@@ -1,0 +1,14 @@
+{
+  "name": "@arka/config",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "files": [
+    "tsconfig.base.json",
+    "tsconfig.node.json",
+    "tsconfig.react.json",
+    "tailwind.config.js",
+    "postcss.config.js"
+  ]
+}
