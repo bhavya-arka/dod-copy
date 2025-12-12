@@ -1,0 +1,89 @@
+CREATE SCHEMA "public";
+CREATE TABLE "flight_edges" (
+	"id" serial PRIMARY KEY,
+	"flight_plan_id" integer NOT NULL,
+	"source_node_id" integer NOT NULL,
+	"target_node_id" integer NOT NULL,
+	"edge_data" jsonb NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"user_id" integer NOT NULL
+);
+CREATE TABLE "flight_nodes" (
+	"id" serial PRIMARY KEY,
+	"flight_plan_id" integer NOT NULL,
+	"node_type" text NOT NULL,
+	"parent_node_id" integer,
+	"position_x" integer DEFAULT 0 NOT NULL,
+	"position_y" integer DEFAULT 0 NOT NULL,
+	"node_data" jsonb NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"user_id" integer NOT NULL
+);
+CREATE TABLE "flight_plans" (
+	"id" serial PRIMARY KEY,
+	"name" text NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	"allocation_data" jsonb NOT NULL,
+	"movement_items_count" integer NOT NULL,
+	"total_weight_lb" integer NOT NULL,
+	"aircraft_count" integer NOT NULL,
+	"user_id" integer NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"movement_data" jsonb
+);
+CREATE TABLE "flight_schedules" (
+	"id" serial PRIMARY KEY,
+	"flight_plan_id" integer,
+	"name" text NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"schedule_data" jsonb NOT NULL,
+	"total_flights" integer NOT NULL,
+	"user_id" integer NOT NULL
+);
+CREATE TABLE "port_inventory" (
+	"id" serial PRIMARY KEY,
+	"flight_plan_id" integer NOT NULL,
+	"airbase_id" text NOT NULL,
+	"incoming_cargo" jsonb DEFAULT '[]' NOT NULL,
+	"outgoing_cargo" jsonb DEFAULT '[]' NOT NULL,
+	"available_cargo" jsonb DEFAULT '[]' NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	"user_id" integer NOT NULL
+);
+CREATE TABLE "sessions" (
+	"id" serial PRIMARY KEY,
+	"user_id" integer NOT NULL,
+	"token" text NOT NULL CONSTRAINT "sessions_token_unique" UNIQUE,
+	"expires_at" timestamp NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
+CREATE TABLE "split_sessions" (
+	"id" serial PRIMARY KEY,
+	"flight_plan_id" integer,
+	"name" text NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	"split_data" jsonb NOT NULL,
+	"total_splits" integer NOT NULL,
+	"total_pallets" integer NOT NULL,
+	"user_id" integer NOT NULL
+);
+CREATE TABLE "users" (
+	"id" serial PRIMARY KEY,
+	"username" text NOT NULL,
+	"password" text NOT NULL,
+	"email" text NOT NULL CONSTRAINT "users_email_unique" UNIQUE,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"last_login_at" timestamp
+);
+CREATE UNIQUE INDEX "flight_edges_pkey" ON "flight_edges" ("id");
+CREATE UNIQUE INDEX "flight_nodes_pkey" ON "flight_nodes" ("id");
+CREATE UNIQUE INDEX "flight_plans_pkey" ON "flight_plans" ("id");
+CREATE UNIQUE INDEX "flight_schedules_pkey" ON "flight_schedules" ("id");
+CREATE UNIQUE INDEX "port_inventory_pkey" ON "port_inventory" ("id");
+CREATE UNIQUE INDEX "sessions_pkey" ON "sessions" ("id");
+CREATE UNIQUE INDEX "sessions_token_unique" ON "sessions" ("token");
+CREATE UNIQUE INDEX "split_sessions_pkey" ON "split_sessions" ("id");
+CREATE UNIQUE INDEX "users_email_unique" ON "users" ("email");
+CREATE UNIQUE INDEX "users_pkey" ON "users" ("id");
