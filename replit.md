@@ -163,11 +163,33 @@ The application is focused exclusively on load planning operations:
 - Integrated 2D ICODES and 3D visualization toggle
 - Route planning with fuel/distance calculations
 
-## Full-Stack Architecture
+## Full-Stack Architecture (Turborepo Monorepo)
+
+**Structure**:
+```
+├── apps/
+│   ├── client/          # React frontend (Vite, port 5000)
+│   └── server/          # Express API (port 3000)
+├── packages/
+│   ├── shared/          # Shared schema and types
+│   └── config/          # Shared Tailwind/PostCSS/TypeScript configs
+├── turbo.json           # Turborepo pipeline configuration
+└── package.json         # Root workspace configuration
+```
+
+**Development Ports**:
+- Client (webview): `http://localhost:5000` - User-facing React app
+- Server (API): `http://localhost:3000` - Express REST API
+- Client proxies `/api/*` requests to server
+
+**Workflows**:
+- `Client`: Runs `cd apps/client && npm run dev` on port 5000
+- `API Server`: Runs `cd apps/server && npm run dev` on port 3000
+
 **Frontend**: React 18+ SPA with TypeScript
 **Backend**: Express.js with RESTful API endpoints 
-**Database**: PostgreSQL with Drizzle ORM
-**Build System**: Vite for development and production builds
+**Database**: PostgreSQL with Drizzle ORM (Neon-backed)
+**Build System**: Vite for development, Turborepo for monorepo orchestration
 
 ## PACAF Planning System Architecture
 
