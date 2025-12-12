@@ -1,12 +1,36 @@
 import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+
+const CLIENT_PORT = 5000;
+const SERVER_PORT = 3000;
+
+app.use(cors({
+  origin: [
+    `http://localhost:${CLIENT_PORT}`,
+    `http://0.0.0.0:${CLIENT_PORT}`,
+    /\.replit\.dev$/,
+    /\.spock\.replit\.dev$/,
+  ],
+  credentials: true,
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+
+function log(message: string) {
+  const formattedTime = new Date().toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+  console.log(`${formattedTime} [server] ${message}`);
+}
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -49,23 +73,12 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
-
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client
-  const port = 5000;
   server.listen({
-    port,
+    port: SERVER_PORT,
     host: "0.0.0.0",
     reusePort: true,
   }, () => {
-    log(`serving on port ${port}`);
+    log(`API server running on port ${SERVER_PORT}`);
+    log(`Accepting requests from client on port ${CLIENT_PORT}`);
   });
 })();
