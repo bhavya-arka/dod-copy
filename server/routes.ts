@@ -759,6 +759,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/flight-plans/:planId/port-inventory/:airbaseId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const planId = parseInt(req.params.planId);
+      const plan = await storage.getFlightPlan(planId, req.user!.id);
+      if (!plan) {
+        return res.status(404).json({ error: "Flight plan not found" });
+      }
+      
+      const { incoming_cargo, outgoing_cargo, available_cargo } = req.body;
+      if (incoming_cargo !== undefined && !Array.isArray(incoming_cargo)) {
+        return res.status(400).json({ error: "incoming_cargo must be an array" });
+      }
+      if (outgoing_cargo !== undefined && !Array.isArray(outgoing_cargo)) {
+        return res.status(400).json({ error: "outgoing_cargo must be an array" });
+      }
+      if (available_cargo !== undefined && !Array.isArray(available_cargo)) {
+        return res.status(400).json({ error: "available_cargo must be an array" });
+      }
+      
+      const inventory = await storage.upsertPortInventory({
+        incoming_cargo: incoming_cargo || [],
+        outgoing_cargo: outgoing_cargo || [],
+        available_cargo: available_cargo || [],
+        flight_plan_id: planId,
+        airbase_id: req.params.airbaseId,
+        user_id: req.user!.id
+      });
+      res.json(inventory);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update port inventory" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
