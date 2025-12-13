@@ -604,7 +604,7 @@ export function parseMovementListV2(csvContent: string): ParsedCargoResult {
     }
 
     // Generate IDs per Section 6
-    const leadTcn = row.lead_tcn.trim() || null;
+    const leadTcn = row.lead_tcn.trim() || 'N/A';
     const baseId = generateBaseId(leadTcn, i);
     
     let palletId: string | null = null;
