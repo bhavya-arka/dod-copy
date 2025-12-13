@@ -553,7 +553,7 @@ function FwdAftIndicators({ loadPlan, scale }: { loadPlan: AircraftLoadPlan; sca
         color="#16a34a"
         anchorX="center"
         anchorY="middle"
-        font="/fonts/inter.json"
+
       >
         FWD
       </Text>
@@ -573,7 +573,7 @@ function FwdAftIndicators({ loadPlan, scale }: { loadPlan: AircraftLoadPlan; sca
         color="#dc2626"
         anchorX="center"
         anchorY="middle"
-        font="/fonts/inter.json"
+
       >
         AFT
       </Text>
@@ -628,7 +628,7 @@ function LengthRuler({ loadPlan, scale, showMeasure }: { loadPlan: AircraftLoadP
               color="#1e40af"
               anchorX="right"
               anchorY="middle"
-              font="/fonts/inter.json"
+      
             >
               {mark.label}
             </Text>
@@ -643,7 +643,7 @@ function LengthRuler({ loadPlan, scale, showMeasure }: { loadPlan: AircraftLoadP
         color="#1e40af"
         anchorX="center"
         anchorY="middle"
-        font="/fonts/inter.json"
+
       >
         {`${lengthIn}" (${(lengthIn / 12).toFixed(1)} ft)`}
       </Text>
