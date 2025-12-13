@@ -7,19 +7,19 @@ export async function createEdge(edge: InsertDagEdge): Promise<{ edge?: DagEdge;
   const [parentNode] = await db
     .select()
     .from(dagNodes)
-    .where(eq(dagNodes.id, edge.parent_id));
+    .where(and(eq(dagNodes.id, edge.parent_id), eq(dagNodes.user_id, edge.user_id)));
   
   const [childNode] = await db
     .select()
     .from(dagNodes)
-    .where(eq(dagNodes.id, edge.child_id));
+    .where(and(eq(dagNodes.id, edge.child_id), eq(dagNodes.user_id, edge.user_id)));
   
   if (!parentNode) {
-    return { error: `Parent node ${edge.parent_id} not found` };
+    return { error: `Parent node ${edge.parent_id} not found or access denied` };
   }
   
   if (!childNode) {
-    return { error: `Child node ${edge.child_id} not found` };
+    return { error: `Child node ${edge.child_id} not found or access denied` };
   }
   
   const typeValidation = validateNodeTypeRules(
@@ -60,8 +60,10 @@ export async function createEdge(edge: InsertDagEdge): Promise<{ edge?: DagEdge;
   return { edge: created };
 }
 
-export async function getEdge(edgeId: string): Promise<DagEdge | undefined> {
-  const [edge] = await db.select().from(dagEdges).where(eq(dagEdges.id, edgeId));
+export async function getEdge(edgeId: string, userId: number): Promise<DagEdge | undefined> {
+  const [edge] = await db.select().from(dagEdges).where(
+    and(eq(dagEdges.id, edgeId), eq(dagEdges.user_id, userId))
+  );
   return edge;
 }
 
@@ -109,19 +111,19 @@ export async function validateEdge(
   const [parentNode] = await db
     .select()
     .from(dagNodes)
-    .where(eq(dagNodes.id, parentId));
+    .where(and(eq(dagNodes.id, parentId), eq(dagNodes.user_id, userId)));
   
   const [childNode] = await db
     .select()
     .from(dagNodes)
-    .where(eq(dagNodes.id, childId));
+    .where(and(eq(dagNodes.id, childId), eq(dagNodes.user_id, userId)));
   
   if (!parentNode) {
-    return { valid: false, error: `Parent node ${parentId} not found` };
+    return { valid: false, error: `Parent node ${parentId} not found or access denied` };
   }
   
   if (!childNode) {
-    return { valid: false, error: `Child node ${childId} not found` };
+    return { valid: false, error: `Child node ${childId} not found or access denied` };
   }
   
   const typeValidation = validateNodeTypeRules(

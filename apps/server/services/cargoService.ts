@@ -7,8 +7,10 @@ export async function createCargoItem(item: InsertCargoItem): Promise<CargoItem>
   return created;
 }
 
-export async function getCargoItem(cargoId: string): Promise<CargoItem | undefined> {
-  const [item] = await db.select().from(cargoItems).where(eq(cargoItems.id, cargoId));
+export async function getCargoItem(cargoId: string, userId: number): Promise<CargoItem | undefined> {
+  const [item] = await db.select().from(cargoItems).where(
+    and(eq(cargoItems.id, cargoId), eq(cargoItems.user_id, userId))
+  );
   return item;
 }
 

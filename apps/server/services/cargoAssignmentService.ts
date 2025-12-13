@@ -15,11 +15,11 @@ export async function createAssignment(
   return created;
 }
 
-export async function getAssignment(assignmentId: string): Promise<CargoAssignment | undefined> {
+export async function getAssignment(assignmentId: string, userId: number): Promise<CargoAssignment | undefined> {
   const [assignment] = await db
     .select()
     .from(cargoAssignments)
-    .where(eq(cargoAssignments.id, assignmentId));
+    .where(and(eq(cargoAssignments.id, assignmentId), eq(cargoAssignments.user_id, userId)));
   return assignment;
 }
 

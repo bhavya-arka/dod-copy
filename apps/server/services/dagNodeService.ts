@@ -8,8 +8,10 @@ export async function createNode(node: InsertDagNode): Promise<DagNode> {
   return created;
 }
 
-export async function getNode(nodeId: string): Promise<DagNode | undefined> {
-  const [node] = await db.select().from(dagNodes).where(eq(dagNodes.id, nodeId));
+export async function getNode(nodeId: string, userId: number): Promise<DagNode | undefined> {
+  const [node] = await db.select().from(dagNodes).where(
+    and(eq(dagNodes.id, nodeId), eq(dagNodes.user_id, userId))
+  );
   return node;
 }
 
