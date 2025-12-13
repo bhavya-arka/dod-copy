@@ -213,17 +213,19 @@ export interface TimeSlot {
 export interface WeatherForecast {
   timestamp: Date;
   location: { lat: number; lon: number };
-  wind_direction_deg: number;
-  wind_speed_kt: number;
-  gust_kt?: number;
-  visibility_sm: number;
-  visibility_nm?: number;
-  ceiling_ft: number;
-  temperature_c: number;
-  dewpoint_c: number;
-  pressure_inhg: number;
-  conditions: 'VFR' | 'MVFR' | 'IFR' | 'LIFR';
-  precipitation?: 'rain' | 'snow' | 'freezing_rain' | 'thunderstorm' | 'none';
+  wind_direction_deg: number | null;
+  wind_speed_kt: number | null;
+  gust_kt?: number | null;
+  visibility_sm: number | null;
+  visibility_nm?: number | null;
+  ceiling_ft: number | null;
+  temperature_c: number | null;
+  dewpoint_c: number | null;
+  pressure_inhg: number | null;
+  conditions: 'VFR' | 'MVFR' | 'IFR' | 'LIFR' | null;
+  precipitation?: 'rain' | 'snow' | 'freezing_rain' | 'thunderstorm' | 'none' | null;
+  /** Indicates if this data is from live NWS vs simulated fallback */
+  dataSource?: 'observations' | 'forecast' | 'simulated';
 }
 
 export interface WeatherMovement {

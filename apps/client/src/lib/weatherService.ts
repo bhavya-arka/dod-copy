@@ -119,10 +119,11 @@ export async function getRealBaseWeather(base: MilitaryBase): Promise<WeatherFor
     const forecast = nwsData.forecast[0];
     const hasForecast = forecast !== undefined;
     const hasConditions = conditions !== undefined && conditions !== null;
+    const dataSource: 'observations' | 'forecast' = hasConditions ? 'observations' : 'forecast';
     
     console.debug(`[Weather] Processing NWS data for ${base.icao} (hasConditions: ${hasConditions}, hasForecast: ${hasForecast})`);
     
-    let tempC: number;
+    let tempC: number | null = null;
     if (hasConditions && conditions.temperature?.value !== null && conditions.temperature?.value !== undefined) {
       tempC = conditions.temperature.unitCode?.includes('degC') 
         ? conditions.temperature.value 
@@ -132,20 +133,18 @@ export async function getRealBaseWeather(base: MilitaryBase): Promise<WeatherFor
         ? (forecast.temperature - 32) * 5/9 
         : forecast.temperature;
       console.debug(`[Weather] ${base.icao}: Using forecast temperature ${forecast.temperature}°${forecast.temperatureUnit} → ${Math.round(tempC)}°C`);
-    } else {
-      tempC = 15;
     }
     
-    let dewpointC: number;
+    let dewpointC: number | null = null;
     if (hasConditions && conditions.dewpoint?.value !== null && conditions.dewpoint?.value !== undefined) {
       dewpointC = conditions.dewpoint.unitCode?.includes('degC')
         ? conditions.dewpoint.value
         : (conditions.dewpoint.value - 32) * 5/9;
-    } else {
+    } else if (tempC !== null) {
       dewpointC = tempC - 5;
     }
     
-    let windDirDeg: number;
+    let windDirDeg: number | null = null;
     if (hasConditions && conditions.windDirection?.value !== null && conditions.windDirection?.value !== undefined) {
       windDirDeg = conditions.windDirection.value;
     } else if (hasForecast && forecast.windDirection) {
@@ -153,12 +152,10 @@ export async function getRealBaseWeather(base: MilitaryBase): Promise<WeatherFor
         'N': 0, 'NNE': 22, 'NE': 45, 'ENE': 67, 'E': 90, 'ESE': 112, 'SE': 135, 'SSE': 157,
         'S': 180, 'SSW': 202, 'SW': 225, 'WSW': 247, 'W': 270, 'WNW': 292, 'NW': 315, 'NNW': 337
       };
-      windDirDeg = dirMap[forecast.windDirection] ?? 0;
-    } else {
-      windDirDeg = 0;
+      windDirDeg = dirMap[forecast.windDirection] ?? null;
     }
     
-    let windSpeedKt: number;
+    let windSpeedKt: number | null = null;
     if (hasConditions && conditions.windSpeed?.value !== null && conditions.windSpeed?.value !== undefined) {
       const windSpeedMs = conditions.windSpeed.value;
       windSpeedKt = conditions.windSpeed.unitCode?.includes('m_s-1')
@@ -168,15 +165,15 @@ export async function getRealBaseWeather(base: MilitaryBase): Promise<WeatherFor
           : windSpeedMs;
     } else if (hasForecast && forecast.windSpeed) {
       const windMatch = forecast.windSpeed.match(/(\d+)/);
-      const windMph = windMatch ? parseInt(windMatch[1], 10) : 0;
-      windSpeedKt = windMph * 0.868976;
-      console.debug(`[Weather] ${base.icao}: Using forecast wind "${forecast.windSpeed}" → ${Math.round(windSpeedKt)}kt`);
-    } else {
-      windSpeedKt = 0;
+      if (windMatch) {
+        const windMph = parseInt(windMatch[1], 10);
+        windSpeedKt = windMph * 0.868976;
+        console.debug(`[Weather] ${base.icao}: Using forecast wind "${forecast.windSpeed}" → ${Math.round(windSpeedKt)}kt`);
+      }
     }
     
-    let visibilitySm: number;
-    let visibilityNm: number | null;
+    let visibilitySm: number | null = null;
+    let visibilityNm: number | null = null;
     if (hasConditions && conditions.visibility?.value !== null && conditions.visibility?.value !== undefined) {
       const visibilityM = conditions.visibility.value;
       visibilitySm = conditions.visibility.unitCode?.includes('m')
@@ -185,47 +182,50 @@ export async function getRealBaseWeather(base: MilitaryBase): Promise<WeatherFor
       visibilityNm = conditions.visibility.unitCode?.includes('m')
         ? metersToNauticalMiles(visibilityM)
         : null;
-    } else {
-      visibilitySm = 10;
-      visibilityNm = 8.7;
     }
     
-    let pressureInhg: number;
+    let pressureInhg: number | null = null;
     if (hasConditions && conditions.barometricPressure?.value !== null && conditions.barometricPressure?.value !== undefined) {
       const pressurePa = conditions.barometricPressure.value;
       pressureInhg = pressurePa / 3386.39;
-    } else {
-      pressureInhg = 29.92;
     }
     
-    let flightConditions: 'VFR' | 'MVFR' | 'IFR' | 'LIFR' = 'VFR';
-    const ceilingFt = 10000;
-    if (ceilingFt < 500 || visibilitySm < 1) flightConditions = 'LIFR';
-    else if (ceilingFt < 1000 || visibilitySm < 3) flightConditions = 'IFR';
-    else if (ceilingFt < 3000 || visibilitySm < 5) flightConditions = 'MVFR';
+    let flightConditions: 'VFR' | 'MVFR' | 'IFR' | 'LIFR' | null = null;
+    let ceilingFt: number | null = null;
+    if (visibilitySm !== null) {
+      ceilingFt = 10000;
+      flightConditions = 'VFR';
+      if (ceilingFt < 500 || visibilitySm < 1) flightConditions = 'LIFR';
+      else if (ceilingFt < 1000 || visibilitySm < 3) flightConditions = 'IFR';
+      else if (ceilingFt < 3000 || visibilitySm < 5) flightConditions = 'MVFR';
+    }
     
-    let precipitation: 'rain' | 'snow' | 'freezing_rain' | 'thunderstorm' | 'none' = 'none';
+    let precipitation: 'rain' | 'snow' | 'freezing_rain' | 'thunderstorm' | 'none' | null = null;
     const desc = (conditions?.textDescription || forecast?.shortForecast || '').toLowerCase();
-    if (desc.includes('thunder')) precipitation = 'thunderstorm';
-    else if (desc.includes('freezing')) precipitation = 'freezing_rain';
-    else if (desc.includes('snow') || desc.includes('sleet')) precipitation = 'snow';
-    else if (desc.includes('rain') || desc.includes('shower')) precipitation = 'rain';
+    if (desc) {
+      precipitation = 'none';
+      if (desc.includes('thunder')) precipitation = 'thunderstorm';
+      else if (desc.includes('freezing')) precipitation = 'freezing_rain';
+      else if (desc.includes('snow') || desc.includes('sleet')) precipitation = 'snow';
+      else if (desc.includes('rain') || desc.includes('shower')) precipitation = 'rain';
+    }
     
-    console.debug(`[Weather] ${base.icao}: temp=${Math.round(tempC)}°C, wind=${Math.round(windSpeedKt)}kt@${windDirDeg}°, vis=${Math.round(visibilitySm)}sm/${visibilityNm?.toFixed(1) || 'N/A'}nm, conditions=${flightConditions}, source=${hasConditions ? 'observations' : 'forecast'}`);
+    console.debug(`[Weather] ${base.icao}: temp=${tempC !== null ? Math.round(tempC) + '°C' : 'N/A'}, wind=${windSpeedKt !== null ? Math.round(windSpeedKt) + 'kt' : 'N/A'}@${windDirDeg ?? 'N/A'}°, vis=${visibilitySm !== null ? Math.round(visibilitySm) + 'sm' : 'N/A'}, conditions=${flightConditions ?? 'N/A'}, source=${dataSource}`);
     
     return {
       timestamp: new Date(),
       location: { lat: base.latitude_deg, lon: base.longitude_deg },
       wind_direction_deg: windDirDeg,
-      wind_speed_kt: Math.round(windSpeedKt),
-      visibility_sm: Math.round(visibilitySm),
-      visibility_nm: visibilityNm !== null ? Math.round(visibilityNm * 10) / 10 : undefined,
+      wind_speed_kt: windSpeedKt !== null ? Math.round(windSpeedKt) : null,
+      visibility_sm: visibilitySm !== null ? Math.round(visibilitySm) : null,
+      visibility_nm: visibilityNm !== null ? Math.round(visibilityNm * 10) / 10 : null,
       ceiling_ft: ceilingFt,
-      temperature_c: Math.round(tempC),
-      dewpoint_c: Math.round(dewpointC),
-      pressure_inhg: Math.round(pressureInhg * 100) / 100,
+      temperature_c: tempC !== null ? Math.round(tempC) : null,
+      dewpoint_c: dewpointC !== null ? Math.round(dewpointC) : null,
+      pressure_inhg: pressureInhg !== null ? Math.round(pressureInhg * 100) / 100 : null,
       conditions: flightConditions,
-      precipitation
+      precipitation,
+      dataSource
     };
   }
   
@@ -322,7 +322,8 @@ export function getBaseWeather(base: MilitaryBase): WeatherForecast {
     dewpoint_c: temp - 5,
     pressure_inhg: 29.92 + ((baseHash % 100) - 50) / 100,
     conditions,
-    precipitation: 'none'
+    precipitation: 'none',
+    dataSource: 'simulated'
   };
 }
 
@@ -372,7 +373,10 @@ export function willWeatherAffectRoute(
   };
 }
 
-export function formatWindData(direction: number, speed: number, gust?: number): string {
+export function formatWindData(direction: number | null, speed: number | null, gust?: number | null): string {
+  if (direction === null || speed === null) {
+    return 'N/A';
+  }
   const dirStr = direction.toString().padStart(3, '0');
   if (gust) {
     return `${dirStr}/${speed}G${gust}KT`;
@@ -380,12 +384,20 @@ export function formatWindData(direction: number, speed: number, gust?: number):
   return `${dirStr}/${speed}KT`;
 }
 
-export function getConditionsColor(conditions: 'VFR' | 'MVFR' | 'IFR' | 'LIFR'): string {
+export function getConditionsColor(conditions: 'VFR' | 'MVFR' | 'IFR' | 'LIFR' | null): string {
   switch (conditions) {
     case 'VFR': return '#22c55e';
     case 'MVFR': return '#3b82f6';
     case 'IFR': return '#ef4444';
     case 'LIFR': return '#a855f7';
+    case null: return '#ef4444';
     default: return '#94a3b8';
   }
+}
+
+export function formatWeatherValue(value: number | null, unit: string): JSX.Element | string {
+  if (value === null) {
+    return 'N/A';
+  }
+  return `${value}${unit}`;
 }

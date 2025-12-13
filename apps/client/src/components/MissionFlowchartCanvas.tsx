@@ -2273,7 +2273,7 @@ function AirbaseDetailModal({ base, flights, onClose, onFlightsChange }: Airbase
   const [hasChanges, setHasChanges] = useState(false);
   const [showTransferMode, setShowTransferMode] = useState(false);
 
-  const tempF = Math.round(weather.temperature_c * 9 / 5 + 32);
+  const tempF = weather.temperature_c !== null ? Math.round(weather.temperature_c * 9 / 5 + 32) : null;
 
   // Handle drag start for pallets
   const handlePalletDragStart = (e: React.DragEvent, palletId: string, sourceFlightId: string) => {
@@ -2485,23 +2485,39 @@ function AirbaseDetailModal({ base, flights, onClose, onFlightsChange }: Airbase
                 }`}>
                   <div className="grid grid-cols-4 gap-4 text-center">
                     <div>
-                      <div className="text-2xl font-bold">{tempF}°F</div>
+                      {tempF !== null ? (
+                        <div className="text-2xl font-bold">{tempF}°F</div>
+                      ) : (
+                        <div className="text-2xl font-bold text-red-500">N/A</div>
+                      )}
                       <div className="text-sm text-neutral-600">Temperature</div>
                     </div>
                     <div>
-                      <div className="text-2xl font-bold">{weather.wind_speed_kt} kts</div>
+                      {weather.wind_speed_kt !== null ? (
+                        <div className="text-2xl font-bold">{weather.wind_speed_kt} kts</div>
+                      ) : (
+                        <div className="text-2xl font-bold text-red-500">N/A</div>
+                      )}
                       <div className="text-sm text-neutral-600">Wind</div>
                     </div>
                     <div>
-                      <div className="text-2xl font-bold">{weather.visibility_sm} sm</div>
+                      {weather.visibility_sm !== null ? (
+                        <div className="text-2xl font-bold">{weather.visibility_sm} sm</div>
+                      ) : (
+                        <div className="text-2xl font-bold text-red-500">N/A</div>
+                      )}
                       <div className="text-sm text-neutral-600">Visibility</div>
                     </div>
                     <div>
-                      <div className={`text-2xl font-bold ${
-                        weather.conditions === 'VFR' ? 'text-green-600' :
-                        weather.conditions === 'MVFR' ? 'text-yellow-600' :
-                        weather.conditions === 'IFR' ? 'text-orange-600' : 'text-red-600'
-                      }`}>{weather.conditions}</div>
+                      {weather.conditions !== null ? (
+                        <div className={`text-2xl font-bold ${
+                          weather.conditions === 'VFR' ? 'text-green-600' :
+                          weather.conditions === 'MVFR' ? 'text-yellow-600' :
+                          weather.conditions === 'IFR' ? 'text-orange-600' : 'text-red-600'
+                        }`}>{weather.conditions}</div>
+                      ) : (
+                        <div className="text-2xl font-bold text-red-500">N/A</div>
+                      )}
                       <div className="text-sm text-neutral-600">Conditions</div>
                     </div>
                   </div>

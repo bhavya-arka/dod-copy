@@ -198,7 +198,7 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
                   if (!base) return null;
                   
                   const weather = getBaseWeather(base);
-                  const tempF = Math.round(weather.temperature_c * 9/5 + 32);
+                  const tempF = weather.temperature_c !== null ? Math.round(weather.temperature_c * 9/5 + 32) : null;
                   const conditionBadge = weather.conditions === 'VFR' ? 'badge-success' :
                                         weather.conditions === 'MVFR' ? 'badge-warning' : 'badge-danger';
                   
@@ -211,19 +211,35 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
                           <span className="text-neutral-500">Temp:</span>
-                          <span className="text-neutral-900 ml-2 font-medium">{tempF}°F</span>
+                          {tempF !== null ? (
+                            <span className="text-neutral-900 ml-2 font-medium">{tempF}°F</span>
+                          ) : (
+                            <span className="text-red-500 ml-2 font-medium">N/A</span>
+                          )}
                         </div>
                         <div>
                           <span className="text-neutral-500">Wind:</span>
-                          <span className="text-neutral-900 ml-2 font-medium">{weather.wind_speed_kt} kts</span>
+                          {weather.wind_speed_kt !== null ? (
+                            <span className="text-neutral-900 ml-2 font-medium">{weather.wind_speed_kt} kts</span>
+                          ) : (
+                            <span className="text-red-500 ml-2 font-medium">N/A</span>
+                          )}
                         </div>
                         <div>
                           <span className="text-neutral-500">Ceiling:</span>
-                          <span className="text-neutral-900 ml-2 font-medium">{weather.ceiling_ft.toLocaleString()} ft</span>
+                          {weather.ceiling_ft !== null ? (
+                            <span className="text-neutral-900 ml-2 font-medium">{weather.ceiling_ft.toLocaleString()} ft</span>
+                          ) : (
+                            <span className="text-red-500 ml-2 font-medium">N/A</span>
+                          )}
                         </div>
                         <div>
                           <span className="text-neutral-500">Vis:</span>
-                          <span className={`${conditionBadge} ml-2`}>{weather.conditions}</span>
+                          {weather.conditions !== null ? (
+                            <span className={`${conditionBadge} ml-2`}>{weather.conditions}</span>
+                          ) : (
+                            <span className="text-red-500 ml-2 font-medium">N/A</span>
+                          )}
                         </div>
                       </div>
                     </div>

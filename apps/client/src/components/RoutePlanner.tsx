@@ -598,20 +598,32 @@ export default function RoutePlanner({ allocationResult, onBack, onHome }: Route
                             )}
                           </div>
                           <div className="flex items-center space-x-3 text-xs">
-                            <span className="text-neutral-600 font-mono">
+                            <span className={`font-mono ${formatWindData(wx.wind_direction_deg, wx.wind_speed_kt) === 'N/A' ? 'text-red-500' : 'text-neutral-600'}`}>
                               {formatWindData(wx.wind_direction_deg, wx.wind_speed_kt)}
                             </span>
-                            <span className="text-neutral-500">{wx.temperature_c}°C</span>
-                            <span className="text-neutral-500">{wx.visibility_sm}SM</span>
-                            <span 
-                              className="font-bold px-2 py-0.5 rounded-lg"
-                              style={{ 
-                                backgroundColor: getConditionsColor(wx.conditions) + '20',
-                                color: getConditionsColor(wx.conditions)
-                              }}
-                            >
-                              {wx.conditions}
-                            </span>
+                            {wx.temperature_c !== null ? (
+                              <span className="text-neutral-500">{wx.temperature_c}°C</span>
+                            ) : (
+                              <span className="text-red-500">N/A</span>
+                            )}
+                            {wx.visibility_sm !== null ? (
+                              <span className="text-neutral-500">{wx.visibility_sm}SM</span>
+                            ) : (
+                              <span className="text-red-500">N/A</span>
+                            )}
+                            {wx.conditions !== null ? (
+                              <span 
+                                className="font-bold px-2 py-0.5 rounded-lg"
+                                style={{ 
+                                  backgroundColor: getConditionsColor(wx.conditions) + '20',
+                                  color: getConditionsColor(wx.conditions)
+                                }}
+                              >
+                                {wx.conditions}
+                              </span>
+                            ) : (
+                              <span className="text-red-500 font-bold px-2 py-0.5 rounded-lg bg-red-100">N/A</span>
+                            )}
                           </div>
                         </div>
                       );
@@ -840,8 +852,12 @@ function LegEditor({ leg, onUpdate, availableAircraft, calculatedLeg }: LegEdito
             <div className="mt-2 text-xs text-neutral-400">Loading weather...</div>
           ) : originWx ? (
             <div className="mt-2 text-xs text-neutral-500">
-              WX: {formatWindData(originWx.wind_direction_deg, originWx.wind_speed_kt)} | 
-              <span style={{ color: getConditionsColor(originWx.conditions) }}> {originWx.conditions}</span>
+              WX: <span className={formatWindData(originWx.wind_direction_deg, originWx.wind_speed_kt) === 'N/A' ? 'text-red-500' : ''}>{formatWindData(originWx.wind_direction_deg, originWx.wind_speed_kt)}</span> | 
+              {originWx.conditions !== null ? (
+                <span style={{ color: getConditionsColor(originWx.conditions) }}> {originWx.conditions}</span>
+              ) : (
+                <span className="text-red-500"> N/A</span>
+              )}
               {originWxError && <span className="text-amber-500 ml-2">⚠️ API unavailable</span>}
             </div>
           ) : null}
@@ -864,8 +880,12 @@ function LegEditor({ leg, onUpdate, availableAircraft, calculatedLeg }: LegEdito
             <div className="mt-2 text-xs text-neutral-400">Loading weather...</div>
           ) : destWx ? (
             <div className="mt-2 text-xs text-neutral-500">
-              WX: {formatWindData(destWx.wind_direction_deg, destWx.wind_speed_kt)} | 
-              <span style={{ color: getConditionsColor(destWx.conditions) }}> {destWx.conditions}</span>
+              WX: <span className={formatWindData(destWx.wind_direction_deg, destWx.wind_speed_kt) === 'N/A' ? 'text-red-500' : ''}>{formatWindData(destWx.wind_direction_deg, destWx.wind_speed_kt)}</span> | 
+              {destWx.conditions !== null ? (
+                <span style={{ color: getConditionsColor(destWx.conditions) }}> {destWx.conditions}</span>
+              ) : (
+                <span className="text-red-500"> N/A</span>
+              )}
               {destWxError && <span className="text-amber-500 ml-2">⚠️ API unavailable</span>}
             </div>
           ) : null}
