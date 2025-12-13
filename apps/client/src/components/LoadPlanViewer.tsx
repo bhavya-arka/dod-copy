@@ -342,28 +342,41 @@ export default function LoadPlanViewer({
                 <div className="glass-card p-4">
                   <h3 className="text-neutral-900 font-bold mb-4">Pallet Manifest</h3>
                   <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin">
-                    {selectedPlan.pallets.map(p => (
-                      <div
-                        key={p.pallet.id}
-                        className="flex justify-between items-center bg-neutral-50 rounded-xl p-3 border border-neutral-200/50"
-                      >
-                        <div>
-                          <span className="text-neutral-900 font-mono font-medium">{p.pallet.id}</span>
-                          <span className="text-neutral-500 text-sm ml-2">
-                            Position {p.position_index + 1}
-                            {p.is_ramp && ' (RAMP)'}
-                          </span>
+                    {selectedPlan.pallets.map(p => {
+                      const itemCount = p.pallet.items?.length || 0;
+                      const primaryDesc = itemCount > 0 ? p.pallet.items[0].description : p.pallet.id;
+                      const displayDesc = itemCount > 1 
+                        ? `${primaryDesc} (+ ${itemCount - 1} more)`
+                        : primaryDesc;
+                      
+                      return (
+                        <div
+                          key={p.pallet.id}
+                          className="flex justify-between items-center bg-neutral-50 rounded-xl p-3 border border-neutral-200/50"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="text-neutral-900 font-medium truncate" title={displayDesc}>
+                              {displayDesc}
+                            </div>
+                            <div className="text-neutral-500 text-sm">
+                              <span className="font-mono">{p.pallet.id}</span>
+                              <span className="ml-2">
+                                Position {p.position_index + 1}
+                                {p.is_ramp && ' (RAMP)'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right ml-2">
+                            <span className="text-neutral-900 font-medium">
+                              {p.pallet.gross_weight.toLocaleString()} lbs
+                            </span>
+                            {p.pallet.hazmat_flag && (
+                              <span className="ml-2 badge-warning">HAZMAT</span>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <span className="text-neutral-900 font-medium">
-                            {p.pallet.gross_weight.toLocaleString()} lbs
-                          </span>
-                          {p.pallet.hazmat_flag && (
-                            <span className="ml-2 badge-warning">HAZMAT</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {selectedPlan.pallets.length === 0 && (
                       <p className="text-neutral-400 text-center py-4">No pallets loaded</p>
                     )}

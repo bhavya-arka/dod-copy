@@ -102,7 +102,12 @@ export function validateEdgeCases(item: MovementItem): EdgeCaseValidationResult 
   }
 
   // 2. OVERWIDTH ITEM (>104 usable pallet inches)
-  if (item.width_in > PALLET_463L.usable_width) {
+  // EXCEPTION: Items with exact 463L footprint (88x108 or 108x88) are pre-built pallets, NOT overwidth cargo
+  const is463LFootprint = 
+    (item.length_in === 88 && item.width_in === 108) ||
+    (item.length_in === 108 && item.width_in === 88);
+  
+  if (item.width_in > PALLET_463L.usable_width && !is463LFootprint) {
     canPalletize = false;
     mustBeRollingStock = true;
     
