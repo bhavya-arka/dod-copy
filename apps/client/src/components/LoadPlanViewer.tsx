@@ -4,15 +4,17 @@
  * 
  * Displays detailed ICODES-style load plans for all aircraft.
  * Supports both 2D ICODES diagrams and interactive 3D visualization.
- * Updated with minimalist glass UI design.
+ * Updated with minimalist glass UI design and manifest editing functionality.
  */
 
-import React, { useState, Suspense } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, Suspense, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   AllocationResult,
   AircraftLoadPlan,
-  InsightsSummary
+  InsightsSummary,
+  PalletPlacement,
+  VehiclePlacement
 } from '../lib/pacafTypes';
 import ICODESViewer from './ICODESViewer';
 import LoadPlan3DViewer from './LoadPlan3DViewer';
@@ -37,9 +39,62 @@ interface LoadPlanViewerProps {
   onLogout?: () => void;
   userEmail?: string;
   hideNavigation?: boolean;
+  flightPlanId?: number;
+  onAllocationUpdate?: (updated: AllocationResult) => void;
 }
 
 type ViewMode = '2d' | '3d';
+
+interface UnsavedChangesModalProps {
+  isOpen: boolean;
+  onNavigateAnyway: () => void;
+  onGoBack: () => void;
+}
+
+function UnsavedChangesModal({ isOpen, onNavigateAnyway, onGoBack }: UnsavedChangesModalProps) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+            onClick={onGoBack}
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md"
+          >
+            <div className="glass-card p-6 shadow-glass-lg">
+              <h3 className="text-lg font-bold text-neutral-900 mb-2">Unsaved Changes</h3>
+              <p className="text-neutral-600 mb-6">
+                You have unsaved changes that will be lost.
+              </p>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={onNavigateAnyway}
+                  className="btn-secondary px-4 py-2 text-sm"
+                >
+                  Navigate Anyway
+                </button>
+                <button
+                  onClick={onGoBack}
+                  className="btn-primary px-4 py-2 text-sm"
+                >
+                  Go Back to Editing
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
 
 export default function LoadPlanViewer({
   allocationResult,
@@ -52,7 +107,9 @@ export default function LoadPlanViewer({
   onDashboard,
   onLogout,
   userEmail,
-  hideNavigation = false
+  hideNavigation = false,
+  flightPlanId,
+  onAllocationUpdate
 }: LoadPlanViewerProps) {
   const [selectedPlan, setSelectedPlan] = useState<AircraftLoadPlan | null>(
     allocationResult.load_plans[0] || null
@@ -62,14 +119,28 @@ export default function LoadPlanViewer({
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
 
-  const advonPlans = allocationResult.load_plans.filter(p => p.phase === 'ADVON');
-  const mainPlans = allocationResult.load_plans.filter(p => p.phase === 'MAIN');
+  const [isEditing, setIsEditing] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [editedAllocation, setEditedAllocation] = useState<AllocationResult>(allocationResult);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
+
+  const advonPlans = (isEditing ? editedAllocation : allocationResult).load_plans.filter(p => p.phase === 'ADVON');
+  const mainPlans = (isEditing ? editedAllocation : allocationResult).load_plans.filter(p => p.phase === 'MAIN');
 
   const displayedPlans = activeTab === 'advon' 
     ? advonPlans 
     : activeTab === 'main' 
       ? mainPlans 
-      : allocationResult.load_plans;
+      : (isEditing ? editedAllocation : allocationResult).load_plans;
+
+  const currentSelectedPlan = isEditing 
+    ? editedAllocation.load_plans.find(p => p.aircraft_id === selectedPlan?.aircraft_id) || null
+    : selectedPlan;
 
   const handleExportPDF = () => {
     exportLoadPlansToPDF(allocationResult, insights, {
@@ -104,22 +175,187 @@ export default function LoadPlanViewer({
 
   const explanationText = generateWhyThisManyAircraft(allocationResult);
 
+  const handleEnterEditMode = () => {
+    setEditedAllocation(JSON.parse(JSON.stringify(allocationResult)));
+    setIsEditing(true);
+    setHasUnsavedChanges(false);
+    setSaveError(null);
+    setSaveSuccess(false);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setHasUnsavedChanges(false);
+    setEditedAllocation(allocationResult);
+    setSaveError(null);
+    setSaveSuccess(false);
+  };
+
+  const handleSave = async () => {
+    if (!flightPlanId) {
+      setSaveError('Cannot save: No flight plan ID available');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      const response = await fetch(`/api/flight-plans/${flightPlanId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          allocation_data: editedAllocation
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to save changes');
+      }
+
+      setSaveSuccess(true);
+      setIsEditing(false);
+      setHasUnsavedChanges(false);
+
+      if (onAllocationUpdate) {
+        onAllocationUpdate(editedAllocation);
+      }
+
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to save changes');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const updatePalletField = useCallback((
+    aircraftId: string, 
+    palletId: string, 
+    field: 'weight' | 'description', 
+    value: string | number
+  ) => {
+    setEditedAllocation(prev => {
+      const newAllocation = JSON.parse(JSON.stringify(prev)) as AllocationResult;
+      const plan = newAllocation.load_plans.find(p => p.aircraft_id === aircraftId);
+      if (plan) {
+        const palletPlacement = plan.pallets.find(p => p.pallet.id === palletId);
+        if (palletPlacement) {
+          if (field === 'weight') {
+            const newWeight = typeof value === 'string' ? parseFloat(value) || 0 : value;
+            palletPlacement.pallet.gross_weight = newWeight;
+            palletPlacement.pallet.net_weight = newWeight - 355;
+          } else if (field === 'description' && palletPlacement.pallet.items && palletPlacement.pallet.items.length > 0) {
+            palletPlacement.pallet.items[0].description = value as string;
+          }
+        }
+      }
+      return newAllocation;
+    });
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const updateVehicleField = useCallback((
+    aircraftId: string, 
+    itemId: string | number, 
+    field: 'weight' | 'description', 
+    value: string | number
+  ) => {
+    setEditedAllocation(prev => {
+      const newAllocation = JSON.parse(JSON.stringify(prev)) as AllocationResult;
+      const plan = newAllocation.load_plans.find(p => p.aircraft_id === aircraftId);
+      if (plan) {
+        const vehicle = plan.rolling_stock.find(v => String(v.item_id) === String(itemId));
+        if (vehicle) {
+          if (field === 'weight') {
+            vehicle.weight = typeof value === 'string' ? parseFloat(value) || 0 : value;
+          } else if (field === 'description') {
+            vehicle.item.description = value as string;
+          }
+        }
+      }
+      return newAllocation;
+    });
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const updatePalletPosition = useCallback((
+    aircraftId: string, 
+    palletId: string, 
+    newPositionIndex: number
+  ) => {
+    setEditedAllocation(prev => {
+      const newAllocation = JSON.parse(JSON.stringify(prev)) as AllocationResult;
+      const plan = newAllocation.load_plans.find(p => p.aircraft_id === aircraftId);
+      if (plan) {
+        const palletPlacement = plan.pallets.find(p => p.pallet.id === palletId);
+        if (palletPlacement) {
+          palletPlacement.position_index = newPositionIndex;
+          palletPlacement.is_ramp = newPositionIndex >= (plan.aircraft_spec.pallet_positions - plan.aircraft_spec.ramp_positions.length);
+        }
+      }
+      return newAllocation;
+    });
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const interceptNavigation = useCallback((action: () => void) => {
+    if (hasUnsavedChanges) {
+      setPendingNavigation(() => action);
+      setShowUnsavedModal(true);
+    } else {
+      action();
+    }
+  }, [hasUnsavedChanges]);
+
+  const handleNavigateAnyway = () => {
+    setShowUnsavedModal(false);
+    setIsEditing(false);
+    setHasUnsavedChanges(false);
+    if (pendingNavigation) {
+      pendingNavigation();
+      setPendingNavigation(null);
+    }
+  };
+
+  const handleGoBackToEditing = () => {
+    setShowUnsavedModal(false);
+    setPendingNavigation(null);
+  };
+
+  const wrappedOnBack = () => interceptNavigation(onBack);
+  const wrappedOnDashboard = onDashboard ? () => interceptNavigation(onDashboard) : undefined;
+  const wrappedOnRoutePlanning = onRoutePlanning ? () => interceptNavigation(onRoutePlanning) : undefined;
+  const wrappedOnMissionWorkspace = onMissionWorkspace ? () => interceptNavigation(onMissionWorkspace) : undefined;
+  const wrappedOnHome = onHome ? () => interceptNavigation(onHome) : undefined;
+  const wrappedOnLogout = onLogout ? () => interceptNavigation(onLogout) : undefined;
+
   return (
     <div className="min-h-screen bg-neutral-50 gradient-mesh">
+      <UnsavedChangesModal
+        isOpen={showUnsavedModal}
+        onNavigateAnyway={handleNavigateAnyway}
+        onGoBack={handleGoBackToEditing}
+      />
+
       <header className="p-3 border-b border-neutral-200/50 flex justify-between items-center bg-white/80 backdrop-blur-xl sticky top-0 z-10 shadow-soft">
         <div className="flex items-center space-x-3">
-          {onDashboard && (
+          {wrappedOnDashboard && (
             <button
-              onClick={onDashboard}
+              onClick={wrappedOnDashboard}
               className="flex items-center space-x-1 text-neutral-600 hover:text-neutral-900 transition btn-ghost"
             >
               <span>←</span>
               <span>Dashboard</span>
             </button>
           )}
-          {!onDashboard && (
+          {!wrappedOnDashboard && (
             <button
-              onClick={onBack}
+              onClick={wrappedOnBack}
               className="flex items-center space-x-1 text-neutral-600 hover:text-neutral-900 transition btn-ghost"
             >
               <span>←</span>
@@ -128,6 +364,11 @@ export default function LoadPlanViewer({
           )}
           <div className="h-5 w-px bg-neutral-200" />
           <h1 className="text-neutral-900 font-bold text-sm">Load Plan Details</h1>
+          {isEditing && (
+            <span className="badge bg-amber-100 text-amber-700 border-amber-200">
+              Editing Mode
+            </span>
+          )}
         </div>
         <div className="flex items-center space-x-2">
           <div className="flex bg-neutral-100 rounded-xl p-1">
@@ -156,70 +397,106 @@ export default function LoadPlanViewer({
           <span className="badge">
             {allocationResult.total_aircraft} Aircraft
           </span>
-          {onRoutePlanning && (
-            <button
-              onClick={onRoutePlanning}
-              className="btn-primary text-sm"
-            >
-              Route Planning
-            </button>
-          )}
-          {onMissionWorkspace && (
-            <button
-              onClick={onMissionWorkspace}
-              className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm transition"
-            >
-              Mission Workspace
-            </button>
-          )}
-          <button
-            onClick={handleExportSinglePDF}
-            disabled={!selectedPlan}
-            className="btn-secondary text-sm disabled:opacity-50"
-          >
-            Export Current
-          </button>
-          <div className="relative">
-            <button
-              onClick={() => setShowExportMenu(!showExportMenu)}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm transition flex items-center space-x-2"
-            >
-              <span>Export ICODES</span>
-              <span className="text-xs">▼</span>
-            </button>
-            {showExportMenu && (
-              <div className="absolute right-0 mt-2 w-56 glass-card shadow-glass-lg z-50 overflow-hidden">
+
+          {!isEditing ? (
+            <>
+              <button
+                onClick={handleEnterEditMode}
+                className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-sm transition flex items-center space-x-2"
+              >
+                <span>Edit Manifest</span>
+              </button>
+              {wrappedOnRoutePlanning && (
                 <button
-                  onClick={handleExportICODES}
-                  className="w-full text-left px-4 py-3 text-neutral-900 hover:bg-neutral-100 transition-colors border-b border-neutral-200"
+                  onClick={wrappedOnRoutePlanning}
+                  className="btn-primary text-sm"
                 >
-                  <div className="font-medium">ICODES JSON</div>
-                  <div className="text-xs text-neutral-500">DoD/DLA compatible format</div>
+                  Route Planning
                 </button>
+              )}
+              {wrappedOnMissionWorkspace && (
                 <button
-                  onClick={handleExportA2IBundle}
-                  className="w-full text-left px-4 py-3 text-neutral-900 hover:bg-neutral-100 transition-colors border-b border-neutral-200"
+                  onClick={wrappedOnMissionWorkspace}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm transition"
                 >
-                  <div className="font-medium">A2I/SAM Bundle</div>
-                  <div className="text-xs text-neutral-500">Full mission package</div>
+                  Mission Workspace
                 </button>
+              )}
+              <button
+                onClick={handleExportSinglePDF}
+                disabled={!selectedPlan}
+                className="btn-secondary text-sm disabled:opacity-50"
+              >
+                Export Current
+              </button>
+              <div className="relative">
                 <button
-                  onClick={handleExportManifest}
-                  className="w-full text-left px-4 py-3 text-neutral-900 hover:bg-neutral-100 transition-colors border-b border-neutral-200"
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm transition flex items-center space-x-2"
                 >
-                  <div className="font-medium">Manifest CSV</div>
-                  <div className="text-xs text-neutral-500">Cargo manifest spreadsheet</div>
+                  <span>Export ICODES</span>
+                  <span className="text-xs">▼</span>
                 </button>
-                <button
-                  onClick={() => { handleExportPDF(); setShowExportMenu(false); }}
-                  className="w-full text-left px-4 py-3 text-neutral-900 hover:bg-neutral-100 transition-colors"
-                >
-                  <div className="font-medium">PDF Report</div>
-                  <div className="text-xs text-neutral-500">Printable load plans</div>
-                </button>
+                {showExportMenu && (
+                  <div className="absolute right-0 mt-2 w-56 glass-card shadow-glass-lg z-50 overflow-hidden">
+                    <button
+                      onClick={handleExportICODES}
+                      className="w-full text-left px-4 py-3 text-neutral-900 hover:bg-neutral-100 transition-colors border-b border-neutral-200"
+                    >
+                      <div className="font-medium">ICODES JSON</div>
+                      <div className="text-xs text-neutral-500">DoD/DLA compatible format</div>
+                    </button>
+                    <button
+                      onClick={handleExportA2IBundle}
+                      className="w-full text-left px-4 py-3 text-neutral-900 hover:bg-neutral-100 transition-colors border-b border-neutral-200"
+                    >
+                      <div className="font-medium">A2I/SAM Bundle</div>
+                      <div className="text-xs text-neutral-500">Full mission package</div>
+                    </button>
+                    <button
+                      onClick={handleExportManifest}
+                      className="w-full text-left px-4 py-3 text-neutral-900 hover:bg-neutral-100 transition-colors border-b border-neutral-200"
+                    >
+                      <div className="font-medium">Manifest CSV</div>
+                      <div className="text-xs text-neutral-500">Cargo manifest spreadsheet</div>
+                    </button>
+                    <button
+                      onClick={() => { handleExportPDF(); setShowExportMenu(false); }}
+                      className="w-full text-left px-4 py-3 text-neutral-900 hover:bg-neutral-100 transition-colors"
+                    >
+                      <div className="font-medium">PDF Report</div>
+                      <div className="text-xs text-neutral-500">Printable load plans</div>
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={handleCancelEdit}
+                disabled={isSaving}
+                className="btn-secondary text-sm disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving || !hasUnsavedChanges}
+                className="btn-primary text-sm disabled:opacity-50 flex items-center space-x-2"
+              >
+                {isSaving ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Changes</span>
+                )}
+              </button>
+            </>
+          )}
+
           <button
             onClick={() => setShowExplanation(!showExplanation)}
             className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-xl transition text-sm"
@@ -232,9 +509,9 @@ export default function LoadPlanViewer({
               <div className="h-5 w-px bg-neutral-200" />
               <div className="flex items-center space-x-3 text-sm">
                 <span className="text-neutral-500">{userEmail}</span>
-                {onLogout && (
+                {wrappedOnLogout && (
                   <button
-                    onClick={onLogout}
+                    onClick={wrappedOnLogout}
                     className="text-neutral-500 hover:text-neutral-900 transition"
                   >
                     Sign Out
@@ -245,6 +522,30 @@ export default function LoadPlanViewer({
           )}
         </div>
       </header>
+
+      {saveError && (
+        <div className="mx-4 mt-4 glass-card bg-red-50/80 border-red-200 p-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-2">
+              <span className="text-red-600">⚠️</span>
+              <span className="text-red-700 font-medium">Error: {saveError}</span>
+            </div>
+            <button onClick={() => setSaveError(null)} className="text-red-600 hover:text-red-900 transition">✕</button>
+          </div>
+        </div>
+      )}
+
+      {saveSuccess && (
+        <div className="mx-4 mt-4 glass-card bg-green-50/80 border-green-200 p-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-2">
+              <span className="text-green-600">✓</span>
+              <span className="text-green-700 font-medium">Changes saved successfully!</span>
+            </div>
+            <button onClick={() => setSaveSuccess(false)} className="text-green-600 hover:text-green-900 transition">✕</button>
+          </div>
+        </div>
+      )}
       
       {showExplanation && (
         <div className="mx-4 mt-4 glass-card bg-purple-50/80 border-purple-200 p-4">
@@ -261,7 +562,7 @@ export default function LoadPlanViewer({
           <div className="p-4 border-b border-neutral-200/50">
             <div className="flex space-x-1 bg-neutral-100 rounded-xl p-1">
               {[
-                { id: 'all', label: 'All', count: allocationResult.load_plans.length },
+                { id: 'all', label: 'All', count: (isEditing ? editedAllocation : allocationResult).load_plans.length },
                 { id: 'advon', label: 'ADVON', count: advonPlans.length },
                 { id: 'main', label: 'MAIN', count: mainPlans.length }
               ].map(tab => (
@@ -319,30 +620,33 @@ export default function LoadPlanViewer({
         </aside>
 
         <main className="flex-1 overflow-y-auto p-6 scrollbar-thin">
-          {selectedPlan ? (
+          {currentSelectedPlan ? (
             <motion.div
-              key={`${selectedPlan.aircraft_id}-${viewMode}`}
+              key={`${currentSelectedPlan.aircraft_id}-${viewMode}`}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               className="space-y-6"
             >
               {viewMode === '2d' ? (
-                <ICODESViewer loadPlan={selectedPlan} />
+                <ICODESViewer loadPlan={currentSelectedPlan} />
               ) : (
                 <Suspense fallback={
                   <div className="glass-card h-[500px] flex items-center justify-center">
                     <div className="text-neutral-500">Loading 3D View...</div>
                   </div>
                 }>
-                  <LoadPlan3DViewer loadPlan={selectedPlan} />
+                  <LoadPlan3DViewer loadPlan={currentSelectedPlan} />
                 </Suspense>
               )}
 
               <div className="grid grid-cols-2 gap-6">
                 <div className="glass-card p-4">
-                  <h3 className="text-neutral-900 font-bold mb-4">Pallet Manifest</h3>
+                  <h3 className="text-neutral-900 font-bold mb-4">
+                    Pallet Manifest
+                    {isEditing && <span className="ml-2 text-sm font-normal text-amber-600">(Click to edit)</span>}
+                  </h3>
                   <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin">
-                    {selectedPlan.pallets.map(p => {
+                    {currentSelectedPlan.pallets.map(p => {
                       const itemCount = p.pallet.items?.length || 0;
                       const primaryDesc = itemCount > 0 ? p.pallet.items[0].description : p.pallet.id;
                       const displayDesc = itemCount > 1 
@@ -352,57 +656,150 @@ export default function LoadPlanViewer({
                       return (
                         <div
                           key={p.pallet.id}
-                          className="flex justify-between items-center bg-neutral-50 rounded-xl p-3 border border-neutral-200/50"
+                          className={`bg-neutral-50 rounded-xl p-3 border border-neutral-200/50 ${
+                            isEditing ? 'hover:border-amber-300' : ''
+                          }`}
                         >
-                          <div className="flex-1 min-w-0">
-                            <div className="text-neutral-900 font-medium truncate" title={displayDesc}>
-                              {displayDesc}
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1 min-w-0">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={primaryDesc}
+                                  onChange={(e) => updatePalletField(
+                                    currentSelectedPlan.aircraft_id,
+                                    p.pallet.id,
+                                    'description',
+                                    e.target.value
+                                  )}
+                                  className="w-full bg-white border border-neutral-300 rounded-lg px-2 py-1 text-neutral-900 font-medium focus:ring-2 focus:ring-primary focus:border-transparent"
+                                />
+                              ) : (
+                                <div className="text-neutral-900 font-medium truncate" title={displayDesc}>
+                                  {displayDesc}
+                                </div>
+                              )}
+                              <div className="text-neutral-500 text-sm mt-1">
+                                <span className="font-mono">{p.pallet.id}</span>
+                                {isEditing ? (
+                                  <select
+                                    value={p.position_index}
+                                    onChange={(e) => updatePalletPosition(
+                                      currentSelectedPlan.aircraft_id,
+                                      p.pallet.id,
+                                      parseInt(e.target.value)
+                                    )}
+                                    className="ml-2 bg-white border border-neutral-300 rounded px-2 py-0.5 text-sm focus:ring-2 focus:ring-primary"
+                                  >
+                                    {Array.from({ length: currentSelectedPlan.aircraft_spec.pallet_positions }, (_, i) => (
+                                      <option key={i} value={i}>
+                                        Position {i + 1}{i >= currentSelectedPlan.aircraft_spec.pallet_positions - currentSelectedPlan.aircraft_spec.ramp_positions.length ? ' (RAMP)' : ''}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className="ml-2">
+                                    Position {p.position_index + 1}
+                                    {p.is_ramp && ' (RAMP)'}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <div className="text-neutral-500 text-sm">
-                              <span className="font-mono">{p.pallet.id}</span>
-                              <span className="ml-2">
-                                Position {p.position_index + 1}
-                                {p.is_ramp && ' (RAMP)'}
-                              </span>
+                            <div className="text-right ml-2">
+                              {isEditing ? (
+                                <div className="flex items-center space-x-1">
+                                  <input
+                                    type="number"
+                                    value={p.pallet.gross_weight}
+                                    onChange={(e) => updatePalletField(
+                                      currentSelectedPlan.aircraft_id,
+                                      p.pallet.id,
+                                      'weight',
+                                      e.target.value
+                                    )}
+                                    className="w-24 bg-white border border-neutral-300 rounded-lg px-2 py-1 text-neutral-900 font-medium text-right focus:ring-2 focus:ring-primary focus:border-transparent"
+                                  />
+                                  <span className="text-neutral-500 text-sm">lbs</span>
+                                </div>
+                              ) : (
+                                <span className="text-neutral-900 font-medium">
+                                  {p.pallet.gross_weight.toLocaleString()} lbs
+                                </span>
+                              )}
+                              {p.pallet.hazmat_flag && (
+                                <span className="ml-2 badge-warning">HAZMAT</span>
+                              )}
                             </div>
-                          </div>
-                          <div className="text-right ml-2">
-                            <span className="text-neutral-900 font-medium">
-                              {p.pallet.gross_weight.toLocaleString()} lbs
-                            </span>
-                            {p.pallet.hazmat_flag && (
-                              <span className="ml-2 badge-warning">HAZMAT</span>
-                            )}
                           </div>
                         </div>
                       );
                     })}
-                    {selectedPlan.pallets.length === 0 && (
+                    {currentSelectedPlan.pallets.length === 0 && (
                       <p className="text-neutral-400 text-center py-4">No pallets loaded</p>
                     )}
                   </div>
                 </div>
 
                 <div className="glass-card p-4">
-                  <h3 className="text-neutral-900 font-bold mb-4">Rolling Stock</h3>
+                  <h3 className="text-neutral-900 font-bold mb-4">
+                    Rolling Stock
+                    {isEditing && <span className="ml-2 text-sm font-normal text-amber-600">(Click to edit)</span>}
+                  </h3>
                   <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin">
-                    {selectedPlan.rolling_stock.map(v => (
+                    {currentSelectedPlan.rolling_stock.map(v => (
                       <div
                         key={String(v.item_id)}
-                        className="flex justify-between items-center bg-neutral-50 rounded-xl p-3 border border-neutral-200/50"
+                        className={`bg-neutral-50 rounded-xl p-3 border border-neutral-200/50 ${
+                          isEditing ? 'hover:border-amber-300' : ''
+                        }`}
                       >
-                        <div>
-                          <span className="text-neutral-900 font-medium">{v.item.description}</span>
-                          <span className="text-neutral-500 text-sm ml-2">
-                            {v.length}"L × {v.width}"W × {v.height}"H
-                          </span>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1 min-w-0">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={v.item.description}
+                                onChange={(e) => updateVehicleField(
+                                  currentSelectedPlan.aircraft_id,
+                                  v.item_id,
+                                  'description',
+                                  e.target.value
+                                )}
+                                className="w-full bg-white border border-neutral-300 rounded-lg px-2 py-1 text-neutral-900 font-medium focus:ring-2 focus:ring-primary focus:border-transparent"
+                              />
+                            ) : (
+                              <span className="text-neutral-900 font-medium">{v.item.description}</span>
+                            )}
+                            <span className="text-neutral-500 text-sm ml-2 block mt-1">
+                              {v.length}"L × {v.width}"W × {v.height}"H
+                            </span>
+                          </div>
+                          <div className="text-right ml-2">
+                            {isEditing ? (
+                              <div className="flex items-center space-x-1">
+                                <input
+                                  type="number"
+                                  value={v.weight}
+                                  onChange={(e) => updateVehicleField(
+                                    currentSelectedPlan.aircraft_id,
+                                    v.item_id,
+                                    'weight',
+                                    e.target.value
+                                  )}
+                                  className="w-24 bg-white border border-neutral-300 rounded-lg px-2 py-1 text-neutral-900 font-medium text-right focus:ring-2 focus:ring-primary focus:border-transparent"
+                                />
+                                <span className="text-neutral-500 text-sm">lbs</span>
+                              </div>
+                            ) : (
+                              <span className="text-neutral-900 font-medium">
+                                {v.weight.toLocaleString()} lbs
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <span className="text-neutral-900 font-medium">
-                          {v.weight.toLocaleString()} lbs
-                        </span>
                       </div>
                     ))}
-                    {selectedPlan.rolling_stock.length === 0 && (
+                    {currentSelectedPlan.rolling_stock.length === 0 && (
                       <p className="text-neutral-400 text-center py-4">No rolling stock</p>
                     )}
                   </div>
@@ -415,31 +812,31 @@ export default function LoadPlanViewer({
                   <div className="stat-card">
                     <p className="stat-label">Total Weight</p>
                     <p className="stat-value text-xl">
-                      {selectedPlan.total_weight.toLocaleString()} lbs
+                      {currentSelectedPlan.total_weight.toLocaleString()} lbs
                     </p>
                   </div>
                   <div className="stat-card">
                     <p className="stat-label">Payload Used</p>
                     <p className="stat-value text-xl">
-                      {selectedPlan.payload_used_percent.toFixed(1)}%
+                      {currentSelectedPlan.payload_used_percent.toFixed(1)}%
                     </p>
                   </div>
                   <div className="stat-card">
                     <p className="stat-label">Center of Balance</p>
-                    <p className={`stat-value text-xl ${selectedPlan.cob_in_envelope ? 'text-green-600' : 'text-red-600'}`}>
-                      {selectedPlan.cob_percent.toFixed(1)}%
+                    <p className={`stat-value text-xl ${currentSelectedPlan.cob_in_envelope ? 'text-green-600' : 'text-red-600'}`}>
+                      {currentSelectedPlan.cob_percent.toFixed(1)}%
                     </p>
                   </div>
                   <div className="stat-card">
                     <p className="stat-label">Positions Used</p>
                     <p className="stat-value text-xl">
-                      {selectedPlan.positions_used}/{selectedPlan.positions_available}
+                      {currentSelectedPlan.positions_used}/{currentSelectedPlan.positions_available}
                     </p>
                   </div>
                   <div className="stat-card">
                     <p className="stat-label">PAX</p>
                     <p className="stat-value text-xl">
-                      {selectedPlan.pax_count}
+                      {currentSelectedPlan.pax_count}
                     </p>
                   </div>
                 </div>

@@ -625,6 +625,8 @@ export function parseMovementListV2(csvContent: string): ParsedCargoResult {
       totalPax += paxValue;
       // Track individual PAX entries for display
       paxIndividual.push(paxValue);
+      // PAX is metadata only - do NOT add to cargo items array
+      continue;
     }
 
     // Detect HAZMAT from description
