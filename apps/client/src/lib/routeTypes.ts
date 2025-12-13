@@ -217,6 +217,7 @@ export interface WeatherForecast {
   wind_speed_kt: number;
   gust_kt?: number;
   visibility_sm: number;
+  visibility_nm?: number;
   ceiling_ft: number;
   temperature_c: number;
   dewpoint_c: number;

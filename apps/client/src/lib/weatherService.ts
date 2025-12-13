@@ -7,6 +7,11 @@
 
 import { WeatherForecast, WeatherMovement, MilitaryBase } from './routeTypes';
 
+// Unit conversion utilities
+const metersToNauticalMiles = (m: number | null): number | null => m == null ? null : m / 1852;
+const metersPerSecondToKnots = (ms: number | null): number | null => ms == null ? null : ms * 1.94384;
+const metersToStatuteMiles = (m: number | null): number | null => m == null ? null : m / 1609.34;
+
 // Types for NWS API response
 export interface NWSForecastPeriod {
   number: number;
@@ -63,28 +68,37 @@ export interface NWSWeatherResponse {
  * @returns Weather data from NWS API or null if request fails
  */
 export async function fetchRealWeather(lat: number, lon: number): Promise<NWSWeatherResponse | null> {
+  const requestId = Math.random().toString(36).substring(7);
+  console.debug(`[Weather ${requestId}] Starting fetch for coordinates: ${lat}, ${lon}`);
+  
   try {
+    const startTime = performance.now();
     const response = await fetch(`/api/weather/${lat}/${lon}`);
+    const duration = (performance.now() - startTime).toFixed(0);
+    
+    console.debug(`[Weather ${requestId}] Response received in ${duration}ms, status: ${response.status}`);
     
     if (response.status === 429) {
-      console.warn('Weather API rate limited. Using fallback data.');
+      console.warn(`[Weather ${requestId}] Rate limited. Using fallback data.`);
       return null;
     }
     
     if (response.status === 404) {
-      console.warn('Location not supported by NWS API (non-US territory). Using fallback data.');
+      console.warn(`[Weather ${requestId}] Location not supported by NWS API (non-US territory). Using fallback data.`);
       return null;
     }
     
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-      console.error('Weather API error:', error);
+      console.error(`[Weather ${requestId}] API error:`, error);
       return null;
     }
     
-    return await response.json();
+    const data = await response.json();
+    console.debug(`[Weather ${requestId}] Successfully parsed response. Cached: ${data.cached}, Periods: ${data.forecast?.length || 0}`);
+    return data;
   } catch (error) {
-    console.error('Failed to fetch weather data:', error);
+    console.error(`[Weather ${requestId}] Failed to fetch weather data:`, error);
     return null;
   }
 }
@@ -96,11 +110,15 @@ export async function fetchRealWeather(lat: number, lon: number): Promise<NWSWea
  * @returns Weather forecast (real or simulated)
  */
 export async function getRealBaseWeather(base: MilitaryBase): Promise<WeatherForecast> {
+  console.debug(`[Weather] Fetching real weather for base: ${base.name} (${base.icao})`);
+  
   const nwsData = await fetchRealWeather(base.latitude_deg, base.longitude_deg);
   
   if (nwsData && nwsData.currentConditions) {
     const conditions = nwsData.currentConditions;
     const forecast = nwsData.forecast[0];
+    
+    console.debug(`[Weather] Processing NWS data for ${base.icao}`);
     
     const tempC = conditions.temperature?.value !== null 
       ? conditions.temperature?.unitCode?.includes('degC') 
@@ -118,15 +136,18 @@ export async function getRealBaseWeather(base: MilitaryBase): Promise<WeatherFor
     
     const windSpeedMs = conditions.windSpeed?.value || 0;
     const windSpeedKt = conditions.windSpeed?.unitCode?.includes('m_s-1')
-      ? windSpeedMs * 1.944
+      ? metersPerSecondToKnots(windSpeedMs) || windSpeedMs * 1.944
       : conditions.windSpeed?.unitCode?.includes('km_h-1')
         ? windSpeedMs * 0.54
         : windSpeedMs;
     
     const visibilityM = conditions.visibility?.value || 16000;
     const visibilitySm = conditions.visibility?.unitCode?.includes('m')
-      ? visibilityM / 1609.34
+      ? metersToStatuteMiles(visibilityM) || visibilityM / 1609.34
       : visibilityM;
+    const visibilityNm = conditions.visibility?.unitCode?.includes('m')
+      ? metersToNauticalMiles(visibilityM)
+      : null;
     
     const pressurePa = conditions.barometricPressure?.value || 101325;
     const pressureInhg = pressurePa / 3386.39;
@@ -144,12 +165,15 @@ export async function getRealBaseWeather(base: MilitaryBase): Promise<WeatherFor
     else if (desc.includes('snow') || desc.includes('sleet')) precipitation = 'snow';
     else if (desc.includes('rain') || desc.includes('shower')) precipitation = 'rain';
     
+    console.debug(`[Weather] ${base.icao}: temp=${Math.round(tempC || 15)}°C, wind=${Math.round(windSpeedKt)}kt, vis=${Math.round(visibilitySm)}sm/${visibilityNm?.toFixed(1) || 'N/A'}nm, conditions=${flightConditions}`);
+    
     return {
       timestamp: new Date(),
       location: { lat: base.latitude_deg, lon: base.longitude_deg },
       wind_direction_deg: windDirDeg,
       wind_speed_kt: Math.round(windSpeedKt),
       visibility_sm: Math.round(visibilitySm),
+      visibility_nm: visibilityNm !== null ? Math.round(visibilityNm * 10) / 10 : undefined,
       ceiling_ft: ceilingFt,
       temperature_c: Math.round(tempC || 15),
       dewpoint_c: Math.round(dewpointC || 10),
@@ -159,6 +183,7 @@ export async function getRealBaseWeather(base: MilitaryBase): Promise<WeatherFor
     };
   }
   
+  console.debug(`[Weather] Using fallback simulated data for ${base.icao} - Weather Data Unavailable from NWS`);
   return getBaseWeather(base);
 }
 
