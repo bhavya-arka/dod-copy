@@ -73,6 +73,11 @@ export interface ParsedCargoResult {
     total_weight: number;
   };
   
+  // Individual PAX entries (e.g., [1, 1, 4, 4, 20])
+  pax_individual: number[];
+  // Total PAX from "Total PAX" row (e.g., 30)
+  pax_total: number;
+  
   // Pallet tracking for ICODES/UI
   pallet_ids: { pallet_id: string; lead_tcn: string | null }[];
 }

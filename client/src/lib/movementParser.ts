@@ -135,7 +135,13 @@ function isHeaderRow(values: string[]): boolean {
   return !hasLongValue && matches >= 4;
 }
 
-function parseRawCSV(csvContent: string): { rows: RawCSVRow[]; headerIndices: number[] } {
+interface ParseRawCSVResult {
+  rows: RawCSVRow[];
+  headerIndices: number[];
+  paxTotal: number;
+}
+
+function parseRawCSV(csvContent: string): ParseRawCSVResult {
   const lines = csvContent.trim().split('\n');
   if (lines.length < 1) {
     throw new Error('CSV file is empty');
@@ -145,6 +151,7 @@ function parseRawCSV(csvContent: string): { rows: RawCSVRow[]; headerIndices: nu
   const headerIndices: number[] = [];
   let columnMapping: { [key: string]: number } = {};
   let hasFoundHeader = false;
+  let paxTotal = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const rawValues = parseCSVLine(lines[i]);
@@ -191,20 +198,54 @@ function parseRawCSV(csvContent: string): { rows: RawCSVRow[]; headerIndices: nu
     if (values.every(v => v === '')) continue;
 
     // Parse data row using column mapping
-    // Only use lead_tcn and pax if columns were explicitly detected in header
-    // This prevents numeric values from wrong columns being misinterpreted
+    const description = values[columnMapping.description ?? 0] || '';
+    const length = values[columnMapping.length ?? 1] || '';
+    const width = values[columnMapping.width ?? 2] || '';
+    const height = values[columnMapping.height ?? 3] || '';
+    const weight = values[columnMapping.weight ?? 4] || '';
+    const lead_tcn = columnMapping.lead_tcn !== undefined ? (values[columnMapping.lead_tcn] || '') : '';
+    const pax = columnMapping.pax !== undefined ? (values[columnMapping.pax] || '') : '';
+
+    // Normalize description for PAX detection
+    // Handle case where description is empty and "PAX" or "Total PAX" appears in another column
+    const descUpper = description.trim().toUpperCase();
+    const lengthUpper = length.trim().toUpperCase();
+    
+    // Check for "Total PAX" row - extract the total and skip
+    // This can appear as Description="Total PAX" or as empty Description with Length="Total PAX"
+    if (descUpper === 'TOTAL PAX' || (descUpper === '' && lengthUpper === 'TOTAL PAX')) {
+      const paxStr = pax.replace(/[^\d]/g, '');
+      if (paxStr) {
+        paxTotal = parseInt(paxStr, 10);
+        console.log('[MovementParser] Found Total PAX row:', paxTotal);
+      }
+      continue; // Skip this row - don't add to items
+    }
+
+    // Check for PAX section marker (Description="PAX" with no PAX count)
+    // This can appear as Description="PAX" or as empty Description with Length="PAX"
+    const isPaxMarker = (descUpper === 'PAX' || (descUpper === '' && lengthUpper === 'PAX'));
+    const hasPaxCount = pax.trim() !== '' && !isNaN(parseInt(pax.replace(/[^\d]/g, ''), 10));
+    
+    if (isPaxMarker && !hasPaxCount) {
+      // Skip PAX section marker row (no count)
+      console.log('[MovementParser] Skipping PAX section marker row (no count)');
+      continue;
+    }
+
+    // Add row to results
     rows.push({
-      description: values[columnMapping.description ?? 0] || '',
-      length: values[columnMapping.length ?? 1] || '',
-      width: values[columnMapping.width ?? 2] || '',
-      height: values[columnMapping.height ?? 3] || '',
-      weight: values[columnMapping.weight ?? 4] || '',
-      lead_tcn: columnMapping.lead_tcn !== undefined ? (values[columnMapping.lead_tcn] || '') : '',
-      pax: columnMapping.pax !== undefined ? (values[columnMapping.pax] || '') : ''
+      description,
+      length,
+      width,
+      height,
+      weight,
+      lead_tcn,
+      pax
     });
   }
 
-  return { rows, headerIndices };
+  return { rows, headerIndices, paxTotal };
 }
 
 // ============================================================================
@@ -502,7 +543,7 @@ function validateAndParseRow(row: RawCSVRow, rowIndex: number): ValidationResult
 export function parseMovementListV2(csvContent: string): ParsedCargoResult {
   resetIdCounters();
   
-  const { rows } = parseRawCSV(csvContent);
+  const { rows, paxTotal: parsedPaxTotal } = parseRawCSV(csvContent);
   const items: ParsedCargoItem[] = [];
   const allErrors: ValidationIssue[] = [];
   const allWarnings: ValidationIssue[] = [];
@@ -515,6 +556,9 @@ export function parseMovementListV2(csvContent: string): ParsedCargoResult {
   let totalLooseCargoWeight = 0;
   let looseCargoCount = 0;
   let totalPax = 0;
+  
+  // Track individual PAX entries
+  const paxIndividual: number[] = [];
 
   const palletIds: { pallet_id: string; lead_tcn: string | null }[] = [];
 
@@ -581,7 +625,10 @@ export function parseMovementListV2(csvContent: string): ParsedCargoResult {
       totalLooseCargoWeight += weight;
       looseCargoCount++;
     } else if (classification.cargo_type === 'PAX_RECORD') {
-      totalPax += paxCount || 1;
+      const paxValue = paxCount || 1;
+      totalPax += paxValue;
+      // Track individual PAX entries for display
+      paxIndividual.push(paxValue);
     }
 
     // Detect HAZMAT from description
@@ -619,12 +666,16 @@ export function parseMovementListV2(csvContent: string): ParsedCargoResult {
     items.push(parsedItem);
   }
 
+  // Use the "Total PAX" row value if available, otherwise sum up individual entries
+  const finalPaxTotal = parsedPaxTotal > 0 ? parsedPaxTotal : totalPax;
+
   console.log('[MovementParser V2] Parse complete:', {
     totalItems: items.length,
     rollingStockCount,
     palletCount: totalPalletCount,
     looseCargoCount,
-    paxCount: totalPax
+    paxIndividual,
+    paxTotal: finalPaxTotal
   });
 
   return {
@@ -638,9 +689,11 @@ export function parseMovementListV2(csvContent: string): ParsedCargoResult {
       rolling_stock_count: rollingStockCount,
       total_loose_cargo_weight: totalLooseCargoWeight,
       loose_cargo_count: looseCargoCount,
-      total_pax: totalPax,
+      total_pax: finalPaxTotal,
       total_weight: totalPalletizedWeight + totalRollingStockWeight + totalLooseCargoWeight
     },
+    pax_individual: paxIndividual,
+    pax_total: finalPaxTotal,
     pallet_ids: palletIds
   };
 }
