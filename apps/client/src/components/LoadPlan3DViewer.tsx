@@ -23,6 +23,8 @@ import {
 } from '../lib/pacafTypes';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Maximize2, X, Minimize2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface LoadPlan3DViewerProps {
   loadPlan: AircraftLoadPlan;
@@ -1063,6 +1065,7 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
     showMinimap: true,
     showMeasure: false
   });
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   const scale = 0.01;
   
@@ -1098,20 +1101,33 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
     setViewerState(prev => ({ ...prev, selectedCargo: null }));
   }, []);
   
-  return (
-    <div className="bg-neutral-50 h-full flex flex-col overflow-hidden relative">
+  const viewerContent = (
+    <>
       <div className="flex justify-between items-center p-4 border-b border-neutral-200 bg-white z-20">
         <div>
           <h3 className="text-neutral-900 font-bold text-lg">{loadPlan.aircraft_id}</h3>
           <p className="text-neutral-500 text-sm">{loadPlan.aircraft_spec.name} - 3D View</p>
         </div>
-        <div className="text-right">
-          <p className="text-neutral-900 font-mono font-bold">
-            {loadPlan.total_weight.toLocaleString()} lbs
-          </p>
-          <p className="text-neutral-500 text-sm">
-            {loadPlan.payload_used_percent.toFixed(1)}% capacity
-          </p>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <p className="text-neutral-900 font-mono font-bold">
+              {loadPlan.total_weight.toLocaleString()} lbs
+            </p>
+            <p className="text-neutral-500 text-sm">
+              {loadPlan.payload_used_percent.toFixed(1)}% capacity
+            </p>
+          </div>
+          <button
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+            title={isFullscreen ? "Exit fullscreen" : "Fullscreen view"}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="w-5 h-5 text-neutral-600" />
+            ) : (
+              <Maximize2 className="w-5 h-5 text-neutral-600" />
+            )}
+          </button>
         </div>
       </div>
       
@@ -1178,6 +1194,33 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
           <span className="text-neutral-400 text-xs">WASD to move • R to reset • Click cargo to select</span>
         </div>
       </div>
-    </div>
+    </>
+  );
+
+  return (
+    <AnimatePresence>
+      {isFullscreen ? (
+        <motion.div
+          key="fullscreen"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 bg-neutral-50 flex flex-col overflow-hidden"
+        >
+          <button
+            onClick={() => setIsFullscreen(false)}
+            className="absolute top-4 right-4 z-50 p-2 rounded-full bg-white shadow-lg hover:bg-neutral-100 transition-colors"
+            title="Close fullscreen"
+          >
+            <X className="w-6 h-6 text-neutral-600" />
+          </button>
+          {viewerContent}
+        </motion.div>
+      ) : (
+        <div className="bg-neutral-50 h-full flex flex-col overflow-hidden relative">
+          {viewerContent}
+        </div>
+      )}
+    </AnimatePresence>
   );
 }
