@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uuid, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -177,3 +177,135 @@ export const insertPortInventorySchema = createInsertSchema(portInventory).omit(
 
 export type InsertPortInventory = z.infer<typeof insertPortInventorySchema>;
 export type PortInventory = typeof portInventory.$inferSelect;
+
+// ============================================================================
+// DAG SYSTEM TABLES (NEW)
+// ============================================================================
+
+// DAG Node Types
+export const dagNodeTypeEnum = ['airbase', 'flight'] as const;
+export type DagNodeType = typeof dagNodeTypeEnum[number];
+
+// DAG Nodes - stores nodes in the directed acyclic graph (airbases or flights)
+export const dagNodes = pgTable("dag_nodes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: integer("user_id").notNull(),
+  node_type: text("node_type").notNull(), // 'airbase' or 'flight'
+  name: text("name").notNull(),
+  icao: text("icao"), // ICAO code for airbases
+  latitude: numeric("latitude", { precision: 10, scale: 6 }),
+  longitude: numeric("longitude", { precision: 10, scale: 6 }),
+  position_x: integer("position_x").notNull().default(0),
+  position_y: integer("position_y").notNull().default(0),
+  metadata: jsonb("metadata").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertDagNodeSchema = createInsertSchema(dagNodes).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+
+export type InsertDagNode = z.infer<typeof insertDagNodeSchema>;
+export type DagNode = typeof dagNodes.$inferSelect;
+
+// DAG Edges - stores directed connections between nodes
+export const dagEdges = pgTable("dag_edges", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: integer("user_id").notNull(),
+  parent_id: uuid("parent_id").notNull(), // references dagNodes.id
+  child_id: uuid("child_id").notNull(), // references dagNodes.id
+  cargo_shared: boolean("cargo_shared").notNull().default(false),
+  edge_data: jsonb("edge_data").notNull().default({}), // distance_nm, fuel_lb, time_en_route, etc.
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDagEdgeSchema = createInsertSchema(dagEdges).omit({
+  id: true,
+  created_at: true,
+});
+
+export type InsertDagEdge = z.infer<typeof insertDagEdgeSchema>;
+export type DagEdge = typeof dagEdges.$inferSelect;
+
+// Cargo Items - individual cargo pieces with TCN
+export const cargoItems = pgTable("cargo_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: integer("user_id").notNull(),
+  tcn: text("tcn").notNull(), // Transportation Control Number
+  description: text("description"),
+  weight_lb: numeric("weight_lb", { precision: 12, scale: 2 }),
+  length_in: numeric("length_in", { precision: 8, scale: 2 }),
+  width_in: numeric("width_in", { precision: 8, scale: 2 }),
+  height_in: numeric("height_in", { precision: 8, scale: 2 }),
+  cargo_type: text("cargo_type"), // 'palletized', 'rolling_stock', 'bulk', 'hazmat', 'oversized'
+  is_hazmat: boolean("is_hazmat").notNull().default(false),
+  hazmat_class: text("hazmat_class"),
+  priority: text("priority"), // 'ADVON', 'MAIN', 'ROUTINE'
+  metadata: jsonb("metadata").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCargoItemSchema = createInsertSchema(cargoItems).omit({
+  id: true,
+  created_at: true,
+});
+
+export type InsertCargoItem = z.infer<typeof insertCargoItemSchema>;
+export type CargoItem = typeof cargoItems.$inferSelect;
+
+// Cargo Assignment Status
+export const cargoAssignmentStatusEnum = ['assigned', 'in_transit', 'delivered', 'pending'] as const;
+export type CargoAssignmentStatus = typeof cargoAssignmentStatusEnum[number];
+
+// Cargo Assignments - links cargo items to nodes with status tracking
+export const cargoAssignments = pgTable("cargo_assignments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: integer("user_id").notNull(),
+  cargo_id: uuid("cargo_id").notNull(), // references cargoItems.id
+  node_id: uuid("node_id").notNull(), // references dagNodes.id
+  status: text("status").notNull().default('assigned'), // 'assigned', 'in_transit', 'delivered', 'pending'
+  sequence: integer("sequence").notNull().default(0), // order in the cargo chain
+  pallet_position: integer("pallet_position"), // position on aircraft if loaded
+  metadata: jsonb("metadata").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCargoAssignmentSchema = createInsertSchema(cargoAssignments).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+
+export type InsertCargoAssignment = z.infer<typeof insertCargoAssignmentSchema>;
+export type CargoAssignment = typeof cargoAssignments.$inferSelect;
+
+// DAG Flight Plans - links flight plans to flight nodes
+export const dagFlightPlans = pgTable("dag_flight_plans", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: integer("user_id").notNull(),
+  flight_node_id: uuid("flight_node_id").notNull(), // references dagNodes.id (flight type)
+  aircraft_type: text("aircraft_type").notNull(), // 'C-17', 'C-130H', 'C-130J'
+  callsign: text("callsign"),
+  departure_time: timestamp("departure_time"),
+  arrival_time: timestamp("arrival_time"),
+  origin_icao: text("origin_icao"),
+  destination_icao: text("destination_icao"),
+  route: jsonb("route").notNull().default([]), // list of waypoints
+  status: text("status").notNull().default('planned'), // 'planned', 'scheduled', 'in_progress', 'completed'
+  metadata: jsonb("metadata").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertDagFlightPlanSchema = createInsertSchema(dagFlightPlans).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+
+export type InsertDagFlightPlan = z.infer<typeof insertDagFlightPlanSchema>;
+export type DagFlightPlan = typeof dagFlightPlans.$inferSelect;
