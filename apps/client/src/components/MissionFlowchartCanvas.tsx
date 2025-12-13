@@ -176,9 +176,36 @@ function useDagPersistence({
   const saveEdge = useCallback(async (edge: Edge) => {
     if (!enabled || !userId) return;
     
+    const sourceDagId = nodeIdMapRef.current.get(edge.source);
+    const targetDagId = nodeIdMapRef.current.get(edge.target);
+    
+    if (!sourceDagId || !targetDagId) {
+      console.warn('DAG save edge skipped: source or target node not yet saved to DAG', {
+        source: edge.source,
+        target: edge.target,
+        sourceDagId,
+        targetDagId
+      });
+      return;
+    }
+    
     setSyncStatus('saving');
     try {
-      const dagEdge = reactFlowEdgeToDagEdge(edge, userId);
+      const dagEdge = {
+        user_id: userId,
+        parent_id: sourceDagId,
+        child_id: targetDagId,
+        cargo_shared: false,
+        edge_data: edge.data ? {
+          distance_nm: (edge.data as any).distance || 0,
+          fuel_lb: (edge.data as any).fuelLb || 0,
+          time_en_route: (edge.data as any).timeHours || 0,
+          flightId: (edge.data as any).flightId || '',
+          isHazmat: (edge.data as any).isHazmat || false,
+          isAdvon: (edge.data as any).isAdvon || false,
+        } : {},
+      };
+      
       const result = await dagApi.edges.create(dagEdge);
       
       if (result.error) throw new Error(result.error);
@@ -321,6 +348,10 @@ interface FlightNodeData {
   };
   originIcao?: string;
   destinationIcao?: string;
+  availableToPickup?: {
+    palletCount: number;
+    totalWeight: number;
+  };
   onExportPDF?: (flightId: string) => void;
   onExportICODES?: (flightId: string) => void;
   onView3D?: (flightId: string) => void;
@@ -358,7 +389,7 @@ interface RouteEdgeData {
 
 const FlightNode = ({ data, selected }: NodeProps) => {
   const nodeData = data as unknown as FlightNodeData;
-  const { callsign, displayName, aircraftType, isHazmat, isAdvon, heaviestItems, summary, flightId, onExportPDF, onExportICODES, onView3D } = nodeData;
+  const { callsign, displayName, aircraftType, isHazmat, isAdvon, heaviestItems, summary, flightId, availableToPickup, originIcao, onExportPDF, onExportICODES, onView3D } = nodeData;
   
   const bgColor = isHazmat 
     ? 'from-yellow-100 to-amber-100 border-yellow-400' 
@@ -448,6 +479,20 @@ const FlightNode = ({ data, selected }: NodeProps) => {
                 <span className="text-neutral-600 font-medium ml-1">{Math.round(item.weight / 1000)}K lb</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {availableToPickup && availableToPickup.palletCount > 0 && (
+        <div className="mt-2 bg-blue-100/80 rounded-lg px-2 py-1.5 text-center border border-blue-200">
+          <div className="flex items-center justify-center gap-2 text-xs">
+            <FiTruck className="text-blue-600" size={12} />
+            <span className="text-blue-800 font-medium">
+              Can pick up {availableToPickup.palletCount} pallets from {originIcao}
+            </span>
+          </div>
+          <div className="text-xs text-blue-600">
+            ({Math.round(availableToPickup.totalWeight / 1000)}K lb available)
           </div>
         </div>
       )}
@@ -737,6 +782,9 @@ function buildGraphFromFlights(flights: SplitFlight[]): { nodes: Node[]; edges: 
       .slice(0, 5)
       .map(i => ({ name: i.description || `Item ${i.item_id}`, weight: i.weight_each_lb * i.quantity }));
 
+    // Calculate what cargo is available at origin that this flight could pick up
+    const originAvailableCargo = calculateAvailableCargo(flight.origin.base_id);
+    
     const flightNode: Node = {
       id: flightId,
       type: 'flight',
@@ -758,6 +806,7 @@ function buildGraphFromFlights(flights: SplitFlight[]): { nodes: Node[]; edges: 
         },
         originIcao: flight.origin.icao,
         destinationIcao: flight.destination.icao,
+        availableToPickup: originAvailableCargo.palletCount > 0 ? originAvailableCargo : undefined,
       } as FlightNodeData,
     };
     nodes.push(flightNode);
@@ -962,6 +1011,15 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
     
     const sourceData = sourceNode.data as unknown as { nodeType: string; isHazmat?: boolean; isAdvon?: boolean; baseId?: string; flightId?: string };
     const targetData = targetNode.data as unknown as { nodeType: string; baseId?: string; flightId?: string };
+    
+    // Check if source is a flight node - flights can only have one destination
+    if (sourceData.nodeType === 'flight') {
+      const hasExistingOutput = edges.some(e => e.source === connection.source);
+      if (hasExistingOutput) {
+        console.warn('Flight nodes can only have one destination');
+        return;
+      }
+    }
     
     // Check if both nodes are airbases - need to auto-spawn a flight
     if (sourceData.nodeType === 'airbase' && targetData.nodeType === 'airbase') {
