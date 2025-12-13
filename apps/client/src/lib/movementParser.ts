@@ -37,11 +37,11 @@ const PALLET_TEXT_HINTS = [
   'LIGHTNING', 'BRU', 'BOS', 'HESAMS'
 ];
 
-// Spec Section 4.1: Rolling stock keywords
+// Spec Section 4.1: Rolling stock keywords (refined to avoid false positives on palletized cargo)
+// Removed: 'RIG' (matches "BOS RIG/AV CTK AMU"), 'PLANT' and 'MOBILE' (too broad)
 const ROLLING_STOCK_KEYWORDS = [
   'TRACTOR', 'TRK', 'TRUCK', 'TRAILER', 'TOW', 'TOWBAR',
-  'LOADER', 'MHU', 'VEH', 'FORKLIFT', 'RIG', 'DOLLY',
-  'VEHICLE', 'PLANT', 'MOBILE'
+  'LOADER', 'MHU-', 'VEH', 'FORKLIFT', 'DOLLY', 'VEHICLE'
 ];
 
 // Spec Section 3.2: Approximate pallet dimension ranges
@@ -320,9 +320,24 @@ function classifyItem(
   const warnings: ValidationIssue[] = [];
   const description = row.description.toUpperCase();
   
-  // Section 4.1: Check for rolling stock keywords FIRST (before PAX)
-  // This ensures cargo with trailing PAX count isn't misclassified
-  // Case-insensitive check - description is already uppercased, keywords are uppercase
+  // PRIORITY 1: Check exact 463L footprint FIRST - items with 88x108 dimensions are PALLETS
+  // This takes precedence over rolling stock keywords to avoid misclassifying pallet items
+  const is463LFootprint = 
+    (length === PALLET_463L_FOOTPRINT.length && width === PALLET_463L_FOOTPRINT.width) ||
+    (length === PALLET_463L_FOOTPRINT.width && width === PALLET_463L_FOOTPRINT.length);
+
+  if (is463LFootprint && weight <= 10000) {
+    reasons.push('DIM_MATCH_463L');
+    return {
+      cargo_type: 'PALLETIZED',
+      pallet_footprint: '463L',
+      inferred_pallet_count: 1,
+      classification_reasons: reasons,
+      warnings
+    };
+  }
+
+  // PRIORITY 2: Check for rolling stock keywords (only for non-463L footprint items)
   const descUpper = description.toUpperCase();
   const isRollingStock = ROLLING_STOCK_KEYWORDS.some(keyword => descUpper.includes(keyword.toUpperCase()));
   
@@ -344,10 +359,8 @@ function classifyItem(
     };
   }
 
-  // Section 5: PAX Record Check (for PAX-only rows without significant cargo)
+  // PRIORITY 3: PAX Record Check (for PAX-only rows without significant cargo)
   if (paxCount !== null && paxCount > 0) {
-    // PAX_RECORD if no significant cargo dimensions/weight
-    // Rows with blank cargo data (0 dimensions) should be PAX_RECORD even if they have a description
     const hasSignificantCargo = (length > 0 || width > 0 || height > 0 || weight > 0);
     
     if (!hasSignificantCargo) {
@@ -361,24 +374,7 @@ function classifyItem(
       };
     }
     
-    // If there IS cargo data AND PAX, continue to classify based on cargo type
     reasons.push('PAX_COUNT_WITH_CARGO');
-  }
-
-  // Section 3.1: Check exact 463L footprint match
-  const is463LFootprint = 
-    (length === PALLET_463L_FOOTPRINT.length && width === PALLET_463L_FOOTPRINT.width) ||
-    (length === PALLET_463L_FOOTPRINT.width && width === PALLET_463L_FOOTPRINT.length);
-
-  if (is463LFootprint && weight <= 10000) {
-    reasons.push('DIM_MATCH_463L');
-    return {
-      cargo_type: 'PALLETIZED',
-      pallet_footprint: '463L',
-      inferred_pallet_count: 1,
-      classification_reasons: reasons,
-      warnings
-    };
   }
 
   // Section 3.2: Text-based hints with approximate dimensions
