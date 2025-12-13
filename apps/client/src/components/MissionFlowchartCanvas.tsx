@@ -59,6 +59,241 @@ import {
   MdFlight, MdFlightTakeoff, MdFlightLand, MdLocalAirport, MdLocationOn
 } from 'react-icons/md';
 import { BiTargetLock } from 'react-icons/bi';
+import { dagApi } from '../lib/dagApiClient';
+import { 
+  reactFlowNodeToDagNode, 
+  dagNodeToReactFlowNode, 
+  reactFlowEdgeToDagEdge, 
+  dagEdgeToReactFlowEdge,
+  dagNodesToReactFlowNodes,
+  dagEdgesToReactFlowEdges,
+} from '../lib/dagMappers';
+import { useAuth } from '../hooks/useAuth';
+
+type DagSyncStatus = 'idle' | 'loading' | 'saving' | 'saved' | 'error';
+
+interface UseDagPersistenceOptions {
+  userId: number | null;
+  enabled: boolean;
+  onLoadedNodes?: (nodes: Node[]) => void;
+  onLoadedEdges?: (edges: Edge[]) => void;
+}
+
+interface UseDagPersistenceResult {
+  isLoading: boolean;
+  syncStatus: DagSyncStatus;
+  error: string | null;
+  hasDagData: boolean;
+  saveNode: (node: Node) => Promise<void>;
+  saveEdge: (edge: Edge) => Promise<void>;
+  updateNodePosition: (nodeId: string, position: { x: number; y: number }) => void;
+  deleteNode: (nodeId: string) => Promise<void>;
+  deleteEdge: (edgeId: string) => Promise<void>;
+  loadDagData: () => Promise<{ nodes: Node[]; edges: Edge[] } | null>;
+}
+
+function useDagPersistence({
+  userId,
+  enabled,
+  onLoadedNodes,
+  onLoadedEdges,
+}: UseDagPersistenceOptions): UseDagPersistenceResult {
+  const [isLoading, setIsLoading] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<DagSyncStatus>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [hasDagData, setHasDagData] = useState(false);
+  
+  const positionUpdateQueue = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const nodeIdMapRef = useRef<Map<string, string>>(new Map());
+
+  const loadDagData = useCallback(async () => {
+    if (!enabled || !userId) return null;
+    
+    setIsLoading(true);
+    setSyncStatus('loading');
+    setError(null);
+    
+    try {
+      const [nodesResult, edgesResult] = await Promise.all([
+        dagApi.nodes.getAll(),
+        dagApi.edges.getAll(),
+      ]);
+      
+      if (nodesResult.error || edgesResult.error) {
+        throw new Error(nodesResult.error || edgesResult.error);
+      }
+      
+      const dagNodes = nodesResult.data || [];
+      const dagEdges = edgesResult.data || [];
+      
+      dagNodes.forEach(n => nodeIdMapRef.current.set(n.id, n.id));
+      
+      const flowNodes = dagNodesToReactFlowNodes(dagNodes);
+      const flowEdges = dagEdgesToReactFlowEdges(dagEdges);
+      
+      setHasDagData(dagNodes.length > 0);
+      setSyncStatus('idle');
+      
+      if (flowNodes.length > 0) onLoadedNodes?.(flowNodes);
+      if (flowEdges.length > 0) onLoadedEdges?.(flowEdges);
+      
+      return { nodes: flowNodes, edges: flowEdges };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load DAG data';
+      setError(message);
+      setSyncStatus('error');
+      console.error('DAG load error:', message);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [enabled, userId, onLoadedNodes, onLoadedEdges]);
+
+  const saveNode = useCallback(async (node: Node) => {
+    if (!enabled || !userId) return;
+    
+    setSyncStatus('saving');
+    try {
+      const dagNode = reactFlowNodeToDagNode(node, userId);
+      const result = await dagApi.nodes.create(dagNode);
+      
+      if (result.error) throw new Error(result.error);
+      if (result.data) {
+        nodeIdMapRef.current.set(node.id, result.data.id);
+      }
+      
+      setSyncStatus('saved');
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save node';
+      setError(message);
+      setSyncStatus('error');
+      console.error('DAG save node error:', message);
+    }
+  }, [enabled, userId]);
+
+  const saveEdge = useCallback(async (edge: Edge) => {
+    if (!enabled || !userId) return;
+    
+    setSyncStatus('saving');
+    try {
+      const dagEdge = reactFlowEdgeToDagEdge(edge, userId);
+      const result = await dagApi.edges.create(dagEdge);
+      
+      if (result.error) throw new Error(result.error);
+      
+      setSyncStatus('saved');
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save edge';
+      setError(message);
+      setSyncStatus('error');
+      console.error('DAG save edge error:', message);
+    }
+  }, [enabled, userId]);
+
+  const flushPositionUpdates = useCallback(async () => {
+    if (!enabled || !userId || positionUpdateQueue.current.size === 0) return;
+    
+    const updates = Array.from(positionUpdateQueue.current.entries());
+    positionUpdateQueue.current.clear();
+    
+    setSyncStatus('saving');
+    try {
+      await Promise.all(updates.map(async ([nodeId, position]) => {
+        const dagNodeId = nodeIdMapRef.current.get(nodeId);
+        if (dagNodeId) {
+          await dagApi.nodes.update(dagNodeId, {
+            position_x: Math.round(position.x),
+            position_y: Math.round(position.y),
+          });
+        }
+      }));
+      
+      setSyncStatus('saved');
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update positions';
+      setError(message);
+      setSyncStatus('error');
+      console.error('DAG position update error:', message);
+    }
+  }, [enabled, userId]);
+
+  const updateNodePosition = useCallback((nodeId: string, position: { x: number; y: number }) => {
+    if (!enabled || !userId) return;
+    
+    positionUpdateQueue.current.set(nodeId, position);
+    
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    debounceTimerRef.current = setTimeout(() => {
+      flushPositionUpdates();
+    }, 1000);
+  }, [enabled, userId, flushPositionUpdates]);
+
+  const deleteNode = useCallback(async (nodeId: string) => {
+    if (!enabled || !userId) return;
+    
+    const dagNodeId = nodeIdMapRef.current.get(nodeId);
+    if (!dagNodeId) return;
+    
+    setSyncStatus('saving');
+    try {
+      await dagApi.nodes.delete(dagNodeId);
+      nodeIdMapRef.current.delete(nodeId);
+      
+      setSyncStatus('saved');
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete node';
+      setError(message);
+      setSyncStatus('error');
+      console.error('DAG delete node error:', message);
+    }
+  }, [enabled, userId]);
+
+  const deleteEdge = useCallback(async (edgeId: string) => {
+    if (!enabled || !userId) return;
+    
+    setSyncStatus('saving');
+    try {
+      await dagApi.edges.delete(edgeId);
+      
+      setSyncStatus('saved');
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete edge';
+      setError(message);
+      setSyncStatus('error');
+      console.error('DAG delete edge error:', message);
+    }
+  }, [enabled, userId]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
+  return {
+    isLoading,
+    syncStatus,
+    error,
+    hasDagData,
+    saveNode,
+    saveEdge,
+    updateNodePosition,
+    deleteNode,
+    deleteEdge,
+    loadDagData,
+  };
+}
 
 interface MissionFlowchartCanvasProps {
   splitFlights: SplitFlight[];
@@ -604,6 +839,14 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
   const [pendingNodePosition, setPendingNodePosition] = useState<{ x: number; y: number } | null>(null);
   const reactFlowInstance = useReactFlow();
 
+  const { user, isAuthenticated } = useAuth();
+  const [dagSyncEnabled, setDagSyncEnabled] = useState(true);
+
+  const dagPersistence = useDagPersistence({
+    userId: user?.id ?? null,
+    enabled: dagSyncEnabled && isAuthenticated,
+  });
+
   // Define handlers first (before enrichNodesWithCallbacks)
   const handleExportPDF = useCallback(() => {
     if (splitFlights.length > 0) {
@@ -656,8 +899,20 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
   }, [handleSingleFlightPDF, handleSingleFlightICODES, onView3D]);
 
   const initialGraph = useMemo(() => buildGraphFromFlights(splitFlights), []);
-  const [nodes, setNodes, onNodesChange] = useNodesState(enrichNodesWithCallbacks(initialGraph.nodes));
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState(enrichNodesWithCallbacks(initialGraph.nodes));
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
+
+  const onNodesChange = useCallback((changes: Parameters<typeof onNodesChangeBase>[0]) => {
+    onNodesChangeBase(changes);
+    
+    if (dagSyncEnabled && isAuthenticated) {
+      changes.forEach((change) => {
+        if (change.type === 'position' && change.position && change.id) {
+          dagPersistence.updateNodePosition(change.id, change.position);
+        }
+      });
+    }
+  }, [onNodesChangeBase, dagSyncEnabled, isAuthenticated, dagPersistence]);
 
   // Sync existing flight node summaries when pallets change (keep node positions intact)
   useEffect(() => {
@@ -802,8 +1057,13 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
     };
     
     setEdges(eds => addEdge(newEdge as Edge, eds));
+    
+    if (dagSyncEnabled && isAuthenticated) {
+      dagPersistence.saveEdge(newEdge as Edge);
+    }
+    
     console.log(`Connected ${connection.source} to ${connection.target}`);
-  }, [nodes, setEdges, splitFlights, onFlightsChange]);
+  }, [nodes, setEdges, splitFlights, onFlightsChange, dagSyncEnabled, isAuthenticated, dagPersistence]);
 
   useEffect(() => {
     const graph = buildGraphFromFlights(splitFlights);
@@ -828,10 +1088,18 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
 
   const handleDeleteSelected = useCallback(() => {
     if (!selectedNode) return;
+    
+    if (dagSyncEnabled && isAuthenticated) {
+      dagPersistence.deleteNode(selectedNode.id);
+      edges
+        .filter(e => e.source === selectedNode.id || e.target === selectedNode.id)
+        .forEach(e => dagPersistence.deleteEdge(e.id));
+    }
+    
     setNodes(nds => nds.filter(n => n.id !== selectedNode.id));
     setEdges(eds => eds.filter(e => e.source !== selectedNode.id && e.target !== selectedNode.id));
     setSelectedNode(null);
-  }, [selectedNode, setNodes, setEdges]);
+  }, [selectedNode, setNodes, setEdges, edges, dagSyncEnabled, isAuthenticated, dagPersistence]);
 
   const handleAutoLayout = useCallback(() => {
     setIsLoading(true);
@@ -1093,10 +1361,15 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
       } as AirbaseNodeData,
     };
     setNodes(nds => [...nds, newNode]);
+    
+    if (dagSyncEnabled && isAuthenticated) {
+      dagPersistence.saveNode(newNode);
+    }
+    
     setShowAddBaseModal(false);
     setActiveTool(null);
     setPendingNodePosition(null);
-  }, [pendingNodePosition, setNodes]);
+  }, [pendingNodePosition, setNodes, dagSyncEnabled, isAuthenticated, dagPersistence]);
 
   // Add a new flight node
   const handleAddFlight = useCallback((aircraftType: 'C-17' | 'C-130', callsign: string, reuseAircraftId?: string, selectedPalletIds?: string[]) => {
@@ -1186,10 +1459,15 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
       } as FlightNodeData,
     };
     setNodes(nds => [...nds, newNode]);
+    
+    if (dagSyncEnabled && isAuthenticated) {
+      dagPersistence.saveNode(newNode);
+    }
+    
     setShowAddFlightModal(false);
     setActiveTool(null);
     setPendingNodePosition(null);
-  }, [pendingNodePosition, setNodes, splitFlights, onFlightsChange, handleSingleFlightPDF, handleSingleFlightICODES, onView3D]);
+  }, [pendingNodePosition, setNodes, splitFlights, onFlightsChange, handleSingleFlightPDF, handleSingleFlightICODES, onView3D, dagSyncEnabled, isAuthenticated, dagPersistence]);
 
   // Handle pallet transfer between flights
   const handlePalletTransfer = useCallback((sourceFlight: SplitFlight, targetFlightId: string, palletIds: string[]) => {
@@ -1563,19 +1841,67 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
         </Panel>
 
         <Panel position="bottom-right" className="!m-4">
-          <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-neutral-200 p-3">
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{splitFlights.length}</div>
-                <div className="text-xs text-neutral-500">Flights</div>
+          <div className="flex flex-col gap-2">
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-neutral-200 p-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setDagSyncEnabled(!dagSyncEnabled)}
+                  className={`relative w-8 h-4 rounded-full transition-colors ${
+                    dagSyncEnabled && isAuthenticated ? 'bg-green-500' : 'bg-neutral-300'
+                  }`}
+                  title={dagSyncEnabled ? 'Disable DAG Sync' : 'Enable DAG Sync'}
+                >
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${
+                    dagSyncEnabled && isAuthenticated ? 'translate-x-4' : 'translate-x-0.5'
+                  }`} />
+                </button>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className={dagSyncEnabled && isAuthenticated ? 'text-green-700 font-medium' : 'text-neutral-500'}>
+                    DAG Sync: {dagSyncEnabled && isAuthenticated ? 'On' : 'Off'}
+                  </span>
+                  {dagSyncEnabled && isAuthenticated && (
+                    <>
+                      <span className="text-neutral-300">|</span>
+                      <span className={`flex items-center gap-1 ${
+                        dagPersistence.syncStatus === 'error' ? 'text-red-600' :
+                        dagPersistence.syncStatus === 'saving' ? 'text-amber-600' :
+                        dagPersistence.syncStatus === 'saved' ? 'text-green-600' :
+                        'text-neutral-400'
+                      }`}>
+                        {dagPersistence.syncStatus === 'saving' && <FiRefreshCw className="animate-spin" size={10} />}
+                        {dagPersistence.syncStatus === 'saved' && <FiCheckCircle size={10} />}
+                        {dagPersistence.syncStatus === 'error' && <FiAlertCircle size={10} />}
+                        {dagPersistence.syncStatus === 'loading' && <FiRefreshCw className="animate-spin" size={10} />}
+                        <span>
+                          {dagPersistence.syncStatus === 'saving' ? 'Saving...' :
+                           dagPersistence.syncStatus === 'saved' ? 'Saved' :
+                           dagPersistence.syncStatus === 'error' ? 'Error' :
+                           dagPersistence.syncStatus === 'loading' ? 'Loading...' :
+                           'Idle'}
+                        </span>
+                      </span>
+                    </>
+                  )}
+                  {!isAuthenticated && dagSyncEnabled && (
+                    <span className="text-amber-600 text-xs">(Login required)</span>
+                  )}
+                </div>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{totalPallets}</div>
-                <div className="text-xs text-neutral-500">Pallets</div>
-              </div>
-              <div className="text-center col-span-2">
-                <div className="text-2xl font-bold text-amber-600">{Math.round(totalWeight / 1000)}K</div>
-                <div className="text-xs text-neutral-500">Total Weight (lb)</div>
+            </div>
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-neutral-200 p-3">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">{splitFlights.length}</div>
+                  <div className="text-xs text-neutral-500">Flights</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{totalPallets}</div>
+                  <div className="text-xs text-neutral-500">Pallets</div>
+                </div>
+                <div className="text-center col-span-2">
+                  <div className="text-2xl font-bold text-amber-600">{Math.round(totalWeight / 1000)}K</div>
+                  <div className="text-xs text-neutral-500">Total Weight (lb)</div>
+                </div>
               </div>
             </div>
           </div>
