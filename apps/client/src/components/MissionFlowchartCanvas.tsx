@@ -696,7 +696,7 @@ const edgeTypes = {
   route: RouteEdge,
 };
 
-function buildGraphFromFlights(flights: SplitFlight[]): { nodes: Node[]; edges: Edge[] } {
+function buildGraphFromFlights(flights: SplitFlight[], manuallyAddedFlights?: Set<string>): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
   const baseNodes = new Map<string, Node>();
@@ -820,50 +820,55 @@ function buildGraphFromFlights(flights: SplitFlight[]): { nodes: Node[]; edges: 
     nodes.push(flightNode);
     dagreGraph.setNode(flightId, { width: 240, height: 200 });
 
-    dagreGraph.setEdge(originId, flightId);
-    dagreGraph.setEdge(flightId, destId);
+    // Skip edge creation for manually added flights - users should connect them manually
+    const isManuallyAdded = manuallyAddedFlights?.has(flight.id);
+    
+    if (!isManuallyAdded) {
+      dagreGraph.setEdge(originId, flightId);
+      dagreGraph.setEdge(flightId, destId);
 
-    const distanceResult = calculateGreatCircleDistance(
-      flight.origin.latitude_deg, flight.origin.longitude_deg,
-      flight.destination.latitude_deg, flight.destination.longitude_deg
-    );
-    const distance = distanceResult.distance_nm;
-    const timeResult = calculateTimeEnRoute(distance, flight.aircraft_type);
-    const timeHours = timeResult.time_enroute_hr;
-    const fuelLb = calculateFuelRequired(distance, flight.aircraft_type);
+      const distanceResult = calculateGreatCircleDistance(
+        flight.origin.latitude_deg, flight.origin.longitude_deg,
+        flight.destination.latitude_deg, flight.destination.longitude_deg
+      );
+      const distance = distanceResult.distance_nm;
+      const timeResult = calculateTimeEnRoute(distance, flight.aircraft_type);
+      const timeHours = timeResult.time_enroute_hr;
+      const fuelLb = calculateFuelRequired(distance, flight.aircraft_type);
 
-    edges.push({
-      id: `edge-${originId}-${flightId}`,
-      source: originId,
-      target: flightId,
-      type: 'route',
-      data: {
-        distance: 0,
-        timeHours: 0,
-        fuelLb: 0,
-        flightId: flight.id,
-        isHazmat,
-        isAdvon,
-      } as RouteEdgeData,
-      animated: true,
-    });
+      edges.push({
+        id: `edge-${originId}-${flightId}`,
+        source: originId,
+        target: flightId,
+        type: 'route',
+        data: {
+          distance: 0,
+          timeHours: 0,
+          fuelLb: 0,
+          flightId: flight.id,
+          isHazmat,
+          isAdvon,
+        } as RouteEdgeData,
+        animated: true,
+      });
 
-    edges.push({
-      id: `edge-${flightId}-${destId}`,
-      source: flightId,
-      target: destId,
-      type: 'route',
-      data: {
-        distance,
-        timeHours,
-        fuelLb,
-        flightId: flight.id,
-        isHazmat,
-        isAdvon,
-      } as RouteEdgeData,
-      animated: true,
-      markerEnd: { type: MarkerType.ArrowClosed, color: isHazmat ? '#eab308' : isAdvon ? '#f97316' : '#6366f1' },
-    });
+      edges.push({
+        id: `edge-${flightId}-${destId}`,
+        source: flightId,
+        target: destId,
+        type: 'route',
+        data: {
+          distance,
+          timeHours,
+          fuelLb,
+          flightId: flight.id,
+          isHazmat,
+          isAdvon,
+        } as RouteEdgeData,
+        animated: true,
+        markerEnd: { type: MarkerType.ArrowClosed, color: isHazmat ? '#eab308' : isAdvon ? '#f97316' : '#6366f1' },
+      });
+    }
   });
 
   baseNodes.forEach(node => nodes.push(node));
@@ -903,6 +908,11 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
     userId: user?.id ?? null,
     enabled: dagSyncEnabled && isAuthenticated,
   });
+
+  // Track manually added nodes that should be preserved when graph rebuilds
+  const manuallyAddedNodesRef = useRef<Set<string>>(new Set());
+  // Track manually added flights that should NOT have auto-edges created
+  const manuallyAddedFlightsRef = useRef<Set<string>>(new Set());
 
   // Define handlers first (before enrichNodesWithCallbacks)
   const handleExportPDF = useCallback(() => {
@@ -1132,9 +1142,18 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
   }, [nodes, setEdges, splitFlights, onFlightsChange, dagSyncEnabled, isAuthenticated, dagPersistence]);
 
   useEffect(() => {
-    const graph = buildGraphFromFlights(splitFlights);
+    const graph = buildGraphFromFlights(splitFlights, manuallyAddedFlightsRef.current);
     const enrichedNodes = enrichNodesWithCallbacks(graph.nodes);
-    setNodes(enrichedNodes);
+    
+    // Preserve manually added nodes (like standalone airbases) that aren't from splitFlights
+    setNodes(currentNodes => {
+      const manualNodes = currentNodes.filter(n => manuallyAddedNodesRef.current.has(n.id));
+      // Merge: use graph nodes as base, but add any manual nodes not already present
+      const graphNodeIds = new Set(enrichedNodes.map(n => n.id));
+      const nodesToAdd = manualNodes.filter(n => !graphNodeIds.has(n.id));
+      return [...enrichedNodes, ...nodesToAdd];
+    });
+    
     setEdges(graph.edges);
   }, [splitFlights, setNodes, setEdges, enrichNodesWithCallbacks]);
 
@@ -1408,8 +1427,9 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
   // Add a new airbase node
   const handleAddAirbase = useCallback((base: MilitaryBase) => {
     const position = pendingNodePosition || { x: 100, y: 100 };
+    const nodeId = `base-${base.base_id}-${Date.now()}`;
     const newNode: Node = {
-      id: `base-${base.base_id}-${Date.now()}`,
+      id: nodeId,
       type: 'airbase',
       position,
       data: {
@@ -1426,6 +1446,10 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
         availableCargo: { palletCount: 0, totalWeight: 0 },
       } as AirbaseNodeData,
     };
+    
+    // Track this as a manually added node to preserve it when graph rebuilds
+    manuallyAddedNodesRef.current.add(nodeId);
+    
     setNodes(nds => [...nds, newNode]);
     
     if (dagSyncEnabled && isAuthenticated) {
@@ -1496,6 +1520,9 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
       weather_warnings: [],
       is_modified: true,
     };
+    
+    // Track this flight as manually added so edges aren't auto-created
+    manuallyAddedFlightsRef.current.add(flightId);
     
     // Add flight to splitFlights
     onFlightsChange([...splitFlights, newFlight]);
