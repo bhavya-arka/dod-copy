@@ -22,31 +22,6 @@ externalPort = 80
 runButton = "Project"
 
 [[workflows.workflow]]
-name = "Start Game"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "webview"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
-waitForPort = 5000
-
-[[workflows.workflow]]
-name = "Start Game"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
-waitForPort = 5000
-
-[workflows.workflow.metadata]
-outputType = "webview"
-
-[[workflows.workflow]]
 name = "Project"
 mode = "parallel"
 author = "agent"

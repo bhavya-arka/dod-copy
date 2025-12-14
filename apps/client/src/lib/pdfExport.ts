@@ -55,14 +55,14 @@ function formatMilDate(): string {
 
 function generatePrintICODESSvg(loadPlan: AircraftLoadPlan): string {
   const spec = loadPlan.aircraft_spec;
-  const scale = 0.55;
+  const scale = 0.72;
   const width = spec.cargo_width * scale;
   const length = spec.cargo_length * scale;
   const palletWidth = 88 * scale;
   const palletLength = 108 * scale;
   const isC17 = loadPlan.aircraft_type === 'C-17';
-  const svgWidth = length + 120;
-  const svgHeight = width + 100;
+  const svgWidth = length + 160;
+  const svgHeight = width + 120;
 
   let positionLabels = '';
   let palletsSvg = '';
@@ -736,14 +736,14 @@ export function exportSplitFlightToPDF(flight: SplitFlight): void {
   const palletRows = flight.pallets.map((p, idx) => `
     <tr style="background: ${idx % 2 === 0 ? '#FFFFFF' : '#F9FAFB'};">
       <td style="padding: 8px; border: 1px solid #E5E7EB;">${idx + 1}</td>
-      <td style="padding: 8px; border: 1px solid #E5E7EB; font-weight: 600;">${p.id}</td>
-      <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: right; font-family: monospace;">${p.gross_weight.toLocaleString()}</td>
-      <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: center;">${p.height}"</td>
-      <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: center; color: ${p.hazmat_flag ? '#DC2626' : '#374151'}; font-weight: ${p.hazmat_flag ? 'bold' : 'normal'};">
-        ${p.hazmat_flag ? 'YES' : 'No'}
+      <td style="padding: 8px; border: 1px solid #E5E7EB; font-weight: 600;">${p.pallet.id}</td>
+      <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: right; font-family: monospace;">${p.pallet.gross_weight.toLocaleString()}</td>
+      <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: center;">${p.pallet.height}"</td>
+      <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: center; color: ${p.pallet.hazmat_flag ? '#DC2626' : '#374151'}; font-weight: ${p.pallet.hazmat_flag ? 'bold' : 'normal'};">
+        ${p.pallet.hazmat_flag ? 'YES' : 'No'}
       </td>
       <td style="padding: 8px; border: 1px solid #E5E7EB; font-size: 11px; color: #6B7280;">
-        ${p.items.slice(0, 2).map(i => i.description).join(', ')}${p.items.length > 2 ? ` (+${p.items.length - 2})` : ''}
+        ${p.pallet.items.slice(0, 2).map(i => i.description).join(', ')}${p.pallet.items.length > 2 ? ` (+${p.pallet.items.length - 2})` : ''}
       </td>
     </tr>
   `).join('');
@@ -814,7 +814,7 @@ export function exportSplitFlightToPDF(flight: SplitFlight): void {
         <div style="margin-top: 20px; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; padding: 15px;">
           <h3 style="margin: 0 0 10px; font-size: 13px; color: #991B1B;">Validation Issues</h3>
           <ul style="margin: 0; padding-left: 20px; color: #DC2626; font-size: 12px;">
-            ${validation.errors.map(e => `<li>${e}</li>`).join('')}
+            ${validation.issues.map(e => `<li>${e}</li>`).join('')}
           </ul>
         </div>
       ` : ''}
