@@ -4,15 +4,18 @@
  * Updated with minimalist glass UI design.
  */
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Table, Grid3X3 } from 'lucide-react';
 import { useMission } from '../context/MissionContext';
 import MissionNavbar from './MissionNavbar';
 import LoadPlanViewer from './LoadPlanViewer';
 import FlightSplitter from './FlightSplitter';
 import AnalyticsPanel from './AnalyticsPanel';
+import EditableSpreadsheet, { SpreadsheetColumn, SpreadsheetRow } from './EditableSpreadsheet';
 import { SplitFlight } from '../lib/flightSplitTypes';
 import { getBaseWeather } from '../lib/weatherService';
+import { MovementItem, ClassifiedItems } from '../lib/pacafTypes';
 
 interface LoadedPlanInfo {
   id: number;
@@ -28,9 +31,23 @@ interface MissionWorkspaceProps {
   onPlanStatusChange?: (newStatus: 'draft' | 'complete' | 'archived') => void;
 }
 
+const manifestColumns: SpreadsheetColumn[] = [
+  { key: 'description', label: 'Description', width: 200, editable: true },
+  { key: 'length_in', label: 'Length (in)', width: 90, type: 'number', editable: true, format: (v) => v > 0 ? `${v}"` : '-' },
+  { key: 'width_in', label: 'Width (in)', width: 90, type: 'number', editable: true, format: (v) => v > 0 ? `${v}"` : '-' },
+  { key: 'height_in', label: 'Height (in)', width: 90, type: 'number', editable: true, format: (v) => v > 0 ? `${v}"` : '-' },
+  { key: 'weight_each_lb', label: 'Weight (lb)', width: 100, type: 'number', editable: true, format: (v) => v > 0 ? v.toLocaleString() : '-' },
+  { key: 'type', label: 'Type', width: 120, editable: false },
+  { key: 'tcn', label: 'Lead TCN', width: 140, editable: true },
+  { key: 'pax_count', label: 'PAX', width: 60, type: 'number', editable: true, format: (v) => v && v > 0 ? v.toString() : '-' },
+  { key: 'hazmat_flag', label: 'HAZMAT', width: 80, type: 'checkbox', editable: true, format: (v) => v ? 'Yes' : 'No' },
+  { key: 'advon_flag', label: 'ADVON', width: 80, type: 'checkbox', editable: true, format: (v) => v ? 'Yes' : 'No' },
+];
+
 export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPlan, onPlanStatusChange }: MissionWorkspaceProps) {
   const handleNavigateAway = onDashboard || onBack || onHome || (() => {});
   const mission = useMission();
+  const [manifestViewMode, setManifestViewMode] = useState<'table' | 'spreadsheet'>('spreadsheet');
 
   useEffect(() => {
     mission.calculateAnalytics();
@@ -43,6 +60,60 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
       await mission.updatePlanSchedules(loadedPlan.id, flights);
     }
   };
+
+  const manifestData = useMemo((): SpreadsheetRow[] => {
+    if (!mission.classifiedItems) return [];
+    const items = [
+      ...mission.classifiedItems.rolling_stock,
+      ...mission.classifiedItems.prebuilt_pallets,
+      ...mission.classifiedItems.loose_items,
+      ...mission.classifiedItems.pax_items
+    ];
+    return items.map((item, idx) => ({
+      id: item.item_id || idx,
+      description: item.description || '',
+      length_in: item.length_in || 0,
+      width_in: item.width_in || 0,
+      height_in: item.height_in || 0,
+      weight_each_lb: item.weight_each_lb || 0,
+      type: item.type || 'PALLETIZABLE',
+      tcn: item.utc_id || item.tcn || '',
+      pax_count: item.pax_count || 0,
+      hazmat_flag: item.hazmat_flag || false,
+      advon_flag: item.advon_flag || false,
+      _original: item,
+    }));
+  }, [mission.classifiedItems]);
+
+  const handleManifestDataChange = useCallback((newData: SpreadsheetRow[]) => {
+    if (!mission.classifiedItems) return;
+    
+    const updatedItems: MovementItem[] = newData.map(row => ({
+      ...(row._original as MovementItem),
+      description: row.description,
+      length_in: row.length_in,
+      width_in: row.width_in,
+      height_in: row.height_in,
+      weight_each_lb: row.weight_each_lb,
+      utc_id: row.tcn,
+      tcn: row.tcn,
+      pax_count: row.pax_count,
+      hazmat_flag: row.hazmat_flag,
+      advon_flag: row.advon_flag,
+    }));
+
+    const newClassified: ClassifiedItems = {
+      ...mission.classifiedItems,
+      rolling_stock: updatedItems.filter(i => i.type === 'ROLLING_STOCK'),
+      prebuilt_pallets: updatedItems.filter(i => i.type === 'PREBUILT_PALLET'),
+      loose_items: updatedItems.filter(i => i.type === 'PALLETIZABLE'),
+      pax_items: updatedItems.filter(i => i.type === 'PAX'),
+      advon_items: updatedItems.filter(i => i.advon_flag),
+      main_items: updatedItems.filter(i => !i.advon_flag),
+    };
+
+    mission.setClassifiedItems(newClassified);
+  }, [mission]);
 
   const renderTabContent = () => {
     switch (mission.currentTab) {
@@ -63,62 +134,108 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
       case 'manifest':
         return (
           <div className="p-8">
-            <h2 className="section-title mb-6">Movement Manifest</h2>
-            <div className="glass-card overflow-hidden">
-              {mission.classifiedItems ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-neutral-100 border-b border-neutral-200">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">Description</th>
-                        <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">Length</th>
-                        <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">Width</th>
-                        <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">Height</th>
-                        <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">Weight</th>
-                        <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">Lead TCN</th>
-                        <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">PAX</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-100">
-                      {[
-                        ...mission.classifiedItems.rolling_stock,
-                        ...mission.classifiedItems.prebuilt_pallets,
-                        ...mission.classifiedItems.loose_items,
-                        ...mission.classifiedItems.pax_items
-                      ].map((item, idx) => (
-                        <tr key={item.item_id || idx} className="hover:bg-neutral-50 transition-colors">
-                          <td className="px-4 py-3 text-neutral-900 text-sm font-medium max-w-xs truncate">
-                            {item.description || 'N/A'}
-                          </td>
-                          <td className="px-4 py-3 text-neutral-600 text-sm font-mono">
-                            {item.length_in > 0 ? `${item.length_in}"` : '-'}
-                          </td>
-                          <td className="px-4 py-3 text-neutral-600 text-sm font-mono">
-                            {item.width_in > 0 ? `${item.width_in}"` : '-'}
-                          </td>
-                          <td className="px-4 py-3 text-neutral-600 text-sm font-mono">
-                            {item.height_in > 0 ? `${item.height_in}"` : '-'}
-                          </td>
-                          <td className="px-4 py-3 text-neutral-600 text-sm font-mono">
-                            {item.weight_each_lb > 0 ? `${item.weight_each_lb.toLocaleString()} lb` : '-'}
-                          </td>
-                          <td className="px-4 py-3 text-neutral-600 text-sm font-mono">
-                            {item.utc_id || item.tcn || '-'}
-                          </td>
-                          <td className="px-4 py-3 text-neutral-600 text-sm font-mono">
-                            {item.pax_count && item.pax_count > 0 ? item.pax_count : '-'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="section-title">Movement Manifest</h2>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center bg-neutral-100 rounded-lg p-0.5">
+                  <button
+                    onClick={() => setManifestViewMode('table')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                      manifestViewMode === 'table'
+                        ? 'bg-white text-neutral-900 shadow-sm'
+                        : 'text-neutral-600 hover:text-neutral-900'
+                    }`}
+                  >
+                    <Table className="w-3.5 h-3.5" />
+                    Table
+                  </button>
+                  <button
+                    onClick={() => setManifestViewMode('spreadsheet')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                      manifestViewMode === 'spreadsheet'
+                        ? 'bg-white text-neutral-900 shadow-sm'
+                        : 'text-neutral-600 hover:text-neutral-900'
+                    }`}
+                  >
+                    <Grid3X3 className="w-3.5 h-3.5" />
+                    Spreadsheet
+                  </button>
                 </div>
-              ) : (
-                <div className="text-center text-neutral-500 py-8">
-                  <p>No manifest data available.</p>
-                </div>
-              )}
+              </div>
             </div>
+            
+            {manifestViewMode === 'spreadsheet' ? (
+              <div className="glass-card overflow-hidden">
+                <EditableSpreadsheet
+                  columns={manifestColumns}
+                  data={manifestData}
+                  onDataChange={handleManifestDataChange}
+                  title="Cargo Manifest"
+                  editable={true}
+                  showToolbar={true}
+                  showRowNumbers={true}
+                  maxHeight="calc(100vh - 280px)"
+                  emptyMessage="No manifest data available. Upload a movement list to begin."
+                />
+              </div>
+            ) : (
+              <div className="glass-card overflow-hidden">
+                {mission.classifiedItems ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-neutral-100 border-b border-neutral-200">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">Description</th>
+                          <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">Length</th>
+                          <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">Width</th>
+                          <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">Height</th>
+                          <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">Weight</th>
+                          <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">Lead TCN</th>
+                          <th className="px-4 py-3 text-left text-neutral-700 font-semibold text-sm">PAX</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-100">
+                        {[
+                          ...mission.classifiedItems.rolling_stock,
+                          ...mission.classifiedItems.prebuilt_pallets,
+                          ...mission.classifiedItems.loose_items,
+                          ...mission.classifiedItems.pax_items
+                        ].map((item, idx) => (
+                          <tr key={item.item_id || idx} className="hover:bg-neutral-50 transition-colors">
+                            <td className="px-4 py-3 text-neutral-900 text-sm font-medium max-w-xs truncate">
+                              {item.description || 'N/A'}
+                            </td>
+                            <td className="px-4 py-3 text-neutral-600 text-sm font-mono">
+                              {item.length_in > 0 ? `${item.length_in}"` : '-'}
+                            </td>
+                            <td className="px-4 py-3 text-neutral-600 text-sm font-mono">
+                              {item.width_in > 0 ? `${item.width_in}"` : '-'}
+                            </td>
+                            <td className="px-4 py-3 text-neutral-600 text-sm font-mono">
+                              {item.height_in > 0 ? `${item.height_in}"` : '-'}
+                            </td>
+                            <td className="px-4 py-3 text-neutral-600 text-sm font-mono">
+                              {item.weight_each_lb > 0 ? `${item.weight_each_lb.toLocaleString()} lb` : '-'}
+                            </td>
+                            <td className="px-4 py-3 text-neutral-600 text-sm font-mono">
+                              {item.utc_id || item.tcn || '-'}
+                            </td>
+                            <td className="px-4 py-3 text-neutral-600 text-sm font-mono">
+                              {item.pax_count && item.pax_count > 0 ? item.pax_count : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center text-neutral-500 py-8">
+                    <p>No manifest data available.</p>
+                  </div>
+                )}
+              </div>
+            )}
+            
             {mission.classifiedItems && (
               <div className="mt-4 flex items-center justify-between">
                 <div className="text-neutral-500 text-sm">
