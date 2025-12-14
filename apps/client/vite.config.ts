@@ -34,6 +34,13 @@ export default defineConfig({
     port: CLIENT_PORT,
     strictPort: true,
     allowedHosts: true,
+    hmr: {
+      clientPort: 443,
+      protocol: "wss",
+    },
+    headers: {
+      "Cache-Control": "no-store",
+    },
     proxy: {
       "/api": {
         target: `http://localhost:${SERVER_PORT}`,
