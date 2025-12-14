@@ -2,6 +2,13 @@
 
 **Arka Cargo Operations** - A comprehensive PACAF Airlift system for C-17/C-130 load planning with:
 
+## Development Checklist
+**CRITICAL**: Before returning control to user, always:
+1. Restart the "Start Game" workflow: `restart_workflow("Start Game")`
+2. Take a screenshot to verify the app loads
+3. Check logs for errors with `refresh_all_logs()`
+4. The workflow runs `turbo run dev --parallel` which starts both client (port 5000) and server (port 3000)
+
 - Full-featured load planning that accepts movement list data (CSV/JSON)
 - Automatic cargo allocation with 463L palletization engine
 - ICODES-style 2D diagrams and interactive 3D visualization
