@@ -224,10 +224,6 @@ function getCurrentDateISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function getHazmatClass(item: { hazmat_flag: boolean }): string | undefined {
-  return item.hazmat_flag ? '1.4' : undefined;
-}
-
 function palletToICODES(placement: PalletPlacement, stationNumber: number): ICODESPalletRecord {
   const pallet = placement.pallet;
   return {
