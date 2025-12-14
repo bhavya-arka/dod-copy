@@ -13,7 +13,11 @@
     "build": "turbo run build",
     "start": "turbo run start",
     "check": "turbo run check",
-    "db:push": "turbo run db:push"
+    "db:push": "turbo run db:push",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "test:client": "NODE_OPTIONS='--experimental-vm-modules' jest --selectProjects client",
+    "test:server": "NODE_OPTIONS='--experimental-vm-modules' jest --selectProjects server",
+    "test:legacy": "NODE_OPTIONS='--experimental-vm-modules' jest --selectProjects legacy"
   },
   "devDependencies": {
     "ts-node": "^10.9.1",
@@ -23,11 +27,21 @@
   "dependencies": {
     "@fontsource/inter": "^5.2.5",
     "@neondatabase/serverless": "^0.10.4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@types/jest": "^30.0.0",
+    "@types/supertest": "^6.0.3",
+    "@types/testing-library__jest-dom": "^5.14.9",
     "drizzle-kit": "^0.30.4",
     "drizzle-orm": "^0.39.1",
     "express": "^4.21.2",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "msw": "^2.12.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "supertest": "^7.1.4",
+    "ts-jest": "^29.4.6",
     "vite": "^5.4.19"
   },
   "optionalDependencies": {
