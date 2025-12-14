@@ -357,6 +357,15 @@ export default function EditableSpreadsheet({
                     const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.colKey === column.key;
                     const isSelected = selectedCells.has(getCellKey(rowIndex, column.key));
                     const isEditable = column.editable !== false;
+                    const cellValue = row[column.key];
+                    
+                    const handleCheckboxChange = (checked: boolean) => {
+                      if (!editMode || !isEditable) return;
+                      const newData = [...localData];
+                      newData[rowIndex] = { ...newData[rowIndex], [column.key]: checked };
+                      setLocalData(newData);
+                      onDataChange?.(newData);
+                    };
                     
                     return (
                       <td
@@ -366,14 +375,26 @@ export default function EditableSpreadsheet({
                             ? 'ring-2 ring-primary ring-inset bg-primary/5'
                             : ''
                         } ${
-                          isEditable && editMode
+                          isEditable && editMode && column.type !== 'checkbox'
                             ? 'hover:bg-primary/5 cursor-cell'
                             : ''
                         }`}
-                        onClick={(e) => handleCellClick(rowIndex, column.key, e)}
-                        onDoubleClick={() => handleCellDoubleClick(rowIndex, column.key)}
+                        onClick={(e) => column.type !== 'checkbox' && handleCellClick(rowIndex, column.key, e)}
+                        onDoubleClick={() => column.type !== 'checkbox' && handleCellDoubleClick(rowIndex, column.key)}
                       >
-                        {isEditing ? (
+                        {column.type === 'checkbox' ? (
+                          <div className="flex items-center justify-center">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(cellValue)}
+                              onChange={(e) => handleCheckboxChange(e.target.checked)}
+                              disabled={!editMode || !isEditable}
+                              className={`w-4 h-4 rounded border-neutral-300 text-primary focus:ring-primary/30 ${
+                                !editMode || !isEditable ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                              }`}
+                            />
+                          </div>
+                        ) : isEditing ? (
                           <input
                             ref={inputRef}
                             type={column.type === 'number' ? 'number' : 'text'}
@@ -389,7 +410,7 @@ export default function EditableSpreadsheet({
                           } ${
                             !isEditable ? 'text-neutral-500' : 'text-neutral-900'
                           }`}>
-                            {formatCellValue(row[column.key], column)}
+                            {formatCellValue(cellValue, column)}
                           </span>
                         )}
                       </td>

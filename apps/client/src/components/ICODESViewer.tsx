@@ -8,9 +8,9 @@
  * Enhanced: Cleaner labels, fullscreen mode, dimension indicators.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Maximize2, X, ZoomIn } from 'lucide-react';
+import { Maximize2, X, ZoomIn, Table, LayoutGrid } from 'lucide-react';
 import {
   AircraftLoadPlan,
   AircraftType,
@@ -20,6 +20,7 @@ import {
   PALLET_463L,
   PAX_WEIGHT_LB
 } from '../lib/pacafTypes';
+import EditableSpreadsheet, { SpreadsheetColumn, SpreadsheetRow } from './EditableSpreadsheet';
 
 interface TooltipData {
   x: number;
@@ -376,6 +377,7 @@ export default function ICODESViewer({
 }: ICODESViewerProps) {
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [viewMode, setViewMode] = useState<'diagram' | 'spreadsheet'>('diagram');
   const spec = loadPlan.aircraft_spec;
   
   const scale = compact ? 0.3 : 0.5;
@@ -383,6 +385,48 @@ export default function ICODESViewer({
   
   const usedPositions = loadPlan.pallets.length;
   const totalPositions = spec.pallet_positions;
+
+  // Define spreadsheet columns for cargo data
+  const spreadsheetColumns: SpreadsheetColumn[] = useMemo(() => [
+    { key: 'position', label: 'Pos', width: 50, type: 'number', editable: false },
+    { key: 'type', label: 'Type', width: 80, editable: false },
+    { key: 'tcnId', label: 'TCN/ID', width: 120, editable: false },
+    { key: 'items', label: 'Contents', width: 200, editable: false },
+    { key: 'weight', label: 'Weight (lbs)', width: 100, type: 'number', format: (v: number) => v?.toLocaleString() || '-' },
+    { key: 'height', label: 'Height (in)', width: 80, type: 'number' },
+    { key: 'location', label: 'Location', width: 100, editable: false },
+    { key: 'hazmat', label: 'HAZMAT', width: 70, type: 'checkbox', format: (v: boolean) => v ? 'Yes' : 'No' },
+  ], []);
+
+  // Convert load plan data to spreadsheet rows
+  const spreadsheetData: SpreadsheetRow[] = useMemo(() => {
+    const palletRows: SpreadsheetRow[] = loadPlan.pallets.map((placement, idx) => ({
+      id: `pallet-${placement.pallet.id}`,
+      position: idx + 1,
+      type: 'Pallet',
+      tcnId: placement.pallet.id,
+      items: placement.pallet.items.slice(0, 3).map(i => i.description).join(', ') + 
+        (placement.pallet.items.length > 3 ? ` +${placement.pallet.items.length - 3} more` : ''),
+      weight: placement.pallet.gross_weight,
+      height: placement.pallet.height,
+      location: placement.is_ramp ? 'Ramp' : 'Main Deck',
+      hazmat: placement.pallet.hazmat_flag,
+    }));
+
+    const vehicleRows: SpreadsheetRow[] = loadPlan.rolling_stock.map((vehicle, idx) => ({
+      id: `vehicle-${vehicle.item_id}`,
+      position: loadPlan.pallets.length + idx + 1,
+      type: 'Rolling Stock',
+      tcnId: String(vehicle.item_id),
+      items: `${vehicle.length}" × ${vehicle.width}" × ${vehicle.height}"`,
+      weight: vehicle.weight,
+      height: vehicle.height,
+      location: vehicle.deck || 'Main Deck',
+      hazmat: false,
+    }));
+
+    return [...palletRows, ...vehicleRows];
+  }, [loadPlan]);
   
   return (
     <>
@@ -393,6 +437,33 @@ export default function ICODESViewer({
             <p className="text-neutral-500 text-sm">{spec.name}</p>
           </div>
           <div className="flex items-center gap-4">
+            {/* View toggle */}
+            <div className="flex items-center bg-neutral-100 rounded-lg p-0.5 border border-neutral-200">
+              <button
+                onClick={() => setViewMode('diagram')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  viewMode === 'diagram'
+                    ? 'bg-white text-neutral-900 shadow-sm'
+                    : 'text-neutral-500 hover:text-neutral-700'
+                }`}
+                title="Diagram View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                Diagram
+              </button>
+              <button
+                onClick={() => setViewMode('spreadsheet')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  viewMode === 'spreadsheet'
+                    ? 'bg-white text-neutral-900 shadow-sm'
+                    : 'text-neutral-500 hover:text-neutral-700'
+                }`}
+                title="Spreadsheet View"
+              >
+                <Table className="w-3.5 h-3.5" />
+                Spreadsheet
+              </button>
+            </div>
             <div className="text-center px-3 py-1 bg-blue-50 rounded-lg border border-blue-100">
               <p className="text-blue-600 font-bold text-lg">{usedPositions}/{totalPositions}</p>
               <p className="text-blue-500 text-xs">positions</p>
@@ -405,66 +476,84 @@ export default function ICODESViewer({
                 {loadPlan.payload_used_percent.toFixed(1)}% capacity
               </p>
             </div>
-            <button
-              onClick={() => setIsFullscreen(true)}
-              className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
-              title="Expand to fullscreen"
-            >
-              <Maximize2 className="w-5 h-5 text-neutral-600" />
-            </button>
+            {viewMode === 'diagram' && (
+              <button
+                onClick={() => setIsFullscreen(true)}
+                className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
+                title="Expand to fullscreen"
+              >
+                <Maximize2 className="w-5 h-5 text-neutral-600" />
+              </button>
+            )}
           </div>
         </div>
         
-        <div className="relative overflow-x-auto bg-neutral-50 rounded-xl p-4 border border-neutral-200/50">
-          <ICODESDiagram 
-            loadPlan={loadPlan}
-            showCoB={showCoB}
-            showWeights={showWeights}
-            compact={compact}
-            scale={scale}
-            onTooltipChange={setTooltip}
-          />
+        {viewMode === 'diagram' ? (
+          <div className="relative overflow-x-auto bg-neutral-50 rounded-xl p-4 border border-neutral-200/50">
+            <ICODESDiagram 
+              loadPlan={loadPlan}
+              showCoB={showCoB}
+              showWeights={showWeights}
+              compact={compact}
+              scale={scale}
+              onTooltipChange={setTooltip}
+            />
 
-          <AnimatePresence>
-            {tooltip && (
-              <motion.div
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 5 }}
-                className="fixed z-50 pointer-events-none"
-                style={{
-                  left: tooltip.x,
-                  top: tooltip.y,
-                  transform: 'translate(-50%, -100%)'
-                }}
-              >
-                <div className="bg-white rounded-xl shadow-glass-lg border border-neutral-200 p-3 min-w-48 max-w-72">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-neutral-900 font-bold text-sm">{tooltip.title}</h4>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      tooltip.type === 'pallet' ? 'bg-blue-100 text-blue-700' :
-                      tooltip.type === 'vehicle' ? 'bg-green-100 text-green-700' : 'bg-neutral-100 text-neutral-600'
-                    }`}>
-                      {tooltip.type === 'pallet' ? 'Pallet' : tooltip.type === 'vehicle' ? 'Vehicle' : 'Empty'}
-                    </span>
+            <AnimatePresence>
+              {tooltip && (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 5 }}
+                  className="fixed z-50 pointer-events-none"
+                  style={{
+                    left: tooltip.x,
+                    top: tooltip.y,
+                    transform: 'translate(-50%, -100%)'
+                  }}
+                >
+                  <div className="bg-white rounded-xl shadow-glass-lg border border-neutral-200 p-3 min-w-48 max-w-72">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-neutral-900 font-bold text-sm">{tooltip.title}</h4>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        tooltip.type === 'pallet' ? 'bg-blue-100 text-blue-700' :
+                        tooltip.type === 'vehicle' ? 'bg-green-100 text-green-700' : 'bg-neutral-100 text-neutral-600'
+                      }`}>
+                        {tooltip.type === 'pallet' ? 'Pallet' : tooltip.type === 'vehicle' ? 'Vehicle' : 'Empty'}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      {tooltip.details.map((detail, idx) => (
+                        <div key={idx} className="flex justify-between text-xs gap-2">
+                          <span className="text-neutral-500">{detail.label}:</span>
+                          <span className={`text-neutral-900 font-medium text-right max-w-40 truncate ${
+                            detail.label === 'HAZMAT' ? 'text-red-600' : ''
+                          }`}>
+                            {detail.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    {tooltip.details.map((detail, idx) => (
-                      <div key={idx} className="flex justify-between text-xs gap-2">
-                        <span className="text-neutral-500">{detail.label}:</span>
-                        <span className={`text-neutral-900 font-medium text-right max-w-40 truncate ${
-                          detail.label === 'HAZMAT' ? 'text-red-600' : ''
-                        }`}>
-                          {detail.value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-neutral-200">
+            <EditableSpreadsheet
+              columns={spreadsheetColumns}
+              data={spreadsheetData}
+              title={`${loadPlan.aircraft_id} Cargo Manifest`}
+              editable={false}
+              showToolbar={true}
+              showRowNumbers={true}
+              stickyHeader={true}
+              maxHeight="400px"
+              emptyMessage="No cargo loaded on this aircraft"
+            />
+          </div>
+        )}
         
         <div className="mt-4 grid grid-cols-5 gap-2 text-sm">
           <div className="bg-neutral-50 rounded-xl p-3 text-center border border-neutral-200/50">
