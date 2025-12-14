@@ -638,6 +638,14 @@ const RouteEdge = ({
 
   return (
     <>
+      {/* Invisible wider path for easier clicking - larger hitbox */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={20}
+        className="cursor-pointer"
+      />
       <path
         id={id}
         d={edgePath}
@@ -645,7 +653,7 @@ const RouteEdge = ({
         stroke={selected ? '#3b82f6' : strokeColor}
         strokeWidth={selected ? 4 : 3}
         strokeDasharray={edgeData?.isHazmat ? '8 4' : undefined}
-        className="transition-all duration-200"
+        className="transition-all duration-200 pointer-events-none"
         markerEnd="url(#arrow)"
       />
       {edgeData?.distance > 0 && (
