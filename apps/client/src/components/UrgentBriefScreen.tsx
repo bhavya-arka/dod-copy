@@ -11,8 +11,7 @@ import { motion } from 'framer-motion';
 import {
   AllocationResult,
   ParseResult,
-  InsightsSummary,
-  AircraftType
+  InsightsSummary
 } from '../lib/pacafTypes';
 
 interface UrgentBriefScreenProps {

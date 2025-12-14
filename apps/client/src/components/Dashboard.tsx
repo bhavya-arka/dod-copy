@@ -58,7 +58,8 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
                 const schedules = await scheduleResponse.json();
                 return { ...plan, schedules };
               }
-            } catch {
+            } catch (err) {
+              console.error(`Failed to fetch schedules for plan ${plan.id}:`, err);
             }
             return { ...plan, schedules: [] };
           })
@@ -68,7 +69,8 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
       } else {
         setError('Failed to load your flight plans');
       }
-    } catch {
+    } catch (err) {
+      console.error('Failed to fetch flight plans:', err);
       setError('Network error');
     } finally {
       setIsLoading(false);
@@ -91,7 +93,9 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
         setPlans(plans.filter(p => p.id !== id));
         await fetchPlans();
       }
-    } catch {
+    } catch (err) {
+      console.error('Failed to delete flight plan:', err);
+      setError('Failed to delete flight plan');
     }
   };
 
