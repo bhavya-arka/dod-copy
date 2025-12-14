@@ -268,7 +268,75 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
                       </div>
                       {plan.schedules && plan.schedules.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-neutral-200/50">
-                          <div className="text-xs text-neutral-500 mb-2 font-medium">Flight Schedules:</div>
+                          {/* Itinerary Summary - Start to Finish Route */}
+                          {(() => {
+                            const schedules = plan.schedules || [];
+                            const origins = new Set<string>();
+                            const destinations = new Set<string>();
+                            const allBases = new Set<string>();
+                            
+                            schedules.forEach(s => {
+                              const data = s.schedule_data || {};
+                              if (data.origin_icao) {
+                                origins.add(data.origin_icao);
+                                allBases.add(data.origin_icao);
+                              }
+                              if (data.destination_icao) {
+                                destinations.add(data.destination_icao);
+                                allBases.add(data.destination_icao);
+                              }
+                            });
+                            
+                            // Find start points (origins that are never destinations)
+                            const startBases = [...origins].filter(o => !destinations.has(o));
+                            // Find end points (destinations that are never origins)
+                            const endBases = [...destinations].filter(d => !origins.has(d));
+                            // Intermediate stops are both origin and destination
+                            const intermediateBases = [...allBases].filter(b => origins.has(b) && destinations.has(b));
+                            
+                            const routeChain = [
+                              ...startBases,
+                              ...intermediateBases.slice(0, 2),
+                              ...(intermediateBases.length > 2 ? ['...'] : []),
+                              ...endBases
+                            ].filter(Boolean);
+                            
+                            return (
+                              <div className="mb-3">
+                                <div className="text-xs text-neutral-500 mb-2 font-medium">Mission Itinerary:</div>
+                                <div className="flex items-center gap-1 flex-wrap bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-2">
+                                  {routeChain.map((base, idx) => (
+                                    <React.Fragment key={idx}>
+                                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                        idx === 0 
+                                          ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                          : idx === routeChain.length - 1
+                                            ? 'bg-green-100 text-green-700 border border-green-200'
+                                            : base === '...'
+                                              ? 'text-neutral-400'
+                                              : 'bg-neutral-100 text-neutral-600'
+                                      }`}>
+                                        {idx === 0 && '🛫 '}
+                                        {idx === routeChain.length - 1 && '🛬 '}
+                                        {base}
+                                      </span>
+                                      {idx < routeChain.length - 1 && (
+                                        <span className="text-neutral-300 text-sm">→</span>
+                                      )}
+                                    </React.Fragment>
+                                  ))}
+                                </div>
+                                <div className="flex items-center gap-4 mt-2 text-xs text-neutral-500">
+                                  <span>{schedules.length} flight legs</span>
+                                  <span>{allBases.size} locations</span>
+                                  {startBases.length > 0 && <span>Origin: {startBases.join(', ')}</span>}
+                                  {endBases.length > 0 && <span>Final: {endBases.join(', ')}</span>}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          
+                          <div className="text-xs text-neutral-500 mb-2 font-medium">Flight Details:</div>
                           <div className="flex flex-wrap gap-2">
                             {plan.schedules.slice(0, 4).map((schedule) => {
                               const data = schedule.schedule_data || {};
