@@ -715,6 +715,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdSchedules.push(created);
       }
       
+      // Update the flight plan's aircraft_count to reflect the actual number of flights
+      if (schedules.length > 0) {
+        await storage.updateFlightPlan(planId, req.user!.id, {
+          aircraft_count: schedules.length
+        });
+      }
+      
       res.status(201).json(createdSchedules);
     } catch (error) {
       console.error('Failed to save flight schedules:', error);

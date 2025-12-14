@@ -260,10 +260,11 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
                       <div className="flex items-center space-x-4 text-sm text-neutral-500">
                         <span className="badge">{plan.movement_items_count} items</span>
                         <span className="badge">{(plan.total_weight_lb / 1000).toFixed(1)}K lbs</span>
-                        <span className="badge">{plan.aircraft_count} aircraft</span>
-                        {plan.schedules && plan.schedules.length > 0 && (
-                          <span className="badge bg-blue-100 text-blue-700">{plan.schedules.length} flights scheduled</span>
-                        )}
+                        <span className="badge">
+                          {plan.schedules && plan.schedules.length > 0 
+                            ? `${plan.schedules.length} flights` 
+                            : `${plan.aircraft_count} aircraft`}
+                        </span>
                         <span>Updated {formatDate(plan.updated_at)}</span>
                       </div>
                       {plan.schedules && plan.schedules.length > 0 && (
