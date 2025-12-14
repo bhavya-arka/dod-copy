@@ -9,8 +9,8 @@ import {
   calculateTimeEnRoute,
   formatMilitaryTime,
   formatFlightTime
-} from '../client/src/lib/routeCalculations';
-import { MILITARY_BASES } from '../client/src/lib/bases';
+} from '../apps/client/src/lib/routeCalculations';
+import { MILITARY_BASES } from '../apps/client/src/lib/bases';
 
 describe('Great Circle Distance', () => {
   test('should calculate distance between same point as zero', () => {

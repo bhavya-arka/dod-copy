@@ -3,9 +3,9 @@
  * Tests for PACAF Spec Section 3: Classification
  */
 
-import { classifyItems, getADVONItems, getMainItems } from '../client/src/lib/classificationEngine';
-import { parseMovementList } from '../client/src/lib/movementParser';
-import { processPalletization } from '../client/src/lib/palletizationEngine';
+import { classifyItems, getADVONItems, getMainItems } from '../apps/client/src/lib/classificationEngine';
+import { parseMovementList } from '../apps/client/src/lib/movementParser';
+import { processPalletization } from '../apps/client/src/lib/palletizationEngine';
 
 describe('Classification Engine - Item Classification', () => {
   test('should classify rolling stock', () => {

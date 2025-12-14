@@ -3,10 +3,10 @@
  * Tests for PACAF Spec Section 4 & 6: 463L Pallet System
  */
 
-import { processPalletization, palletizeLooseItems, validatePrebuiltPallet } from '../client/src/lib/palletizationEngine';
-import { PALLET_463L } from '../client/src/lib/pacafTypes';
-import { classifyItems } from '../client/src/lib/classificationEngine';
-import { parseMovementList } from '../client/src/lib/movementParser';
+import { processPalletization, palletizeLooseItems, validatePrebuiltPallet } from '../apps/client/src/lib/palletizationEngine';
+import { PALLET_463L } from '../apps/client/src/lib/pacafTypes';
+import { classifyItems } from '../apps/client/src/lib/classificationEngine';
+import { parseMovementList } from '../apps/client/src/lib/movementParser';
 
 describe('463L Pallet Specifications', () => {
   test('should have correct pallet dimensions', () => {

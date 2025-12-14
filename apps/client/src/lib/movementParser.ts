@@ -646,7 +646,7 @@ export function parseMovementListV2(csvContent: string): ParsedCargoResult {
       height_in: height,
       weight_lb: weight,
       lead_tcn: leadTcn,
-      pax_count: classification.cargo_type === 'PAX_RECORD' ? paxCount : null,
+      pax_count: null, // PAX_RECORD items are skipped via continue above
       cargo_type: classification.cargo_type,
       pallet_footprint: classification.pallet_footprint,
       inferred_pallet_count: classification.inferred_pallet_count,

@@ -3,7 +3,7 @@
  * Tests for PACAF Spec Section 2: Input Parsing
  */
 
-import { parseMovementList } from '../client/src/lib/movementParser';
+import { parseMovementList } from '../apps/client/src/lib/movementParser';
 
 describe('Movement Parser - CSV Parsing', () => {
   const validCSV = `item_id,description,length_in,width_in,height_in,weight_lb,lead_tcn,pax

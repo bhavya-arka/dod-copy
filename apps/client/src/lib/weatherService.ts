@@ -395,7 +395,7 @@ export function getConditionsColor(conditions: 'VFR' | 'MVFR' | 'IFR' | 'LIFR' |
   }
 }
 
-export function formatWeatherValue(value: number | null, unit: string): JSX.Element | string {
+export function formatWeatherValue(value: number | null, unit: string): string {
   if (value === null) {
     return 'N/A';
   }

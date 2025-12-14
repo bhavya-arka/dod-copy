@@ -7,8 +7,8 @@ import {
   generateCallsign,
   checkScheduleConflicts,
   createScheduledFlight
-} from '../client/src/lib/flightScheduler';
-import { MILITARY_BASES } from '../client/src/lib/bases';
+} from '../apps/client/src/lib/flightScheduler';
+import { MILITARY_BASES } from '../apps/client/src/lib/bases';
 
 describe('Callsign Generation', () => {
   test('should generate valid callsign', () => {

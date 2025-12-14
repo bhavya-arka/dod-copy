@@ -7,8 +7,8 @@ import {
   getBaseWeather,
   willWeatherAffectRoute,
   getActiveWeatherSystems
-} from '../client/src/lib/weatherService';
-import { MILITARY_BASES } from '../client/src/lib/bases';
+} from '../apps/client/src/lib/weatherService';
+import { MILITARY_BASES } from '../apps/client/src/lib/bases';
 
 describe('Base Weather', () => {
   test('should return weather for known base', () => {

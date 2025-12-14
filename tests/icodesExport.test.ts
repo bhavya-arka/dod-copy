@@ -7,13 +7,13 @@ import {
   loadPlanToICODES, 
   generateA2IBundle,
   splitFlightToICODES
-} from '../client/src/lib/icodesExport';
-import { AIRCRAFT_SPECS, Pallet463L, AircraftLoadPlan, PalletPlacement } from '../client/src/lib/pacafTypes';
-import { classifyItems } from '../client/src/lib/classificationEngine';
-import { solveAircraftAllocation } from '../client/src/lib/aircraftSolver';
-import { parseMovementList } from '../client/src/lib/movementParser';
-import { SplitFlight } from '../client/src/lib/flightSplitTypes';
-import { MILITARY_BASES } from '../client/src/lib/bases';
+} from '../apps/client/src/lib/icodesExport';
+import { AIRCRAFT_SPECS, Pallet463L, AircraftLoadPlan, PalletPlacement } from '../apps/client/src/lib/pacafTypes';
+import { classifyItems } from '../apps/client/src/lib/classificationEngine';
+import { solveAircraftAllocation } from '../apps/client/src/lib/aircraftSolver';
+import { parseMovementList } from '../apps/client/src/lib/movementParser';
+import { SplitFlight } from '../apps/client/src/lib/flightSplitTypes';
+import { MILITARY_BASES } from '../apps/client/src/lib/bases';
 
 const createMockPallet = (id: string, weight: number): Pallet463L => ({
   id,
@@ -46,11 +46,15 @@ const createMockLoadPlan = (id: string, pallets: Pallet463L[]): AircraftLoadPlan
   pallets: pallets.map((p, i): PalletPlacement => ({
     pallet: p,
     position_index: i,
-    position_coord: AIRCRAFT_SPECS['C-17'].position_coords[i] || i * 54,
+    position_coord: i * 54, // C-17 pallet spacing
     is_ramp: i >= 16
   })),
   rolling_stock: [],
   pax_count: 5,
+  pax_weight: 1000,
+  seat_capacity: 54,
+  seats_used: 5,
+  seat_utilization_percent: 9.3,
   total_weight: pallets.reduce((sum, p) => sum + p.gross_weight, 0) + 1000,
   payload_used_percent: 50,
   center_of_balance: 500,
@@ -166,7 +170,7 @@ describe('Split Flight ICODES Export', () => {
       pallets: pallets.map((p, i): PalletPlacement => ({
         pallet: p,
         position_index: i,
-        position_coord: AIRCRAFT_SPECS['C-17'].position_coords[i],
+        position_coord: i * 54, // C-17 pallet spacing
         is_ramp: false
       })),
       rolling_stock: [],

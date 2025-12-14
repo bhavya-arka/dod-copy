@@ -3,10 +3,10 @@
  * Tests for PACAF Spec Section 13: AI-Driven Insights
  */
 
-import { analyzeMovementList, analyzeAllocation } from '../client/src/lib/insightsEngine';
-import { classifyItems } from '../client/src/lib/classificationEngine';
-import { solveAircraftAllocation } from '../client/src/lib/aircraftSolver';
-import { parseMovementList } from '../client/src/lib/movementParser';
+import { analyzeMovementList, analyzeAllocation } from '../apps/client/src/lib/insightsEngine';
+import { classifyItems } from '../apps/client/src/lib/classificationEngine';
+import { solveAircraftAllocation } from '../apps/client/src/lib/aircraftSolver';
+import { parseMovementList } from '../apps/client/src/lib/movementParser';
 
 describe('Movement List Analysis', () => {
   test('should generate insights for movement list', () => {

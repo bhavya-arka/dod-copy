@@ -3,8 +3,8 @@
  * Tests for PACAF edge case validation
  */
 
-import { validateEdgeCases } from '../client/src/lib/edgeCaseHandler';
-import { parseMovementList } from '../client/src/lib/movementParser';
+import { validateEdgeCases } from '../apps/client/src/lib/edgeCaseHandler';
+import { parseMovementList } from '../apps/client/src/lib/movementParser';
 
 describe('Edge Case - Overheight Detection', () => {
   test('should detect overheight items', () => {
