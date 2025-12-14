@@ -49,24 +49,24 @@ export interface IStorage {
   updateSplitSession(id: number, userId: number, data: Partial<InsertSplitSession>): Promise<SplitSession | undefined>;
   deleteSplitSession(id: number, userId: number): Promise<void>;
   
-  // Flight node methods
-  getFlightNodes(flightPlanId: number): Promise<FlightNode[]>;
-  getFlightNode(id: number): Promise<FlightNode | undefined>;
-  getFlightNodeChildren(parentNodeId: number): Promise<FlightNode[]>;
+  // Flight node methods (user-scoped)
+  getFlightNodes(flightPlanId: number, userId: number): Promise<FlightNode[]>;
+  getFlightNode(id: number, userId: number): Promise<FlightNode | undefined>;
+  getFlightNodeChildren(parentNodeId: number, userId: number): Promise<FlightNode[]>;
   createFlightNode(node: InsertFlightNode): Promise<FlightNode>;
-  updateFlightNode(id: number, data: Partial<InsertFlightNode>): Promise<FlightNode | undefined>;
-  deleteFlightNode(id: number): Promise<void>;
+  updateFlightNode(id: number, userId: number, data: Partial<InsertFlightNode>): Promise<FlightNode | undefined>;
+  deleteFlightNode(id: number, userId: number): Promise<void>;
   
-  // Flight edge methods
-  getFlightEdges(flightPlanId: number): Promise<FlightEdge[]>;
-  getFlightEdge(id: number): Promise<FlightEdge | undefined>;
+  // Flight edge methods (user-scoped)
+  getFlightEdges(flightPlanId: number, userId: number): Promise<FlightEdge[]>;
+  getFlightEdge(id: number, userId: number): Promise<FlightEdge | undefined>;
   createFlightEdge(edge: InsertFlightEdge): Promise<FlightEdge>;
-  updateFlightEdge(id: number, data: Partial<InsertFlightEdge>): Promise<FlightEdge | undefined>;
-  deleteFlightEdge(id: number): Promise<void>;
+  updateFlightEdge(id: number, userId: number, data: Partial<InsertFlightEdge>): Promise<FlightEdge | undefined>;
+  deleteFlightEdge(id: number, userId: number): Promise<void>;
   
-  // Port inventory methods
-  getPortInventory(flightPlanId: number, airbaseId: string): Promise<PortInventory | undefined>;
-  getPortInventories(flightPlanId: number): Promise<PortInventory[]>;
+  // Port inventory methods (user-scoped)
+  getPortInventory(flightPlanId: number, airbaseId: string, userId: number): Promise<PortInventory | undefined>;
+  getPortInventories(flightPlanId: number, userId: number): Promise<PortInventory[]>;
   upsertPortInventory(inventory: InsertPortInventory): Promise<PortInventory>;
 }
 

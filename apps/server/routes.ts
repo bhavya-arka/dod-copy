@@ -1,4 +1,4 @@
-import type { Express, Request, Response, NextFunction } from "express";
+import type { Express, Request, Response as ExpressResponse, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { loginSchema, insertUserSchema } from "@shared/schema";
@@ -152,7 +152,7 @@ interface AuthRequest extends Request {
 }
 
 // Auth middleware
-async function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+async function authMiddleware(req: AuthRequest, res: ExpressResponse, next: NextFunction) {
   const token = req.cookies?.session || req.headers.authorization?.replace('Bearer ', '');
   
   if (!token) {
