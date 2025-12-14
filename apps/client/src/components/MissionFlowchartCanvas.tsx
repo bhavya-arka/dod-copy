@@ -1115,6 +1115,33 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
     const isHazmat = sourceData.isHazmat || false;
     const isAdvon = sourceData.isAdvon || false;
     
+    // Update flight origin/destination based on edge connections
+    // If base -> flight: update flight's origin
+    // If flight -> base: update flight's destination
+    if (sourceData.nodeType === 'airbase' && targetData.nodeType === 'flight') {
+      const flightId = targetData.flightId;
+      const baseId = sourceData.baseId;
+      const base = MILITARY_BASES.find(b => b.base_id === baseId);
+      if (flightId && base) {
+        const updatedFlights = splitFlights.map(f => 
+          f.id === flightId ? { ...f, origin: base } : f
+        );
+        onFlightsChange(updatedFlights);
+        console.log(`Updated flight ${flightId} origin to ${base.icao}`);
+      }
+    } else if (sourceData.nodeType === 'flight' && targetData.nodeType === 'airbase') {
+      const flightId = sourceData.flightId;
+      const baseId = targetData.baseId;
+      const base = MILITARY_BASES.find(b => b.base_id === baseId);
+      if (flightId && base) {
+        const updatedFlights = splitFlights.map(f => 
+          f.id === flightId ? { ...f, destination: base } : f
+        );
+        onFlightsChange(updatedFlights);
+        console.log(`Updated flight ${flightId} destination to ${base.icao}`);
+      }
+    }
+    
     const newEdge = {
       ...connection,
       id: `edge-${connection.source}-${connection.target}-${Date.now()}`,
