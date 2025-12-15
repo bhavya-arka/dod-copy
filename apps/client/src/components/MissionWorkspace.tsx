@@ -126,6 +126,39 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
     }
   }, [mission]);
 
+  const handleManifestRowDelete = useCallback((id: string | number) => {
+    if (!mission.classifiedItems) return;
+    
+    const newClassified: ClassifiedItems = {
+      ...mission.classifiedItems,
+      rolling_stock: mission.classifiedItems.rolling_stock.filter(i => (i.item_id || i.utc_id) !== id),
+      prebuilt_pallets: mission.classifiedItems.prebuilt_pallets.filter(i => (i.item_id || i.utc_id) !== id),
+      loose_items: mission.classifiedItems.loose_items.filter(i => (i.item_id || i.utc_id) !== id),
+      pax_items: mission.classifiedItems.pax_items.filter(i => (i.item_id || i.utc_id) !== id),
+      advon_items: mission.classifiedItems.advon_items.filter(i => (i.item_id || i.utc_id) !== id),
+      main_items: mission.classifiedItems.main_items.filter(i => (i.item_id || i.utc_id) !== id),
+    };
+
+    mission.setClassifiedItems(newClassified);
+
+    if (mission.manifestId) {
+      const remainingItems = [
+        ...newClassified.rolling_stock,
+        ...newClassified.prebuilt_pallets,
+        ...newClassified.loose_items,
+        ...newClassified.pax_items
+      ];
+      fetch(`/api/manifests/${mission.manifestId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ items: remainingItems })
+      }).catch(error => {
+        console.error('Failed to save manifest deletion to database:', error);
+      });
+    }
+  }, [mission]);
+
   const renderTabContent = () => {
     switch (mission.currentTab) {
       case 'flights':
@@ -181,6 +214,7 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
                   columns={manifestColumns}
                   data={manifestData}
                   onDataChange={handleManifestDataChange}
+                  onRowDelete={handleManifestRowDelete}
                   title="Cargo Manifest"
                   editable={true}
                   showToolbar={true}

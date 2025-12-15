@@ -241,6 +241,29 @@ export interface StationConstraint {
   requires_shoring: boolean;  // Whether heavy vehicles require shoring plates
 }
 
+/**
+ * PAX Group - represents a group of passengers from CSV parsing
+ */
+export interface PaxGroup {
+  id: string;                 // e.g. "PAX_GRP_1"
+  count: number;              // Number of passengers in this group
+  weightPerPaxLb: number;     // Weight per passenger (default 210 lb with gear)
+  seatZoneId?: string;        // Which seating zone they're assigned to
+}
+
+/**
+ * Seat Zone - defines a seating area in the aircraft
+ */
+export interface SeatZone {
+  id: string;                 // e.g. "C17_SIDE_SEATS_FWD"
+  name: string;               // Human-readable name
+  capacity: number;           // Maximum passengers in this zone
+  xStartIn: number;           // Start position (inches from cargo bay start)
+  xEndIn: number;             // End position (inches from cargo bay start)
+  yOffsetIn: number;          // Lateral offset (negative = left wall, positive = right wall)
+  side: 'left' | 'right' | 'center';  // Which side of the aircraft
+}
+
 export interface AircraftSpec {
   type: AircraftType;
   name: string;
@@ -297,6 +320,7 @@ export interface AircraftSpec {
   
   // Passenger capacity
   seat_capacity: number;         // Maximum number of passengers (PAX)
+  seat_zones: SeatZone[];        // Seating zones for PAX allocation
 }
 
 /**
@@ -406,6 +430,12 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     
     // Passenger capacity
     seat_capacity: 102,
+    seat_zones: [
+      { id: 'C17_LEFT_FWD', name: 'Left Side Forward', capacity: 27, xStartIn: 0, xEndIn: 400, yOffsetIn: -100, side: 'left' },
+      { id: 'C17_LEFT_AFT', name: 'Left Side Aft', capacity: 24, xStartIn: 400, xEndIn: 800, yOffsetIn: -100, side: 'left' },
+      { id: 'C17_RIGHT_FWD', name: 'Right Side Forward', capacity: 27, xStartIn: 0, xEndIn: 400, yOffsetIn: 100, side: 'right' },
+      { id: 'C17_RIGHT_AFT', name: 'Right Side Aft', capacity: 24, xStartIn: 400, xEndIn: 800, yOffsetIn: 100, side: 'right' },
+    ],
   },
   'C-130': {
     type: 'C-130',
@@ -467,6 +497,11 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     
     // Passenger capacity
     seat_capacity: 92,
+    seat_zones: [
+      { id: 'C130_LEFT', name: 'Left Side Seats', capacity: 23, xStartIn: 0, xEndIn: 400, yOffsetIn: -55, side: 'left' },
+      { id: 'C130_RIGHT', name: 'Right Side Seats', capacity: 23, xStartIn: 0, xEndIn: 400, yOffsetIn: 55, side: 'right' },
+      { id: 'C130_CENTER', name: 'Center Seats', capacity: 46, xStartIn: 50, xEndIn: 350, yOffsetIn: 0, side: 'center' },
+    ],
   }
 };
 
