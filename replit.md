@@ -49,6 +49,17 @@ Core data models include:
 
 ## December 2025
 
+### Database-Backed Manifest Storage (15/12/2025)
+- **Feature**: Manifest edits now persist to the database so changes (like marking items as hazmat) are saved
+- **Database**: Added `manifests` table with `id`, `user_id`, `flight_plan_id`, `name`, `items` (JSONB), `created_at`, `updated_at`
+- **API Endpoints**: Added full CRUD for manifests:
+  - `GET/POST /api/manifests` - List and create manifests
+  - `GET/PUT/DELETE /api/manifests/:id` - Read, update, delete individual manifests
+  - `PATCH /api/manifests/:id/items/:itemIndex` - Update single item in manifest
+- **Context**: Added `manifestId` state to `MissionContext.tsx` for tracking active manifest
+- **UI Integration**: `MissionWorkspace.tsx` now calls PUT API on manifest edits (fire-and-forget pattern)
+- **Files**: `shared/schema.ts`, `apps/server/routes.ts`, `apps/server/storage.ts`, `apps/client/src/context/MissionContext.tsx`, `apps/client/src/components/MissionWorkspace.tsx`
+
 ### Rolling Stock Placement Bug Fix (15/12/2025)
 - **Bug**: Rolling stock items (vehicles like MHU-226, LOADER WEAPONS, TRACTOR TOW) were correctly classified but never loaded onto aircraft
 - **Root Cause**: Coordinate system mismatch - `placeRollingStock` used 0-based coordinates (0 to cargo_length), but the geometry module's `isWithinBounds` expected station-based coordinates (bay_start_in ~245 to bay_end). All items at position 0 failed bounds checking.
