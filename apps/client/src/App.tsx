@@ -5,7 +5,7 @@
  * persistent storage, and comprehensive airlift planning tools.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import "@fontsource/inter";
 import PACAPApp from "./components/PACAPApp";
 import AuthScreen from "./components/AuthScreen";
