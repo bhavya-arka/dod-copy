@@ -395,7 +395,7 @@ function MiniMap({
         
         <circle
           cx={spec.cargo_width / 2}
-          cy={loadPlan.center_of_balance}
+          cy={loadPlan.center_of_balance - (spec.stations[0]?.rdl_distance || 245)}
           r={8}
           fill={loadPlan.cob_in_envelope ? '#22c55e' : '#ef4444'}
           stroke="#fff"
@@ -899,7 +899,11 @@ function Vehicle3D({
 }
 
 function CenterOfBalance({ loadPlan, scale, viewMode }: { loadPlan: AircraftLoadPlan; scale: number; viewMode: ViewMode }) {
-  const cobPosition = loadPlan.center_of_balance * scale;
+  // center_of_balance is in station coordinates (aircraft datum reference)
+  // 3D model uses 0-based coordinates from cargo bay start
+  // Subtract bayStart to convert station coords to 3D model coords
+  const bayStart = loadPlan.aircraft_spec.stations[0]?.rdl_distance || 245;
+  const cobPosition = (loadPlan.center_of_balance - bayStart) * scale;
   const color = loadPlan.cob_in_envelope ? '#22c55e' : '#ef4444';
   const isCogMode = viewMode === 'cog';
   

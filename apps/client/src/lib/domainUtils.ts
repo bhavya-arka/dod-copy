@@ -56,17 +56,30 @@ export function calculateCoBFromPlacements(
   let totalWeight = 0;
   let totalMoment = 0;
 
-  // Pallet position_coord is already RDL station distance (absolute)
+  // Get bay start from first station RDL (245" for C-130, 245" for C-17 position 1)
+  const bayStart = spec.stations[0]?.rdl_distance || 245;
+
+  // Pallet position_coord is 0-based from cargo bay start (set by solver)
+  // Add bayStart to convert to aircraft station coordinates
   for (const p of pallets) {
-    totalWeight += p.pallet.gross_weight;
-    totalMoment += p.pallet.gross_weight * p.position_coord;
+    const weight = p.pallet.gross_weight;
+    // If x_start_in is available (from solver), use it; otherwise use position_coord
+    const solverArm = p.x_start_in !== undefined 
+      ? p.x_start_in + (PALLET_463L.length / 2)
+      : p.position_coord;
+    const stationArm = solverArm + bayStart;
+    totalWeight += weight;
+    totalMoment += weight * stationArm;
   }
 
-  // Vehicle position.z is cargo-relative, add forward_offset to get aircraft station
+  // Vehicle position.z is 0-based from cargo bay start
+  // Add bayStart to convert to aircraft station coordinates
   for (const v of vehicles) {
-    totalWeight += v.weight;
-    const vehicleStation = v.position.z + spec.forward_offset;
-    totalMoment += v.weight * vehicleStation;
+    const weight = v.weight;
+    const solverArm = v.position.z;
+    const stationArm = solverArm + bayStart;
+    totalWeight += weight;
+    totalMoment += weight * stationArm;
   }
 
   // Calculate CG station (inches from aircraft datum)
