@@ -1597,6 +1597,30 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
     const targetFlight = splitFlights.find(f => f.id === targetFlightId);
     if (!targetFlight) return;
     
+    // Pre-validation: Check capacity limits before transfer
+    const maxPayload = targetFlight.aircraft_type === 'C-17' ? 170900 : 42000;
+    const maxPallets = targetFlight.aircraft_type === 'C-17' ? 18 : 6;
+    
+    // Get pallet count and weight for validation
+    const palletCountToTransfer = palletIds.length;
+    const transferWeight = sourceFlight.pallets
+      .filter(p => palletIds.includes(p.pallet.id))
+      .reduce((sum, p) => sum + p.pallet.gross_weight, 0);
+    
+    // Check pallet count limit
+    const simulatedPalletCount = targetFlight.pallets.length + palletCountToTransfer;
+    if (simulatedPalletCount > maxPallets) {
+      alert(`Cannot transfer: ${targetFlight.callsign} can only hold ${maxPallets} pallets (would have ${simulatedPalletCount})`);
+      return;
+    }
+    
+    // Check weight limit
+    const simulatedWeight = calculateFlightWeight(targetFlight) + transferWeight;
+    if (simulatedWeight > maxPayload) {
+      alert(`Cannot transfer: ${targetFlight.callsign} would exceed max payload (${simulatedWeight.toLocaleString()} lb > ${maxPayload.toLocaleString()} lb)`);
+      return;
+    }
+    
     // Deep clone pallets to avoid shared references
     const deepClonePallet = (p: typeof sourceFlight.pallets[0]) => ({
       ...p,
@@ -2753,6 +2777,65 @@ function AirbaseDetailModal({ base, flights, onClose, onFlightsChange }: Airbase
     if (sourceFlightId === targetFlightId) {
       setDraggedItem(null);
       return;
+    }
+
+    // Pre-validation: Check capacity limits before drop
+    const targetFlight = outgoingFlights.find(f => f.id === targetFlightId);
+    if (!targetFlight) {
+      setDraggedItem(null);
+      return;
+    }
+    
+    const maxPayload = targetFlight.aircraft_type === 'C-17' ? 170900 : 42000;
+    const maxPallets = targetFlight.aircraft_type === 'C-17' ? 18 : 6;
+    
+    // Get current draft state for target flight
+    const targetDraftPallets = draftPalletAssignments.get(targetFlightId) || [];
+    const targetDraftRolling = draftRollingAssignments.get(targetFlightId) || [];
+    
+    if (itemType === 'pallet') {
+      const sourceDraftPallets = draftPalletAssignments.get(sourceFlightId) || [];
+      const palletToMove = sourceDraftPallets.find(p => p.pallet.pallet.id === itemId);
+      
+      if (!palletToMove) {
+        setDraggedItem(null);
+        return;
+      }
+      
+      // Check pallet count limit
+      if (targetDraftPallets.length >= maxPallets) {
+        alert(`Cannot drop: ${targetFlight.callsign} is at maximum pallet capacity (${maxPallets})`);
+        setDraggedItem(null);
+        return;
+      }
+      
+      // Check weight limit
+      const currentWeight = targetDraftPallets.reduce((sum, p) => sum + p.pallet.pallet.gross_weight, 0) +
+                           targetDraftRolling.reduce((sum, r) => sum + r.item.weight, 0);
+      const newWeight = currentWeight + palletToMove.pallet.pallet.gross_weight;
+      if (newWeight > maxPayload) {
+        alert(`Cannot drop: Would exceed ${targetFlight.callsign} max payload (${newWeight.toLocaleString()} lb > ${maxPayload.toLocaleString()} lb)`);
+        setDraggedItem(null);
+        return;
+      }
+    } else {
+      const sourceDraftRolling = draftRollingAssignments.get(sourceFlightId) || [];
+      const itemToMove = sourceDraftRolling.find(r => String(r.item.item_id) === itemId);
+      
+      if (!itemToMove) {
+        setDraggedItem(null);
+        return;
+      }
+      
+      // Check weight limit for rolling stock
+      const currentWeight = targetDraftPallets.reduce((sum, p) => sum + p.pallet.pallet.gross_weight, 0) +
+                           targetDraftRolling.reduce((sum, r) => sum + r.item.weight, 0);
+      const newWeight = currentWeight + itemToMove.item.weight;
+      if (newWeight > maxPayload) {
+        alert(`Cannot drop: Would exceed ${targetFlight.callsign} max payload (${newWeight.toLocaleString()} lb > ${maxPayload.toLocaleString()} lb)`);
+        setDraggedItem(null);
+        return;
+      }
     }
 
     if (itemType === 'pallet') {
