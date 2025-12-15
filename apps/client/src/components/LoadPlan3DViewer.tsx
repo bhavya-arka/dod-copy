@@ -419,13 +419,25 @@ function MiniMap({
         })}
         
         {(() => {
-          // Convert station CG to solver coordinates for display
-          const solverCG = loadPlan.center_of_balance - spec.cargo_bay_fs_start;
-          const clampedCG = Math.max(0, Math.min(solverCG, spec.cargo_length));
+          // FIXED: Normalize CoB position within the CG envelope for accurate visual representation
+          const cobPercent = loadPlan.cob_percent; // Already clamped to 0-100%
+          const minAllowed = spec.cob_min_percent;
+          const maxAllowed = spec.cob_max_percent;
+          
+          let normalized: number;
+          if (cobPercent <= minAllowed) {
+            normalized = 0;
+          } else if (cobPercent >= maxAllowed) {
+            normalized = 1;
+          } else {
+            normalized = (cobPercent - minAllowed) / (maxAllowed - minAllowed);
+          }
+          
+          const cobY = normalized * spec.cargo_length;
           return (
             <circle
               cx={spec.cargo_width / 2}
-              cy={clampedCG}
+              cy={cobY}
               r={8}
               fill={loadPlan.cob_in_envelope ? '#22c55e' : '#ef4444'}
               stroke="#fff"
@@ -1312,14 +1324,29 @@ function MeasureHUD({
 }
 
 function CenterOfBalance({ loadPlan, scale, viewMode }: { loadPlan: AircraftLoadPlan; scale: number; viewMode: ViewMode }) {
-  // center_of_balance is in station coordinates (aircraft datum reference)
-  // 3D model uses 0-based coordinates from cargo bay start
-  // Subtract cargo_bay_fs_start to convert station coords to 3D model coords
-  const bayStart = loadPlan.aircraft_spec.cargo_bay_fs_start;
-  const solverCG = loadPlan.center_of_balance - bayStart;
-  // Clamp to cargo bay bounds
-  const clampedCG = Math.max(0, Math.min(solverCG, loadPlan.aircraft_spec.cargo_length));
-  const cobPosition = clampedCG * scale;
+  // FIXED: Normalize CoB position within the CG envelope for accurate visual representation
+  // The visual marker should show the CoB position relative to the envelope:
+  // - If CoB = min_allowed (16% for C-17), marker at forward edge
+  // - If CoB = mid-point (28% for C-17), marker at center
+  // - If CoB = max_allowed (40% for C-17), marker at aft edge
+  
+  const spec = loadPlan.aircraft_spec;
+  const cobPercent = loadPlan.cob_percent; // Already clamped to 0-100%
+  const minAllowed = spec.cob_min_percent; // e.g., 16% for C-17
+  const maxAllowed = spec.cob_max_percent; // e.g., 40% for C-17
+  
+  // Normalize within the envelope range [0, 1]
+  let normalized: number;
+  if (cobPercent <= minAllowed) {
+    normalized = 0; // At or before forward limit
+  } else if (cobPercent >= maxAllowed) {
+    normalized = 1; // At or after aft limit
+  } else {
+    normalized = (cobPercent - minAllowed) / (maxAllowed - minAllowed);
+  }
+  
+  // Position marker along the cargo bay length (in 3D coordinates)
+  const cobPosition = normalized * spec.cargo_length * scale;
   const color = loadPlan.cob_in_envelope ? '#22c55e' : '#ef4444';
   const isCogMode = viewMode === 'cog';
   

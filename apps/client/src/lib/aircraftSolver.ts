@@ -818,10 +818,19 @@ function placePallets(
     return b.gross_weight - a.gross_weight;
   });
 
-  const centerSlotIndex = Math.floor((targetSolverCG - startX) / PALLET_SLOT);
+  // Calculate center slot - use target CG if available, otherwise center of available space
+  // This handles cases where rolling stock takes up the front of the cargo bay
+  let centerSlotIndex: number;
+  if (targetSolverCG >= startX && targetSolverCG <= maxX) {
+    // Target CG is within available space - use it
+    centerSlotIndex = Math.floor((targetSolverCG - startX) / PALLET_SLOT);
+  } else {
+    // Target CG is outside available space - center in available slots
+    centerSlotIndex = Math.floor(maxSlots / 2);
+  }
   const validCenterIndex = Math.max(0, Math.min(maxSlots - 1, centerSlotIndex));
   
-  console.log(`[PlacePallets] Center slot index: ${validCenterIndex} of ${maxSlots} slots (startX=${startX})`);
+  console.log(`[PlacePallets] Center slot index: ${validCenterIndex} of ${maxSlots} slots (startX=${startX}, targetCG=${targetSolverCG.toFixed(0)}")`);
 
   const assignedSlots: Map<number, Pallet463L> = new Map();
   let runningWeight = currentWeight;
