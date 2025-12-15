@@ -440,16 +440,16 @@ function placeRollingStock(
     for (let i = 0; i < itemsToPlace.length; i++) {
       const item = itemsToPlace[i];
       
-      if (item.width_in > aircraftSpec.ramp_clearance_width) {
-        console.log(`[PlaceRollingStock] Item ${item.description} too wide: ${item.width_in} > ${aircraftSpec.ramp_clearance_width}`);
+      if (item.width_in > aircraftSpec.cargo_width) {
+        console.log(`[PlaceRollingStock] Item ${item.description} too wide for cargo bay: ${item.width_in} > ${aircraftSpec.cargo_width}`);
         unplaced.push(item);
         itemsToPlace.splice(i, 1);
         i--;
         continue;
       }
 
-      if (item.height_in > aircraftSpec.ramp_clearance_height) {
-        console.log(`[PlaceRollingStock] Item ${item.description} too tall: ${item.height_in} > ${aircraftSpec.ramp_clearance_height}`);
+      if (item.height_in > aircraftSpec.main_deck_height) {
+        console.log(`[PlaceRollingStock] Item ${item.description} too tall for main deck: ${item.height_in} > ${aircraftSpec.main_deck_height}`);
         unplaced.push(item);
         itemsToPlace.splice(i, 1);
         i--;
