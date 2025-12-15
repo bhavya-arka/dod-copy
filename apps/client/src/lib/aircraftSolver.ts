@@ -97,10 +97,16 @@ export interface CGLoadItem {
 /**
  * Extended CG result with lateral balance information
  * Per T.O. 1C-17A-9 and T.O. 1C-130H-9 specifications
+ * 
+ * NOTE: The physical cargo bay is larger than the CG envelope range.
+ * For C-17: cargo bay spans 1056", but 16-40% MAC is only ~74" of CG travel.
+ * Therefore, front-loaded cargo can produce negative %MAC (physically impossible to display).
+ * We compute both raw (physics-accurate) and clamped (display-safe 0-100%) values.
  */
 export interface CGResult {
   station_cg: number;             // CG in station inches (from aircraft datum)
-  mac_percent: number;            // CG as % MAC
+  mac_percent: number;            // CG as % MAC (raw, can be negative or >100%)
+  clamped_mac_percent: number;    // CG as % MAC clamped to 0-100% for display
   total_weight: number;           // Total load weight (lbs)
   total_moment: number;           // Total longitudinal moment (inch-pounds)
   lateral_cg: number;             // Lateral CG offset from centerline (inches)
@@ -192,12 +198,17 @@ export function calculateCenterOfGravity(
   // Calculate lateral CG (deviation from centerline)
   const lateralCG = totalWeight > 0 ? totalLateralMoment / totalWeight : 0;
   
-  // Convert to %MAC
+  // Convert to %MAC (raw value - can be negative or >100%)
   const macPercent = totalWeight > 0
     ? ((stationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100
     : targetCGPercent; // Empty aircraft defaults to target
 
-  // Check envelope limits
+  // CRITICAL FIX: Clamp %MAC to 0-100% for display purposes
+  // The physical cargo bay is larger than the CG envelope, so extreme forward/aft
+  // loading can produce values outside 0-100%. We clamp for display but keep raw for physics.
+  const clampedMacPercent = Math.max(0, Math.min(100, macPercent));
+
+  // Check envelope limits (using raw value for accurate physics)
   const withinEnvelope = macPercent >= aircraftSpec.cob_min_percent && 
                          macPercent <= aircraftSpec.cob_max_percent;
   
@@ -217,6 +228,7 @@ export function calculateCenterOfGravity(
   return {
     station_cg: stationCG,
     mac_percent: macPercent,
+    clamped_mac_percent: clampedMacPercent,
     total_weight: totalWeight,
     total_moment: totalMoment,
     lateral_cg: lateralCG,
@@ -296,11 +308,12 @@ export function calculateCenterOfBalance(
   const cgResult = calculateCenterOfGravity(loadItems, aircraftSpec);
   
   // Return legacy CoBCalculation format
+  // CRITICAL FIX: Use clamped_mac_percent for display (never show negative or >100%)
   return {
     total_weight: cgResult.total_weight,
     total_moment: cgResult.total_moment,
     center_of_balance: cgResult.station_cg,
-    cob_percent: cgResult.mac_percent,
+    cob_percent: cgResult.clamped_mac_percent, // Use clamped value for display
     min_allowed: cgResult.forward_limit_percent,
     max_allowed: cgResult.aft_limit_percent,
     in_envelope: cgResult.within_envelope,
