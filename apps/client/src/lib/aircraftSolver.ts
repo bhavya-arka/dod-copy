@@ -79,15 +79,16 @@ function sortPalletsWithWeaponsPriority(pallets: Pallet463L[]): Pallet463L[] {
 }
 
 // ============================================================================
-// SECTION 9: CENTER OF BALANCE CALCULATIONS (FIXED)
+// SECTION 9: CENTER OF BALANCE CALCULATIONS (MAC-based)
 // ============================================================================
 
 /**
  * Calculate Center of Balance as percentage of Mean Aerodynamic Chord (MAC)
  * 
- * FIXED: Now produces valid positive percentages in the 15-40% range
+ * Uses the standard MAC formula:
+ *   CoB% = ((Station_CG - LEMAC) / MAC_Length) * 100
  * 
- * The formula maps cargo position to a percentage within the aircraft's envelope.
+ * The solver uses 0-based coordinates, so we add bay_start to convert to station coordinates.
  * - Cargo at front of bay = lower percentage (forward CG)
  * - Cargo at back of bay = higher percentage (aft CG)
  */
@@ -99,29 +100,31 @@ export function calculateCenterOfBalance(
   let totalWeight = 0;
   let totalMoment = 0;
 
+  const bayStart = aircraftSpec.stations[0]?.rdl_distance || 245;
+
   for (const p of pallets) {
     const weight = p.pallet.gross_weight;
-    const arm = p.x_start_in !== undefined 
+    const solverArm = p.x_start_in !== undefined 
       ? p.x_start_in + (PALLET_463L.length / 2)
       : p.position_coord;
+    const stationArm = solverArm + bayStart;
     totalWeight += weight;
-    totalMoment += weight * arm;
+    totalMoment += weight * stationArm;
   }
 
   for (const v of vehicles) {
     const weight = v.weight;
-    const arm = v.position.z;
+    const solverArm = v.position.z;
+    const stationArm = solverArm + bayStart;
     totalWeight += weight;
-    totalMoment += weight * arm;
+    totalMoment += weight * stationArm;
   }
 
-  const cgPosition = totalWeight > 0 ? totalMoment / totalWeight : 0;
+  const stationCg = totalWeight > 0 ? totalMoment / totalWeight : bayStart;
   
-  const cargoLength = aircraftSpec.cargo_length;
-  const normalizedPosition = Math.max(0, Math.min(1, cgPosition / cargoLength));
-  
-  const cobPercent = aircraftSpec.cob_min_percent + 
-    normalizedPosition * (aircraftSpec.cob_max_percent - aircraftSpec.cob_min_percent);
+  const cobPercent = totalWeight > 0
+    ? ((stationCg - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100
+    : 0;
 
   const inEnvelope = cobPercent >= aircraftSpec.cob_min_percent && 
                      cobPercent <= aircraftSpec.cob_max_percent;
@@ -140,7 +143,7 @@ export function calculateCenterOfBalance(
   return {
     total_weight: totalWeight,
     total_moment: totalMoment,
-    center_of_balance: cgPosition,
+    center_of_balance: stationCg,
     cob_percent: cobPercent,
     min_allowed: aircraftSpec.cob_min_percent,
     max_allowed: aircraftSpec.cob_max_percent,
