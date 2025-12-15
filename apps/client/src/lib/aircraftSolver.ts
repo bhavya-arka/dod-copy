@@ -618,7 +618,7 @@ function placeRollingStock(
   runningWeight: number;
   runningMoment: number;
 } {
-  console.log('[PlaceRollingStock] CoB-Optimizing algorithm called with', items.length, 'items');
+  console.log('[PlaceRollingStock] V3-PARTITION algorithm called with', items.length, 'items');
   
   const placements: VehiclePlacement[] = [];
   const unplaced: MovementItem[] = [];
@@ -769,17 +769,14 @@ function placeRollingStock(
     const halfWidth = item.width_in / 2;
     const candidateXs = generateCandidateXPositions(item.length_in);
     
-    let bestPosition: { x: number; y: number; score: number; projectedCG: number } | null = null;
+    // Collect ALL valid positions with their scores
+    const allCandidates: { x: number; y: number; score: number; projectedCG: number; improvesBalance: boolean }[] = [];
     
-    // Evaluate ALL candidate X positions to find the best one
     for (const xStart of candidateXs) {
       const xEnd = xStart + item.length_in;
-      
-      // Find available lateral positions at this X
       const lateralPositions = findLateralPositions(xStart, xEnd, item.width_in);
       
       for (const yCenter of lateralPositions) {
-        // Check bounds
         const candidateBox = {
           x_start: xStart,
           x_end: xEnd,
@@ -788,17 +785,10 @@ function placeRollingStock(
           z_top: item.height_in
         };
         
-        if (!isWithinSolverBounds(candidateBox, halfAircraftWidth, maxX, maxHeight)) {
-          continue;
-        }
+        if (!isWithinSolverBounds(candidateBox, halfAircraftWidth, maxX, maxHeight)) continue;
+        if (checkCollision(xStart, xEnd, yCenter, halfWidth)) continue;
         
-        // Check collision
-        if (checkCollision(xStart, xEnd, yCenter, halfWidth)) {
-          continue;
-        }
-        
-        // Score this position by projected CG deviation
-        let { score, projectedCGPercent } = scorePlacementPosition(
+        const { score, projectedCGPercent } = scorePlacementPosition(
           xStart,
           item.length_in,
           item.weight_each_lb,
@@ -808,24 +798,40 @@ function placeRollingStock(
           aircraftSpec
         );
         
-        // DIRECTIONAL PREFERENCE: Penalize placements that move CG FURTHER from target
-        // Only penalize if projected CG deviates MORE from target than current CG
+        // Check if this position moves CG TOWARD target (improves balance)
         const currentDeviation = Math.abs(currentCGPercent - targetCGPercent);
         const projectedDeviation = Math.abs(projectedCGPercent - targetCGPercent);
+        const improvesBalance = projectedDeviation <= currentDeviation;
         
-        if (projectedDeviation > currentDeviation) {
-          // This placement makes balance WORSE - add penalty proportional to worsening
-          const worseningAmount = projectedDeviation - currentDeviation;
-          score += worseningAmount * 5; // 5x penalty for each % worse
-        }
-        
-        if (bestPosition === null || score < bestPosition.score) {
-          bestPosition = { x: xStart, y: yCenter, score, projectedCG: projectedCGPercent };
-        }
+        allCandidates.push({ x: xStart, y: yCenter, score, projectedCG: projectedCGPercent, improvesBalance });
       }
     }
     
-    // NO early exit - always evaluate ALL candidates to find true best
+    // PARTITION: Separate improving positions from worsening ones
+    const improvingCandidates = allCandidates.filter(c => c.improvesBalance);
+    const worseningCandidates = allCandidates.filter(c => !c.improvesBalance);
+    
+    // PREFER improving positions, fall back to least-bad worsening position
+    let bestPosition: { x: number; y: number; score: number; projectedCG: number } | null = null;
+    
+    if (improvingCandidates.length > 0) {
+      // Pick the improving position with lowest score (closest to target CG)
+      improvingCandidates.sort((a, b) => a.score - b.score);
+      const best = improvingCandidates[0];
+      bestPosition = { x: best.x, y: best.y, score: best.score, projectedCG: best.projectedCG };
+    } else if (worseningCandidates.length > 0) {
+      // No improving positions - pick the one that stays closest to envelope
+      // Sort by: positions within envelope first, then by score
+      worseningCandidates.sort((a, b) => {
+        const aInEnvelope = a.projectedCG >= aircraftSpec.cob_min_percent && a.projectedCG <= aircraftSpec.cob_max_percent;
+        const bInEnvelope = b.projectedCG >= aircraftSpec.cob_min_percent && b.projectedCG <= aircraftSpec.cob_max_percent;
+        if (aInEnvelope && !bInEnvelope) return -1;
+        if (!aInEnvelope && bInEnvelope) return 1;
+        return a.score - b.score;
+      });
+      const best = worseningCandidates[0];
+      bestPosition = { x: best.x, y: best.y, score: best.score, projectedCG: best.projectedCG };
+    }
     
     // Place item at best position
     if (bestPosition !== null) {
