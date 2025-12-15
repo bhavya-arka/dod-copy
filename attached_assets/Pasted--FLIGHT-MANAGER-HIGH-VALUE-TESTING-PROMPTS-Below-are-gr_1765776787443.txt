@@ -1,0 +1,97 @@
+
+✅ FLIGHT MANAGER – HIGH‑VALUE TESTING PROMPTS
+Below are grouped sets of prompts you can fire directly into Replit AI to force it to audit, debug, and optimize the Flight Manager.
+
+✈️ 1. Core Flowchart & Node System Validation
+Prompt A1 — Validate Node Linking Logic
+
+“Audit the Flight Manager flowchart system. Confirm aircraft nodes, airbase nodes, cargo nodes, and route nodes connect logically. Identify missing edges, impossible links, and validate that deleting a node cleans up all dependent references.”
+
+Prompt A2 — Validate New‑Flight Propagation
+
+“Verify that when a new flight is added inside the flowchart, it automatically appears in the ‘Flights’ sidebar, in the cargo split tab, and in the ICODE export session. List any missing update pathways and fix them.”
+
+Prompt A3 — Check Drag‑and‑Drop Logic
+
+“Test all drag‑and‑drop flows: cargo → pallet, pallet → aircraft, aircraft → route node, and node → delete. Ensure no ghost nodes remain and no duplicate entries are created.”
+
+📦 2. Cargo & Pallet Logic Testing
+Prompt B1 — Validate Palletization Rules
+
+“Validate that cargo dimensions and weight are parsed correctly, and ensure that items larger than a 463L pallet cannot be assigned unless marked as rolling stock. Fix any incorrect type inference.”
+
+Prompt B2 — Overlapping Cargo Detection
+
+“Simulate 50 randomized cargo loads and verify that the 2D and 3D placement algorithms never allow overlapping geometry. If overlaps occur, fix the collision detection system and log the test cases.”
+
+Prompt B3 — Verify Lateral/Vertical Limits
+
+“Audit lateral spacing, vertical stacking limitations, and aisle requirements according to USAF transport loading rules. Add missing validation checks and reject invalid placements.”
+
+🔧 3. Aircraft Data Integrity (C‑17/C‑5/KC‑46/etc.)
+Prompt C1 — Validate Cargo Bay Geometry
+
+“Recalculate the C‑17 cargo bay geometry, pallet positions, FS station reference points, and usable cargo area. Identify mismatches between 2D, 3D, and actual aircraft specs and fix all coordinate definitions.”
+
+Prompt C2 — Validate Pallet Station Mapping
+
+“Check that pallets 1–18 align with the correct FS ranges, and verify centroids and balance contribution values. If any station is offset incorrectly, correct the source map and conversion equations.”
+
+🎯 4. Center of Balance & Weight Math
+Prompt D1 — Full CoB Audit
+
+“Recompute center‑of‑balance for multiple pallet arrangements. Confirm that CoB uses station-based moment calculations: CoB = sum(weight * moment arm) / total weight. Fix any discrepancy between 2D, 3D, and the summary panel.”
+
+Prompt D2 — Extreme Case Testing
+
+“Run heavy‑aft loads, heavy‑forward loads, and mixed loads. Validate warnings for out‑of‑limits CoB. Add missing constraints or error messages.”
+
+⛽ 5. Routing, Weather, and Fuel Consumption
+Prompt E1 — Weather Data Sync Test
+
+“Verify weather tab pulls the same METAR/TAF and turbulence data as the flight plan tab. Diagnose why the weather tab is stale. Fix shared data source so both tabs use identical, live weather.”
+
+Prompt E2 — Fuel Burn Validation
+
+“Recalculate fuel burn for C‑17 using official charts. Compare real‑world block time, flight time, and reserve fuel values to the app. Fix scaling issues and wrong formulas.”
+
+📊 6. Analytics Tab QA
+Prompt F1 — Validate Analytics Math
+
+“Test every analytics metric (loading efficiency, pallet utilization, mission time, cargo density). Recompute with raw input data. Fix any formulas producing inaccurate values.”
+
+Prompt F2 — Variable Input Validation
+
+“Ensure that analytics fields accept variable inputs. Add missing ones (fuel price, aircraft availability, maintenance interval). Validate formula recalculations after each edit.”
+
+📤 7. ICODES Export Validation
+Prompt G1 — Validate ICODES Output Format
+
+“Audit ICODES export for file structure, required fields, spacing, and TCN formatting. Compare with a real ICODES sample and correct any mismatches.”
+
+Prompt G2 — Handsontable Spreadsheet View Audit
+
+“Ensure that once a configuration is saved, all ICODES data is viewable in Handsontable format. Test editing, validation, saving, and round‑tripping the data back to state.”
+
+🧠 8. UTC & PDF Parsing QA
+Prompt H1 — Validate UTC Parsing
+
+“Test UTC upload parsing. Ensure no column is mis‑typed (numerical columns stay numerical), names parse correctly, pallet IDs parse correctly, and PAX rows map to dedicated fields.”
+
+Prompt H2 — Ensure Missing Fields Don’t Break Parsing
+
+“Simulate incomplete rows, missing weights, or missing dimensions. Ensure parser assigns nulls, warnings, and default handling — not crashes.”
+
+🖥️ 9. UI/UX & Control Flow Testing
+Prompt I1 — Validate Screen Consistency
+
+“Navigate end-to-end: Upload UTC → Flowchart → Cargo Split → Routes & Fuel → Analytics → Export. Identify missing buttons, weird layout jumps, or inconsistent state handling.”
+
+Prompt I2 — State Sync Testing
+
+“Validate that edits in Flowchart propagate to all other tabs and vice versa. Fix any out‑of‑sync values.”
+
+🐛 10. Full Regression Testing Prompt
+This is the master test:
+
+“Perform a full regression test on the Flight Manager module: flowchart logic, cargo parsing, pallet placement, route computation, CoB calculations, 3D visuals, weather sync, analytics metrics, and ICODES export. Identify every mismatch, log errors clearly, and propose fixes with code-level detail.”
