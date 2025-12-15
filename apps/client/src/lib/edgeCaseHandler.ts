@@ -101,12 +101,26 @@ export function validateEdgeCases(item: MovementItem): EdgeCaseValidationResult 
     });
   }
 
-  // 2. OVERWIDTH ITEM (>104 usable pallet inches)
-  // EXCEPTION: Items with exact 463L footprint (88x108 or 108x88) are pre-built pallets, NOT overwidth cargo
+  // 2. OVERLENGTH ITEM (>104 usable pallet inches)
+  // EXCEPTION: Items with exact 463L footprint (88x108 or 108x88) are pre-built pallets, NOT overlength cargo
   const is463LFootprint = 
     (item.length_in === 88 && item.width_in === 108) ||
     (item.length_in === 108 && item.width_in === 88);
   
+  if (item.length_in > PALLET_463L.usable_length && !is463LFootprint) {
+    canPalletize = false;
+    mustBeRollingStock = true;
+    warnings.push({
+      code: 'WARN_OVERSIZE_ITEM',
+      item_id: item.item_id,
+      field: 'length_in',
+      message: `LENGTH_EXCEEDED: Item length ${item.length_in}" exceeds pallet limit (${PALLET_463L.usable_length}"). Cannot palletize.`,
+      suggestion: 'Item will be treated as rolling stock or requires special handling',
+      severity: 'warning'
+    });
+  }
+
+  // 3. OVERWIDTH ITEM (>84 usable pallet inches)
   if (item.width_in > PALLET_463L.usable_width && !is463LFootprint) {
     canPalletize = false;
     mustBeRollingStock = true;
@@ -175,10 +189,18 @@ export function validateEdgeCases(item: MovementItem): EdgeCaseValidationResult 
     });
   }
 
-  // 8. EXTREMELY HEAVY VEHICLES (>10,000 lb)
-  if (item.weight_each_lb > AIRCRAFT_SPECS['C-17'].per_position_weight) {
+  // 8. EXTREMELY HEAVY ITEMS (>10,000 lb - exceeds pallet weight limit)
+  if (item.weight_each_lb > PALLET_463L.max_payload_96in) {
     canPalletize = false;
     mustBeRollingStock = true;
+    warnings.push({
+      code: 'WARN_OVERSIZE_ITEM',
+      item_id: item.item_id,
+      field: 'weight_each_lb',
+      message: `WEIGHT_EXCEEDED: Item weight ${item.weight_each_lb.toLocaleString()} lb exceeds pallet limit (${PALLET_463L.max_payload_96in.toLocaleString()} lb). Cannot palletize.`,
+      suggestion: 'Item will be treated as rolling stock',
+      severity: 'warning'
+    });
     
     if (item.weight_each_lb > AIRCRAFT_SPECS['C-130'].max_payload) {
       requiresC17Only = true;
