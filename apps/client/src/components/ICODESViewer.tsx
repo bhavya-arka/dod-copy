@@ -332,39 +332,49 @@ function ICODESDiagram({
         );
       })}
       
-      {showCoB && (
-        <>
-          <line
-            x1={50 + loadPlan.center_of_balance * scale}
-            y1={45}
-            x2={50 + loadPlan.center_of_balance * scale}
-            y2={55 + width}
-            stroke={loadPlan.cob_in_envelope ? '#22c55e' : '#ef4444'}
-            strokeWidth={2}
-            strokeDasharray="4 2"
-          />
-          
-          <polygon
-            points={`
-              ${50 + loadPlan.center_of_balance * scale},${45}
-              ${50 + loadPlan.center_of_balance * scale - 6},${35}
-              ${50 + loadPlan.center_of_balance * scale + 6},${35}
-            `}
-            fill={loadPlan.cob_in_envelope ? '#22c55e' : '#ef4444'}
-          />
-          
-          <text 
-            x={50 + loadPlan.center_of_balance * scale}
-            y={28}
-            textAnchor="middle"
-            fill={loadPlan.cob_in_envelope ? '#22c55e' : '#ef4444'}
-            fontSize={9}
-            fontWeight="600"
-          >
-            CoB
-          </text>
-        </>
-      )}
+      {showCoB && (() => {
+        // Convert station CG back to solver coordinates for display
+        // center_of_balance is in station coords (includes cargo_bay_fs_start offset)
+        // We need solver coords (0-based from cargo bay start) for the visual marker
+        const solverCG = loadPlan.center_of_balance - spec.cargo_bay_fs_start;
+        // Clamp to cargo bay bounds to prevent marker from going off-screen
+        const clampedCG = Math.max(0, Math.min(solverCG, spec.cargo_length));
+        const cobX = 50 + clampedCG * scale;
+        
+        return (
+          <>
+            <line
+              x1={cobX}
+              y1={45}
+              x2={cobX}
+              y2={55 + width}
+              stroke={loadPlan.cob_in_envelope ? '#22c55e' : '#ef4444'}
+              strokeWidth={2}
+              strokeDasharray="4 2"
+            />
+            
+            <polygon
+              points={`
+                ${cobX},${45}
+                ${cobX - 6},${35}
+                ${cobX + 6},${35}
+              `}
+              fill={loadPlan.cob_in_envelope ? '#22c55e' : '#ef4444'}
+            />
+            
+            <text 
+              x={cobX}
+              y={28}
+              textAnchor="middle"
+              fill={loadPlan.cob_in_envelope ? '#22c55e' : '#ef4444'}
+              fontSize={9}
+              fontWeight="600"
+            >
+              CoB
+            </text>
+          </>
+        );
+      })()}
     </svg>
   );
 }

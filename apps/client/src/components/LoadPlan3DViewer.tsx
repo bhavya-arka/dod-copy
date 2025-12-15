@@ -418,14 +418,21 @@ function MiniMap({
           );
         })}
         
-        <circle
-          cx={spec.cargo_width / 2}
-          cy={loadPlan.center_of_balance - (spec.stations[0]?.rdl_distance || 245)}
-          r={8}
-          fill={loadPlan.cob_in_envelope ? '#22c55e' : '#ef4444'}
-          stroke="#fff"
-          strokeWidth={2}
-        />
+        {(() => {
+          // Convert station CG to solver coordinates for display
+          const solverCG = loadPlan.center_of_balance - spec.cargo_bay_fs_start;
+          const clampedCG = Math.max(0, Math.min(solverCG, spec.cargo_length));
+          return (
+            <circle
+              cx={spec.cargo_width / 2}
+              cy={clampedCG}
+              r={8}
+              fill={loadPlan.cob_in_envelope ? '#22c55e' : '#ef4444'}
+              stroke="#fff"
+              strokeWidth={2}
+            />
+          );
+        })()}
         
         <text
           x={10}
@@ -1307,9 +1314,12 @@ function MeasureHUD({
 function CenterOfBalance({ loadPlan, scale, viewMode }: { loadPlan: AircraftLoadPlan; scale: number; viewMode: ViewMode }) {
   // center_of_balance is in station coordinates (aircraft datum reference)
   // 3D model uses 0-based coordinates from cargo bay start
-  // Subtract bayStart to convert station coords to 3D model coords
-  const bayStart = loadPlan.aircraft_spec.stations[0]?.rdl_distance || 245;
-  const cobPosition = (loadPlan.center_of_balance - bayStart) * scale;
+  // Subtract cargo_bay_fs_start to convert station coords to 3D model coords
+  const bayStart = loadPlan.aircraft_spec.cargo_bay_fs_start;
+  const solverCG = loadPlan.center_of_balance - bayStart;
+  // Clamp to cargo bay bounds
+  const clampedCG = Math.max(0, Math.min(solverCG, loadPlan.aircraft_spec.cargo_length));
+  const cobPosition = clampedCG * scale;
   const color = loadPlan.cob_in_envelope ? '#22c55e' : '#ef4444';
   const isCogMode = viewMode === 'cog';
   
