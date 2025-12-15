@@ -414,14 +414,14 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     // Cargo Bay: Stations 245 to 1215 (970" length)
     // CG Envelope: 16% - 40% MAC for cargo operations
     // Target CG: 28% MAC (center of envelope)
-    // cargo_bay_fs_start: FS where solver X=0 maps to forward CG limit
-    // Formula: LEMAC - (forward_limit × MAC) = 869.7 - (0.16 × 309.5) = 820"
-    // This ensures: front cargo → ~16% MAC, centered → ~28%, aft → ~40%
+    // cargo_bay_fs_start: FS datum where solver X=0 begins
+    // Formula: targetStation - targetCG = (LEMAC + 0.28×MAC) - 528 = 956.4 - 528 = 428"
+    // This ensures: centered cargo at targetCG produces ~28% MAC
     cob_min_percent: 16,
     cob_max_percent: 40,
     mac_length: 309.5,
     lemac_station: 869.7,
-    cargo_bay_fs_start: 820,
+    cargo_bay_fs_start: 428,
     
     // Station constraints
     stations: C17_STATIONS,
@@ -486,14 +486,14 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     // Cargo Bay: Stations 245 to 605 (360" length)
     // CG Envelope: 18% - 33% MAC for cargo operations
     // Target CG: 25.5% MAC (center of envelope)
-    // cargo_bay_fs_start: FS where solver X=0 maps to forward CG limit
-    // Formula: LEMAC - (forward_limit × MAC) = 494.5 - (0.18 × 164.5) = 465"
-    // This ensures: front cargo → ~18% MAC, centered → ~25.5%, aft → ~33%
+    // cargo_bay_fs_start: FS datum where solver X=0 begins
+    // Formula: targetStation - targetCG = (LEMAC + 0.255×MAC) - 246 = 536.5 - 246 = 290"
+    // This ensures: centered cargo at targetCG produces ~25.5% MAC
     cob_min_percent: 18,
     cob_max_percent: 33,
     mac_length: 164.5,
     lemac_station: 494.5,
-    cargo_bay_fs_start: 465,
+    cargo_bay_fs_start: 290,
     
     // Station constraints
     stations: C130_STATIONS,
