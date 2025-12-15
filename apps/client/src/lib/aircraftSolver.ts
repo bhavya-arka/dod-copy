@@ -760,12 +760,18 @@ function placeRollingStock(
       continue;
     }
 
+    // Calculate current CG to determine directional preference
+    const currentCGPercent = runningWeight > 0 
+      ? ((runningMoment / runningWeight - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100
+      : targetCGPercent;
+    const isNoseHeavy = currentCGPercent < targetCGPercent;
+
     const halfWidth = item.width_in / 2;
     const candidateXs = generateCandidateXPositions(item.length_in);
     
     let bestPosition: { x: number; y: number; score: number; projectedCG: number } | null = null;
     
-    // Evaluate each candidate X position
+    // Evaluate ALL candidate X positions to find the best one
     for (const xStart of candidateXs) {
       const xEnd = xStart + item.length_in;
       
@@ -792,7 +798,7 @@ function placeRollingStock(
         }
         
         // Score this position by projected CG deviation
-        const { score, projectedCGPercent } = scorePlacementPosition(
+        let { score, projectedCGPercent } = scorePlacementPosition(
           xStart,
           item.length_in,
           item.weight_each_lb,
@@ -802,16 +808,24 @@ function placeRollingStock(
           aircraftSpec
         );
         
+        // DIRECTIONAL PREFERENCE: Penalize placements that move CG FURTHER from target
+        // Only penalize if projected CG deviates MORE from target than current CG
+        const currentDeviation = Math.abs(currentCGPercent - targetCGPercent);
+        const projectedDeviation = Math.abs(projectedCGPercent - targetCGPercent);
+        
+        if (projectedDeviation > currentDeviation) {
+          // This placement makes balance WORSE - add penalty proportional to worsening
+          const worseningAmount = projectedDeviation - currentDeviation;
+          score += worseningAmount * 5; // 5x penalty for each % worse
+        }
+        
         if (bestPosition === null || score < bestPosition.score) {
           bestPosition = { x: xStart, y: yCenter, score, projectedCG: projectedCGPercent };
         }
       }
-      
-      // Early exit if we found a perfect position (within 1% of target)
-      if (bestPosition && bestPosition.score < 1.0) {
-        break;
-      }
     }
+    
+    // NO early exit - always evaluate ALL candidates to find true best
     
     // Place item at best position
     if (bestPosition !== null) {
