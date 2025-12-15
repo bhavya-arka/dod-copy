@@ -214,7 +214,7 @@ export function MissionProvider({
     const totalPax = allocationResult.total_pax;
     const aircraftCount = plans.length + (splitFlights.length > plans.length ? splitFlights.length - plans.length : 0);
     
-    const avgCob = plans.reduce((sum, p) => sum + p.cob_percent, 0) / plans.length || 27.5;
+    const avgCob = plans.length > 0 ? plans.reduce((sum, p) => sum + p.cob_percent, 0) / plans.length : 0;
     const maxCapacity = plans.reduce((sum, p) => sum + p.aircraft_spec.max_payload, 0);
     const utilization = maxCapacity > 0 ? (totalWeight / maxCapacity) * 100 : 0;
     
@@ -254,10 +254,10 @@ export function MissionProvider({
       const specs = AIRCRAFT_SPECS[aircraftType];
       
       const route = routes[i];
-      const distance = route?.total_distance_nm || 2000;
-      const payloadWeight = flight?.total_weight_lb || plan?.total_weight || 50000;
+      const distance = route?.total_distance_nm ?? 0;
+      const payloadWeight = flight?.total_weight_lb ?? plan?.total_weight ?? 0;
       
-      const cruiseTime = distance / specs.cruise_speed_kt;
+      const cruiseTime = distance > 0 ? distance / specs.cruise_speed_kt : 0;
       const totalFlightHours = specs.taxi_time_hr + specs.climb_time_hr + cruiseTime + specs.descent_time_hr;
       
       const taxiFuel = specs.fuel_burn_taxi_lb_hr * specs.taxi_time_hr;
@@ -344,22 +344,25 @@ export function MissionProvider({
       return;
     }
 
-    const flights = splitFlights.length > 0 ? splitFlights : [];
     const plans = allocationResult.load_plans;
     
     let totalFuel = 0;
     let totalDistance = 0;
     let totalFlightHours = 0;
     
-    const fuelRates = { 'C-17': 20000, 'C-130': 6000 }; // lb/hr approximate
-    const speeds = { 'C-17': 450, 'C-130': 320 }; // knots
-    
     for (const route of routes) {
       totalDistance += route.total_distance_nm;
-      const aircraftType = plans[0]?.aircraft_spec.name.includes('C-17') ? 'C-17' : 'C-130';
-      const hours = route.total_distance_nm / speeds[aircraftType as 'C-17' | 'C-130'];
+      const aircraftType: 'C-17' | 'C-130' = plans[0]?.aircraft_spec.name.includes('C-17') ? 'C-17' : 'C-130';
+      const specs = AIRCRAFT_SPECS[aircraftType];
+      const cruiseTime = route.total_distance_nm / specs.cruise_speed_kt;
+      const hours = specs.taxi_time_hr + specs.climb_time_hr + cruiseTime + specs.descent_time_hr;
       totalFlightHours += hours;
-      totalFuel += hours * fuelRates[aircraftType as 'C-17' | 'C-130'];
+      
+      const missionFuel = (specs.fuel_burn_taxi_lb_hr * specs.taxi_time_hr) +
+                          (specs.fuel_burn_climb_lb_hr * specs.climb_time_hr) +
+                          (specs.fuel_burn_cruise_lb_hr * cruiseTime) +
+                          (specs.fuel_burn_descent_lb_hr * specs.descent_time_hr);
+      totalFuel += missionFuel * (1 + DEFAULT_FUEL_CONFIG.reserve_fuel_percent + DEFAULT_FUEL_CONFIG.contingency_fuel_percent);
     }
 
     const totalWeight = allocationResult.total_weight;
@@ -367,11 +370,9 @@ export function MissionProvider({
     const totalPax = allocationResult.total_pax;
     const aircraftCount = plans.length + (splitFlights.length > plans.length ? splitFlights.length - plans.length : 0);
     
-    const avgCob = plans.reduce((sum, p) => sum + p.cob_percent, 0) / plans.length || 27.5;
+    const avgCob = plans.length > 0 ? plans.reduce((sum, p) => sum + p.cob_percent, 0) / plans.length : 0;
     const maxCapacity = plans.reduce((sum, p) => sum + p.aircraft_spec.max_payload, 0);
     const utilization = maxCapacity > 0 ? (totalWeight / maxCapacity) * 100 : 0;
-    
-    const fuelCostPerLb = 3.50;
     
     setAnalytics({
       total_aircraft: aircraftCount,
@@ -381,7 +382,7 @@ export function MissionProvider({
       total_fuel_lb: totalFuel,
       total_distance_nm: totalDistance,
       total_flight_hours: totalFlightHours,
-      estimated_cost_usd: totalFuel * fuelCostPerLb,
+      estimated_cost_usd: totalFuel * DEFAULT_FUEL_CONFIG.fuel_cost_per_lb,
       average_cob_percent: avgCob,
       utilization_percent: utilization
     });
@@ -409,10 +410,10 @@ export function MissionProvider({
       const specs = AIRCRAFT_SPECS[aircraftType];
       
       const route = routes[i];
-      const distance = route?.total_distance_nm || 2000;
-      const payloadWeight = flight?.total_weight_lb || plan?.total_weight || 50000;
+      const distance = route?.total_distance_nm ?? 0;
+      const payloadWeight = flight?.total_weight_lb ?? plan?.total_weight ?? 0;
       
-      const cruiseTime = distance / specs.cruise_speed_kt;
+      const cruiseTime = distance > 0 ? distance / specs.cruise_speed_kt : 0;
       const totalFlightHours = specs.taxi_time_hr + specs.climb_time_hr + cruiseTime + specs.descent_time_hr;
       
       const taxiFuel = specs.fuel_burn_taxi_lb_hr * specs.taxi_time_hr;

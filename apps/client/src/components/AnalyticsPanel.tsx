@@ -8,6 +8,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMission, MissionConfiguration, MissionAnalytics, FuelCostBreakdown, AircraftCostBreakdown } from '../context/MissionContext';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { AIRCRAFT_SPECS } from '../lib/routeTypes';
 
 interface AnalyticsPanelProps {
   onSaveConfiguration: (name: string) => void;
@@ -98,6 +99,56 @@ export default function AnalyticsPanel({ onSaveConfiguration }: AnalyticsPanelPr
     if (!selectedAircraftId || !mission.fuelBreakdown) return null;
     return mission.fuelBreakdown.fuel_per_aircraft.find(a => a.aircraft_id === selectedAircraftId);
   }, [selectedAircraftId, mission.fuelBreakdown]);
+
+  const cargoTypeData = useMemo(() => {
+    if (!mission.allocationResult) return [];
+    const plans = mission.allocationResult.load_plans;
+    
+    let palletWeight = 0;
+    let rollingStockWeight = 0;
+    let paxWeight = 0;
+    
+    for (const plan of plans) {
+      palletWeight += plan.pallets.reduce((sum, p) => sum + (p.pallet.gross_weight || 0), 0);
+      rollingStockWeight += plan.rolling_stock.reduce((sum, v) => sum + (v.weight || 0), 0);
+      paxWeight += plan.pax_weight || 0;
+    }
+    
+    const data = [];
+    if (palletWeight > 0) data.push({ name: 'Palletized', value: palletWeight, color: '#3b82f6' });
+    if (rollingStockWeight > 0) data.push({ name: 'Rolling Stock', value: rollingStockWeight, color: '#10b981' });
+    if (paxWeight > 0) data.push({ name: 'PAX Weight', value: paxWeight, color: '#f59e0b' });
+    
+    return data;
+  }, [mission.allocationResult]);
+
+  const palletDistributionData = useMemo(() => {
+    if (!mission.allocationResult) return [];
+    const plans = mission.allocationResult.load_plans;
+    
+    return plans.map(plan => ({
+      name: plan.aircraft_id,
+      pallets: plan.pallets.length,
+      rollingStock: plan.rolling_stock.length,
+      positionsUsed: plan.positions_used,
+      positionsAvailable: plan.positions_available
+    }));
+  }, [mission.allocationResult]);
+
+  const aircraftLoadData = useMemo(() => {
+    if (!mission.allocationResult) return [];
+    const plans = mission.allocationResult.load_plans;
+    
+    return plans.map(plan => ({
+      name: plan.aircraft_id,
+      type: plan.aircraft_type,
+      loadPercent: plan.payload_used_percent || 0,
+      weight: plan.total_weight,
+      maxPayload: plan.aircraft_spec.max_payload,
+      cobPercent: plan.cob_percent,
+      inEnvelope: plan.cob_in_envelope
+    }));
+  }, [mission.allocationResult]);
 
   return (
     <div className="p-8">
@@ -341,6 +392,111 @@ export default function AnalyticsPanel({ onSaveConfiguration }: AnalyticsPanelPr
               </div>
             </div>
           )}
+
+          {cargoTypeData.length > 0 && (
+            <div className="glass-card p-6">
+              <h3 className="text-neutral-900 font-bold mb-4">Cargo Type Breakdown</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie
+                        data={cargoTypeData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={40}
+                        outerRadius={70}
+                        paddingAngle={2}
+                      >
+                        {cargoTypeData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => [`${(value / 1000).toFixed(1)}K lbs`, '']} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="space-y-3">
+                  {cargoTypeData.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-neutral-50 rounded-lg p-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
+                        <span className="text-neutral-700 font-medium">{item.name}</span>
+                      </div>
+                      <span className="text-neutral-900 font-bold">{(item.value / 1000).toFixed(1)}K lbs</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {aircraftLoadData.length > 0 && (
+            <div className="glass-card p-6">
+              <h3 className="text-neutral-900 font-bold mb-4">Per-Aircraft Load Percentage</h3>
+              <div className="space-y-3">
+                {aircraftLoadData.map((aircraft, idx) => (
+                  <div key={idx} className="bg-neutral-50 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-3">
+                        <span className={`px-2 py-1 text-xs rounded-lg font-medium ${
+                          aircraft.type === 'C-17' 
+                            ? 'bg-blue-100 text-blue-700' 
+                            : 'bg-green-100 text-green-700'
+                        }`}>
+                          {aircraft.type}
+                        </span>
+                        <span className="text-neutral-900 font-medium">{aircraft.name}</span>
+                      </div>
+                      <div className="flex items-center space-x-4 text-sm">
+                        <span className="text-neutral-500">{(aircraft.weight / 1000).toFixed(1)}K / {(aircraft.maxPayload / 1000).toFixed(0)}K lbs</span>
+                        <span className={`font-bold ${
+                          aircraft.loadPercent >= 80 ? 'text-green-600' : 
+                          aircraft.loadPercent >= 50 ? 'text-amber-600' : 'text-red-600'
+                        }`}>
+                          {aircraft.loadPercent.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-neutral-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full ${
+                          aircraft.loadPercent >= 80 ? 'bg-green-500' : 
+                          aircraft.loadPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${Math.min(aircraft.loadPercent, 100)}%` }}
+                      ></div>
+                    </div>
+                    <div className="flex items-center justify-between mt-2 text-xs text-neutral-500">
+                      <span>CoB: {aircraft.cobPercent.toFixed(1)}%</span>
+                      <span className={aircraft.inEnvelope ? 'text-green-600' : 'text-red-600'}>
+                        {aircraft.inEnvelope ? 'Within envelope' : 'Outside envelope'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {palletDistributionData.length > 1 && (
+            <div className="glass-card p-6">
+              <h3 className="text-neutral-900 font-bold mb-4">Pallet Distribution by Aircraft</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={palletDistributionData}>
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="pallets" name="Pallets" fill="#3b82f6" />
+                  <Bar dataKey="rollingStock" name="Rolling Stock" fill="#10b981" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -418,19 +574,19 @@ export default function AnalyticsPanel({ onSaveConfiguration }: AnalyticsPanelPr
             <h3 className="text-neutral-900 font-bold mb-4">Fuel Rate Reference</h3>
             <div className="space-y-3 text-sm">
               <div className="bg-blue-50 rounded-lg p-3">
-                <div className="font-medium text-blue-900 mb-1">C-17 Globemaster III</div>
+                <div className="font-medium text-blue-900 mb-1">{AIRCRAFT_SPECS['C-17'].name}</div>
                 <div className="text-blue-700 space-y-1">
-                  <div>Cruise: 21,000 lb/hr</div>
-                  <div>Climb: 28,000 lb/hr</div>
-                  <div>Operating: $22,000/hr</div>
+                  <div>Cruise: {AIRCRAFT_SPECS['C-17'].fuel_burn_cruise_lb_hr.toLocaleString()} lb/hr</div>
+                  <div>Climb: {AIRCRAFT_SPECS['C-17'].fuel_burn_climb_lb_hr.toLocaleString()} lb/hr</div>
+                  <div>Operating: ${AIRCRAFT_SPECS['C-17'].operating_cost_per_hr.toLocaleString()}/hr</div>
                 </div>
               </div>
               <div className="bg-green-50 rounded-lg p-3">
-                <div className="font-medium text-green-900 mb-1">C-130H Hercules</div>
+                <div className="font-medium text-green-900 mb-1">{AIRCRAFT_SPECS['C-130'].name}</div>
                 <div className="text-green-700 space-y-1">
-                  <div>Cruise: 5,500 lb/hr</div>
-                  <div>Climb: 7,000 lb/hr</div>
-                  <div>Operating: $7,000/hr</div>
+                  <div>Cruise: {AIRCRAFT_SPECS['C-130'].fuel_burn_cruise_lb_hr.toLocaleString()} lb/hr</div>
+                  <div>Climb: {AIRCRAFT_SPECS['C-130'].fuel_burn_climb_lb_hr.toLocaleString()} lb/hr</div>
+                  <div>Operating: ${AIRCRAFT_SPECS['C-130'].operating_cost_per_hr.toLocaleString()}/hr</div>
                 </div>
               </div>
             </div>
