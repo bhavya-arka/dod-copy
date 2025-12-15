@@ -899,6 +899,15 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
   const [isLoading, setIsLoading] = useState(false);
   const [activeTool, setActiveTool] = useState<ActiveTool>(null);
   const [pendingNodePosition, setPendingNodePosition] = useState<{ x: number; y: number } | null>(null);
+  const [userWarning, setUserWarning] = useState<string | null>(null);
+
+  // Auto-clear warnings after 4 seconds
+  useEffect(() => {
+    if (userWarning) {
+      const timer = setTimeout(() => setUserWarning(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [userWarning]);
   const reactFlowInstance = useReactFlow();
 
   const { user, isAuthenticated } = useAuth();
@@ -1051,7 +1060,10 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
       const originBase = MILITARY_BASES.find(b => b.base_id === sourceData.baseId);
       const destBase = MILITARY_BASES.find(b => b.base_id === targetData.baseId);
       
-      if (!originBase || !destBase) return;
+      if (!originBase || !destBase) {
+        setUserWarning('Could not find base information. Please try again.');
+        return;
+      }
       
       // Find a flight that goes to origin as default template
       const templateFlight = splitFlights.find(f => f.destination.base_id === originBase.base_id) || splitFlights[0];
@@ -1362,7 +1374,8 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
     
     // Need at least 2 pallets to split
     if (flight.pallets.length < 2) {
-      console.log('Cannot split flight with less than 2 pallets');
+      setUserWarning(`Cannot split ${flight.callsign}: Need at least 2 pallets to split (has ${flight.pallets.length})`);
+      setActiveTool(null);
       return;
     }
     
@@ -1434,6 +1447,12 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
 
   // Handle pane click for placing nodes
   const handlePaneClick = useCallback((event: React.MouseEvent) => {
+    // Reset scissors/eraser tools when clicking on empty canvas (not on a node)
+    if (activeTool === 'scissors' || activeTool === 'eraser') {
+      setActiveTool(null);
+      return;
+    }
+    
     if (!activeTool || activeTool === 'select') return;
     
     // screenToFlowPosition expects viewport coordinates (clientX/clientY)
@@ -1842,6 +1861,20 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
           <button
             onClick={() => setActiveTool(null)}
             className="ml-2 text-neutral-400 hover:text-neutral-600"
+          >
+            <FiX size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Warning Notification */}
+      {userWarning && (
+        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-20 backdrop-blur-sm px-4 py-2 rounded-xl shadow-lg border flex items-center gap-2 bg-amber-50/95 border-amber-300">
+          <FiAlertTriangle className="text-amber-600" size={16} />
+          <span className="text-sm font-medium text-amber-800">{userWarning}</span>
+          <button
+            onClick={() => setUserWarning(null)}
+            className="ml-2 text-amber-400 hover:text-amber-600"
           >
             <FiX size={16} />
           </button>

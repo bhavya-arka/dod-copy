@@ -10,10 +10,12 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  authError: string | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (email: string, username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  clearAuthError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -29,9 +31,15 @@ export function useAuth(): AuthContextType {
 export function useAuthProvider(): AuthContextType {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const clearAuthError = useCallback(() => {
+    setAuthError(null);
+  }, []);
 
   const checkAuth = useCallback(async () => {
     try {
+      setAuthError(null);
       const response = await fetch('/api/auth/me', {
         credentials: 'include'
       });
@@ -43,6 +51,7 @@ export function useAuthProvider(): AuthContextType {
       }
     } catch {
       setUser(null);
+      setAuthError('Unable to connect to server. Please check your internet connection.');
     } finally {
       setIsLoading(false);
     }
@@ -112,10 +121,12 @@ export function useAuthProvider(): AuthContextType {
     user,
     isLoading,
     isAuthenticated: !!user,
+    authError,
     login,
     register,
     logout,
-    checkAuth
+    checkAuth,
+    clearAuthError
   };
 }
 
