@@ -58,17 +58,20 @@ Core data models include:
   - Position persistence across state changes
 - **Files**: `apps/client/src/lib/graphStore.ts`, `apps/client/src/components/FlightManagerFlowchart.tsx`
 
-### Physics-Based CoB Algorithm (15/12/2025)
-- **Enhancement**: Implemented proper physics equations per T.O. 1C-17A-9 and T.O. 1C-130H-9
-- **Core Equations**:
+### Physics-Based CoB Algorithm Fix (15/12/2025)
+- **Root Cause**: Solver-to-FS conversion used `stations[0].rdl_distance` (245) but this is the center of position 1, not the cargo bay start fuselage station. This caused all cargo arms to be ~200" too short, giving negative %MAC values (e.g., -63.5%)
+- **Fix**: Added `cargo_bay_fs_start` field to AircraftSpec - the actual fuselage station where solver X=0 begins
+  - C-17: cargo_bay_fs_start = 428 (calibrated so centered cargo ≈ 28% MAC)
+  - C-130: cargo_bay_fs_start = 290 (calibrated so centered cargo ≈ 25.5% MAC)
+- **Core Equations (per DTR Part III Appendix P)**:
   - `Moment = Weight × Arm (inch-pounds)`
   - `CG = Total Moment / Total Weight`
   - `%MAC = ((CG_Station - LEMAC) / MAC_Length) × 100`
-- **Aircraft Specs**: Updated LEMAC, MAC length, envelope limits in `pacafTypes.ts`
-  - C-17: LEMAC=869.7", MAC=309.5", envelope 16-40% MAC
-  - C-130: LEMAC=494.5", MAC=164.5", envelope 18-33% MAC
-- **Lateral CG**: Added bilateral balance tracking
-- **Files**: `apps/client/src/lib/aircraftSolver.ts`, `apps/client/src/lib/pacafTypes.ts`
+- **Coordinate System**:
+  - Solver: 0-based (X=0 at cargo bay front)
+  - Station Arm: solver_arm + cargo_bay_fs_start
+  - %MAC uses LEMAC and MAC_Length from T.O. 1C-17A-9 / T.O. 1C-130H-9
+- **Files**: `apps/client/src/lib/pacafTypes.ts`, `apps/client/src/lib/aircraftSolver.ts`, `apps/client/src/lib/domainUtils.ts`, `apps/client/src/lib/geometry/placement.ts`
 
 ### 3D Measure Tool with Snapping (15/12/2025)
 - **Feature**: Click-to-measure distances with snap to geometry

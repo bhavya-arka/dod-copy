@@ -93,8 +93,8 @@ export function calculateCoBFromPlacements(
   let totalMoment = 0;
   let totalLateralMoment = 0;
 
-  // Get bay start from first station RDL (245" for C-130, 245" for C-17 position 1)
-  const bayStart = spec.stations[0]?.rdl_distance || 245;
+  // Use cargo_bay_fs_start - the fuselage station where solver X=0 begins (calibrated for correct %MAC)
+  const bayStart = spec.cargo_bay_fs_start;
 
   // Pallet position_coord is 0-based from cargo bay start (set by solver)
   // Add bayStart to convert to aircraft station coordinates

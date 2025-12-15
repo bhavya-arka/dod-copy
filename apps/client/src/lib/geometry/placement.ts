@@ -25,7 +25,7 @@ export function createAircraftGeometry(spec: AircraftSpec): AircraftGeometry {
     main_deck_height_in: spec.main_deck_height,
     ramp_height_in: spec.ramp_clearance_height,
     ref_rdl_in: 0,
-    bay_start_in: spec.stations[0]?.rdl_distance || 245,
+    bay_start_in: 0,  // Solver uses 0-based coordinates; CG calculations use cargo_bay_fs_start separately
     bay_length_in: spec.cargo_length,
     cob_min_percent: spec.cob_min_percent,
     cob_max_percent: spec.cob_max_percent,
@@ -37,24 +37,21 @@ export function createAircraftGeometry(spec: AircraftSpec): AircraftGeometry {
 export function createHeightZones(spec: AircraftSpec): HeightZone[] {
   const zones: HeightZone[] = [];
   
-  const mainDeckEnd = spec.stations.find(s => s.is_ramp)?.rdl_distance || 
-                      (spec.stations[spec.stations.length - 1]?.rdl_distance || 1000);
+  // All dimensions in solver coordinates (0-based from cargo bay start)
+  const mainDeckEnd = spec.cargo_length - spec.ramp_length;
   
   zones.push({
-    x_start_in: spec.stations[0]?.rdl_distance || 245,
+    x_start_in: 0,
     x_end_in: mainDeckEnd,
     max_height_in: spec.main_deck_height,
     zone_name: 'Main Deck'
   });
 
-  const rampStations = spec.stations.filter(s => s.is_ramp);
-  if (rampStations.length > 0) {
-    const rampStart = Math.min(...rampStations.map(s => s.rdl_distance));
-    const rampEnd = Math.max(...rampStations.map(s => s.rdl_distance)) + 60;
-    
+  // Ramp zone (if aircraft has ramp)
+  if (spec.ramp_length > 0) {
     zones.push({
-      x_start_in: rampStart,
-      x_end_in: rampEnd,
+      x_start_in: mainDeckEnd,
+      x_end_in: spec.cargo_length,
       max_height_in: spec.ramp_clearance_height,
       zone_name: 'Ramp'
     });
@@ -186,7 +183,7 @@ export function findNextLongitudinalPosition(
   item_width: number,
   existing_items: PlacedCargo[],
   aircraft: AircraftGeometry,
-  start_x: number = 245
+  start_x: number = 0  // Solver uses 0-based coordinates
 ): { x_start: number; fits: boolean } {
   const sortedByX = [...existing_items]
     .filter(e => e.aircraft_id === existing_items[0]?.aircraft_id)

@@ -157,7 +157,9 @@ export function calculateCenterOfGravity(
   loadItems: CGLoadItem[],
   aircraftSpec: AircraftSpec
 ): CGResult {
-  const bayStart = aircraftSpec.stations[0]?.rdl_distance || 245;
+  // Use cargo_bay_fs_start for FS conversion - this is the fuselage station where solver X=0 begins
+  // This value is calibrated so that centered cargo gives ~28% MAC for C-17, ~25.5% MAC for C-130
+  const bayStart = aircraftSpec.cargo_bay_fs_start;
   const targetCGPercent = (aircraftSpec.cob_min_percent + aircraftSpec.cob_max_percent) / 2;
   
   let totalWeight = 0;
@@ -320,7 +322,7 @@ export function calculateNewCGWithItem(
   newLength: number,
   aircraftSpec: AircraftSpec
 ): { newCGPercent: number; newLateralCG: number } {
-  const bayStart = aircraftSpec.stations[0]?.rdl_distance || 245;
+  const bayStart = aircraftSpec.cargo_bay_fs_start;
   
   // Calculate arm for new item
   const newArm = newPositionX + (newLength / 2) + bayStart;
@@ -774,7 +776,7 @@ function placePallets(
 
   const maxX = aircraftSpec.cargo_length;
   const maxPayload = aircraftSpec.max_payload;
-  const bayStart = aircraftSpec.stations[0]?.rdl_distance || 245;
+  const bayStart = aircraftSpec.cargo_bay_fs_start;
   
   const targetCobPercent = (aircraftSpec.cob_min_percent + aircraftSpec.cob_max_percent) / 2;
   const targetStationCG = aircraftSpec.lemac_station + (targetCobPercent / 100) * aircraftSpec.mac_length;

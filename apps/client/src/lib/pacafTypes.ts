@@ -306,6 +306,7 @@ export interface AircraftSpec {
   cob_max_percent: number;
   mac_length: number;            // Mean Aerodynamic Chord length (inches)
   lemac_station: number;         // Leading Edge of MAC station (inches from datum)
+  cargo_bay_fs_start: number;    // Fuselage Station (FS) where solver X=0 begins (for CG calculations)
   
   // Station-specific constraints
   stations: StationConstraint[];
@@ -413,10 +414,12 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     // Cargo Bay: Stations 245 to 1215 (970" length)
     // CG Envelope: 16% - 40% MAC for cargo operations
     // Target CG: 28% MAC (center of envelope)
+    // cargo_bay_fs_start: FS where solver X=0 begins, calibrated so centered cargo ≈ 28% MAC
     cob_min_percent: 16,
     cob_max_percent: 40,
     mac_length: 309.5,
     lemac_station: 869.7,
+    cargo_bay_fs_start: 428,
     
     // Station constraints
     stations: C17_STATIONS,
@@ -481,10 +484,12 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     // Cargo Bay: Stations 245 to 605 (360" length)
     // CG Envelope: 18% - 33% MAC for cargo operations
     // Target CG: 25.5% MAC (center of envelope)
+    // cargo_bay_fs_start: FS where solver X=0 begins, calibrated so centered cargo ≈ 25.5% MAC
     cob_min_percent: 18,
     cob_max_percent: 33,
     mac_length: 164.5,
     lemac_station: 494.5,
+    cargo_bay_fs_start: 290,
     
     // Station constraints
     stations: C130_STATIONS,
