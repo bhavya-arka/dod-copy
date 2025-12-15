@@ -112,6 +112,7 @@ interface MissionContextType {
   
   // Configuration management
   saveConfiguration: (name: string) => Promise<void>;
+  updateConfiguration: (planId: number) => Promise<void>;
   updatePlanSchedules: (planId: number, flights?: SplitFlight[]) => Promise<void>;
   loadConfiguration: (id: string) => void;
   deleteConfiguration: (id: string) => void;
@@ -583,6 +584,45 @@ export function MissionProvider({
     }
   }, [allocationResult, splitFlights, routes]);
 
+  const updateConfiguration = useCallback(async (planId: number) => {
+    if (!allocationResult) return;
+    
+    try {
+      const itemCount = allocationResult.total_pallets + 
+                        allocationResult.total_rolling_stock + 
+                        (allocationResult.total_pax > 0 ? 1 : 0);
+      
+      const response = await fetch(`/api/flight-plans/${planId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          allocation_data: {
+            allocation_result: allocationResult,
+            split_flights: splitFlights,
+            routes
+          },
+          movement_items_count: Math.max(itemCount, 1),
+          total_weight_lb: Math.round(allocationResult.total_weight) || 0,
+          aircraft_count: allocationResult.total_aircraft || 1
+        }),
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to update flight plan:', await response.text());
+        return;
+      }
+      
+      if (splitFlights.length > 0) {
+        await updatePlanSchedules(planId, splitFlights);
+      }
+    } catch (error) {
+      console.error('Failed to update flight plan:', error);
+    }
+  }, [allocationResult, splitFlights, routes]);
+
   const updatePlanSchedules = useCallback(async (planId: number, flights?: SplitFlight[]) => {
     const flightsToSave = flights || splitFlights;
     if (flightsToSave.length === 0) return;
@@ -688,6 +728,7 @@ export function MissionProvider({
     setIsProcessing,
     setError,
     saveConfiguration,
+    updateConfiguration,
     updatePlanSchedules,
     loadConfiguration,
     deleteConfiguration,
@@ -699,7 +740,7 @@ export function MissionProvider({
     parseResult, classifiedItems, allocationResult, insights, splitFlights, routes, manifestId,
     selectedAircraft, selectedAircraftIndex, currentTab, isProcessing, error,
     savedConfigurations, activeConfigurationId, analytics, fuelBreakdown,
-    saveConfiguration, updatePlanSchedules, loadConfiguration, deleteConfiguration, compareConfigurations,
+    saveConfiguration, updateConfiguration, updatePlanSchedules, loadConfiguration, deleteConfiguration, compareConfigurations,
     calculateAnalytics, calculateFuelBreakdown, resetMission
   ]);
 

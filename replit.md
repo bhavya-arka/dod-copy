@@ -49,6 +49,16 @@ Core data models include:
 
 ## December 2025
 
+### Save Plan Update-in-Place Logic (15/12/2025)
+- **Issue**: Saving an already-saved plan would prompt for a new name instead of updating
+- **Fix**: Save button now detects if a plan is already loaded via `loadedPlan` prop
+  - If plan is loaded → calls `updateConfiguration(planId)` to update without prompting
+  - If no plan loaded → prompts for name and creates new plan
+- **New Method**: Added `updateConfiguration(planId: number)` to MissionContext
+  - Uses PUT `/api/flight-plans/:id` to update allocation_data
+  - Also updates flight schedules via `updatePlanSchedules`
+- **Files**: `apps/client/src/context/MissionContext.tsx`, `apps/client/src/components/MissionNavbar.tsx`
+
 ### CoB-Aware Pallet & Lateral Placement Fix (15/12/2025)
 - **Issue 1**: Negative CoB (-43.5%) when pallets placed front-to-back
 - **Issue 2**: Rolling stock placed in single line instead of side-by-side

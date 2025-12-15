@@ -206,10 +206,15 @@ export default function MissionNavbar({ onDashboard, showTabs = true, loadedPlan
         {mission.allocationResult && (
           <button
             onClick={async () => {
-              const name = prompt('Enter a name for this flight plan:');
-              if (name) {
-                await mission.saveConfiguration(name);
-                alert(`Flight plan "${name}" saved successfully!`);
+              if (loadedPlan) {
+                await mission.updateConfiguration(loadedPlan.id);
+                alert('Flight plan saved!');
+              } else {
+                const name = prompt('Enter a name for this flight plan:');
+                if (name) {
+                  await mission.saveConfiguration(name);
+                  alert(`Flight plan "${name}" saved successfully!`);
+                }
               }
             }}
             className="flex items-center space-x-2 bg-primary text-white px-3 py-1.5 rounded-lg text-sm hover:bg-primary-dark transition-colors shadow-soft"
