@@ -811,6 +811,20 @@ function placeRollingStock(
     const improvingCandidates = allCandidates.filter(c => c.improvesBalance);
     const worseningCandidates = allCandidates.filter(c => !c.improvesBalance);
     
+    // Log all candidates for debugging
+    console.log(`[PlaceRollingStock] ${item.description}: ${allCandidates.length} candidates, ${improvingCandidates.length} improving, ${worseningCandidates.length} worsening`);
+    
+    // Log positions that would be in envelope vs out
+    const inEnvelope = worseningCandidates.filter(c => c.projectedCG >= aircraftSpec.cob_min_percent && c.projectedCG <= aircraftSpec.cob_max_percent);
+    const outEnvelope = worseningCandidates.filter(c => c.projectedCG < aircraftSpec.cob_min_percent || c.projectedCG > aircraftSpec.cob_max_percent);
+    console.log(`[PlaceRollingStock] In-envelope: ${inEnvelope.length}, Out-envelope: ${outEnvelope.length}`);
+    if (inEnvelope.length > 0) {
+      console.log(`[PlaceRollingStock] Best in-envelope: x=${inEnvelope.sort((a,b) => a.score-b.score)[0]?.x}, CG=${inEnvelope[0]?.projectedCG.toFixed(1)}%`);
+    }
+    if (outEnvelope.length > 0) {
+      console.log(`[PlaceRollingStock] Out-envelope examples: ${outEnvelope.slice(0,3).map(c => `x=${c.x}→${c.projectedCG.toFixed(1)}%`).join(', ')}`);
+    }
+    
     // PREFER improving positions, fall back to least-bad worsening position
     let bestPosition: { x: number; y: number; score: number; projectedCG: number } | null = null;
     
@@ -830,6 +844,7 @@ function placeRollingStock(
         return a.score - b.score;
       });
       const best = worseningCandidates[0];
+      console.log(`[PlaceRollingStock] Chose worsening position: x=${best.x}, CG=${best.projectedCG.toFixed(1)}%, inEnv=${best.projectedCG >= 16 && best.projectedCG <= 40}`);
       bestPosition = { x: best.x, y: best.y, score: best.score, projectedCG: best.projectedCG };
     }
     
