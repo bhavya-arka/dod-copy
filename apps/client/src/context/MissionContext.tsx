@@ -79,6 +79,7 @@ interface MissionContextType {
   insights: InsightsSummary | null;
   splitFlights: SplitFlight[];
   routes: FlightRoute[];
+  manifestId: number | null;
   
   // UI state
   selectedAircraft: AircraftType;
@@ -102,6 +103,7 @@ interface MissionContextType {
   setInsights: (insights: InsightsSummary) => void;
   setSplitFlights: (flights: SplitFlight[]) => void;
   setRoutes: (routes: FlightRoute[]) => void;
+  setManifestId: (id: number | null) => void;
   setSelectedAircraft: (type: AircraftType) => void;
   setSelectedAircraftIndex: (index: number) => void;
   setCurrentTab: (tab: MissionTab) => void;
@@ -156,6 +158,7 @@ export function MissionProvider({
   const [insights, setInsights] = useState<InsightsSummary | null>(initialInsights || null);
   const [splitFlights, setSplitFlights] = useState<SplitFlight[]>([]);
   const [routes, setRoutes] = useState<FlightRoute[]>([]);
+  const [manifestId, setManifestId] = useState<number | null>(null);
   
   const [selectedAircraft, setSelectedAircraft] = useState<AircraftType>(initialAircraft);
   const [selectedAircraftIndex, setSelectedAircraftIndex] = useState(0);
@@ -645,6 +648,7 @@ export function MissionProvider({
     setInsights(null);
     setSplitFlights([]);
     setRoutes([]);
+    setManifestId(null);
     setSelectedAircraftIndex(0);
     setCurrentTab('flights');
     setError(null);
@@ -660,6 +664,7 @@ export function MissionProvider({
     insights,
     splitFlights,
     routes,
+    manifestId,
     selectedAircraft,
     selectedAircraftIndex,
     currentTab,
@@ -675,6 +680,7 @@ export function MissionProvider({
     setInsights,
     setSplitFlights,
     setRoutes,
+    setManifestId,
     setSelectedAircraft,
     setSelectedAircraftIndex,
     setCurrentTab,
@@ -689,7 +695,7 @@ export function MissionProvider({
     calculateFuelBreakdown,
     resetMission
   }), [
-    parseResult, classifiedItems, allocationResult, insights, splitFlights, routes,
+    parseResult, classifiedItems, allocationResult, insights, splitFlights, routes, manifestId,
     selectedAircraft, selectedAircraftIndex, currentTab, isProcessing, error,
     savedConfigurations, activeConfigurationId, analytics, fuelBreakdown,
     saveConfiguration, updatePlanSchedules, loadConfiguration, deleteConfiguration, compareConfigurations,

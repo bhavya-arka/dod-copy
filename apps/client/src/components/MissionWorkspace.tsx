@@ -113,6 +113,17 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
     };
 
     mission.setClassifiedItems(newClassified);
+
+    if (mission.manifestId) {
+      fetch(`/api/manifests/${mission.manifestId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ items: updatedItems })
+      }).catch(error => {
+        console.error('Failed to save manifest changes to database:', error);
+      });
+    }
   }, [mission]);
 
   const renderTabContent = () => {
