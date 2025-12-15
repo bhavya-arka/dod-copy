@@ -1175,6 +1175,12 @@ function FlightManagerFlowchartInner({
     }));
   }, [splitFlights]);
   
+  const syncPositionsToLayoutRef = useCallback(() => {
+    graphState.nodes.forEach(node => {
+      layoutRef.current.set(node.id, node.position);
+    });
+  }, [graphState.nodes]);
+  
   const handleNodesChange = useCallback((changes: any) => {
     setGraphState(prev => {
       const updatedNodes = [...prev.nodes];
@@ -1183,6 +1189,7 @@ function FlightManagerFlowchartInner({
           const idx = updatedNodes.findIndex(n => n.id === change.id);
           if (idx !== -1) {
             updatedNodes[idx] = { ...updatedNodes[idx], position: change.position };
+            layoutRef.current.set(change.id, change.position);
           }
         }
       });
@@ -1209,6 +1216,8 @@ function FlightManagerFlowchartInner({
       const base = MILITARY_BASES.find(b => b.base_id === baseData.baseId);
       
       if (flight && base) {
+        syncPositionsToLayoutRef();
+        
         const hasOrigin = flight.origin && flight.origin.base_id !== flight.destination?.base_id;
         const updatedFlight = {
           ...flight,
@@ -1223,7 +1232,7 @@ function FlightManagerFlowchartInner({
         setIsDirty(true);
       }
     }
-  }, [graphState.nodes, splitFlights, onFlightsChange]);
+  }, [graphState.nodes, splitFlights, onFlightsChange, syncPositionsToLayoutRef]);
   
   const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
@@ -1245,12 +1254,13 @@ function FlightManagerFlowchartInner({
   }, []);
   
   const handleFlightUpdate = useCallback((flightId: string, updates: Partial<SplitFlight>) => {
+    syncPositionsToLayoutRef();
     const updatedFlights = splitFlights.map(f => 
       f.id === flightId ? { ...f, ...updates, is_modified: true } : f
     );
     onFlightsChange(updatedFlights);
     setIsDirty(true);
-  }, [splitFlights, onFlightsChange]);
+  }, [splitFlights, onFlightsChange, syncPositionsToLayoutRef]);
   
   const handleBaseSelect = useCallback((baseId: string, flightId: string, asOrigin: boolean) => {
     const base = MILITARY_BASES.find(b => b.base_id === baseId);
