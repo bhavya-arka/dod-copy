@@ -49,6 +49,17 @@ Core data models include:
 
 ## December 2025
 
+### Stress Test Suite for Edge Cases (15/12/2025)
+- **Test File**: `tests/stressTest.edgeCases.test.ts` - 27 comprehensive tests
+- **Edge Case Handler Fixes**: Added overlength (>104" pallet), overweight (>10,000 lb pallet), and cargo bay dimension validation
+- **Documented Edge Cases** (22 scenarios):
+  - **Dimension**: Overheight pallet (>100"), overwidth pallet (>84"), overlength pallet (>104"), exceeds C-130/C-17 cargo bay, ramp height/width violations
+  - **Weight**: Overweight pallet (>10,000 lb), overweight position, overweight ramp, exceeds C-130/C-17 payload, axle weight exceeded
+  - **CoB**: Nose-heavy, tail-heavy, extreme imbalance, zero weight load, single item at LEMAC
+  - **Combination**: Oversized+overweight, hazmat at limits, many small items (1000+), few massive items
+- **Performance Tests**: 100 items < 5s, 500 items < 10s
+- **Files**: `tests/stressTest.edgeCases.test.ts`, `apps/client/src/lib/edgeCaseHandler.ts`
+
 ### Analytics Tab Audit and Enhancements (15/12/2025)
 - **Hardcoded Fallback Removal**: Removed fake fallback values from MissionContext.tsx:
   - `avgCob || 27.5` → now properly calculates or returns 0 if no data

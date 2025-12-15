@@ -151,7 +151,40 @@ export function validateEdgeCases(item: MovementItem): EdgeCaseValidationResult 
     }
   }
 
-  // 3. ZERO WEIGHT ITEM
+  // 4. CARGO BAY DIMENSION LIMITS (exceeds aircraft cargo bay)
+  // Check length against cargo bay - C-130 first, then C-17
+  if (item.length_in > AIRCRAFT_SPECS['C-130'].cargo_length) {
+    requiresC17Only = true;
+    if (item.length_in > AIRCRAFT_SPECS['C-17'].cargo_length) {
+      cannotLoad = true;
+      errors.push({
+        code: 'ERR_DIMENSION_INVALID',
+        item_id: item.item_id,
+        field: 'length_in',
+        message: `LENGTH_EXCEEDED: Item length ${item.length_in}" exceeds C-17 cargo bay (${AIRCRAFT_SPECS['C-17'].cargo_length}"). Cannot load on any aircraft.`,
+        suggestion: 'Item is too long for any cargo aircraft',
+        severity: 'error'
+      });
+    }
+  }
+  
+  // Check width against cargo bay
+  if (item.width_in > AIRCRAFT_SPECS['C-130'].cargo_width) {
+    requiresC17Only = true;
+    if (item.width_in > AIRCRAFT_SPECS['C-17'].cargo_width) {
+      cannotLoad = true;
+      errors.push({
+        code: 'ERR_DIMENSION_INVALID',
+        item_id: item.item_id,
+        field: 'width_in',
+        message: `WIDTH_EXCEEDED: Item width ${item.width_in}" exceeds C-17 cargo bay (${AIRCRAFT_SPECS['C-17'].cargo_width}"). Cannot load on any aircraft.`,
+        suggestion: 'Item is too wide for any cargo aircraft',
+        severity: 'error'
+      });
+    }
+  }
+
+  // 5. ZERO WEIGHT ITEM
   if (item.weight_each_lb === 0 || isNaN(item.weight_each_lb)) {
     adjustedItem.weight_each_lb = 1;
     warnings.push({
