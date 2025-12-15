@@ -14,10 +14,6 @@ run = ["npm", "run", "start"]
 localPort = 3000
 externalPort = 3000
 
-[[ports]]
-localPort = 5000
-externalPort = 80
-
 [workflows]
 runButton = "Project"
 
@@ -30,6 +26,10 @@ author = "agent"
 task = "workflow.run"
 args = "Arka Server"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Arka API"
+
 [[workflows.workflow]]
 name = "Arka Server"
 author = "agent"
@@ -39,8 +39,20 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
+args = "npm --workspace apps/client run dev"
 waitForPort = 5000
+
+[[workflows.workflow]]
+name = "Arka API"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm --workspace apps/server run dev"
+waitForPort = 3000
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [agent]
 integrations = ["gamestack_custom_model:1.0.0"]
