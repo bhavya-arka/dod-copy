@@ -49,6 +49,13 @@ Core data models include:
 
 ## December 2025
 
+### Center of Balance Formula Fix (15/12/2025)
+- **Bug**: CoB calculation in aircraftSolver.ts used incorrect linear interpolation formula instead of proper MAC-based calculation
+- **Root Cause**: Original formula mapped CG position to a percentage using `cob_min + normalized_position * (cob_max - cob_min)`, which doesn't match standard MAC calculation
+- **Solution**: Fixed to use proper MAC formula: `CoB% = ((Station_CG - LEMAC) / MAC_Length) * 100`
+- **Coordinate Conversion**: Solver uses 0-based coordinates, so bay_start offset is added to convert to station coordinates before MAC calculation
+- **File**: `apps/client/src/lib/aircraftSolver.ts`
+
 ### Database-Backed Manifest Storage (15/12/2025)
 - **Feature**: Manifest edits now persist to the database so changes (like marking items as hazmat) are saved
 - **Database**: Added `manifests` table with `id`, `user_id`, `flight_plan_id`, `name`, `items` (JSONB), `created_at`, `updated_at`
