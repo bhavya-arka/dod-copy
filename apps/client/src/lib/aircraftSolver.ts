@@ -412,8 +412,47 @@ export function getCoBStatusMessage(cob: CoBCalculation): string {
 }
 
 // ============================================================================
-// SECTION 7: ROLLING STOCK PLACEMENT (Dimension-based)
+// SECTION 7: ROLLING STOCK PLACEMENT (CoB-Optimizing Algorithm)
 // ============================================================================
+
+/**
+ * Score a placement position by how close it brings the CG to target
+ * Lower score = better (closer to target CG)
+ * 
+ * This is the core function for CG-aware placement decisions.
+ * It calculates what the resulting CG would be if we place an item at the given position.
+ */
+function scorePlacementPosition(
+  xPosition: number,
+  itemLength: number,
+  weight: number,
+  currentMoment: number,
+  currentWeight: number,
+  targetCGPercent: number,
+  aircraftSpec: AircraftSpec
+): { score: number; projectedCGPercent: number; projectedStationCG: number } {
+  const bayStart = aircraftSpec.cargo_bay_fs_start;
+  
+  // Calculate arm to center of item in station coordinates
+  const arm = xPosition + (itemLength / 2) + bayStart;
+  
+  // Calculate new totals
+  const newWeight = currentWeight + weight;
+  const newMoment = currentMoment + (weight * arm);
+  
+  // Calculate new CG
+  const newStationCG = newWeight > 0 ? newMoment / newWeight : bayStart;
+  const newCGPercent = ((newStationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
+  
+  // Score = deviation from target (lower is better)
+  const score = Math.abs(newCGPercent - targetCGPercent);
+  
+  return { 
+    score, 
+    projectedCGPercent: newCGPercent,
+    projectedStationCG: newStationCG
+  };
+}
 
 /**
  * Simple 0-based bounds check for the solver's coordinate system.
@@ -536,205 +575,290 @@ function findSolverPosition(
 }
 
 /**
- * Lane-based lateral placement for rolling stock
- * Places items side-by-side when possible, only advancing X when lateral space is exhausted
+ * CoB-Optimizing Rolling Stock Placement Algorithm
  * 
- * Algorithm:
- * 1. Group items by similar length for efficient row packing
- * 2. For each X position, try to fit items laterally (center, then left, then right)
- * 3. Only advance X when no more items fit at current position
+ * This algorithm places rolling stock to achieve target Center of Balance (~28% MAC for C-17).
+ * 
+ * Key principles:
+ * 1. Calculate target CG position (center of allowed envelope)
+ * 2. Sort items by weight (heaviest first for best CG control)
+ * 3. For each item, evaluate candidate positions centered around target CG
+ * 4. Score positions by how close they bring overall CG to target
+ * 5. Update running weight/moment after each placement
+ * 
+ * This ensures heavy items are placed near the target CG, and the final load
+ * is balanced within the CoB envelope.
  */
 function placeRollingStock(
   items: MovementItem[],
   aircraftSpec: AircraftSpec,
   startX: number = 0,
   aircraftId: string = 'AC-1'
-): { placements: VehiclePlacement[]; nextX: number; unplaced: MovementItem[]; totalLength: number } {
-  console.log('[PlaceRollingStock] Called with', items.length, 'items:', items.map(i => ({
-    id: i.item_id,
-    desc: i.description,
-    type: i.type,
-    dims: `${i.length_in}L x ${i.width_in}W x ${i.height_in}H`
-  })));
+): { 
+  placements: VehiclePlacement[]; 
+  nextX: number; 
+  unplaced: MovementItem[]; 
+  totalLength: number;
+  runningWeight: number;
+  runningMoment: number;
+} {
+  console.log('[PlaceRollingStock] CoB-Optimizing algorithm called with', items.length, 'items');
   
   const placements: VehiclePlacement[] = [];
   const unplaced: MovementItem[] = [];
   const existingPlacements: PlacedCargo[] = [];
 
-  const sortedItems = sortWithWeaponsPriority(items);
   const LONGITUDINAL_SPACING = 4;
   const LATERAL_SPACING = 4;
   const maxX = aircraftSpec.cargo_length;
   const halfAircraftWidth = aircraftSpec.cargo_width / 2;
   const maxHeight = aircraftSpec.main_deck_height;
+  const bayStart = aircraftSpec.cargo_bay_fs_start;
 
-  const itemsToPlace = [...sortedItems];
+  // Calculate target CG position (center of envelope)
+  const targetCGPercent = (aircraftSpec.cob_min_percent + aircraftSpec.cob_max_percent) / 2;
+  const targetStationCG = aircraftSpec.lemac_station + (targetCGPercent / 100) * aircraftSpec.mac_length;
+  const targetX = targetStationCG - bayStart; // Target position in solver coordinates
+  
+  console.log(`[PlaceRollingStock] Target CG: ${targetCGPercent.toFixed(1)}% MAC, targetX=${targetX.toFixed(0)}" (solver coords)`);
 
-  function tryPlaceItem(item: MovementItem, xStart: number, yCenter: number): boolean {
-    const halfWidth = item.width_in / 2;
-    const xEnd = xStart + item.length_in;
-    
-    const candidateBox = {
-      x_start: xStart,
-      x_end: xEnd,
-      y_left: yCenter - halfWidth,
-      y_right: yCenter + halfWidth,
-      z_top: item.height_in
-    };
-    
-    if (!isWithinSolverBounds(candidateBox, halfAircraftWidth, maxX, maxHeight)) {
-      return false;
+  // Track running totals for CG calculation
+  let runningWeight = 0;
+  let runningMoment = 0;
+
+  // Sort by weight (heaviest first) with weapons priority
+  // Heavy items have more influence on CG, so placing them optimally is most important
+  const sortedItems = [...items].sort((a, b) => {
+    const aIsWeapon = isWeaponsItem(a.description || '');
+    const bIsWeapon = isWeaponsItem(b.description || '');
+    if (aIsWeapon && !bIsWeapon) return -1;
+    if (!aIsWeapon && bIsWeapon) return 1;
+    return b.weight_each_lb - a.weight_each_lb;
+  });
+
+  // Helper: Check if a position collides with existing placements
+  function checkCollision(xStart: number, xEnd: number, yCenter: number, halfWidth: number): boolean {
+    for (const existing of existingPlacements) {
+      // Check X overlap
+      if (xStart < existing.x_end_in && xEnd > existing.x_start_in) {
+        // Check Y overlap
+        const yLeft = yCenter - halfWidth;
+        const yRight = yCenter + halfWidth;
+        if (yLeft < existing.y_right_in && yRight > existing.y_left_in) {
+          return true; // Collision
+        }
+      }
     }
-    
-    if (collidesWithAny(createBoundingBox(xStart, item.length_in, yCenter, item.width_in, 0, item.height_in), existingPlacements)) {
-      return false;
-    }
-    
-    let side: 'center' | 'left' | 'right' = 'center';
-    if (yCenter < -10) side = 'left';
-    else if (yCenter > 10) side = 'right';
-    
-    const placement: VehiclePlacement = {
-      item_id: item.item_id,
-      item: item,
-      weight: item.weight_each_lb,
-      length: item.length_in,
-      width: item.width_in,
-      height: item.height_in,
-      axle_weights: item.axle_weights || [],
-      position: { x: yCenter, y: 0, z: xStart + item.length_in / 2 },
-      lateral_placement: {
-        y_center_in: yCenter,
-        y_left_in: yCenter - halfWidth,
-        y_right_in: yCenter + halfWidth,
-        side
-      },
-      deck: 'MAIN'
-    };
-
-    const placedCargo: PlacedCargo = {
-      id: String(item.item_id),
-      lead_tcn: item.lead_tcn || null,
-      description: item.description,
-      length_in: item.length_in,
-      width_in: item.width_in,
-      height_in: item.height_in,
-      weight_lb: item.weight_each_lb,
-      cargo_type: 'ROLLING_STOCK',
-      aircraft_id: aircraftId,
-      deck: 'MAIN',
-      x_start_in: xStart,
-      y_center_in: yCenter,
-      z_floor_in: 0,
-      x_end_in: xEnd,
-      y_left_in: yCenter - halfWidth,
-      y_right_in: yCenter + halfWidth,
-      z_top_in: item.height_in,
-      is_hazardous: item.hazmat_flag
-    };
-    
-    existingPlacements.push(placedCargo);
-    placements.push(placement);
-    console.log(`[PlaceRollingStock] Placed ${item.description} at x=${xStart}, y=${yCenter} (${side})`);
-    return true;
+    return false;
   }
 
-  function findLateralPositions(xStart: number, itemWidth: number): number[] {
+  // Helper: Find available lateral positions at a given X
+  function findLateralPositions(xStart: number, xEnd: number, itemWidth: number): number[] {
     const halfWidth = itemWidth / 2;
     const candidates: number[] = [];
     
+    // Get items that overlap in X range
     const itemsAtX = existingPlacements.filter(p => 
-      p.x_start_in < xStart + 200 && p.x_end_in > xStart
+      p.x_start_in < xEnd && p.x_end_in > xStart
     );
     
     if (itemsAtX.length === 0) {
+      // No items at this X, try center first, then sides
       candidates.push(0);
       candidates.push(-halfAircraftWidth + halfWidth + LATERAL_SPACING);
       candidates.push(halfAircraftWidth - halfWidth - LATERAL_SPACING);
     } else {
+      // Find gaps between existing items
       const occupiedRanges = itemsAtX.map(p => ({ left: p.y_left_in, right: p.y_right_in }));
       occupiedRanges.sort((a, b) => a.left - b.left);
       
       let leftEdge = -halfAircraftWidth + LATERAL_SPACING;
       for (const range of occupiedRanges) {
-        const gapCenter = (leftEdge + range.left - LATERAL_SPACING) / 2;
         const gapWidth = range.left - LATERAL_SPACING - leftEdge;
         if (gapWidth >= itemWidth) {
+          const gapCenter = (leftEdge + range.left - LATERAL_SPACING) / 2;
           candidates.push(gapCenter);
         }
         leftEdge = range.right + LATERAL_SPACING;
       }
       
-      const rightGapCenter = (leftEdge + halfAircraftWidth - LATERAL_SPACING) / 2;
+      // Check gap after last item
       const rightGapWidth = halfAircraftWidth - LATERAL_SPACING - leftEdge;
       if (rightGapWidth >= itemWidth) {
+        const rightGapCenter = (leftEdge + halfAircraftWidth - LATERAL_SPACING) / 2;
         candidates.push(rightGapCenter);
       }
     }
     
+    // Filter to positions within aircraft bounds
     return candidates.filter(y => 
       y - halfWidth >= -halfAircraftWidth && 
       y + halfWidth <= halfAircraftWidth
     );
   }
 
-  let currentX = startX;
-  
-  while (itemsToPlace.length > 0 && currentX < maxX) {
-    let placedAnyAtCurrentX = false;
+  // Helper: Generate candidate X positions centered around target
+  function generateCandidateXPositions(itemLength: number): number[] {
+    const candidates: number[] = [];
+    const step = 20; // 20-inch steps for granular placement
     
-    for (let i = 0; i < itemsToPlace.length; i++) {
-      const item = itemsToPlace[i];
+    // Start from target position and radiate outward
+    for (let offset = 0; offset <= maxX; offset += step) {
+      // Position aft of target (toward rear)
+      const aftX = targetX - (itemLength / 2) + offset;
+      if (aftX >= startX && aftX + itemLength <= maxX) {
+        candidates.push(aftX);
+      }
       
-      if (item.width_in > aircraftSpec.cargo_width) {
-        console.log(`[PlaceRollingStock] Item ${item.description} too wide for cargo bay: ${item.width_in} > ${aircraftSpec.cargo_width}`);
-        unplaced.push(item);
-        itemsToPlace.splice(i, 1);
-        i--;
-        continue;
-      }
-
-      if (item.height_in > aircraftSpec.main_deck_height) {
-        console.log(`[PlaceRollingStock] Item ${item.description} too tall for main deck: ${item.height_in} > ${aircraftSpec.main_deck_height}`);
-        unplaced.push(item);
-        itemsToPlace.splice(i, 1);
-        i--;
-        continue;
-      }
-
-      if (currentX + item.length_in > maxX) {
-        continue;
-      }
-
-      const lateralPositions = findLateralPositions(currentX, item.width_in);
-      
-      for (const yPos of lateralPositions) {
-        if (tryPlaceItem(item, currentX, yPos)) {
-          itemsToPlace.splice(i, 1);
-          i--;
-          placedAnyAtCurrentX = true;
-          break;
+      // Position forward of target (toward front)
+      if (offset > 0) {
+        const fwdX = targetX - (itemLength / 2) - offset;
+        if (fwdX >= startX && fwdX + itemLength <= maxX) {
+          candidates.push(fwdX);
         }
       }
     }
     
-    if (!placedAnyAtCurrentX) {
-      const maxOccupiedAtCurrentX = existingPlacements
-        .filter(p => p.x_start_in >= currentX - LONGITUDINAL_SPACING)
-        .reduce((max, p) => Math.max(max, p.x_end_in), currentX);
+    // Remove duplicates and sort by distance from target
+    const unique = candidates.filter((val, idx, arr) => arr.indexOf(val) === idx);
+    unique.sort((a, b) => {
+      const aCenter = a + itemLength / 2;
+      const bCenter = b + itemLength / 2;
+      return Math.abs(aCenter - targetX) - Math.abs(bCenter - targetX);
+    });
+    
+    return unique;
+  }
+
+  // Process each item
+  for (const item of sortedItems) {
+    // Validate item dimensions
+    if (item.width_in > aircraftSpec.cargo_width) {
+      console.log(`[PlaceRollingStock] Item ${item.description} too wide: ${item.width_in}" > ${aircraftSpec.cargo_width}"`);
+      unplaced.push(item);
+      continue;
+    }
+    if (item.height_in > maxHeight) {
+      console.log(`[PlaceRollingStock] Item ${item.description} too tall: ${item.height_in}" > ${maxHeight}"`);
+      unplaced.push(item);
+      continue;
+    }
+
+    const halfWidth = item.width_in / 2;
+    const candidateXs = generateCandidateXPositions(item.length_in);
+    
+    let bestPosition: { x: number; y: number; score: number; projectedCG: number } | null = null;
+    
+    // Evaluate each candidate X position
+    for (const xStart of candidateXs) {
+      const xEnd = xStart + item.length_in;
       
-      const newX = maxOccupiedAtCurrentX + LONGITUDINAL_SPACING;
-      if (newX <= currentX) {
-        currentX += 50;
-      } else {
-        currentX = newX;
+      // Find available lateral positions at this X
+      const lateralPositions = findLateralPositions(xStart, xEnd, item.width_in);
+      
+      for (const yCenter of lateralPositions) {
+        // Check bounds
+        const candidateBox = {
+          x_start: xStart,
+          x_end: xEnd,
+          y_left: yCenter - halfWidth,
+          y_right: yCenter + halfWidth,
+          z_top: item.height_in
+        };
+        
+        if (!isWithinSolverBounds(candidateBox, halfAircraftWidth, maxX, maxHeight)) {
+          continue;
+        }
+        
+        // Check collision
+        if (checkCollision(xStart, xEnd, yCenter, halfWidth)) {
+          continue;
+        }
+        
+        // Score this position by projected CG deviation
+        const { score, projectedCGPercent } = scorePlacementPosition(
+          xStart,
+          item.length_in,
+          item.weight_each_lb,
+          runningMoment,
+          runningWeight,
+          targetCGPercent,
+          aircraftSpec
+        );
+        
+        if (bestPosition === null || score < bestPosition.score) {
+          bestPosition = { x: xStart, y: yCenter, score, projectedCG: projectedCGPercent };
+        }
+      }
+      
+      // Early exit if we found a perfect position (within 1% of target)
+      if (bestPosition && bestPosition.score < 1.0) {
+        break;
       }
     }
-  }
-  
-  for (const item of itemsToPlace) {
-    unplaced.push(item);
-    console.log(`[PlaceRollingStock] Could not place ${item.description}`);
+    
+    // Place item at best position
+    if (bestPosition !== null) {
+      const xStart = bestPosition.x;
+      const yCenter = bestPosition.y;
+      const xEnd = xStart + item.length_in;
+      
+      let side: 'center' | 'left' | 'right' = 'center';
+      if (yCenter < -10) side = 'left';
+      else if (yCenter > 10) side = 'right';
+      
+      const placement: VehiclePlacement = {
+        item_id: item.item_id,
+        item: item,
+        weight: item.weight_each_lb,
+        length: item.length_in,
+        width: item.width_in,
+        height: item.height_in,
+        axle_weights: item.axle_weights || [],
+        position: { x: yCenter, y: 0, z: xStart + item.length_in / 2 },
+        lateral_placement: {
+          y_center_in: yCenter,
+          y_left_in: yCenter - halfWidth,
+          y_right_in: yCenter + halfWidth,
+          side
+        },
+        deck: 'MAIN'
+      };
+
+      const placedCargo: PlacedCargo = {
+        id: String(item.item_id),
+        lead_tcn: item.lead_tcn || null,
+        description: item.description,
+        length_in: item.length_in,
+        width_in: item.width_in,
+        height_in: item.height_in,
+        weight_lb: item.weight_each_lb,
+        cargo_type: 'ROLLING_STOCK',
+        aircraft_id: aircraftId,
+        deck: 'MAIN',
+        x_start_in: xStart,
+        y_center_in: yCenter,
+        z_floor_in: 0,
+        x_end_in: xEnd,
+        y_left_in: yCenter - halfWidth,
+        y_right_in: yCenter + halfWidth,
+        z_top_in: item.height_in,
+        is_hazardous: item.hazmat_flag
+      };
+      
+      existingPlacements.push(placedCargo);
+      placements.push(placement);
+      
+      // Update running totals for next item's CG calculation
+      const arm = xStart + (item.length_in / 2) + bayStart;
+      runningMoment += item.weight_each_lb * arm;
+      runningWeight += item.weight_each_lb;
+      
+      console.log(`[PlaceRollingStock] Placed ${item.description} at x=${xStart.toFixed(0)}", y=${yCenter.toFixed(0)}" (${side}), projectedCG=${bestPosition.projectedCG.toFixed(1)}%`);
+    } else {
+      unplaced.push(item);
+      console.log(`[PlaceRollingStock] Could not place ${item.description}`);
+    }
   }
 
   const maxOccupiedX = existingPlacements.length > 0
@@ -743,9 +867,23 @@ function placeRollingStock(
   
   const totalLength = existingPlacements.reduce((sum, p) => sum + p.length_in, 0);
   
-  console.log(`[PlaceRollingStock] Summary: ${placements.length} placed, ${unplaced.length} unplaced, maxX=${maxOccupiedX}`);
+  // Calculate final CG for logging
+  if (runningWeight > 0) {
+    const finalStationCG = runningMoment / runningWeight;
+    const finalCGPercent = ((finalStationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
+    console.log(`[PlaceRollingStock] Summary: ${placements.length} placed, ${unplaced.length} unplaced, finalCG=${finalCGPercent.toFixed(1)}% MAC, target=${targetCGPercent.toFixed(1)}% MAC`);
+  } else {
+    console.log(`[PlaceRollingStock] Summary: ${placements.length} placed, ${unplaced.length} unplaced, no weight`);
+  }
   
-  return { placements, nextX: maxOccupiedX, unplaced, totalLength };
+  return { 
+    placements, 
+    nextX: maxOccupiedX, 
+    unplaced, 
+    totalLength,
+    runningWeight,
+    runningMoment
+  };
 }
 
 // ============================================================================
@@ -756,29 +894,32 @@ function placeRollingStock(
  * CoB-aware pallet placement algorithm
  * 
  * Strategy per USAF T.O. 1C-17A-9:
- * 1. Calculate target CG position for middle of CoB envelope
- * 2. Sort pallets by weight (heaviest first)
- * 3. Place pallets bilaterally from target CG - heavy pallets near center
- * 4. Alternate fore/aft placement to maintain balance
+ * 1. Receive current weight/moment state from rolling stock placement
+ * 2. Calculate how to balance the load by placing pallets optimally
+ * 3. Use scorePlacementPosition to find best slot for each pallet
+ * 4. Heavy pallets are placed first, scored by CG deviation
  * 
- * This ensures the weighted average position of pallets falls within the CoB envelope.
+ * Key insight: If rolling stock made the load nose-heavy, we need to place
+ * heavy pallets more toward the aft. If tail-heavy, place forward.
  */
 function placePallets(
   pallets: Pallet463L[],
   aircraftSpec: AircraftSpec,
   startX: number = 0,
-  currentWeight: number = 0
+  currentWeight: number = 0,
+  currentMoment: number = 0
 ): { 
   placements: PalletPlacement[]; 
   unplaced: Pallet463L[]; 
   nextX: number;
   totalWeight: number;
+  totalMoment: number;
 } {
   const placements: PalletPlacement[] = [];
   const unplaced: Pallet463L[] = [];
 
   if (pallets.length === 0) {
-    return { placements, unplaced, nextX: startX, totalWeight: currentWeight };
+    return { placements, unplaced, nextX: startX, totalWeight: currentWeight, totalMoment: currentMoment };
   }
 
   const PALLET_LENGTH = PALLET_463L.length;
@@ -795,21 +936,30 @@ function placePallets(
   const targetStationCG = aircraftSpec.lemac_station + (targetCobPercent / 100) * aircraftSpec.mac_length;
   const targetSolverCG = targetStationCG - bayStart;
   
-  console.log(`[PlacePallets] CoB-aware placement: target=${targetCobPercent.toFixed(1)}% MAC, targetCG=${targetSolverCG.toFixed(0)}" (solver coords)`);
+  // Calculate current CG state from rolling stock
+  let currentCGPercent = targetCobPercent;
+  if (currentWeight > 0) {
+    const currentStationCG = currentMoment / currentWeight;
+    currentCGPercent = ((currentStationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
+  }
+  
+  console.log(`[PlacePallets] CoB-aware placement: currentCG=${currentCGPercent.toFixed(1)}% MAC, target=${targetCobPercent.toFixed(1)}% MAC`);
 
   const usableLength = maxX - startX;
   const maxSlots = Math.floor(usableLength / PALLET_SLOT);
   
   if (maxSlots <= 0) {
     unplaced.push(...pallets);
-    return { placements, unplaced, nextX: startX, totalWeight: currentWeight };
+    return { placements, unplaced, nextX: startX, totalWeight: currentWeight, totalMoment: currentMoment };
   }
 
+  // Generate slot positions
   const slotPositions: number[] = [];
   for (let i = 0; i < maxSlots; i++) {
     slotPositions.push(startX + i * PALLET_SLOT);
   }
 
+  // Sort pallets: weapons priority, then by weight (heaviest first)
   const sortedPallets = [...pallets].sort((a, b) => {
     const aHasWeapons = a.items.some(item => isWeaponsItem(item.description));
     const bHasWeapons = b.items.some(item => isWeaponsItem(item.description));
@@ -818,23 +968,12 @@ function placePallets(
     return b.gross_weight - a.gross_weight;
   });
 
-  // Calculate center slot - use target CG if available, otherwise center of available space
-  // This handles cases where rolling stock takes up the front of the cargo bay
-  let centerSlotIndex: number;
-  if (targetSolverCG >= startX && targetSolverCG <= maxX) {
-    // Target CG is within available space - use it
-    centerSlotIndex = Math.floor((targetSolverCG - startX) / PALLET_SLOT);
-  } else {
-    // Target CG is outside available space - center in available slots
-    centerSlotIndex = Math.floor(maxSlots / 2);
-  }
-  const validCenterIndex = Math.max(0, Math.min(maxSlots - 1, centerSlotIndex));
-  
-  console.log(`[PlacePallets] Center slot index: ${validCenterIndex} of ${maxSlots} slots (startX=${startX}, targetCG=${targetSolverCG.toFixed(0)}")`);
-
-  const assignedSlots: Map<number, Pallet463L> = new Map();
+  // Track running totals (starting from rolling stock state)
   let runningWeight = currentWeight;
+  let runningMoment = currentMoment;
+  const assignedSlots: Set<number> = new Set();
 
+  // For each pallet, find the slot that brings CG closest to target
   for (const pallet of sortedPallets) {
     if (runningWeight + pallet.gross_weight > maxPayload) {
       unplaced.push(pallet);
@@ -842,92 +981,88 @@ function placePallets(
     }
 
     let bestSlot = -1;
-    let bestDistance = Infinity;
+    let bestScore = Infinity;
+    let bestProjectedCG = 0;
 
-    for (let offset = 0; offset < maxSlots; offset++) {
-      for (const dir of [0, 1, -1]) {
-        const candidateIndex = validCenterIndex + (dir === 0 ? 0 : dir * offset);
-        
-        if (candidateIndex < 0 || candidateIndex >= maxSlots) continue;
-        if (assignedSlots.has(candidateIndex)) continue;
-        
-        const slotX = slotPositions[candidateIndex];
-        const isOnRamp = slotX >= (maxX - aircraftSpec.ramp_length);
-        const maxPositionWeight = isOnRamp 
-          ? aircraftSpec.ramp_position_weight 
-          : aircraftSpec.per_position_weight;
-
-        if (pallet.gross_weight > maxPositionWeight) continue;
-
-        const armPosition = slotX + PALLET_LENGTH / 2;
-        const distanceFromTarget = Math.abs(armPosition - targetSolverCG);
-        
-        if (distanceFromTarget < bestDistance) {
-          bestDistance = distanceFromTarget;
-          bestSlot = candidateIndex;
-        }
-      }
+    // Evaluate each available slot
+    for (let slotIndex = 0; slotIndex < maxSlots; slotIndex++) {
+      if (assignedSlots.has(slotIndex)) continue;
       
-      if (bestSlot !== -1) break;
+      const slotX = slotPositions[slotIndex];
+      const isOnRamp = slotX >= (maxX - aircraftSpec.ramp_length);
+      const maxPositionWeight = isOnRamp 
+        ? aircraftSpec.ramp_position_weight 
+        : aircraftSpec.per_position_weight;
+
+      if (pallet.gross_weight > maxPositionWeight) continue;
+
+      // Score this slot by how close it brings CG to target
+      const { score, projectedCGPercent } = scorePlacementPosition(
+        slotX,
+        PALLET_LENGTH,
+        pallet.gross_weight,
+        runningMoment,
+        runningWeight,
+        targetCobPercent,
+        aircraftSpec
+      );
+      
+      if (score < bestScore) {
+        bestScore = score;
+        bestSlot = slotIndex;
+        bestProjectedCG = projectedCGPercent;
+      }
     }
 
     if (bestSlot !== -1) {
-      assignedSlots.set(bestSlot, pallet);
+      assignedSlots.add(bestSlot);
+      
+      // Update running totals
+      const slotX = slotPositions[bestSlot];
+      const arm = slotX + (PALLET_LENGTH / 2) + bayStart;
+      runningMoment += pallet.gross_weight * arm;
       runningWeight += pallet.gross_weight;
+      
+      const isOnRamp = slotX >= (maxX - aircraftSpec.ramp_length);
+      
+      const placement: PalletPlacement = {
+        pallet: pallet,
+        position_index: placements.length,
+        position_coord: slotX + PALLET_LENGTH / 2,
+        is_ramp: isOnRamp,
+        lateral_placement: {
+          y_center_in: 0,
+          y_left_in: -PALLET_HALF_WIDTH,
+          y_right_in: PALLET_HALF_WIDTH
+        },
+        x_start_in: slotX,
+        x_end_in: slotX + PALLET_LENGTH
+      };
+
+      placements.push(placement);
+      console.log(`[PlacePallets] Placed ${pallet.id} (${pallet.gross_weight}lb) at slot ${bestSlot}, x=${slotX}", projectedCG=${bestProjectedCG.toFixed(1)}%`);
     } else {
       unplaced.push(pallet);
     }
-  }
-
-  const sortedAssignments = [...assignedSlots.entries()].sort((a, b) => a[0] - b[0]);
-  
-  for (const [slotIndex, pallet] of sortedAssignments) {
-    const xStart = slotPositions[slotIndex];
-    const xEnd = xStart + PALLET_LENGTH;
-    const armPosition = xStart + PALLET_LENGTH / 2;
-    const isOnRamp = xStart >= (maxX - aircraftSpec.ramp_length);
-    
-    const placement: PalletPlacement = {
-      pallet: pallet,
-      position_index: placements.length,
-      position_coord: armPosition,
-      is_ramp: isOnRamp,
-      lateral_placement: {
-        y_center_in: 0,
-        y_left_in: -PALLET_HALF_WIDTH,
-        y_right_in: PALLET_HALF_WIDTH
-      },
-      x_start_in: xStart,
-      x_end_in: xEnd
-    };
-
-    placements.push(placement);
-    console.log(`[PlacePallets] Placed ${pallet.id} (${pallet.gross_weight}lb) at slot ${slotIndex}, x=${xStart}"`);
   }
 
   const maxOccupiedX = placements.length > 0
     ? Math.max(...placements.map(p => p.x_end_in!))
     : startX;
 
-  if (placements.length > 0) {
-    let totalMoment = 0;
-    let totalPalletWeight = 0;
-    for (const p of placements) {
-      const arm = p.x_start_in! + PALLET_LENGTH / 2;
-      totalMoment += p.pallet.gross_weight * arm;
-      totalPalletWeight += p.pallet.gross_weight;
-    }
-    const actualCG = totalPalletWeight > 0 ? totalMoment / totalPalletWeight : 0;
-    const stationCG = actualCG + bayStart;
-    const actualCobPercent = ((stationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
-    console.log(`[PlacePallets] Result: ${placements.length} pallets, actualCG=${actualCG.toFixed(0)}", CoB=${actualCobPercent.toFixed(1)}% MAC`);
+  // Log final CG state
+  if (runningWeight > 0) {
+    const finalStationCG = runningMoment / runningWeight;
+    const finalCGPercent = ((finalStationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
+    console.log(`[PlacePallets] Result: ${placements.length} pallets, finalCG=${finalCGPercent.toFixed(1)}% MAC, target=${targetCobPercent.toFixed(1)}% MAC`);
   }
 
   return { 
     placements, 
     unplaced, 
     nextX: maxOccupiedX + SPACING,
-    totalWeight: runningWeight
+    totalWeight: runningWeight,
+    totalMoment: runningMoment
   };
 }
 
@@ -963,16 +1098,20 @@ function loadSingleAircraftFromQueue(
   const spec = AIRCRAFT_SPECS[aircraftType];
   const aircraftId = `${aircraftType}-${queue.phase}-${sequence}`;
   
+  // Place rolling stock with CoB-optimizing algorithm
   const rsResult = placeRollingStock(queue.rolling_stock, spec, 0, aircraftId);
-  const rsWeight = rsResult.placements.reduce((sum, v) => sum + v.weight, 0);
   
+  // Calculate pallet start position (after rolling stock, if any)
   const palletStartX = rsResult.nextX > 0 ? rsResult.nextX + 12 : 0;
   
+  // Pass running weight and moment from rolling stock to pallet placement
+  // This allows pallets to balance the load
   const palletResult = placePallets(
     queue.pallets, 
     spec, 
     palletStartX,
-    rsWeight
+    rsResult.runningWeight,
+    rsResult.runningMoment
   );
   
   const finalPalletWeight = palletResult.placements.reduce((sum, p) => sum + p.pallet.gross_weight, 0);
