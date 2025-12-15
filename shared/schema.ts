@@ -309,3 +309,27 @@ export const insertDagFlightPlanSchema = createInsertSchema(dagFlightPlans).omit
 
 export type InsertDagFlightPlan = z.infer<typeof insertDagFlightPlanSchema>;
 export type DagFlightPlan = typeof dagFlightPlans.$inferSelect;
+
+// ============================================================================
+// CARGO MANIFESTS TABLE
+// ============================================================================
+
+// Manifests - stores uploaded cargo manifests with editable items
+export const manifests = pgTable("manifests", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  flight_plan_id: integer("flight_plan_id"),
+  name: text("name").notNull(),
+  items: jsonb("items").notNull(), // ParsedCargoItem[] or MovementItem[]
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertManifestSchema = createInsertSchema(manifests).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+
+export type InsertManifest = z.infer<typeof insertManifestSchema>;
+export type Manifest = typeof manifests.$inferSelect;

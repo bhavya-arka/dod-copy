@@ -1407,6 +1407,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================================================
+  // MANIFESTS API (PROTECTED)
+  // ============================================================================
+
+  app.get("/api/manifests", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const manifestsList = await storage.getManifests(req.user!.id);
+      res.json(manifestsList);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch manifests" });
+    }
+  });
+
+  app.get("/api/manifests/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const manifest = await storage.getManifest(parseInt(req.params.id), req.user!.id);
+      if (!manifest) {
+        return res.status(404).json({ error: "Manifest not found" });
+      }
+      res.json(manifest);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch manifest" });
+    }
+  });
+
+  app.post("/api/manifests", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { name, items, flight_plan_id } = req.body;
+      if (!name || !items) {
+        return res.status(400).json({ error: "Name and items are required" });
+      }
+      const manifest = await storage.createManifest({
+        user_id: req.user!.id,
+        name,
+        items,
+        flight_plan_id: flight_plan_id || null
+      });
+      res.status(201).json(manifest);
+    } catch (error) {
+      console.error('Failed to create manifest:', error);
+      res.status(500).json({ error: "Failed to create manifest" });
+    }
+  });
+
+  app.put("/api/manifests/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { user_id, id, created_at, ...safeData } = req.body;
+      const manifest = await storage.updateManifest(
+        parseInt(req.params.id),
+        req.user!.id,
+        safeData
+      );
+      if (!manifest) {
+        return res.status(404).json({ error: "Manifest not found" });
+      }
+      res.json(manifest);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update manifest" });
+    }
+  });
+
+  app.patch("/api/manifests/:id/items/:itemIndex", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const manifestId = parseInt(req.params.id);
+      const itemIndex = parseInt(req.params.itemIndex);
+      const itemData = req.body;
+      
+      if (isNaN(itemIndex) || itemIndex < 0) {
+        return res.status(400).json({ error: "Invalid item index" });
+      }
+      
+      const manifest = await storage.updateManifestItem(
+        manifestId,
+        req.user!.id,
+        itemIndex,
+        itemData
+      );
+      
+      if (!manifest) {
+        return res.status(404).json({ error: "Manifest or item not found" });
+      }
+      res.json(manifest);
+    } catch (error) {
+      console.error('Failed to update manifest item:', error);
+      res.status(500).json({ error: "Failed to update manifest item" });
+    }
+  });
+
+  app.delete("/api/manifests/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      await storage.deleteManifest(parseInt(req.params.id), req.user!.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete manifest" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

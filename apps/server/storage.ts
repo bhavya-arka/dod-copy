@@ -6,7 +6,8 @@ import {
   sessions, type Session, type InsertSession,
   flightNodes, type FlightNode, type InsertFlightNode,
   flightEdges, type FlightEdge, type InsertFlightEdge,
-  portInventory, type PortInventory, type InsertPortInventory
+  portInventory, type PortInventory, type InsertPortInventory,
+  manifests, type Manifest, type InsertManifest
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gt } from "drizzle-orm";
@@ -68,6 +69,14 @@ export interface IStorage {
   getPortInventory(flightPlanId: number, airbaseId: string, userId: number): Promise<PortInventory | undefined>;
   getPortInventories(flightPlanId: number, userId: number): Promise<PortInventory[]>;
   upsertPortInventory(inventory: InsertPortInventory): Promise<PortInventory>;
+  
+  // Manifest methods (user-scoped)
+  getManifests(userId: number): Promise<Manifest[]>;
+  getManifest(id: number, userId: number): Promise<Manifest | undefined>;
+  createManifest(manifest: InsertManifest): Promise<Manifest>;
+  updateManifest(id: number, userId: number, data: Partial<InsertManifest>): Promise<Manifest | undefined>;
+  updateManifestItem(manifestId: number, userId: number, itemIndex: number, itemData: Record<string, any>): Promise<Manifest | undefined>;
+  deleteManifest(id: number, userId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -386,6 +395,60 @@ export class DatabaseStorage implements IStorage {
       const [created] = await db.insert(portInventory).values(inventory).returning();
       return created;
     }
+  }
+
+  // ============================================================================
+  // MANIFEST METHODS (USER-SCOPED)
+  // ============================================================================
+
+  async getManifests(userId: number): Promise<Manifest[]> {
+    return db.select()
+      .from(manifests)
+      .where(eq(manifests.user_id, userId))
+      .orderBy(desc(manifests.created_at));
+  }
+
+  async getManifest(id: number, userId: number): Promise<Manifest | undefined> {
+    const [manifest] = await db.select()
+      .from(manifests)
+      .where(and(eq(manifests.id, id), eq(manifests.user_id, userId)));
+    return manifest;
+  }
+
+  async createManifest(manifest: InsertManifest): Promise<Manifest> {
+    const [created] = await db.insert(manifests).values(manifest).returning();
+    return created;
+  }
+
+  async updateManifest(id: number, userId: number, data: Partial<InsertManifest>): Promise<Manifest | undefined> {
+    const [updated] = await db
+      .update(manifests)
+      .set({ ...data, updated_at: new Date() })
+      .where(and(eq(manifests.id, id), eq(manifests.user_id, userId)))
+      .returning();
+    return updated;
+  }
+
+  async updateManifestItem(manifestId: number, userId: number, itemIndex: number, itemData: Record<string, any>): Promise<Manifest | undefined> {
+    const manifest = await this.getManifest(manifestId, userId);
+    if (!manifest) return undefined;
+
+    const items = manifest.items as any[];
+    if (itemIndex < 0 || itemIndex >= items.length) return undefined;
+
+    items[itemIndex] = { ...items[itemIndex], ...itemData };
+
+    const [updated] = await db
+      .update(manifests)
+      .set({ items, updated_at: new Date() })
+      .where(and(eq(manifests.id, manifestId), eq(manifests.user_id, userId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteManifest(id: number, userId: number): Promise<void> {
+    await db.delete(manifests)
+      .where(and(eq(manifests.id, id), eq(manifests.user_id, userId)));
   }
 }
 
