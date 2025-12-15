@@ -100,9 +100,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const hashedPassword = await bcrypt.hash(insertUser.password, SALT_ROUNDS);
+    const userData = insertUser as { email: string; username: string; password: string };
+    const hashedPassword = await bcrypt.hash(userData.password, SALT_ROUNDS);
     const [user] = await db.insert(users).values({
-      ...insertUser,
+      email: userData.email,
+      username: userData.username,
       password: hashedPassword
     }).returning();
     return user;
@@ -117,7 +119,7 @@ export class DatabaseStorage implements IStorage {
     
     // Update last login time
     await db.update(users)
-      .set({ last_login_at: new Date() })
+      .set({ last_login_at: new Date() } as any)
       .where(eq(users.id, user.id));
     
     return user;
@@ -169,14 +171,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createFlightPlan(plan: InsertFlightPlan): Promise<FlightPlan> {
-    const [created] = await db.insert(flightPlans).values(plan).returning();
+    const [created] = await db.insert(flightPlans).values(plan as any).returning();
     return created;
   }
 
   async updateFlightPlan(id: number, userId: number, data: Partial<InsertFlightPlan>): Promise<FlightPlan | undefined> {
     const [updated] = await db
       .update(flightPlans)
-      .set({ ...data, updated_at: new Date() })
+      .set({ ...data, updated_at: new Date() } as any)
       .where(and(eq(flightPlans.id, id), eq(flightPlans.user_id, userId)))
       .returning();
     return updated;
@@ -206,7 +208,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createFlightSchedule(schedule: InsertFlightSchedule): Promise<FlightSchedule> {
-    const [created] = await db.insert(flightSchedules).values(schedule).returning();
+    const [created] = await db.insert(flightSchedules).values(schedule as any).returning();
     return created;
   }
 
@@ -252,14 +254,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createSplitSession(session: InsertSplitSession): Promise<SplitSession> {
-    const [created] = await db.insert(splitSessions).values(session).returning();
+    const [created] = await db.insert(splitSessions).values(session as any).returning();
     return created;
   }
 
   async updateSplitSession(id: number, userId: number, data: Partial<InsertSplitSession>): Promise<SplitSession | undefined> {
     const [updated] = await db
       .update(splitSessions)
-      .set({ ...data, updated_at: new Date() })
+      .set({ ...data, updated_at: new Date() } as any)
       .where(and(eq(splitSessions.id, id), eq(splitSessions.user_id, userId)))
       .returning();
     return updated;
@@ -300,7 +302,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createFlightNode(node: InsertFlightNode): Promise<FlightNode> {
-    const [created] = await db.insert(flightNodes).values(node).returning();
+    const [created] = await db.insert(flightNodes).values(node as any).returning();
     return created;
   }
 
@@ -339,7 +341,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createFlightEdge(edge: InsertFlightEdge): Promise<FlightEdge> {
-    const [created] = await db.insert(flightEdges).values(edge).returning();
+    const [created] = await db.insert(flightEdges).values(edge as any).returning();
     return created;
   }
 
@@ -382,17 +384,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertPortInventory(inventory: InsertPortInventory): Promise<PortInventory> {
-    const existing = await this.getPortInventory(inventory.flight_plan_id, inventory.airbase_id, inventory.user_id);
+    const inv = inventory as any;
+    const existing = await this.getPortInventory(inv.flight_plan_id, inv.airbase_id, inv.user_id);
     
     if (existing) {
       const [updated] = await db
         .update(portInventory)
-        .set({ ...inventory, updated_at: new Date() })
-        .where(and(eq(portInventory.id, existing.id), eq(portInventory.user_id, inventory.user_id)))
+        .set({ ...inv, updated_at: new Date() })
+        .where(and(eq(portInventory.id, existing.id), eq(portInventory.user_id, inv.user_id)))
         .returning();
       return updated;
     } else {
-      const [created] = await db.insert(portInventory).values(inventory).returning();
+      const [created] = await db.insert(portInventory).values(inv).returning();
       return created;
     }
   }
@@ -416,14 +419,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createManifest(manifest: InsertManifest): Promise<Manifest> {
-    const [created] = await db.insert(manifests).values(manifest).returning();
+    const [created] = await db.insert(manifests).values(manifest as any).returning();
     return created;
   }
 
   async updateManifest(id: number, userId: number, data: Partial<InsertManifest>): Promise<Manifest | undefined> {
     const [updated] = await db
       .update(manifests)
-      .set({ ...data, updated_at: new Date() })
+      .set({ ...data, updated_at: new Date() } as any)
       .where(and(eq(manifests.id, id), eq(manifests.user_id, userId)))
       .returning();
     return updated;
@@ -440,7 +443,7 @@ export class DatabaseStorage implements IStorage {
 
     const [updated] = await db
       .update(manifests)
-      .set({ items, updated_at: new Date() })
+      .set({ items, updated_at: new Date() } as any)
       .where(and(eq(manifests.id, manifestId), eq(manifests.user_id, userId)))
       .returning();
     return updated;

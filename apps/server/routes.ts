@@ -185,19 +185,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
       
+      const userData = parsed.data as { email: string; username: string; password: string };
+      
       // Check for duplicate email
-      const existingEmail = await storage.getUserByEmail(parsed.data.email);
+      const existingEmail = await storage.getUserByEmail(userData.email);
       if (existingEmail) {
         return res.status(409).json({ error: "Email already registered" });
       }
       
       // Check for duplicate username
-      const existingUsername = await storage.getUserByUsername(parsed.data.username);
+      const existingUsername = await storage.getUserByUsername(userData.username);
       if (existingUsername) {
         return res.status(409).json({ error: "Username already taken" });
       }
       
-      const user = await storage.createUser(parsed.data);
+      const user = await storage.createUser(userData);
       const session = await storage.createSession(user.id);
       
       res.cookie('session', session.token, {
@@ -223,7 +225,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
       
-      const user = await storage.validatePassword(parsed.data.email, parsed.data.password);
+      const loginData = parsed.data as { email: string; password: string };
+      const user = await storage.validatePassword(loginData.email, loginData.password);
       if (!user) {
         return res.status(401).json({ error: "Invalid email or password" });
       }
