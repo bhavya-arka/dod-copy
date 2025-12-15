@@ -72,7 +72,8 @@ export function calculateTimeEnRoute(
   distance_nm: number,
   aircraft_type: 'C-17' | 'C-130',
   weather?: WeatherData,
-  settings: RouteSettings = DEFAULT_ROUTE_SETTINGS
+  settings: RouteSettings = DEFAULT_ROUTE_SETTINGS,
+  track_deg?: number
 ): {
   time_enroute_hr: number;
   block_time_hr: number;
@@ -83,9 +84,9 @@ export function calculateTimeEnRoute(
   let ground_speed_kt = perf.cruise_speed_kt;
   let wind_component_kt = 0;
   
-  if (weather && settings.use_live_weather) {
+  if (weather && settings.use_live_weather && track_deg !== undefined) {
     wind_component_kt = calculateWindComponent(
-      0, // Would need actual track
+      track_deg,
       weather.wind_direction_deg,
       weather.wind_speed_kt
     );
@@ -138,11 +139,20 @@ export function createRouteLeg(
     destination.longitude_deg
   );
   
+  // Calculate actual track bearing for accurate wind component
+  const track_deg = calculateBearing(
+    origin.latitude_deg,
+    origin.longitude_deg,
+    destination.latitude_deg,
+    destination.longitude_deg
+  );
+  
   const timeResult = calculateTimeEnRoute(
     distance_nm,
     aircraft_type,
     weather,
-    settings
+    settings,
+    track_deg
   );
   
   const fuel_required_lb = calculateFuelRequired(

@@ -3,6 +3,7 @@
 
 ## Summary
 Full regression test suite executed with 714 tests across 36 test suites.
+Flight Manager comprehensive audit completed covering flowchart, cargo, CoB, fuel, ICODES, and weather systems.
 
 ## Final Results
 - **Total Tests**: 714
@@ -35,6 +36,18 @@ import React, { useState, useEffect, useCallback } from "react";
 **Root Cause**: JIT compilation and CI environment variability cause timing fluctuations
 **Fix**: Increased tolerance from 20x to 100x to accommodate CI variability
 **Severity**: Low (test flakiness, not a real bug)
+
+### 4. Wind Component Bug - Hardcoded Track
+**File**: `apps/client/src/lib/routeCalculations.ts`
+**Function**: `calculateTimeEnRoute`
+**Issue**: Wind component calculation used hardcoded `track_deg = 0` instead of actual flight bearing
+**Root Cause**: Function signature didn't accept track parameter; bearing was never passed
+**Impact**: Inaccurate ground speed and fuel estimates when weather data is active
+**Fix**: 
+1. Added optional `track_deg` parameter to `calculateTimeEnRoute`
+2. Modified `createRouteLeg` to calculate bearing using `calculateBearing()` and pass it
+3. Wind component now uses actual route bearing for accurate headwind/tailwind calculation
+**Severity**: Medium (affected fuel/time calculations with live weather)
 
 ## LSP Diagnostics Still Present
 
