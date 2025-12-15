@@ -421,6 +421,8 @@ export function getCoBStatusMessage(cob: CoBCalculation): string {
  * 
  * This is the core function for CG-aware placement decisions.
  * It calculates what the resulting CG would be if we place an item at the given position.
+ * 
+ * ENHANCED: Adds heavy penalty for positions that push CG outside the envelope
  */
 function scorePlacementPosition(
   xPosition: number,
@@ -432,6 +434,8 @@ function scorePlacementPosition(
   aircraftSpec: AircraftSpec
 ): { score: number; projectedCGPercent: number; projectedStationCG: number } {
   const bayStart = aircraftSpec.cargo_bay_fs_start;
+  const minCG = aircraftSpec.cob_min_percent;
+  const maxCG = aircraftSpec.cob_max_percent;
   
   // Calculate arm to center of item in station coordinates
   const arm = xPosition + (itemLength / 2) + bayStart;
@@ -444,8 +448,20 @@ function scorePlacementPosition(
   const newStationCG = newWeight > 0 ? newMoment / newWeight : bayStart;
   const newCGPercent = ((newStationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
   
-  // Score = deviation from target (lower is better)
-  const score = Math.abs(newCGPercent - targetCGPercent);
+  // Base score = deviation from target (lower is better)
+  let score = Math.abs(newCGPercent - targetCGPercent);
+  
+  // CRITICAL: Add heavy penalty for positions that push CG outside envelope
+  // This ensures we STRONGLY prefer staying within 16-40% MAC even if slightly off target
+  if (newCGPercent < minCG) {
+    // Forward of envelope - add penalty based on how far outside
+    const forwardPenalty = (minCG - newCGPercent) * 10; // 10x penalty for each % outside
+    score += forwardPenalty;
+  } else if (newCGPercent > maxCG) {
+    // Aft of envelope - add penalty based on how far outside
+    const aftPenalty = (newCGPercent - maxCG) * 10;
+    score += aftPenalty;
+  }
   
   return { 
     score, 
