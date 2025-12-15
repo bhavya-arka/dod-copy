@@ -1166,13 +1166,15 @@ function FlightManagerFlowchartInner({
   }, [graphState.nodes]);
   
   useEffect(() => {
-    const newGraphState = missionStateToGraph(splitFlights, layoutRef.current);
-    setGraphState(prev => ({
-      ...newGraphState,
-      selectedNodeId: prev.selectedNodeId,
-      selectedEdgeId: prev.selectedEdgeId,
-      isDirty: prev.isDirty,
-    }));
+    setGraphState(prev => {
+      const newGraphState = missionStateToGraph(splitFlights, layoutRef.current, prev.nodes);
+      return {
+        ...newGraphState,
+        selectedNodeId: prev.selectedNodeId,
+        selectedEdgeId: prev.selectedEdgeId,
+        isDirty: prev.isDirty,
+      };
+    });
   }, [splitFlights]);
   
   const syncPositionsToLayoutRef = useCallback(() => {

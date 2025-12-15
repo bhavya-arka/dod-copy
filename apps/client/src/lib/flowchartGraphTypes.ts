@@ -246,15 +246,25 @@ export function createRouteLegEdge(
 
 export function missionStateToGraph(
   flights: SplitFlight[],
-  existingLayout?: Map<string, { x: number; y: number }>
+  existingLayout?: Map<string, { x: number; y: number }>,
+  existingNodes?: GraphNode[]
 ): GraphState {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const baseConnections = new Map<string, { isOrigin: string[]; isDestination: string[]; isWaypoint: string[] }>();
   const usedBases = new Set<string>();
   
+  const existingNodeMap = new Map<string, GraphNode>();
+  if (existingNodes) {
+    existingNodes.forEach(node => {
+      existingNodeMap.set(node.id, node);
+    });
+  }
+  
   flights.forEach((flight, index) => {
-    const position = existingLayout?.get(`flight-${flight.id}`) || {
+    const nodeId = `flight-${flight.id}`;
+    const existingNode = existingNodeMap.get(nodeId);
+    const position = existingNode?.position || existingLayout?.get(nodeId) || {
       x: 50,
       y: 100 + index * 200,
     };
@@ -317,13 +327,31 @@ export function missionStateToGraph(
       const base = MILITARY_BASES.find(b => b.base_id === baseId);
       if (!base) return;
       
-      const position = existingLayout?.get(`base-${baseId}`) || {
+      const nodeId = `base-${baseId}`;
+      const existingNode = existingNodeMap.get(nodeId);
+      const position = existingNode?.position || existingLayout?.get(nodeId) || {
         x: 350 + column * 300,
         y: 100 + rowIndex * 150,
       };
       
       const conn = baseConnections.get(baseId) || { isOrigin: [], isDestination: [], isWaypoint: [] };
-      nodes.push(createAirbaseNode(base, position, { isOrigin: conn.isOrigin, isDestination: conn.isDestination }));
+      
+      if (existingNode && existingNode.data.nodeType === 'airbase') {
+        const updatedNode: AirbaseGraphNode = {
+          ...existingNode as AirbaseGraphNode,
+          position,
+          data: {
+            ...(existingNode.data as AirbaseNodeData),
+            connectedFlightIds: Array.from(new Set([...conn.isOrigin, ...conn.isDestination])),
+            isOriginFor: conn.isOrigin,
+            isDestinationFor: conn.isDestination,
+            isOrphan: conn.isOrigin.length === 0 && conn.isDestination.length === 0,
+          },
+        };
+        nodes.push(updatedNode);
+      } else {
+        nodes.push(createAirbaseNode(base, position, { isOrigin: conn.isOrigin, isDestination: conn.isDestination }));
+      }
     });
   });
   
