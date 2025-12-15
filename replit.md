@@ -49,6 +49,18 @@ Core data models include:
 
 ## December 2025
 
+### Analytics Tab Audit and Enhancements (15/12/2025)
+- **Hardcoded Fallback Removal**: Removed fake fallback values from MissionContext.tsx:
+  - `avgCob || 27.5` → now properly calculates or returns 0 if no data
+  - `distance || 2000` and `payloadWeight || 50000` → now use 0 if no route/payload data
+  - Fixed duplicate hardcoded fuel rates in callback functions to use AIRCRAFT_SPECS
+- **Fuel Reference Data**: AnalyticsPanel.tsx now pulls fuel rate reference values from AIRCRAFT_SPECS instead of hardcoding
+- **New Metrics Added**:
+  - Cargo Type Breakdown chart (palletized, rolling stock, PAX weight)
+  - Per-Aircraft Load Percentage with visual progress bars and CoB status
+  - Pallet Distribution by Aircraft bar chart
+- **Files**: `apps/client/src/context/MissionContext.tsx`, `apps/client/src/components/AnalyticsPanel.tsx`
+
 ### Center of Balance Formula Fix (15/12/2025)
 - **Bug**: CoB calculation in aircraftSolver.ts used incorrect linear interpolation formula instead of proper MAC-based calculation
 - **Root Cause**: Original formula mapped CG position to a percentage using `cob_min + normalized_position * (cob_max - cob_min)`, which doesn't match standard MAC calculation
