@@ -1,6 +1,8 @@
 /**
  * Geometry Validation Functions
  * Per lateral_placement_spec - Shared validation logic for 2D/3D views
+ * 
+ * Enhanced with physics-based CG envelope validation per T.O. 1C-17A-9 and T.O. 1C-130H-9
  */
 
 import {
@@ -10,9 +12,202 @@ import {
   GeometryValidationIssue,
   CoBResult
 } from './types';
+import { AircraftType, AIRCRAFT_SPECS } from '../pacafTypes';
 
 const ROLLING_STOCK_LATERAL_CLEARANCE_IN = 2;
 const ROLLING_STOCK_LONGITUDINAL_CLEARANCE_IN = 4;
+
+// CG warning thresholds - warn when approaching limits
+const CG_WARNING_THRESHOLD_PERCENT = 3; // Warn when within 3% of limits
+const LATERAL_CG_WARNING_THRESHOLD_IN = 5; // Warn when lateral CG exceeds 5" from centerline
+
+// ============================================================================
+// CG ENVELOPE VALIDATION - Per T.O. 1C-17A-9 / T.O. 1C-130H-9
+// ============================================================================
+
+/**
+ * CG Envelope validation result
+ */
+export interface CGValidationResult {
+  valid: boolean;
+  issue?: string;
+  severity: 'ok' | 'warning' | 'error';
+  cgPercent: number;
+  forwardLimit: number;
+  aftLimit: number;
+  targetCG: number;
+  deviationFromTarget: number;
+}
+
+/**
+ * Validate that CG is within the allowed envelope
+ * Per T.O. 1C-17A-9: C-17 CG limits are 16-40% MAC
+ * Per T.O. 1C-130H-9: C-130 CG limits are 18-33% MAC
+ */
+export function validateCGEnvelope(
+  cgPercent: number,
+  aircraftType: AircraftType
+): CGValidationResult {
+  const spec = AIRCRAFT_SPECS[aircraftType];
+  const forwardLimit = spec.cob_min_percent;
+  const aftLimit = spec.cob_max_percent;
+  const targetCG = (forwardLimit + aftLimit) / 2;
+  const deviationFromTarget = Math.abs(cgPercent - targetCG);
+  
+  // Check if CG exceeds forward limit (nose heavy)
+  if (cgPercent < forwardLimit) {
+    return {
+      valid: false,
+      issue: `CG too far forward (nose heavy): ${cgPercent.toFixed(1)}% MAC is below forward limit of ${forwardLimit}% MAC`,
+      severity: 'error',
+      cgPercent,
+      forwardLimit,
+      aftLimit,
+      targetCG,
+      deviationFromTarget
+    };
+  }
+  
+  // Check if CG exceeds aft limit (tail heavy)
+  if (cgPercent > aftLimit) {
+    return {
+      valid: false,
+      issue: `CG too far aft (tail heavy): ${cgPercent.toFixed(1)}% MAC exceeds aft limit of ${aftLimit}% MAC`,
+      severity: 'error',
+      cgPercent,
+      forwardLimit,
+      aftLimit,
+      targetCG,
+      deviationFromTarget
+    };
+  }
+  
+  // Check if CG is approaching forward limit
+  if (cgPercent < forwardLimit + CG_WARNING_THRESHOLD_PERCENT) {
+    return {
+      valid: true,
+      issue: `CG approaching forward limit: ${cgPercent.toFixed(1)}% MAC (limit: ${forwardLimit}%)`,
+      severity: 'warning',
+      cgPercent,
+      forwardLimit,
+      aftLimit,
+      targetCG,
+      deviationFromTarget
+    };
+  }
+  
+  // Check if CG is approaching aft limit
+  if (cgPercent > aftLimit - CG_WARNING_THRESHOLD_PERCENT) {
+    return {
+      valid: true,
+      issue: `CG approaching aft limit: ${cgPercent.toFixed(1)}% MAC (limit: ${aftLimit}%)`,
+      severity: 'warning',
+      cgPercent,
+      forwardLimit,
+      aftLimit,
+      targetCG,
+      deviationFromTarget
+    };
+  }
+  
+  // CG is safely within envelope
+  return {
+    valid: true,
+    severity: 'ok',
+    cgPercent,
+    forwardLimit,
+    aftLimit,
+    targetCG,
+    deviationFromTarget
+  };
+}
+
+/**
+ * Validate lateral CG balance
+ * For bilateral loading, lateral CG should be near centerline (0)
+ */
+export function validateLateralBalance(
+  lateralCG: number,
+  aircraftType: AircraftType
+): CGValidationResult & { lateralCG: number } {
+  const spec = AIRCRAFT_SPECS[aircraftType];
+  const halfWidth = spec.cargo_width / 2;
+  const maxAllowedOffset = halfWidth * 0.1; // Allow up to 10% of half-width offset
+  
+  if (Math.abs(lateralCG) > maxAllowedOffset) {
+    const side = lateralCG > 0 ? 'right' : 'left';
+    return {
+      valid: false,
+      issue: `Lateral CG imbalance: ${Math.abs(lateralCG).toFixed(1)}" ${side} of centerline exceeds limit of ${maxAllowedOffset.toFixed(1)}"`,
+      severity: 'error',
+      cgPercent: 0,
+      forwardLimit: 0,
+      aftLimit: 0,
+      targetCG: 0,
+      deviationFromTarget: 0,
+      lateralCG
+    };
+  }
+  
+  if (Math.abs(lateralCG) > LATERAL_CG_WARNING_THRESHOLD_IN) {
+    const side = lateralCG > 0 ? 'right' : 'left';
+    return {
+      valid: true,
+      issue: `Slight lateral imbalance: ${Math.abs(lateralCG).toFixed(1)}" ${side} of centerline`,
+      severity: 'warning',
+      cgPercent: 0,
+      forwardLimit: 0,
+      aftLimit: 0,
+      targetCG: 0,
+      deviationFromTarget: 0,
+      lateralCG
+    };
+  }
+  
+  return {
+    valid: true,
+    severity: 'ok',
+    cgPercent: 0,
+    forwardLimit: 0,
+    aftLimit: 0,
+    targetCG: 0,
+    deviationFromTarget: 0,
+    lateralCG
+  };
+}
+
+/**
+ * Combined CG validation for both longitudinal and lateral balance
+ */
+export function validateCGComplete(
+  cgPercent: number,
+  lateralCG: number,
+  aircraftType: AircraftType
+): GeometryValidationIssue[] {
+  const issues: GeometryValidationIssue[] = [];
+  
+  // Validate longitudinal CG
+  const longitudinalResult = validateCGEnvelope(cgPercent, aircraftType);
+  if (longitudinalResult.issue) {
+    issues.push({
+      code: longitudinalResult.valid ? 'CG_ENVELOPE_WARNING' : 'CG_ENVELOPE_EXCEEDED',
+      message: longitudinalResult.issue,
+      severity: longitudinalResult.severity === 'error' ? 'error' : 'warning'
+    });
+  }
+  
+  // Validate lateral CG
+  const lateralResult = validateLateralBalance(lateralCG, aircraftType);
+  if (lateralResult.issue) {
+    issues.push({
+      code: lateralResult.valid ? 'LATERAL_CG_WARNING' : 'LATERAL_CG_EXCEEDED',
+      message: lateralResult.issue,
+      severity: lateralResult.severity === 'error' ? 'error' : 'warning'
+    });
+  }
+  
+  return issues;
+}
 
 export function checkBounds(
   item: PlacedCargo,

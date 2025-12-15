@@ -407,15 +407,16 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     taper_start_position: 15,
     taper_width_reduction: 8,
     
-    // Center of Balance (% MAC)
-    // RDL distances in station table are cargo-floor relative (245-1215")
-    // Mid-cargo position ~730", LEMAC calibrated so balanced load produces ~25-30% MAC
-    // LEMAC = mid_cargo - (target_percent × MAC) = 730 - (0.28 × 309.5) = 643
-    // Envelope per T.O. 1C-17A-5: 16-40% MAC
+    // Center of Balance (% MAC) - Per T.O. 1C-17A-9
+    // LEMAC: 869.7" from aircraft datum (nose)
+    // MAC Length: 309.5"
+    // Cargo Bay: Stations 245 to 1215 (970" length)
+    // CG Envelope: 16% - 40% MAC for cargo operations
+    // Target CG: 28% MAC (center of envelope)
     cob_min_percent: 16,
     cob_max_percent: 40,
     mac_length: 309.5,
-    lemac_station: 643,
+    lemac_station: 869.7,
     
     // Station constraints
     stations: C17_STATIONS,
@@ -474,15 +475,16 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     taper_start_position: 5,
     taper_width_reduction: 6,
     
-    // Center of Balance (% MAC)
-    // RDL distances in station table are cargo-floor relative (245-655")
-    // Mid-cargo position ~450", LEMAC calibrated so balanced load produces ~25% MAC
-    // LEMAC = mid_cargo - (target_percent × MAC) = 450 - (0.25 × 165) = 409
-    // Envelope per T.O. 1C-130H-5: 15-35% MAC
-    cob_min_percent: 15,
-    cob_max_percent: 35,
-    mac_length: 165,
-    lemac_station: 409,
+    // Center of Balance (% MAC) - Per T.O. 1C-130H-9
+    // LEMAC: 494.5" from aircraft datum (nose)
+    // MAC Length: 164.5"
+    // Cargo Bay: Stations 245 to 605 (360" length)
+    // CG Envelope: 18% - 33% MAC for cargo operations
+    // Target CG: 25.5% MAC (center of envelope)
+    cob_min_percent: 18,
+    cob_max_percent: 33,
+    mac_length: 164.5,
+    lemac_station: 494.5,
     
     // Station constraints
     stations: C130_STATIONS,
@@ -674,6 +676,9 @@ export interface CoBCalculation {
   // Extended properties for detailed warnings
   envelope_status?: 'in_envelope' | 'forward_limit' | 'aft_limit';
   envelope_deviation?: number;   // How far outside envelope (% MAC)
+  
+  // Lateral balance - Per T.O. 1C-17A-9 bilateral loading requirements
+  lateral_cg?: number;           // Lateral CG offset from centerline (inches)
 }
 
 // ============================================================================

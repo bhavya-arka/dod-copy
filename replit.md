@@ -49,6 +49,35 @@ Core data models include:
 
 ## December 2025
 
+### FlightManagerFlowchart Architectural Redesign (15/12/2025)
+- **Issue**: Nodes reset positions when adding new flights/bases, connections don't link properly
+- **Solution**: Created GraphStore module (`apps/client/src/lib/graphStore.ts`) with:
+  - Stable position map with canonical IDs (`flight-{id}`, `base-{baseId}`)
+  - SSR-safe localStorage access with lazy loading
+  - Reconciliation-based updates (diff/patch instead of wholesale rebuilds)
+  - Position persistence across state changes
+- **Files**: `apps/client/src/lib/graphStore.ts`, `apps/client/src/components/FlightManagerFlowchart.tsx`
+
+### Physics-Based CoB Algorithm (15/12/2025)
+- **Enhancement**: Implemented proper physics equations per T.O. 1C-17A-9 and T.O. 1C-130H-9
+- **Core Equations**:
+  - `Moment = Weight × Arm (inch-pounds)`
+  - `CG = Total Moment / Total Weight`
+  - `%MAC = ((CG_Station - LEMAC) / MAC_Length) × 100`
+- **Aircraft Specs**: Updated LEMAC, MAC length, envelope limits in `pacafTypes.ts`
+  - C-17: LEMAC=869.7", MAC=309.5", envelope 16-40% MAC
+  - C-130: LEMAC=494.5", MAC=164.5", envelope 18-33% MAC
+- **Lateral CG**: Added bilateral balance tracking
+- **Files**: `apps/client/src/lib/aircraftSolver.ts`, `apps/client/src/lib/pacafTypes.ts`
+
+### 3D Measure Tool with Snapping (15/12/2025)
+- **Feature**: Click-to-measure distances with snap to geometry
+- **Snapping Hierarchy**: Vertices (red) → Edge midpoints (orange) → Surfaces (yellow)
+- **Controls**: M key to toggle, ESC to reset
+- **Visual Feedback**: Colored markers, dashed lines, distance labels in 3D and HUD
+- **Fixes**: Proper FaceIndices typing for BufferGeometry, measure state resets on toggle
+- **File**: `apps/client/src/components/LoadPlan3DViewer.tsx`
+
 ### Save Plan Update-in-Place Logic (15/12/2025)
 - **Issue**: Saving an already-saved plan would prompt for a new name instead of updating
 - **Fix**: Save button now detects if a plan is already loaded via `loadedPlan` prop

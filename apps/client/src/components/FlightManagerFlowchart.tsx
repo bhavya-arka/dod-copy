@@ -50,7 +50,10 @@ import {
   createRouteLegEdge,
   getFlightStops,
   setFlightStops,
+  getCanonicalFlightNodeId,
+  getCanonicalBaseNodeId,
 } from '../lib/flowchartGraphTypes';
+import { createGraphStore, GraphStore } from '../lib/graphStore';
 
 interface FlightManagerFlowchartProps {
   splitFlights: SplitFlight[];
@@ -1138,9 +1141,23 @@ function FlightManagerFlowchartInner({
   onAddFlight,
   onSplitFlight,
 }: FlightManagerFlowchartProps) {
-  const [graphState, setGraphState] = useState<GraphState>(() => 
-    missionStateToGraph(splitFlights)
-  );
+  const graphStoreRef = useRef<GraphStore | null>(null);
+  if (!graphStoreRef.current) {
+    graphStoreRef.current = createGraphStore();
+  }
+  const graphStore = graphStoreRef.current;
+
+  const [graphState, setGraphState] = useState<GraphState>(() => {
+    const initial = graphStore.syncFromMissionState(splitFlights);
+    return {
+      nodes: initial.nodes,
+      edges: initial.edges,
+      selectedNodeId: null,
+      selectedEdgeId: null,
+      isDirty: false,
+    };
+  });
+  
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [filter, setFilter] = useState('all');
@@ -1157,48 +1174,35 @@ function FlightManagerFlowchartInner({
     warnings: Array<{ nodeId: string; message: string }>;
   }>({ isOpen: false, errors: [], warnings: [] });
   
-  const layoutRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const prevFlightsRef = useRef<SplitFlight[]>(splitFlights);
   
   useEffect(() => {
-    graphState.nodes.forEach(node => {
-      layoutRef.current.set(node.id, node.position);
-    });
-  }, [graphState.nodes]);
-  
-  useEffect(() => {
-    setGraphState(prev => {
-      const newGraphState = missionStateToGraph(splitFlights, layoutRef.current, prev.nodes);
-      return {
-        ...newGraphState,
-        selectedNodeId: prev.selectedNodeId,
-        selectedEdgeId: prev.selectedEdgeId,
-        isDirty: prev.isDirty,
-      };
-    });
-  }, [splitFlights]);
-  
-  const syncPositionsToLayoutRef = useCallback(() => {
-    graphState.nodes.forEach(node => {
-      layoutRef.current.set(node.id, node.position);
-    });
-  }, [graphState.nodes]);
+    if (prevFlightsRef.current === splitFlights) {
+      return;
+    }
+    prevFlightsRef.current = splitFlights;
+    
+    const result = graphStore.syncFromMissionState(splitFlights);
+    
+    setGraphState(prev => ({
+      nodes: result.nodes,
+      edges: result.edges,
+      selectedNodeId: prev.selectedNodeId,
+      selectedEdgeId: prev.selectedEdgeId,
+      isDirty: prev.isDirty,
+    }));
+  }, [splitFlights, graphStore]);
   
   const handleNodesChange = useCallback((changes: any) => {
-    setGraphState(prev => {
-      const updatedNodes = [...prev.nodes];
-      changes.forEach((change: any) => {
-        if (change.type === 'position' && change.position) {
-          const idx = updatedNodes.findIndex(n => n.id === change.id);
-          if (idx !== -1) {
-            updatedNodes[idx] = { ...updatedNodes[idx], position: change.position };
-            layoutRef.current.set(change.id, change.position);
-          }
-        }
-      });
-      return { ...prev, nodes: updatedNodes, isDirty: true };
-    });
+    const updatedNodes = graphStore.applyNodeChanges(changes);
+    
+    setGraphState(prev => ({
+      ...prev,
+      nodes: updatedNodes,
+      isDirty: true,
+    }));
     setIsDirty(true);
-  }, []);
+  }, [graphStore]);
   
   const handleEdgesChange = useCallback((changes: any) => {
     setGraphState(prev => ({ ...prev, isDirty: true }));
@@ -1218,8 +1222,6 @@ function FlightManagerFlowchartInner({
       const base = MILITARY_BASES.find(b => b.base_id === baseData.baseId);
       
       if (flight && base) {
-        syncPositionsToLayoutRef();
-        
         const hasOrigin = flight.origin && flight.origin.base_id !== flight.destination?.base_id;
         const updatedFlight = {
           ...flight,
@@ -1234,7 +1236,7 @@ function FlightManagerFlowchartInner({
         setIsDirty(true);
       }
     }
-  }, [graphState.nodes, splitFlights, onFlightsChange, syncPositionsToLayoutRef]);
+  }, [graphState.nodes, splitFlights, onFlightsChange]);
   
   const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
@@ -1256,13 +1258,12 @@ function FlightManagerFlowchartInner({
   }, []);
   
   const handleFlightUpdate = useCallback((flightId: string, updates: Partial<SplitFlight>) => {
-    syncPositionsToLayoutRef();
     const updatedFlights = splitFlights.map(f => 
       f.id === flightId ? { ...f, ...updates, is_modified: true } : f
     );
     onFlightsChange(updatedFlights);
     setIsDirty(true);
-  }, [splitFlights, onFlightsChange, syncPositionsToLayoutRef]);
+  }, [splitFlights, onFlightsChange]);
   
   const handleBaseSelect = useCallback((baseId: string, flightId: string, asOrigin: boolean) => {
     const base = MILITARY_BASES.find(b => b.base_id === baseId);

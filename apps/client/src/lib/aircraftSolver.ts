@@ -79,11 +79,158 @@ function sortPalletsWithWeaponsPriority(pallets: Pallet463L[]): Pallet463L[] {
 }
 
 // ============================================================================
-// SECTION 9: CENTER OF BALANCE CALCULATIONS (MAC-based)
+// SECTION 9: CENTER OF GRAVITY CALCULATIONS (Physics-based)
 // ============================================================================
 
 /**
- * Calculate Center of Balance as percentage of Mean Aerodynamic Chord (MAC)
+ * Load item interface for CG calculations
+ * Provides a standardized way to calculate CG for any cargo type
+ */
+export interface CGLoadItem {
+  weight_lb: number;
+  position_x: number;      // 0-based from cargo bay start (longitudinal)
+  position_y: number;      // Lateral position from centerline (positive = right)
+  length: number;          // Item length for arm calculation
+  width: number;           // Item width for lateral bounds
+}
+
+/**
+ * Extended CG result with lateral balance information
+ * Per T.O. 1C-17A-9 and T.O. 1C-130H-9 specifications
+ */
+export interface CGResult {
+  station_cg: number;             // CG in station inches (from aircraft datum)
+  mac_percent: number;            // CG as % MAC
+  total_weight: number;           // Total load weight (lbs)
+  total_moment: number;           // Total longitudinal moment (inch-pounds)
+  lateral_cg: number;             // Lateral CG offset from centerline (inches)
+  lateral_moment: number;         // Total lateral moment (inch-pounds)
+  within_envelope: boolean;       // Is CG within limits?
+  forward_limit_percent: number;  // Forward limit (% MAC)
+  aft_limit_percent: number;      // Aft limit (% MAC)
+  target_cg_percent: number;      // Target CG (% MAC) - center of envelope
+  deviation_from_target: number;  // How far from target CG (% MAC)
+  envelope_status: 'in_envelope' | 'forward_limit' | 'aft_limit';
+  envelope_deviation: number;     // How far outside envelope (% MAC), 0 if inside
+}
+
+/**
+ * Calculate target CG position for optimal balance
+ * Returns the station position (inches from datum) for target CG percentage
+ */
+export function calculateTargetCGStation(aircraftSpec: AircraftSpec): number {
+  const targetPercent = (aircraftSpec.cob_min_percent + aircraftSpec.cob_max_percent) / 2;
+  return aircraftSpec.lemac_station + (targetPercent / 100) * aircraftSpec.mac_length;
+}
+
+/**
+ * Convert station position to %MAC
+ */
+export function stationToMACPercent(stationCG: number, aircraftSpec: AircraftSpec): number {
+  return ((stationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
+}
+
+/**
+ * Convert %MAC to station position  
+ */
+export function macPercentToStation(macPercent: number, aircraftSpec: AircraftSpec): number {
+  return aircraftSpec.lemac_station + (macPercent / 100) * aircraftSpec.mac_length;
+}
+
+/**
+ * Calculate Center of Gravity using physics-based moment summation
+ * 
+ * Physics Principles (per USAF T.O.):
+ *   Moment (inch-pounds) = Weight (pounds) × Arm (inches from datum)
+ *   CG (station inches) = Total Moment / Total Weight  
+ *   %MAC = ((CG_Station - LEMAC) / MAC_Length) × 100
+ * 
+ * The solver uses 0-based coordinates (cargo bay start = 0), so we add 
+ * bay_start_station to convert to aircraft station coordinates.
+ * 
+ * Lateral CG calculation:
+ *   lateral_moment = weight × (position_y - centerline)
+ *   lateral_CG = total_lateral_moment / total_weight
+ *   For balanced loading, lateral_CG should be near 0.
+ */
+export function calculateCenterOfGravity(
+  loadItems: CGLoadItem[],
+  aircraftSpec: AircraftSpec
+): CGResult {
+  const bayStart = aircraftSpec.stations[0]?.rdl_distance || 245;
+  const targetCGPercent = (aircraftSpec.cob_min_percent + aircraftSpec.cob_max_percent) / 2;
+  
+  let totalWeight = 0;
+  let totalMoment = 0;
+  let totalLateralMoment = 0;
+
+  for (const item of loadItems) {
+    const weight = item.weight_lb;
+    if (weight <= 0) continue;
+    
+    // Calculate longitudinal arm (station coordinates)
+    // Arm is measured to the center of the item
+    const solverArm = item.position_x + (item.length / 2);
+    const stationArm = solverArm + bayStart;
+    
+    // Moment = Weight × Arm
+    const moment = weight * stationArm;
+    
+    // Lateral moment (from centerline, positive = right)
+    const lateralMoment = weight * item.position_y;
+    
+    totalWeight += weight;
+    totalMoment += moment;
+    totalLateralMoment += lateralMoment;
+  }
+
+  // Calculate CG station position
+  const stationCG = totalWeight > 0 ? totalMoment / totalWeight : bayStart;
+  
+  // Calculate lateral CG (deviation from centerline)
+  const lateralCG = totalWeight > 0 ? totalLateralMoment / totalWeight : 0;
+  
+  // Convert to %MAC
+  const macPercent = totalWeight > 0
+    ? ((stationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100
+    : targetCGPercent; // Empty aircraft defaults to target
+
+  // Check envelope limits
+  const withinEnvelope = macPercent >= aircraftSpec.cob_min_percent && 
+                         macPercent <= aircraftSpec.cob_max_percent;
+  
+  let envelopeDeviation = 0;
+  let envelopeStatus: 'in_envelope' | 'forward_limit' | 'aft_limit' = 'in_envelope';
+  
+  if (macPercent < aircraftSpec.cob_min_percent) {
+    envelopeDeviation = aircraftSpec.cob_min_percent - macPercent;
+    envelopeStatus = 'forward_limit';
+  } else if (macPercent > aircraftSpec.cob_max_percent) {
+    envelopeDeviation = macPercent - aircraftSpec.cob_max_percent;
+    envelopeStatus = 'aft_limit';
+  }
+
+  const deviationFromTarget = Math.abs(macPercent - targetCGPercent);
+
+  return {
+    station_cg: stationCG,
+    mac_percent: macPercent,
+    total_weight: totalWeight,
+    total_moment: totalMoment,
+    lateral_cg: lateralCG,
+    lateral_moment: totalLateralMoment,
+    within_envelope: withinEnvelope,
+    forward_limit_percent: aircraftSpec.cob_min_percent,
+    aft_limit_percent: aircraftSpec.cob_max_percent,
+    target_cg_percent: targetCGPercent,
+    deviation_from_target: deviationFromTarget,
+    envelope_status: envelopeStatus,
+    envelope_deviation: envelopeDeviation
+  };
+}
+
+/**
+ * Calculate Center of Balance from placements (legacy wrapper)
  * 
  * Uses the standard MAC formula:
  *   CoB% = ((Station_CG - LEMAC) / MAC_Length) * 100
@@ -99,71 +246,142 @@ export function calculateCenterOfBalance(
   paxCount: number = 0,
   paxWeight: number = 0
 ): CoBCalculation {
-  let totalWeight = 0;
-  let totalMoment = 0;
+  // Convert placements to CGLoadItems
+  const loadItems: CGLoadItem[] = [];
+  
+  // Add pallets
+  for (const p of pallets) {
+    const xPosition = p.x_start_in !== undefined ? p.x_start_in : (p.position_coord - PALLET_463L.length / 2);
+    const yPosition = p.lateral_placement?.y_center_in ?? 0;
+    
+    loadItems.push({
+      weight_lb: p.pallet.gross_weight,
+      position_x: xPosition,
+      position_y: yPosition,
+      length: PALLET_463L.length,
+      width: PALLET_463L.width
+    });
+  }
+  
+  // Add vehicles/rolling stock
+  for (const v of vehicles) {
+    const xPosition = v.position.z - v.length / 2; // position.z is center, convert to start
+    const yPosition = v.lateral_placement?.y_center_in ?? v.position.x;
+    
+    loadItems.push({
+      weight_lb: v.weight,
+      position_x: xPosition,
+      position_y: yPosition,
+      length: v.length,
+      width: v.width
+    });
+  }
+  
+  // Add PAX weight if present
+  // PAX seat position: forward troop seats are typically at ~40% of cargo bay length
+  if (paxCount > 0 && paxWeight > 0) {
+    const paxPosition = aircraftSpec.cargo_length * 0.4;
+    loadItems.push({
+      weight_lb: paxWeight,
+      position_x: paxPosition,
+      position_y: 0, // PAX distributed symmetrically
+      length: 100,   // Approximate seating zone length
+      width: 200     // Full width
+    });
+  }
+  
+  // Calculate CG using the physics-based function
+  const cgResult = calculateCenterOfGravity(loadItems, aircraftSpec);
+  
+  // Return legacy CoBCalculation format
+  return {
+    total_weight: cgResult.total_weight,
+    total_moment: cgResult.total_moment,
+    center_of_balance: cgResult.station_cg,
+    cob_percent: cgResult.mac_percent,
+    min_allowed: cgResult.forward_limit_percent,
+    max_allowed: cgResult.aft_limit_percent,
+    in_envelope: cgResult.within_envelope,
+    envelope_status: cgResult.envelope_status,
+    envelope_deviation: cgResult.envelope_deviation,
+    lateral_cg: cgResult.lateral_cg
+  };
+}
 
+/**
+ * Calculate what the new CG would be after adding an item at a specific position
+ * Used for optimal placement decisions
+ */
+export function calculateNewCGWithItem(
+  currentCG: CGResult,
+  newWeight: number,
+  newPositionX: number,
+  newPositionY: number,
+  newLength: number,
+  aircraftSpec: AircraftSpec
+): { newCGPercent: number; newLateralCG: number } {
   const bayStart = aircraftSpec.stations[0]?.rdl_distance || 245;
   
-  // PAX seat position: forward troop seats are typically at ~40% of cargo bay length
-  // For C-17: ~420" from bay start (station 665), for C-130: ~200" (station 445)
-  const paxSolverArm = aircraftSpec.cargo_length * 0.4;
-
-  for (const p of pallets) {
-    const weight = p.pallet.gross_weight;
-    const solverArm = p.x_start_in !== undefined 
-      ? p.x_start_in + (PALLET_463L.length / 2)
-      : p.position_coord;
-    const stationArm = solverArm + bayStart;
-    totalWeight += weight;
-    totalMoment += weight * stationArm;
-  }
-
-  for (const v of vehicles) {
-    const weight = v.weight;
-    const solverArm = v.position.z;
-    const stationArm = solverArm + bayStart;
-    totalWeight += weight;
-    totalMoment += weight * stationArm;
-  }
-
-  // Include PAX weight in CoB calculation
-  if (paxCount > 0 && paxWeight > 0) {
-    const paxStationArm = paxSolverArm + bayStart;
-    totalWeight += paxWeight;
-    totalMoment += paxWeight * paxStationArm;
-  }
-
-  const stationCg = totalWeight > 0 ? totalMoment / totalWeight : bayStart;
+  // Calculate arm for new item
+  const newArm = newPositionX + (newLength / 2) + bayStart;
+  const newMoment = newWeight * newArm;
+  const newLateralMoment = newWeight * newPositionY;
   
-  const cobPercent = totalWeight > 0
-    ? ((stationCg - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100
-    : 0;
-
-  const inEnvelope = cobPercent >= aircraftSpec.cob_min_percent && 
-                     cobPercent <= aircraftSpec.cob_max_percent;
+  // Calculate combined values
+  const totalWeight = currentCG.total_weight + newWeight;
+  const totalMoment = currentCG.total_moment + newMoment;
+  const totalLateralMoment = (currentCG.lateral_cg * currentCG.total_weight) + newLateralMoment;
   
-  let envelopeDeviation = 0;
-  let envelopeStatus: 'in_envelope' | 'forward_limit' | 'aft_limit' = 'in_envelope';
+  // Calculate new CG
+  const newStationCG = totalWeight > 0 ? totalMoment / totalWeight : bayStart;
+  const newCGPercent = ((newStationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
+  const newLateralCG = totalWeight > 0 ? totalLateralMoment / totalWeight : 0;
   
-  if (cobPercent < aircraftSpec.cob_min_percent) {
-    envelopeDeviation = aircraftSpec.cob_min_percent - cobPercent;
-    envelopeStatus = 'forward_limit';
-  } else if (cobPercent > aircraftSpec.cob_max_percent) {
-    envelopeDeviation = cobPercent - aircraftSpec.cob_max_percent;
-    envelopeStatus = 'aft_limit';
-  }
+  return { newCGPercent, newLateralCG };
+}
 
-  return {
-    total_weight: totalWeight,
-    total_moment: totalMoment,
-    center_of_balance: stationCg,
-    cob_percent: cobPercent,
-    min_allowed: aircraftSpec.cob_min_percent,
-    max_allowed: aircraftSpec.cob_max_percent,
-    in_envelope: inEnvelope,
-    envelope_status: envelopeStatus,
-    envelope_deviation: envelopeDeviation
-  };
+/**
+ * Select optimal position for an item to bring CG closest to target
+ * Implements the bilateral loading algorithm per T.O. 1C-17A-9
+ */
+export function selectOptimalPosition(
+  weight: number,
+  length: number,
+  currentCG: CGResult,
+  targetCGPercent: number,
+  availablePositions: { x: number; y: number }[],
+  aircraftSpec: AircraftSpec
+): { x: number; y: number; newCGPercent: number } | null {
+  if (availablePositions.length === 0) return null;
+  
+  const candidates = availablePositions.map(pos => {
+    const result = calculateNewCGWithItem(
+      currentCG,
+      weight,
+      pos.x,
+      pos.y,
+      length,
+      aircraftSpec
+    );
+    return {
+      x: pos.x,
+      y: pos.y,
+      newCGPercent: result.newCGPercent,
+      newLateralCG: result.newLateralCG,
+      deviationFromTarget: Math.abs(result.newCGPercent - targetCGPercent),
+      lateralDeviation: Math.abs(result.newLateralCG)
+    };
+  });
+  
+  // Sort by deviation from target CG, then by lateral balance
+  candidates.sort((a, b) => {
+    const cgDiff = a.deviationFromTarget - b.deviationFromTarget;
+    if (Math.abs(cgDiff) > 0.1) return cgDiff;
+    return a.lateralDeviation - b.lateralDeviation;
+  });
+  
+  const best = candidates[0];
+  return { x: best.x, y: best.y, newCGPercent: best.newCGPercent };
 }
 
 export function getCoBStatusMessage(cob: CoBCalculation): string {

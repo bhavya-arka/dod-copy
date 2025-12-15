@@ -41,20 +41,57 @@ export function calculateTotalWeight(
 }
 
 // ============================================================================
-// CENTER OF BALANCE CALCULATIONS  
+// CENTER OF BALANCE CALCULATIONS
+// Enhanced with physics-based moment summation per T.O. 1C-17A-9 / T.O. 1C-130H-9  
 // ============================================================================
 
+/**
+ * Calculate moment (inch-pounds) = Weight (pounds) × Arm (inches from datum)
+ */
 export function calculateMoment(weight: number, position: number): number {
   return weight * position;
 }
 
+/**
+ * Get target CG percentage (center of envelope)
+ */
+export function getTargetCGPercent(spec: AircraftSpec): number {
+  return (spec.cob_min_percent + spec.cob_max_percent) / 2;
+}
+
+/**
+ * Convert station position to %MAC
+ * %MAC = ((CG_Station - LEMAC) / MAC_Length) × 100
+ */
+export function stationToMACPercent(stationCG: number, spec: AircraftSpec): number {
+  return ((stationCG - spec.lemac_station) / spec.mac_length) * 100;
+}
+
+/**
+ * Convert %MAC to station position
+ */
+export function macPercentToStation(macPercent: number, spec: AircraftSpec): number {
+  return spec.lemac_station + (macPercent / 100) * spec.mac_length;
+}
+
+/**
+ * Calculate Center of Balance from placements with lateral CG support
+ * 
+ * Physics Principles (per USAF T.O.):
+ *   Moment (inch-pounds) = Weight (pounds) × Arm (inches from datum)
+ *   CG (station inches) = Total Moment / Total Weight  
+ *   %MAC = ((CG_Station - LEMAC) / MAC_Length) × 100
+ */
 export function calculateCoBFromPlacements(
   pallets: PalletPlacement[],
   vehicles: VehiclePlacement[],
-  spec: AircraftSpec
+  spec: AircraftSpec,
+  paxCount: number = 0,
+  paxWeight: number = 0
 ): CoBCalculation {
   let totalWeight = 0;
   let totalMoment = 0;
+  let totalLateralMoment = 0;
 
   // Get bay start from first station RDL (245" for C-130, 245" for C-17 position 1)
   const bayStart = spec.stations[0]?.rdl_distance || 245;
@@ -68,8 +105,11 @@ export function calculateCoBFromPlacements(
       ? p.x_start_in + (PALLET_463L.length / 2)
       : p.position_coord;
     const stationArm = solverArm + bayStart;
+    const lateralPosition = p.lateral_placement?.y_center_in ?? 0;
+    
     totalWeight += weight;
     totalMoment += weight * stationArm;
+    totalLateralMoment += weight * lateralPosition;
   }
 
   // Vehicle position.z is 0-based from cargo bay start
@@ -78,18 +118,47 @@ export function calculateCoBFromPlacements(
     const weight = v.weight;
     const solverArm = v.position.z;
     const stationArm = solverArm + bayStart;
+    const lateralPosition = v.lateral_placement?.y_center_in ?? v.position.x;
+    
     totalWeight += weight;
     totalMoment += weight * stationArm;
+    totalLateralMoment += weight * lateralPosition;
+  }
+
+  // Include PAX weight in CoB calculation
+  // PAX seat position: forward troop seats are typically at ~40% of cargo bay length
+  if (paxCount > 0 && paxWeight > 0) {
+    const paxSolverArm = spec.cargo_length * 0.4;
+    const paxStationArm = paxSolverArm + bayStart;
+    totalWeight += paxWeight;
+    totalMoment += paxWeight * paxStationArm;
+    // PAX assumed to be symmetrically distributed (no lateral moment)
   }
 
   // Calculate CG station (inches from aircraft datum)
-  const cgStation = totalWeight > 0 ? totalMoment / totalWeight : 0;
+  const cgStation = totalWeight > 0 ? totalMoment / totalWeight : bayStart;
+  
+  // Calculate lateral CG (deviation from centerline)
+  const lateralCG = totalWeight > 0 ? totalLateralMoment / totalWeight : 0;
   
   // Calculate CoB as percentage of MAC using correct formula
   // CoB% = ((CG Station - LEMAC) / MAC Length) × 100
+  const targetCGPercent = getTargetCGPercent(spec);
   const cobPercent = totalWeight > 0 
     ? ((cgStation - spec.lemac_station) / spec.mac_length) * 100
-    : 0;
+    : targetCGPercent; // Empty aircraft defaults to target
+
+  // Determine envelope status
+  let envelopeStatus: 'in_envelope' | 'forward_limit' | 'aft_limit' = 'in_envelope';
+  let envelopeDeviation = 0;
+  
+  if (cobPercent < spec.cob_min_percent) {
+    envelopeStatus = 'forward_limit';
+    envelopeDeviation = spec.cob_min_percent - cobPercent;
+  } else if (cobPercent > spec.cob_max_percent) {
+    envelopeStatus = 'aft_limit';
+    envelopeDeviation = cobPercent - spec.cob_max_percent;
+  }
 
   return {
     total_weight: totalWeight,
@@ -98,7 +167,10 @@ export function calculateCoBFromPlacements(
     cob_percent: cobPercent,
     min_allowed: spec.cob_min_percent,
     max_allowed: spec.cob_max_percent,
-    in_envelope: cobPercent >= spec.cob_min_percent && cobPercent <= spec.cob_max_percent
+    in_envelope: cobPercent >= spec.cob_min_percent && cobPercent <= spec.cob_max_percent,
+    envelope_status: envelopeStatus,
+    envelope_deviation: envelopeDeviation,
+    lateral_cg: lateralCG
   };
 }
 

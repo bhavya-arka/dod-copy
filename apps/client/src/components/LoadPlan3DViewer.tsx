@@ -43,12 +43,20 @@ type CargoItem = {
   hazmat?: boolean;
 };
 
+interface MeasureState {
+  firstPoint: THREE.Vector3 | null;
+  secondPoint: THREE.Vector3 | null;
+  hoverPoint: THREE.Vector3 | null;
+  snapType: 'vertex' | 'edge' | 'surface' | null;
+}
+
 interface ViewerState {
   selectedCargo: CargoItem | null;
   viewMode: ViewMode;
   showHeatmap: boolean;
   showMinimap: boolean;
   showMeasure: boolean;
+  measureState: MeasureState;
 }
 
 enum Controls {
@@ -59,6 +67,7 @@ enum Controls {
   reset = 'reset',
   measure = 'measure',
   heatmap = 'heatmap',
+  escape = 'escape',
 }
 
 const keyMap = [
@@ -69,6 +78,7 @@ const keyMap = [
   { name: Controls.reset, keys: ['KeyR'] },
   { name: Controls.measure, keys: ['KeyM'] },
   { name: Controls.heatmap, keys: ['KeyH'] },
+  { name: Controls.escape, keys: ['Escape'] },
 ];
 
 function CameraController({ 
@@ -76,13 +86,17 @@ function CameraController({
   length,
   onReset,
   onMeasureToggle,
-  onHeatmapToggle
+  onHeatmapToggle,
+  onMeasureReset,
+  showMeasure
 }: { 
   centerZ: number; 
   length: number;
   onReset: () => void;
   onMeasureToggle: () => void;
   onHeatmapToggle: () => void;
+  onMeasureReset: () => void;
+  showMeasure: boolean;
 }) {
   const { camera } = useThree();
   const [subscribe, getState] = useKeyboardControls<Controls>();
@@ -120,6 +134,17 @@ function CameraController({
       }
     );
   }, [subscribe, onHeatmapToggle]);
+
+  useEffect(() => {
+    return subscribe(
+      (state) => state.escape,
+      (pressed) => {
+        if (pressed && showMeasure) {
+          onMeasureReset();
+        }
+      }
+    );
+  }, [subscribe, onMeasureReset, showMeasure]);
 
   useFrame((_, delta) => {
     const state = getState();
@@ -898,6 +923,387 @@ function Vehicle3D({
   );
 }
 
+function getVerticesFromGeometry(
+  geometry: THREE.BufferGeometry,
+  object: THREE.Object3D
+): THREE.Vector3[] {
+  const vertices: THREE.Vector3[] = [];
+  const positionAttribute = geometry.getAttribute('position');
+  
+  if (!positionAttribute) return vertices;
+  
+  const worldMatrix = object.matrixWorld;
+  
+  for (let i = 0; i < positionAttribute.count; i++) {
+    const vertex = new THREE.Vector3(
+      positionAttribute.getX(i),
+      positionAttribute.getY(i),
+      positionAttribute.getZ(i)
+    );
+    vertex.applyMatrix4(worldMatrix);
+    vertices.push(vertex);
+  }
+  
+  return vertices;
+}
+
+interface FaceIndices {
+  a: number;
+  b: number;
+  c: number;
+}
+
+function getEdgeMidpointsFromGeometry(
+  geometry: THREE.BufferGeometry,
+  object: THREE.Object3D,
+  face: FaceIndices | null | undefined
+): THREE.Vector3[] {
+  const midpoints: THREE.Vector3[] = [];
+  
+  if (!face) return midpoints;
+  
+  const positionAttribute = geometry.getAttribute('position');
+  if (!positionAttribute) return midpoints;
+  
+  const worldMatrix = object.matrixWorld;
+  
+  const indices = [face.a, face.b, face.c];
+  if (indices.some(idx => idx < 0 || idx >= positionAttribute.count)) {
+    return midpoints;
+  }
+  
+  const faceVertices = indices.map(idx => {
+    const v = new THREE.Vector3(
+      positionAttribute.getX(idx),
+      positionAttribute.getY(idx),
+      positionAttribute.getZ(idx)
+    );
+    v.applyMatrix4(worldMatrix);
+    return v;
+  });
+  
+  for (let i = 0; i < 3; i++) {
+    const start = faceVertices[i];
+    const end = faceVertices[(i + 1) % 3];
+    const midpoint = new THREE.Vector3().lerpVectors(start, end, 0.5);
+    midpoints.push(midpoint);
+  }
+  
+  return midpoints;
+}
+
+function findNearestPoint(
+  target: THREE.Vector3,
+  candidates: THREE.Vector3[],
+  threshold: number
+): { point: THREE.Vector3; distance: number } | null {
+  let nearest: { point: THREE.Vector3; distance: number } | null = null;
+  
+  for (const candidate of candidates) {
+    const dist = target.distanceTo(candidate);
+    if (dist <= threshold && (!nearest || dist < nearest.distance)) {
+      nearest = { point: candidate.clone(), distance: dist };
+    }
+  }
+  
+  return nearest;
+}
+
+function findSnapPoint(
+  hitPoint: THREE.Vector3,
+  hitObject: THREE.Object3D,
+  face: FaceIndices | null | undefined,
+  snapThreshold: number = 0.15
+): { point: THREE.Vector3; snapType: 'vertex' | 'edge' | 'surface' } {
+  const mesh = hitObject as THREE.Mesh;
+  if (!mesh.geometry) {
+    return { point: hitPoint.clone(), snapType: 'surface' };
+  }
+  
+  const geometry = mesh.geometry as THREE.BufferGeometry;
+  
+  const vertices = getVerticesFromGeometry(geometry, hitObject);
+  const nearestVertex = findNearestPoint(hitPoint, vertices, snapThreshold);
+  if (nearestVertex) {
+    return { point: nearestVertex.point, snapType: 'vertex' };
+  }
+  
+  const edgeMidpoints = getEdgeMidpointsFromGeometry(geometry, hitObject, face);
+  const nearestEdge = findNearestPoint(hitPoint, edgeMidpoints, snapThreshold * 0.8);
+  if (nearestEdge) {
+    return { point: nearestEdge.point, snapType: 'edge' };
+  }
+  
+  return { point: hitPoint.clone(), snapType: 'surface' };
+}
+
+function SnapMarker({ 
+  position, 
+  snapType 
+}: { 
+  position: THREE.Vector3; 
+  snapType: 'vertex' | 'edge' | 'surface';
+}) {
+  const color = snapType === 'vertex' ? '#ff0000' : snapType === 'edge' ? '#ff8800' : '#ffff00';
+  const size = snapType === 'vertex' ? 0.08 : snapType === 'edge' ? 0.06 : 0.05;
+  
+  return (
+    <group position={position}>
+      <mesh>
+        <sphereGeometry args={[size, 16, 16]} />
+        <meshBasicMaterial color={color} />
+      </mesh>
+      {snapType === 'vertex' && (
+        <>
+          <mesh rotation={[0, 0, 0]}>
+            <boxGeometry args={[0.02, 0.2, 0.02]} />
+            <meshBasicMaterial color="#ffffff" />
+          </mesh>
+          <mesh rotation={[0, 0, Math.PI / 2]}>
+            <boxGeometry args={[0.02, 0.2, 0.02]} />
+            <meshBasicMaterial color="#ffffff" />
+          </mesh>
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <boxGeometry args={[0.02, 0.2, 0.02]} />
+            <meshBasicMaterial color="#ffffff" />
+          </mesh>
+        </>
+      )}
+    </group>
+  );
+}
+
+function MeasurementLine({ 
+  point1, 
+  point2,
+  scale
+}: { 
+  point1: THREE.Vector3; 
+  point2: THREE.Vector3;
+  scale: number;
+}) {
+  const distance = point1.distanceTo(point2);
+  const distanceInches = distance / scale;
+  const midpoint = useMemo(() => new THREE.Vector3().lerpVectors(point1, point2, 0.5), [point1, point2]);
+  
+  const lineGeometry = useMemo(() => {
+    const geometry = new THREE.BufferGeometry();
+    const points = [point1, point2];
+    geometry.setFromPoints(points);
+    return geometry;
+  }, [point1, point2]);
+  
+  const deltaX = Math.abs((point2.x - point1.x) / scale);
+  const deltaY = Math.abs((point2.y - point1.y) / scale);
+  const deltaZ = Math.abs((point2.z - point1.z) / scale);
+  
+  const lineRef = useRef<THREE.Line>(null);
+  
+  useEffect(() => {
+    if (lineRef.current) {
+      lineRef.current.computeLineDistances();
+    }
+  }, [lineGeometry]);
+  
+  return (
+    <group>
+      <primitive object={new THREE.Line(
+        lineGeometry,
+        new THREE.LineDashedMaterial({ color: '#ffff00', dashSize: 0.05, gapSize: 0.03 })
+      )} ref={lineRef} />
+      
+      <SnapMarker position={point1} snapType="vertex" />
+      <SnapMarker position={point2} snapType="vertex" />
+      
+      <Html position={midpoint} center style={{ pointerEvents: 'none' }}>
+        <div className="bg-black/90 text-white px-3 py-2 rounded-lg shadow-lg text-sm font-mono">
+          <div className="text-yellow-400 font-bold text-center mb-1">
+            {distanceInches.toFixed(1)}"
+          </div>
+          <div className="text-xs text-slate-300 space-y-0.5">
+            <div>ΔX: {deltaX.toFixed(1)}"</div>
+            <div>ΔY: {deltaY.toFixed(1)}"</div>
+            <div>ΔZ: {deltaZ.toFixed(1)}"</div>
+          </div>
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+function MeasureTool({
+  measureState,
+  onMeasureClick,
+  onHoverPoint,
+  scale
+}: {
+  measureState: MeasureState;
+  onMeasureClick: (point: THREE.Vector3, snapType: 'vertex' | 'edge' | 'surface') => void;
+  onHoverPoint: (point: THREE.Vector3 | null, snapType: 'vertex' | 'edge' | 'surface' | null) => void;
+  scale: number;
+}) {
+  const { camera, scene, gl } = useThree();
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+  
+  const handlePointerMove = useCallback((event: PointerEvent) => {
+    const rect = gl.domElement.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    
+    raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+    
+    const meshes = scene.children.filter(child => 
+      child instanceof THREE.Mesh || child instanceof THREE.Group
+    );
+    
+    const intersects = raycaster.intersectObjects(meshes, true);
+    
+    if (intersects.length > 0) {
+      const hit = intersects[0];
+      const face = hit.face ?? undefined;
+      const { point, snapType } = findSnapPoint(hit.point, hit.object, face, 0.15);
+      onHoverPoint(point, snapType);
+    } else {
+      onHoverPoint(null, null);
+    }
+  }, [camera, scene, gl, raycaster, onHoverPoint]);
+  
+  const handleClick = useCallback((event: MouseEvent) => {
+    const rect = gl.domElement.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    
+    raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+    
+    const meshes = scene.children.filter(child => 
+      child instanceof THREE.Mesh || child instanceof THREE.Group
+    );
+    
+    const intersects = raycaster.intersectObjects(meshes, true);
+    
+    if (intersects.length > 0) {
+      const hit = intersects[0];
+      const face = hit.face ?? undefined;
+      const { point, snapType } = findSnapPoint(hit.point, hit.object, face, 0.15);
+      onMeasureClick(point, snapType);
+    }
+  }, [camera, scene, gl, raycaster, onMeasureClick]);
+  
+  useEffect(() => {
+    const canvas = gl.domElement;
+    canvas.addEventListener('pointermove', handlePointerMove);
+    canvas.addEventListener('click', handleClick);
+    canvas.style.cursor = 'crosshair';
+    
+    return () => {
+      canvas.removeEventListener('pointermove', handlePointerMove);
+      canvas.removeEventListener('click', handleClick);
+      canvas.style.cursor = 'auto';
+    };
+  }, [gl, handlePointerMove, handleClick]);
+  
+  return (
+    <group>
+      {measureState.hoverPoint && !measureState.secondPoint && (
+        <SnapMarker 
+          position={measureState.hoverPoint} 
+          snapType={measureState.snapType || 'surface'} 
+        />
+      )}
+      
+      {measureState.firstPoint && !measureState.secondPoint && (
+        <SnapMarker position={measureState.firstPoint} snapType="vertex" />
+      )}
+      
+      {measureState.firstPoint && measureState.hoverPoint && !measureState.secondPoint && (
+        <group>
+          <line>
+            <bufferGeometry>
+              <bufferAttribute
+                attach="attributes-position"
+                count={2}
+                array={new Float32Array([
+                  measureState.firstPoint.x, measureState.firstPoint.y, measureState.firstPoint.z,
+                  measureState.hoverPoint.x, measureState.hoverPoint.y, measureState.hoverPoint.z
+                ])}
+                itemSize={3}
+              />
+            </bufferGeometry>
+            <lineBasicMaterial color="#ffff00" opacity={0.5} transparent />
+          </line>
+        </group>
+      )}
+      
+      {measureState.firstPoint && measureState.secondPoint && (
+        <MeasurementLine 
+          point1={measureState.firstPoint} 
+          point2={measureState.secondPoint}
+          scale={scale}
+        />
+      )}
+    </group>
+  );
+}
+
+function MeasureHUD({ 
+  measureState, 
+  scale,
+  onReset 
+}: { 
+  measureState: MeasureState;
+  scale: number;
+  onReset: () => void;
+}) {
+  if (!measureState.firstPoint && !measureState.secondPoint) {
+    return (
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-slate-900/95 px-4 py-2 rounded-lg text-white text-sm z-10">
+        <span className="text-yellow-400">📏 Measure Mode:</span> Click on surfaces to measure distances
+      </div>
+    );
+  }
+  
+  if (measureState.firstPoint && !measureState.secondPoint) {
+    return (
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-slate-900/95 px-4 py-2 rounded-lg text-white text-sm z-10">
+        <span className="text-green-400">✓ First point set.</span> Click to set second point. <span className="text-slate-400">(ESC to cancel)</span>
+      </div>
+    );
+  }
+  
+  if (measureState.firstPoint && measureState.secondPoint) {
+    const distance = measureState.firstPoint.distanceTo(measureState.secondPoint);
+    const distanceInches = distance / scale;
+    const deltaX = Math.abs((measureState.secondPoint.x - measureState.firstPoint.x) / scale);
+    const deltaY = Math.abs((measureState.secondPoint.y - measureState.firstPoint.y) / scale);
+    const deltaZ = Math.abs((measureState.secondPoint.z - measureState.firstPoint.z) / scale);
+    
+    return (
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-slate-900/95 px-4 py-3 rounded-lg text-white z-10 shadow-xl">
+        <div className="flex items-center gap-4">
+          <div className="text-center">
+            <div className="text-yellow-400 font-bold text-xl">{distanceInches.toFixed(1)}"</div>
+            <div className="text-slate-400 text-xs">({(distanceInches / 12).toFixed(2)} ft)</div>
+          </div>
+          <div className="border-l border-slate-600 pl-4 text-xs text-slate-300 font-mono">
+            <div>ΔX: {deltaX.toFixed(1)}"</div>
+            <div>ΔY: {deltaY.toFixed(1)}"</div>
+            <div>ΔZ: {deltaZ.toFixed(1)}"</div>
+          </div>
+          <button 
+            onClick={onReset}
+            className="ml-2 px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm"
+          >
+            Reset
+          </button>
+        </div>
+        <div className="text-slate-400 text-xs mt-2 text-center">Click again or press ESC to start new measurement</div>
+      </div>
+    );
+  }
+  
+  return null;
+}
+
 function CenterOfBalance({ loadPlan, scale, viewMode }: { loadPlan: AircraftLoadPlan; scale: number; viewMode: ViewMode }) {
   // center_of_balance is in station coordinates (aircraft datum reference)
   // 3D model uses 0-based coordinates from cargo bay start
@@ -954,7 +1360,10 @@ function Scene({
   onSelectCargo,
   onReset,
   onMeasureToggle,
-  onHeatmapToggle
+  onHeatmapToggle,
+  onMeasureClick,
+  onMeasureHover,
+  onMeasureReset
 }: { 
   loadPlan: AircraftLoadPlan;
   viewerState: ViewerState;
@@ -962,6 +1371,9 @@ function Scene({
   onReset: () => void;
   onMeasureToggle: () => void;
   onHeatmapToggle: () => void;
+  onMeasureClick: (point: THREE.Vector3, snapType: 'vertex' | 'edge' | 'surface') => void;
+  onMeasureHover: (point: THREE.Vector3 | null, snapType: 'vertex' | 'edge' | 'surface' | null) => void;
+  onMeasureReset: () => void;
 }) {
   const scale = 0.01;
   const spec = loadPlan.aircraft_spec;
@@ -1050,16 +1462,34 @@ function Scene({
         rotation={[0, 0, 0]}
       />
       
+      {viewerState.showMeasure && (
+        <MeasureTool
+          measureState={viewerState.measureState}
+          onMeasureClick={onMeasureClick}
+          onHoverPoint={onMeasureHover}
+          scale={scale}
+        />
+      )}
+      
       <CameraController 
         centerZ={centerZ} 
         length={length}
         onReset={onReset}
         onMeasureToggle={onMeasureToggle}
         onHeatmapToggle={onHeatmapToggle}
+        onMeasureReset={onMeasureReset}
+        showMeasure={viewerState.showMeasure}
       />
     </>
   );
 }
+
+const initialMeasureState: MeasureState = {
+  firstPoint: null,
+  secondPoint: null,
+  hoverPoint: null,
+  snapType: null
+};
 
 export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
   const [viewerState, setViewerState] = useState<ViewerState>({
@@ -1067,7 +1497,8 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
     viewMode: 'normal',
     showHeatmap: false,
     showMinimap: true,
-    showMeasure: false
+    showMeasure: false,
+    measureState: initialMeasureState
   });
   const [isFullscreen, setIsFullscreen] = useState(false);
   
@@ -1090,7 +1521,11 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
   }, []);
   
   const handleMeasureToggle = useCallback(() => {
-    setViewerState(prev => ({ ...prev, showMeasure: !prev.showMeasure }));
+    setViewerState(prev => ({ 
+      ...prev, 
+      showMeasure: !prev.showMeasure,
+      measureState: !prev.showMeasure ? initialMeasureState : prev.measureState
+    }));
   }, []);
   
   const handleHeatmapToggle = useCallback(() => {
@@ -1103,6 +1538,63 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
   
   const handleReset = useCallback(() => {
     setViewerState(prev => ({ ...prev, selectedCargo: null }));
+  }, []);
+  
+  const handleMeasureClick = useCallback((point: THREE.Vector3, snapType: 'vertex' | 'edge' | 'surface') => {
+    setViewerState(prev => {
+      const ms = prev.measureState;
+      
+      if (!ms.firstPoint) {
+        return {
+          ...prev,
+          measureState: {
+            ...ms,
+            firstPoint: point.clone(),
+            secondPoint: null,
+            snapType
+          }
+        };
+      }
+      
+      if (!ms.secondPoint) {
+        return {
+          ...prev,
+          measureState: {
+            ...ms,
+            secondPoint: point.clone(),
+            snapType
+          }
+        };
+      }
+      
+      return {
+        ...prev,
+        measureState: {
+          firstPoint: point.clone(),
+          secondPoint: null,
+          hoverPoint: null,
+          snapType
+        }
+      };
+    });
+  }, []);
+  
+  const handleMeasureHover = useCallback((point: THREE.Vector3 | null, snapType: 'vertex' | 'edge' | 'surface' | null) => {
+    setViewerState(prev => ({
+      ...prev,
+      measureState: {
+        ...prev.measureState,
+        hoverPoint: point ? point.clone() : null,
+        snapType: snapType
+      }
+    }));
+  }, []);
+  
+  const handleMeasureReset = useCallback(() => {
+    setViewerState(prev => ({
+      ...prev,
+      measureState: initialMeasureState
+    }));
   }, []);
   
   const viewerContent = (
@@ -1145,6 +1637,9 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
               onReset={handleReset}
               onMeasureToggle={handleMeasureToggle}
               onHeatmapToggle={handleHeatmapToggle}
+              onMeasureClick={handleMeasureClick}
+              onMeasureHover={handleMeasureHover}
+              onMeasureReset={handleMeasureReset}
             />
           </Canvas>
         </KeyboardControls>
@@ -1167,6 +1662,14 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
         
         {viewerState.showMinimap && (
           <MiniMap loadPlan={loadPlan} scale={scale} />
+        )}
+        
+        {viewerState.showMeasure && (
+          <MeasureHUD 
+            measureState={viewerState.measureState} 
+            scale={scale}
+            onReset={handleMeasureReset}
+          />
         )}
       </div>
       
@@ -1195,7 +1698,7 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
             <span>PAX Weight: <strong>{((loadPlan.pax_weight || loadPlan.pax_count * PAX_WEIGHT_LB) / 1000).toFixed(1)}k lbs</strong></span>
             <span>Seat Util: <strong className={`${(loadPlan.seat_utilization_percent || 0) > 80 ? 'text-amber-600' : ''}`}>{(loadPlan.seat_utilization_percent || 0).toFixed(1)}%</strong></span>
           </div>
-          <span className="text-neutral-400 text-xs">WASD to move • R to reset • Click cargo to select</span>
+          <span className="text-neutral-400 text-xs">WASD to move • R reset • M measure • ESC cancel</span>
         </div>
       </div>
     </>

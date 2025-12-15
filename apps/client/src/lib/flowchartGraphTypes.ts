@@ -118,10 +118,7 @@ export interface MissionGraphState {
   routeLegs: Map<string, RouteLegEdgeData[]>;
 }
 
-export function createFlightNode(
-  flight: SplitFlight,
-  position: { x: number; y: number }
-): FlightGraphNode {
+export function createFlightNodeData(flight: SplitFlight): FlightNodeData {
   const weight = calculateFlightWeight(flight);
   const validation = validateFlightLoad(flight);
   const maxPayload = flight.aircraft_type === 'C-17' ? 170900 : 42000;
@@ -145,33 +142,62 @@ export function createFlightNode(
   const hasHazmat = flight.pallets.some(p => p.pallet.hazmat_flag);
   
   return {
-    id: `flight-${flight.id}`,
+    nodeType: 'flight',
+    flightId: flight.id,
+    callsign: flight.callsign,
+    displayName: flight.display_name,
+    aircraftType: flight.aircraft_type,
+    summary: {
+      paxCount: flight.pax_count,
+      totalWeight: weight,
+      palletCount: flight.pallets.length,
+      rollingStockCount: flight.rolling_stock.length,
+    },
+    statusFlags: {
+      hasWarnings: warningMessages.length > 0,
+      hasErrors: errorMessages.length > 0 || !validation.valid,
+      warningMessages,
+      errorMessages: [...errorMessages, ...validation.issues],
+      isOverloaded: weight > maxPayload,
+      hasHazmat,
+      hasNoRoute,
+    },
+    originBaseId: flight.origin?.base_id,
+    destinationBaseId: flight.destination?.base_id,
+  };
+}
+
+export function createFlightNode(
+  flight: SplitFlight,
+  position: { x: number; y: number }
+): FlightGraphNode {
+  return {
+    id: getCanonicalFlightNodeId(flight.id),
     type: 'flight',
     position,
-    data: {
-      nodeType: 'flight',
-      flightId: flight.id,
-      callsign: flight.callsign,
-      displayName: flight.display_name,
-      aircraftType: flight.aircraft_type,
-      summary: {
-        paxCount: flight.pax_count,
-        totalWeight: weight,
-        palletCount: flight.pallets.length,
-        rollingStockCount: flight.rolling_stock.length,
-      },
-      statusFlags: {
-        hasWarnings: warningMessages.length > 0,
-        hasErrors: errorMessages.length > 0 || !validation.valid,
-        warningMessages,
-        errorMessages: [...errorMessages, ...validation.issues],
-        isOverloaded: weight > maxPayload,
-        hasHazmat,
-        hasNoRoute,
-      },
-      originBaseId: flight.origin?.base_id,
-      destinationBaseId: flight.destination?.base_id,
-    },
+    data: createFlightNodeData(flight),
+  };
+}
+
+export function createAirbaseNodeData(
+  base: MilitaryBase,
+  connectedFlights: { isOrigin: string[]; isDestination: string[] }
+): AirbaseNodeData {
+  const allConnected = Array.from(new Set([...connectedFlights.isOrigin, ...connectedFlights.isDestination]));
+  
+  return {
+    nodeType: 'airbase',
+    baseId: base.base_id,
+    name: base.name,
+    icao: base.icao,
+    country: base.country,
+    runwayLengthFt: base.runway_length_ft,
+    latitude: base.latitude_deg,
+    longitude: base.longitude_deg,
+    connectedFlightIds: allConnected,
+    isOriginFor: connectedFlights.isOrigin,
+    isDestinationFor: connectedFlights.isDestination,
+    isOrphan: allConnected.length === 0,
   };
 }
 
@@ -180,27 +206,24 @@ export function createAirbaseNode(
   position: { x: number; y: number },
   connectedFlights: { isOrigin: string[]; isDestination: string[] }
 ): AirbaseGraphNode {
-  const allConnected = Array.from(new Set([...connectedFlights.isOrigin, ...connectedFlights.isDestination]));
-  
   return {
-    id: `base-${base.base_id}`,
+    id: getCanonicalBaseNodeId(base.base_id),
     type: 'airbase',
     position,
-    data: {
-      nodeType: 'airbase',
-      baseId: base.base_id,
-      name: base.name,
-      icao: base.icao,
-      country: base.country,
-      runwayLengthFt: base.runway_length_ft,
-      latitude: base.latitude_deg,
-      longitude: base.longitude_deg,
-      connectedFlightIds: allConnected,
-      isOriginFor: connectedFlights.isOrigin,
-      isDestinationFor: connectedFlights.isDestination,
-      isOrphan: allConnected.length === 0,
-    },
+    data: createAirbaseNodeData(base, connectedFlights),
   };
+}
+
+export function getCanonicalFlightNodeId(flightId: string): string {
+  return `flight-${flightId}`;
+}
+
+export function getCanonicalBaseNodeId(baseId: string): string {
+  return `base-${baseId}`;
+}
+
+export function getCanonicalEdgeId(flightId: string, legIndex: number): string {
+  return `edge-${flightId}-leg-${legIndex}`;
 }
 
 export function createRouteLegEdge(
@@ -221,9 +244,9 @@ export function createRouteLegEdge(
   const fuelRequired = calculateFuelRequired(distance_nm, aircraftType);
   
   return {
-    id: `leg-${flightId}-${legIndex}`,
-    source: legIndex === 0 ? `flight-${flightId}` : `base-${fromBase.base_id}`,
-    target: `base-${toBase.base_id}`,
+    id: getCanonicalEdgeId(flightId, legIndex),
+    source: legIndex === 0 ? getCanonicalFlightNodeId(flightId) : getCanonicalBaseNodeId(fromBase.base_id),
+    target: getCanonicalBaseNodeId(toBase.base_id),
     type: 'default',
     animated: true,
     label: `${Math.round(distance_nm)}nm`,
