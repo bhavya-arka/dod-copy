@@ -834,14 +834,18 @@ function placeRollingStock(
       const best = improvingCandidates[0];
       bestPosition = { x: best.x, y: best.y, score: best.score, projectedCG: best.projectedCG };
     } else if (worseningCandidates.length > 0) {
-      // No improving positions - pick the one that stays closest to envelope
-      // Sort by: positions within envelope first, then by score
+      // No improving positions - pick the one that stays closest to envelope/target
+      // Sort by: 1) envelope compliance, 2) distance from target CG (NOT heuristic score)
       worseningCandidates.sort((a, b) => {
         const aInEnvelope = a.projectedCG >= aircraftSpec.cob_min_percent && a.projectedCG <= aircraftSpec.cob_max_percent;
         const bInEnvelope = b.projectedCG >= aircraftSpec.cob_min_percent && b.projectedCG <= aircraftSpec.cob_max_percent;
         if (aInEnvelope && !bInEnvelope) return -1;
         if (!aInEnvelope && bInEnvelope) return 1;
-        return a.score - b.score;
+        // Both in or both out of envelope - pick the one closest to TARGET CG
+        // Ignore heuristic score entirely - we want balance over "centrality"
+        const aDistFromTarget = Math.abs(a.projectedCG - targetCGPercent);
+        const bDistFromTarget = Math.abs(b.projectedCG - targetCGPercent);
+        return aDistFromTarget - bDistFromTarget;
       });
       const best = worseningCandidates[0];
       console.log(`[PlaceRollingStock] Chose worsening position: x=${best.x}, CG=${best.projectedCG.toFixed(1)}%, inEnv=${best.projectedCG >= 16 && best.projectedCG <= 40}`);
@@ -1307,11 +1311,26 @@ export function solveAircraftAllocation(
   
   const advonIds = new Set(classifiedItems.advon_items.map(i => i.item_id));
   
+  const advonPaxItems = classifiedItems.pax_items.filter(i => advonIds.has(i.item_id));
+  const mainPaxItems = classifiedItems.pax_items.filter(i => !advonIds.has(i.item_id));
+  
+  // Debug PAX allocation to trace doubling
+  const advonPaxTotal = advonPaxItems.reduce((sum, p) => sum + (p.pax_count || 1), 0);
+  const mainPaxTotal = mainPaxItems.reduce((sum, p) => sum + (p.pax_count || 1), 0);
+  console.log('[AircraftSolver] PAX split:', {
+    advonPaxItems: advonPaxItems.length,
+    advonPaxTotal,
+    mainPaxItems: mainPaxItems.length,
+    mainPaxTotal,
+    totalPaxItems: classifiedItems.pax_items.length,
+    paxItemDetails: classifiedItems.pax_items.map(p => ({ id: p.item_id, pax_count: p.pax_count, advon: advonIds.has(p.item_id) }))
+  });
+  
   const advonInput: SolverInput = {
     rolling_stock: classifiedItems.rolling_stock.filter(i => advonIds.has(i.item_id)),
     prebuilt_pallets: classifiedItems.prebuilt_pallets.filter(i => advonIds.has(i.item_id)),
     loose_items: classifiedItems.loose_items.filter(i => advonIds.has(i.item_id)),
-    pax_items: classifiedItems.pax_items.filter(i => advonIds.has(i.item_id)),
+    pax_items: advonPaxItems,
     phase: 'ADVON'
   };
   
@@ -1319,7 +1338,7 @@ export function solveAircraftAllocation(
     rolling_stock: classifiedItems.rolling_stock.filter(i => !advonIds.has(i.item_id)),
     prebuilt_pallets: classifiedItems.prebuilt_pallets.filter(i => !advonIds.has(i.item_id)),
     loose_items: classifiedItems.loose_items.filter(i => !advonIds.has(i.item_id)),
-    pax_items: classifiedItems.pax_items.filter(i => !advonIds.has(i.item_id)),
+    pax_items: mainPaxItems,
     phase: 'MAIN'
   };
   
