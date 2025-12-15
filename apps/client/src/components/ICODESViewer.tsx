@@ -464,10 +464,6 @@ export default function ICODESViewer({
                 Spreadsheet
               </button>
             </div>
-            <div className="text-center px-3 py-1 bg-blue-50 rounded-lg border border-blue-100">
-              <p className="text-blue-600 font-bold text-lg">{usedPositions}/{totalPositions}</p>
-              <p className="text-blue-500 text-xs">positions</p>
-            </div>
             <div className="text-right">
               <p className="text-neutral-900 font-mono font-medium">
                 {loadPlan.total_weight.toLocaleString()} lbs
@@ -607,10 +603,6 @@ export default function ICODESViewer({
                     <p className="text-neutral-500">{spec.name}</p>
                   </div>
                   <div className="flex items-center gap-4 text-sm">
-                    <div className="px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-100">
-                      <span className="text-blue-700 font-bold">{usedPositions}/{totalPositions}</span>
-                      <span className="text-blue-500 ml-1">positions used</span>
-                    </div>
                     <div className="px-3 py-1.5 bg-neutral-100 rounded-lg">
                       <span className="text-neutral-600">Cargo: </span>
                       <span className="text-neutral-900 font-medium">{spec.cargo_length}" × {spec.cargo_width}"</span>

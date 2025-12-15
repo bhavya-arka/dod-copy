@@ -95,12 +95,18 @@ function sortPalletsWithWeaponsPriority(pallets: Pallet463L[]): Pallet463L[] {
 export function calculateCenterOfBalance(
   pallets: PalletPlacement[],
   vehicles: VehiclePlacement[],
-  aircraftSpec: AircraftSpec
+  aircraftSpec: AircraftSpec,
+  paxCount: number = 0,
+  paxWeight: number = 0
 ): CoBCalculation {
   let totalWeight = 0;
   let totalMoment = 0;
 
   const bayStart = aircraftSpec.stations[0]?.rdl_distance || 245;
+  
+  // PAX seat position: forward troop seats are typically at ~40% of cargo bay length
+  // For C-17: ~420" from bay start (station 665), for C-130: ~200" (station 445)
+  const paxSolverArm = aircraftSpec.cargo_length * 0.4;
 
   for (const p of pallets) {
     const weight = p.pallet.gross_weight;
@@ -118,6 +124,13 @@ export function calculateCenterOfBalance(
     const stationArm = solverArm + bayStart;
     totalWeight += weight;
     totalMoment += weight * stationArm;
+  }
+
+  // Include PAX weight in CoB calculation
+  if (paxCount > 0 && paxWeight > 0) {
+    const paxStationArm = paxSolverArm + bayStart;
+    totalWeight += paxWeight;
+    totalMoment += paxWeight * paxStationArm;
   }
 
   const stationCg = totalWeight > 0 ? totalMoment / totalWeight : bayStart;
@@ -737,7 +750,7 @@ function loadSingleAircraftFromQueue(
   const paxWeight = actualPaxCount * PAX_WEIGHT_LB;
   const finalTotalWeight = cargoWeight + paxWeight;
   
-  const cob = calculateCenterOfBalance(palletResult.placements, rsResult.placements, spec);
+  const cob = calculateCenterOfBalance(palletResult.placements, rsResult.placements, spec, actualPaxCount, paxWeight);
   
   const totalPositionsUsed = rsResult.placements.length + palletResult.placements.length;
   const maxUsableLength = spec.cargo_length;

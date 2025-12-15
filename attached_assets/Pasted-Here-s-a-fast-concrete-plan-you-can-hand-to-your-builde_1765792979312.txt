@@ -1,0 +1,147 @@
+Here’s a fast, concrete plan you can hand to your builder to get PAX showing up in 2D + 3D.
+
+1. Data model changes
+Extend flight state
+
+interface PaxGroup {
+  id: string;          // e.g. "PAX_GRP_1"
+  count: number;       // 1, 4, 20, etc.
+  weightPerPaxLb: number; // default config (e.g. 210), editable
+  seatZoneId?: string; // which seating zone they’re assigned to
+}
+
+interface Flight {
+  ...
+  paxGroups: PaxGroup[];
+  totalPax: number;    // derived = Σ count
+}
+Tie into your existing CSV parsing
+
+Use the PAX rows you already parse (1,1,4,4,20) → create PaxGroup entries.
+
+Ignore the “Total PAX 30” row except to cross‑check that Σ count == total.
+
+Seat zones per aircraft
+
+interface SeatZone {
+  id: string;          // e.g. "C17_SIDE_SEATS_FWD"
+  name: string;
+  capacity: number;
+  xStartIn: number;
+  xEndIn: number;
+  yOffsetIn: number;   // left/right wall
+}
+
+interface AircraftGeometry {
+  ...
+  seatZones: SeatZone[];
+}
+2. Allocation logic (how PAX get onto the jet)
+Auto‑allocation pass
+
+On upload or when pax count changes:
+
+Iterate through seatZones by priority (e.g. forward troop seats → mid → aft).
+
+Fill each zone until capacity.
+
+Store seatZoneId on each PaxGroup and track assignedCount.
+
+If pax > total capacity → flag error: “PAX exceed aircraft seat capacity by X”.
+
+Manual overrides
+
+In the Flight Manager, let user:
+
+Drag a pax group “pill” onto a seat zone.
+
+Adjust counts in a small dialog (e.g. split group 20 into 12+8 between zones).
+
+3. 2D view changes
+Add a PAX layer toggle
+
+Buttons: Cargo, Pallets, PAX, All.
+
+When PAX is on:
+
+Draw each SeatZone as a thin rectangle along cabin walls.
+
+Fill with a simple “seat fill bar”:
+
+Green: within capacity.
+
+Yellow: >80% full.
+
+Red: over capacity.
+
+Tooltips / details
+
+Hover on zone → show:
+
+Zone name
+
+Assigned pax / capacity
+
+Effective weight = assignedCount * weightPerPaxLb
+
+Clicking a zone opens a side panel to tweak pax distribution.
+
+4. 3D view changes
+Visual representation
+
+Don’t model individual chairs; just:
+
+For each SeatZone, draw a low‑height rectangular block hugging the wall.
+
+Color/opacity based on fill % (same green/yellow/red logic).
+
+Optional: add small human icons along the zone if you want prettier visuals.
+
+Interaction
+
+Hover → same tooltip as 2D.
+
+Clicking a zone opens the same pax editing panel used in 2D.
+
+5. CoB & weight integration
+Weight model
+
+For each PaxGroup, compute:
+
+groupWeight = count * weightPerPaxLb
+groupArmIn = center of assigned SeatZone (x midpoint)
+groupMoment = groupWeight * groupArmIn
+Add pax weight + moment into your existing CoB calculation.
+
+Configurable pax weight
+
+In settings per mission:
+
+standardPaxWeightLb (default 210 or whatever spec you want).
+
+Allow override per group (e.g. “light team” vs “heavily equipped”).
+
+Validation
+
+Show CoB with and without pax (simple toggle) so they can see the impact.
+
+If pax push CoB out of limits → show specific warning:
+
+“PAX distribution causing aft CoB; move group forward.”
+
+6. UX / flow glue
+Flights list
+
+Each flight card: Cargo: X pallets / Y lbs · PAX: N.
+
+Clicking PAX: N jumps directly to pax view for that flight.
+
+Error surfacing
+
+Global banner in Flight Manager if:
+
+Any flight has pax over capacity.
+
+CoB invalid with pax.
+
+Drill‑down link → takes you to the offending flight & seat zone.

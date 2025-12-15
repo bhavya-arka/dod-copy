@@ -808,7 +808,7 @@ export default function LoadPlanViewer({
 
               <div className="glass-card p-4">
                 <h3 className="text-neutral-900 font-bold mb-4">Load Summary</h3>
-                <div className="grid grid-cols-5 gap-4">
+                <div className="grid grid-cols-4 gap-4">
                   <div className="stat-card">
                     <p className="stat-label">Total Weight</p>
                     <p className="stat-value text-xl">
@@ -825,12 +825,6 @@ export default function LoadPlanViewer({
                     <p className="stat-label">Center of Balance</p>
                     <p className={`stat-value text-xl ${currentSelectedPlan.cob_in_envelope ? 'text-green-600' : 'text-red-600'}`}>
                       {currentSelectedPlan.cob_percent.toFixed(1)}%
-                    </p>
-                  </div>
-                  <div className="stat-card">
-                    <p className="stat-label">Positions Used</p>
-                    <p className="stat-value text-xl">
-                      {currentSelectedPlan.positions_used}/{currentSelectedPlan.positions_available}
                     </p>
                   </div>
                   <div className="stat-card">
