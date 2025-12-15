@@ -96,6 +96,7 @@ function App() {
         onDashboard={handleBackToDashboard}
         onLogout={handleLogout}
         userEmail={auth.user?.email}
+        loadPlanId={selectedPlanId}
       />
     </AuthContext.Provider>
   );

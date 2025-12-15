@@ -5,7 +5,7 @@
  * Orchestrates the complete workflow from upload to load plan generation.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AppScreen,
@@ -62,9 +62,10 @@ interface PACAPAppProps {
   onDashboard?: () => void;
   onLogout?: () => void;
   userEmail?: string;
+  loadPlanId?: number | null;
 }
 
-export default function PACAPApp({ onDashboard, onLogout, userEmail }: PACAPAppProps) {
+export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId }: PACAPAppProps) {
   const [state, setState] = useState<AppState>({
     currentScreen: 'upload',
     selectedAircraft: 'C-17',
@@ -75,6 +76,61 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail }: PACAPAppP
     isProcessing: false,
     error: null
   });
+
+  useEffect(() => {
+    if (loadPlanId) {
+      loadSavedPlan(loadPlanId);
+    }
+  }, [loadPlanId]);
+
+  const loadSavedPlan = async (planId: number) => {
+    setState(prev => ({ ...prev, isProcessing: true, error: null }));
+    
+    try {
+      const response = await fetch(`/api/flight-plans/${planId}`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to load flight plan');
+      }
+      
+      const plan = await response.json();
+      
+      if (plan.allocation_data && plan.movement_data) {
+        const allocationResult = plan.allocation_data as AllocationResult;
+        const movementData = plan.movement_data as ParseResult;
+        const classifiedItems = classifyItems(movementData);
+        
+        const movementInsights = analyzeMovementList(movementData.items, classifiedItems);
+        const allocationInsights = analyzeAllocation(allocationResult);
+        
+        const combinedInsights: InsightsSummary = {
+          ...movementInsights,
+          insights: [...movementInsights.insights, ...allocationInsights]
+        };
+
+        setState(prev => ({
+          ...prev,
+          movementData,
+          classifiedItems,
+          allocationResult,
+          insights: combinedInsights,
+          selectedAircraft: allocationResult.aircraft_type || 'C-17',
+          isProcessing: false,
+          currentScreen: 'mission_workspace'
+        }));
+      } else {
+        throw new Error('Flight plan has no saved data. Please upload a movement list.');
+      }
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        isProcessing: false,
+        error: error instanceof Error ? error.message : 'Failed to load flight plan'
+      }));
+    }
+  };
 
   const processMovementList = useCallback(async (content: string, filename: string) => {
     setState(prev => ({ ...prev, isProcessing: true, error: null }));
