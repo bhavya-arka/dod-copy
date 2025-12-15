@@ -49,6 +49,12 @@ Core data models include:
 
 ## December 2025
 
+### Rolling Stock Placement Bug Fix (15/12/2025)
+- **Bug**: Rolling stock items (vehicles like MHU-226, LOADER WEAPONS, TRACTOR TOW) were correctly classified but never loaded onto aircraft
+- **Root Cause**: Coordinate system mismatch - `placeRollingStock` used 0-based coordinates (0 to cargo_length), but the geometry module's `isWithinBounds` expected station-based coordinates (bay_start_in ~245 to bay_end). All items at position 0 failed bounds checking.
+- **Solution**: Added `isWithinSolverBounds` and `findSolverPosition` functions in `aircraftSolver.ts` that use 0-based coordinates consistent with the solver
+- **File**: `apps/client/src/lib/aircraftSolver.ts`
+
 ### Flight Manager Node Position Bug Fix (15/12/2025)
 - **Race Condition Fix**: Fixed bug where connecting flight/airport nodes would reset their positions
 - **Root Cause**: Positions weren't saved to `layoutRef` before graph regeneration due to async useEffect timing

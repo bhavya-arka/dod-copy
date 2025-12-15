@@ -166,6 +166,126 @@ export function getCoBStatusMessage(cob: CoBCalculation): string {
 // SECTION 7: ROLLING STOCK PLACEMENT (Dimension-based)
 // ============================================================================
 
+/**
+ * Simple 0-based bounds check for the solver's coordinate system.
+ * The solver uses 0-based positions (0 to cargo_length), not station-based (bay_start to bay_end).
+ */
+function isWithinSolverBounds(
+  box: { x_start: number; x_end: number; y_left: number; y_right: number; z_top: number },
+  halfWidth: number,
+  maxLength: number,
+  maxHeight: number
+): boolean {
+  if (box.x_start < 0) return false;
+  if (box.x_end > maxLength) return false;
+  if (box.y_left < -halfWidth) return false;
+  if (box.y_right > halfWidth) return false;
+  if (box.z_top > maxHeight) return false;
+  return true;
+}
+
+/**
+ * Find a non-overlapping position using 0-based coordinates.
+ * This replaces the geometry module's findNonOverlappingPosition which uses station-based coordinates.
+ */
+function findSolverPosition(
+  length: number,
+  width: number,
+  height: number,
+  existingPlacements: PlacedCargo[],
+  aircraftSpec: AircraftSpec,
+  startX: number,
+  spacing: number
+): { fits: boolean; x_start: number; y_center: number; side: 'center' | 'left' | 'right' } {
+  const halfItemWidth = width / 2;
+  const halfAircraftWidth = aircraftSpec.cargo_width / 2;
+  const maxX = aircraftSpec.cargo_length;
+  const maxHeight = aircraftSpec.main_deck_height;
+  
+  if (halfItemWidth > halfAircraftWidth) {
+    return { fits: false, x_start: startX, y_center: 0, side: 'center' };
+  }
+  
+  const candidatePositions: number[] = [startX];
+  const sortedExisting = [...existingPlacements].sort((a, b) => a.x_start_in - b.x_start_in);
+  
+  for (const item of sortedExisting) {
+    const posAfterItem = item.x_end_in + spacing;
+    if (posAfterItem >= startX && posAfterItem + length <= maxX) {
+      candidatePositions.push(posAfterItem);
+    }
+  }
+  
+  for (const x of candidatePositions) {
+    if (x + length > maxX) continue;
+    
+    const itemsInRange = sortedExisting.filter(e => 
+      e.x_start_in < x + length && e.x_end_in > x
+    );
+    
+    if (itemsInRange.length === 0) {
+      const box = {
+        x_start: x,
+        x_end: x + length,
+        y_left: -halfItemWidth,
+        y_right: halfItemWidth,
+        z_top: height
+      };
+      if (isWithinSolverBounds(box, halfAircraftWidth, maxX, maxHeight)) {
+        return { fits: true, x_start: x, y_center: 0, side: 'center' };
+      }
+    }
+    
+    const centerBox = {
+      x_start: x,
+      x_end: x + length,
+      y_left: -halfItemWidth,
+      y_right: halfItemWidth,
+      z_top: height
+    };
+    const centerCollides = itemsInRange.some(e => {
+      const overlap = Math.min(e.y_right_in, centerBox.y_right) - Math.max(e.y_left_in, centerBox.y_left);
+      return overlap > -spacing;
+    });
+    
+    if (!centerCollides && isWithinSolverBounds(centerBox, halfAircraftWidth, maxX, maxHeight)) {
+      return { fits: true, x_start: x, y_center: 0, side: 'center' };
+    }
+    
+    if (itemsInRange.length > 0) {
+      const leftmostItem = itemsInRange.reduce((min, item) => 
+        item.y_left_in < min.y_left_in ? item : min, itemsInRange[0]);
+      const leftCenter = leftmostItem.y_left_in - spacing - halfItemWidth;
+      const leftBox = {
+        x_start: x,
+        x_end: x + length,
+        y_left: leftCenter - halfItemWidth,
+        y_right: leftCenter + halfItemWidth,
+        z_top: height
+      };
+      if (isWithinSolverBounds(leftBox, halfAircraftWidth, maxX, maxHeight)) {
+        return { fits: true, x_start: x, y_center: leftCenter, side: 'left' };
+      }
+      
+      const rightmostItem = itemsInRange.reduce((max, item) => 
+        item.y_right_in > max.y_right_in ? item : max, itemsInRange[0]);
+      const rightCenter = rightmostItem.y_right_in + spacing + halfItemWidth;
+      const rightBox = {
+        x_start: x,
+        x_end: x + length,
+        y_left: rightCenter - halfItemWidth,
+        y_right: rightCenter + halfItemWidth,
+        z_top: height
+      };
+      if (isWithinSolverBounds(rightBox, halfAircraftWidth, maxX, maxHeight)) {
+        return { fits: true, x_start: x, y_center: rightCenter, side: 'right' };
+      }
+    }
+  }
+  
+  return { fits: false, x_start: startX, y_center: 0, side: 'center' };
+}
+
 function placeRollingStock(
   items: MovementItem[],
   aircraftSpec: AircraftSpec,
@@ -182,28 +302,32 @@ function placeRollingStock(
   const placements: VehiclePlacement[] = [];
   const unplaced: MovementItem[] = [];
   
-  const aircraftGeometry = createAircraftGeometry(aircraftSpec);
   const existingPlacements: PlacedCargo[] = [];
 
   const sortedItems = sortWithWeaponsPriority(items);
   const LONGITUDINAL_SPACING = 4;
   const LATERAL_SPACING = 2;
   const maxX = aircraftSpec.cargo_length;
+  const halfAircraftWidth = aircraftSpec.cargo_width / 2;
+  const maxHeight = aircraftSpec.main_deck_height;
 
   let currentX = startX;
 
   for (const item of sortedItems) {
     if (item.width_in > aircraftSpec.ramp_clearance_width) {
+      console.log(`[PlaceRollingStock] Item ${item.description} too wide: ${item.width_in} > ${aircraftSpec.ramp_clearance_width}`);
       unplaced.push(item);
       continue;
     }
 
     if (item.height_in > aircraftSpec.ramp_clearance_height) {
+      console.log(`[PlaceRollingStock] Item ${item.description} too tall: ${item.height_in} > ${aircraftSpec.ramp_clearance_height}`);
       unplaced.push(item);
       continue;
     }
 
     if (currentX + item.length_in > maxX) {
+      console.log(`[PlaceRollingStock] Item ${item.description} doesn't fit: ${currentX} + ${item.length_in} > ${maxX}`);
       unplaced.push(item);
       continue;
     }
@@ -211,29 +335,33 @@ function placeRollingStock(
     const halfWidth = item.width_in / 2;
     let placed = false;
 
-    const position = findNonOverlappingPosition(
+    const position = findSolverPosition(
       item.length_in,
       item.width_in,
       item.height_in,
       existingPlacements,
-      aircraftGeometry,
-      {
-        prefer_centerline: true,
-        start_x: currentX,
-        z_floor: 0,
-        lateral_clearance: LATERAL_SPACING,
-        longitudinal_clearance: LONGITUDINAL_SPACING
-      }
+      aircraftSpec,
+      currentX,
+      LONGITUDINAL_SPACING
     );
+
+    console.log(`[PlaceRollingStock] Position for ${item.description}:`, position);
 
     if (position.fits) {
       const xStart = position.x_start;
       const xEnd = xStart + item.length_in;
       const yCenter = position.y_center;
 
-      const candidateBox = createBoundingBox(xStart, item.length_in, yCenter, item.width_in, 0, item.height_in);
+      const candidateBox = {
+        x_start: xStart,
+        x_end: xEnd,
+        y_left: yCenter - halfWidth,
+        y_right: yCenter + halfWidth,
+        z_top: item.height_in
+      };
       
-      if (isWithinBounds(candidateBox, aircraftGeometry) && !collidesWithAny(candidateBox, existingPlacements)) {
+      if (isWithinSolverBounds(candidateBox, halfAircraftWidth, maxX, maxHeight) && 
+          !collidesWithAny(createBoundingBox(xStart, item.length_in, yCenter, item.width_in, 0, item.height_in), existingPlacements)) {
         const placement: VehiclePlacement = {
           item_id: item.item_id,
           item: item,
@@ -306,8 +434,15 @@ function placeRollingStock(
         
         for (const yCandidate of yCandidates) {
           const box = createBoundingBox(candidateX, item.length_in, yCandidate, item.width_in, 0, item.height_in);
+          const simpleBox = {
+            x_start: candidateX,
+            x_end: candidateX + item.length_in,
+            y_left: yCandidate - halfWidth,
+            y_right: yCandidate + halfWidth,
+            z_top: item.height_in
+          };
           
-          if (isWithinBounds(box, aircraftGeometry) && !collidesWithAny(box, existingPlacements)) {
+          if (isWithinSolverBounds(simpleBox, halfAircraftWidth, maxX, maxHeight) && !collidesWithAny(box, existingPlacements)) {
             const xStart = candidateX;
             const xEnd = xStart + item.length_in;
             
@@ -372,22 +507,26 @@ function placeRollingStock(
     }
   }
 
-  const validationResult = validatePlacement(existingPlacements, aircraftGeometry);
-  if (!validationResult.is_valid) {
-    for (const collision of validationResult.collisions) {
-      const item2 = existingPlacements.find(p => p.id === collision.item2_id);
-      if (item2) {
-        const idx2 = existingPlacements.indexOf(item2);
-        if (idx2 >= 0) {
-          existingPlacements.splice(idx2, 1);
-          const placementIdx = placements.findIndex(p => String(p.item_id) === item2.id);
-          if (placementIdx >= 0) {
-            const removedPlacement = placements.splice(placementIdx, 1)[0];
-            if (removedPlacement.item) {
-              unplaced.push(removedPlacement.item);
-            }
+  for (let i = 0; i < existingPlacements.length; i++) {
+    for (let j = i + 1; j < existingPlacements.length; j++) {
+      const item1 = existingPlacements[i];
+      const item2 = existingPlacements[j];
+      const box1 = createBoundingBox(item1.x_start_in, item1.length_in, item1.y_center_in, item1.width_in, 0, item1.height_in);
+      const box2 = createBoundingBox(item2.x_start_in, item2.length_in, item2.y_center_in, item2.width_in, 0, item2.height_in);
+      
+      const overlapX = Math.min(box1.x_end, box2.x_end) - Math.max(box1.x_start, box2.x_start);
+      const overlapY = Math.min(box1.y_right, box2.y_right) - Math.max(box1.y_left, box2.y_left);
+      
+      if (overlapX > 0 && overlapY > 0) {
+        existingPlacements.splice(j, 1);
+        const placementIdx = placements.findIndex(p => String(p.item_id) === item2.id);
+        if (placementIdx >= 0) {
+          const removedPlacement = placements.splice(placementIdx, 1)[0];
+          if (removedPlacement.item) {
+            unplaced.push(removedPlacement.item);
           }
         }
+        j--;
       }
     }
   }
