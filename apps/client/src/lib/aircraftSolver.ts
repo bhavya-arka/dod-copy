@@ -289,6 +289,15 @@ function findSolverPosition(
   return { fits: false, x_start: startX, y_center: 0, side: 'center' };
 }
 
+/**
+ * Lane-based lateral placement for rolling stock
+ * Places items side-by-side when possible, only advancing X when lateral space is exhausted
+ * 
+ * Algorithm:
+ * 1. Group items by similar length for efficient row packing
+ * 2. For each X position, try to fit items laterally (center, then left, then right)
+ * 3. Only advance X when no more items fit at current position
+ */
 function placeRollingStock(
   items: MovementItem[],
   aircraftSpec: AircraftSpec,
@@ -304,234 +313,182 @@ function placeRollingStock(
   
   const placements: VehiclePlacement[] = [];
   const unplaced: MovementItem[] = [];
-  
   const existingPlacements: PlacedCargo[] = [];
 
   const sortedItems = sortWithWeaponsPriority(items);
   const LONGITUDINAL_SPACING = 4;
-  const LATERAL_SPACING = 2;
+  const LATERAL_SPACING = 4;
   const maxX = aircraftSpec.cargo_length;
   const halfAircraftWidth = aircraftSpec.cargo_width / 2;
   const maxHeight = aircraftSpec.main_deck_height;
 
-  let currentX = startX;
+  const itemsToPlace = [...sortedItems];
 
-  for (const item of sortedItems) {
-    if (item.width_in > aircraftSpec.ramp_clearance_width) {
-      console.log(`[PlaceRollingStock] Item ${item.description} too wide: ${item.width_in} > ${aircraftSpec.ramp_clearance_width}`);
-      unplaced.push(item);
-      continue;
-    }
-
-    if (item.height_in > aircraftSpec.ramp_clearance_height) {
-      console.log(`[PlaceRollingStock] Item ${item.description} too tall: ${item.height_in} > ${aircraftSpec.ramp_clearance_height}`);
-      unplaced.push(item);
-      continue;
-    }
-
-    if (currentX + item.length_in > maxX) {
-      console.log(`[PlaceRollingStock] Item ${item.description} doesn't fit: ${currentX} + ${item.length_in} > ${maxX}`);
-      unplaced.push(item);
-      continue;
-    }
-
+  function tryPlaceItem(item: MovementItem, xStart: number, yCenter: number): boolean {
     const halfWidth = item.width_in / 2;
-    let placed = false;
-
-    const position = findSolverPosition(
-      item.length_in,
-      item.width_in,
-      item.height_in,
-      existingPlacements,
-      aircraftSpec,
-      currentX,
-      LONGITUDINAL_SPACING
-    );
-
-    console.log(`[PlaceRollingStock] Position for ${item.description}:`, position);
-
-    if (position.fits) {
-      const xStart = position.x_start;
-      const xEnd = xStart + item.length_in;
-      const yCenter = position.y_center;
-
-      const candidateBox = {
-        x_start: xStart,
-        x_end: xEnd,
-        y_left: yCenter - halfWidth,
-        y_right: yCenter + halfWidth,
-        z_top: item.height_in
-      };
-      
-      if (isWithinSolverBounds(candidateBox, halfAircraftWidth, maxX, maxHeight) && 
-          !collidesWithAny(createBoundingBox(xStart, item.length_in, yCenter, item.width_in, 0, item.height_in), existingPlacements)) {
-        const placement: VehiclePlacement = {
-          item_id: item.item_id,
-          item: item,
-          weight: item.weight_each_lb,
-          length: item.length_in,
-          width: item.width_in,
-          height: item.height_in,
-          axle_weights: item.axle_weights || [],
-          position: { x: yCenter, y: 0, z: xStart + item.length_in / 2 },
-          lateral_placement: {
-            y_center_in: yCenter,
-            y_left_in: yCenter - halfWidth,
-            y_right_in: yCenter + halfWidth,
-            side: position.side
-          },
-          deck: 'MAIN'
-        };
-
-        const placedCargo: PlacedCargo = {
-          id: String(item.item_id),
-          lead_tcn: item.lead_tcn || null,
-          description: item.description,
-          length_in: item.length_in,
-          width_in: item.width_in,
-          height_in: item.height_in,
-          weight_lb: item.weight_each_lb,
-          cargo_type: 'ROLLING_STOCK',
-          aircraft_id: aircraftId,
-          deck: 'MAIN',
-          x_start_in: xStart,
-          y_center_in: yCenter,
-          z_floor_in: 0,
-          x_end_in: xEnd,
-          y_left_in: yCenter - halfWidth,
-          y_right_in: yCenter + halfWidth,
-          z_top_in: item.height_in,
-          is_hazardous: item.hazmat_flag
-        };
-        
-        existingPlacements.push(placedCargo);
-        placements.push(placement);
-        currentX = Math.max(currentX, xEnd + LONGITUDINAL_SPACING);
-        placed = true;
-      }
+    const xEnd = xStart + item.length_in;
+    
+    const candidateBox = {
+      x_start: xStart,
+      x_end: xEnd,
+      y_left: yCenter - halfWidth,
+      y_right: yCenter + halfWidth,
+      z_top: item.height_in
+    };
+    
+    if (!isWithinSolverBounds(candidateBox, halfAircraftWidth, maxX, maxHeight)) {
+      return false;
     }
-
-    if (!placed) {
-      let foundPosition = false;
-      const sortedExisting = [...existingPlacements].sort((a, b) => a.x_start_in - b.x_start_in);
-      
-      const candidateXPositions: number[] = [currentX];
-      for (const existing of sortedExisting) {
-        candidateXPositions.push(existing.x_end_in + LONGITUDINAL_SPACING);
-      }
-      
-      for (const candidateX of candidateXPositions) {
-        if (candidateX + item.length_in > maxX) continue;
-        
-        const yCandidates = [0];
-        const itemsInRange = sortedExisting.filter(e => 
-          e.x_start_in < candidateX + item.length_in && e.x_end_in > candidateX
-        );
-        
-        if (itemsInRange.length > 0) {
-          const leftmost = Math.min(...itemsInRange.map(i => i.y_left_in));
-          const rightmost = Math.max(...itemsInRange.map(i => i.y_right_in));
-          yCandidates.push(leftmost - LATERAL_SPACING - halfWidth);
-          yCandidates.push(rightmost + LATERAL_SPACING + halfWidth);
-        }
-        
-        for (const yCandidate of yCandidates) {
-          const box = createBoundingBox(candidateX, item.length_in, yCandidate, item.width_in, 0, item.height_in);
-          const simpleBox = {
-            x_start: candidateX,
-            x_end: candidateX + item.length_in,
-            y_left: yCandidate - halfWidth,
-            y_right: yCandidate + halfWidth,
-            z_top: item.height_in
-          };
-          
-          if (isWithinSolverBounds(simpleBox, halfAircraftWidth, maxX, maxHeight) && !collidesWithAny(box, existingPlacements)) {
-            const xStart = candidateX;
-            const xEnd = xStart + item.length_in;
-            
-            let side: 'center' | 'left' | 'right' = 'center';
-            if (yCandidate < -10) side = 'left';
-            else if (yCandidate > 10) side = 'right';
-
-            const placement: VehiclePlacement = {
-              item_id: item.item_id,
-              item: item,
-              weight: item.weight_each_lb,
-              length: item.length_in,
-              width: item.width_in,
-              height: item.height_in,
-              axle_weights: item.axle_weights || [],
-              position: { x: yCandidate, y: 0, z: xStart + item.length_in / 2 },
-              lateral_placement: {
-                y_center_in: yCandidate,
-                y_left_in: yCandidate - halfWidth,
-                y_right_in: yCandidate + halfWidth,
-                side
-              },
-              deck: 'MAIN'
-            };
-
-            const placedCargo: PlacedCargo = {
-              id: String(item.item_id),
-              lead_tcn: item.lead_tcn || null,
-              description: item.description,
-              length_in: item.length_in,
-              width_in: item.width_in,
-              height_in: item.height_in,
-              weight_lb: item.weight_each_lb,
-              cargo_type: 'ROLLING_STOCK',
-              aircraft_id: aircraftId,
-              deck: 'MAIN',
-              x_start_in: xStart,
-              y_center_in: yCandidate,
-              z_floor_in: 0,
-              x_end_in: xEnd,
-              y_left_in: yCandidate - halfWidth,
-              y_right_in: yCandidate + halfWidth,
-              z_top_in: item.height_in,
-              is_hazardous: item.hazmat_flag
-            };
-            
-            existingPlacements.push(placedCargo);
-            placements.push(placement);
-            currentX = Math.max(currentX, xEnd + LONGITUDINAL_SPACING);
-            foundPosition = true;
-            placed = true;
-            break;
-          }
-        }
-        
-        if (foundPosition) break;
-      }
+    
+    if (collidesWithAny(createBoundingBox(xStart, item.length_in, yCenter, item.width_in, 0, item.height_in), existingPlacements)) {
+      return false;
     }
+    
+    let side: 'center' | 'left' | 'right' = 'center';
+    if (yCenter < -10) side = 'left';
+    else if (yCenter > 10) side = 'right';
+    
+    const placement: VehiclePlacement = {
+      item_id: item.item_id,
+      item: item,
+      weight: item.weight_each_lb,
+      length: item.length_in,
+      width: item.width_in,
+      height: item.height_in,
+      axle_weights: item.axle_weights || [],
+      position: { x: yCenter, y: 0, z: xStart + item.length_in / 2 },
+      lateral_placement: {
+        y_center_in: yCenter,
+        y_left_in: yCenter - halfWidth,
+        y_right_in: yCenter + halfWidth,
+        side
+      },
+      deck: 'MAIN'
+    };
 
-    if (!placed) {
-      unplaced.push(item);
-    }
+    const placedCargo: PlacedCargo = {
+      id: String(item.item_id),
+      lead_tcn: item.lead_tcn || null,
+      description: item.description,
+      length_in: item.length_in,
+      width_in: item.width_in,
+      height_in: item.height_in,
+      weight_lb: item.weight_each_lb,
+      cargo_type: 'ROLLING_STOCK',
+      aircraft_id: aircraftId,
+      deck: 'MAIN',
+      x_start_in: xStart,
+      y_center_in: yCenter,
+      z_floor_in: 0,
+      x_end_in: xEnd,
+      y_left_in: yCenter - halfWidth,
+      y_right_in: yCenter + halfWidth,
+      z_top_in: item.height_in,
+      is_hazardous: item.hazmat_flag
+    };
+    
+    existingPlacements.push(placedCargo);
+    placements.push(placement);
+    console.log(`[PlaceRollingStock] Placed ${item.description} at x=${xStart}, y=${yCenter} (${side})`);
+    return true;
   }
 
-  for (let i = 0; i < existingPlacements.length; i++) {
-    for (let j = i + 1; j < existingPlacements.length; j++) {
-      const item1 = existingPlacements[i];
-      const item2 = existingPlacements[j];
-      const box1 = createBoundingBox(item1.x_start_in, item1.length_in, item1.y_center_in, item1.width_in, 0, item1.height_in);
-      const box2 = createBoundingBox(item2.x_start_in, item2.length_in, item2.y_center_in, item2.width_in, 0, item2.height_in);
+  function findLateralPositions(xStart: number, itemWidth: number): number[] {
+    const halfWidth = itemWidth / 2;
+    const candidates: number[] = [];
+    
+    const itemsAtX = existingPlacements.filter(p => 
+      p.x_start_in < xStart + 200 && p.x_end_in > xStart
+    );
+    
+    if (itemsAtX.length === 0) {
+      candidates.push(0);
+      candidates.push(-halfAircraftWidth + halfWidth + LATERAL_SPACING);
+      candidates.push(halfAircraftWidth - halfWidth - LATERAL_SPACING);
+    } else {
+      const occupiedRanges = itemsAtX.map(p => ({ left: p.y_left_in, right: p.y_right_in }));
+      occupiedRanges.sort((a, b) => a.left - b.left);
       
-      const overlapX = Math.min(box1.x_end, box2.x_end) - Math.max(box1.x_start, box2.x_start);
-      const overlapY = Math.min(box1.y_right, box2.y_right) - Math.max(box1.y_left, box2.y_left);
-      
-      if (overlapX > 0 && overlapY > 0) {
-        existingPlacements.splice(j, 1);
-        const placementIdx = placements.findIndex(p => String(p.item_id) === item2.id);
-        if (placementIdx >= 0) {
-          const removedPlacement = placements.splice(placementIdx, 1)[0];
-          if (removedPlacement.item) {
-            unplaced.push(removedPlacement.item);
-          }
+      let leftEdge = -halfAircraftWidth + LATERAL_SPACING;
+      for (const range of occupiedRanges) {
+        const gapCenter = (leftEdge + range.left - LATERAL_SPACING) / 2;
+        const gapWidth = range.left - LATERAL_SPACING - leftEdge;
+        if (gapWidth >= itemWidth) {
+          candidates.push(gapCenter);
         }
-        j--;
+        leftEdge = range.right + LATERAL_SPACING;
+      }
+      
+      const rightGapCenter = (leftEdge + halfAircraftWidth - LATERAL_SPACING) / 2;
+      const rightGapWidth = halfAircraftWidth - LATERAL_SPACING - leftEdge;
+      if (rightGapWidth >= itemWidth) {
+        candidates.push(rightGapCenter);
       }
     }
+    
+    return candidates.filter(y => 
+      y - halfWidth >= -halfAircraftWidth && 
+      y + halfWidth <= halfAircraftWidth
+    );
+  }
+
+  let currentX = startX;
+  
+  while (itemsToPlace.length > 0 && currentX < maxX) {
+    let placedAnyAtCurrentX = false;
+    
+    for (let i = 0; i < itemsToPlace.length; i++) {
+      const item = itemsToPlace[i];
+      
+      if (item.width_in > aircraftSpec.ramp_clearance_width) {
+        console.log(`[PlaceRollingStock] Item ${item.description} too wide: ${item.width_in} > ${aircraftSpec.ramp_clearance_width}`);
+        unplaced.push(item);
+        itemsToPlace.splice(i, 1);
+        i--;
+        continue;
+      }
+
+      if (item.height_in > aircraftSpec.ramp_clearance_height) {
+        console.log(`[PlaceRollingStock] Item ${item.description} too tall: ${item.height_in} > ${aircraftSpec.ramp_clearance_height}`);
+        unplaced.push(item);
+        itemsToPlace.splice(i, 1);
+        i--;
+        continue;
+      }
+
+      if (currentX + item.length_in > maxX) {
+        continue;
+      }
+
+      const lateralPositions = findLateralPositions(currentX, item.width_in);
+      
+      for (const yPos of lateralPositions) {
+        if (tryPlaceItem(item, currentX, yPos)) {
+          itemsToPlace.splice(i, 1);
+          i--;
+          placedAnyAtCurrentX = true;
+          break;
+        }
+      }
+    }
+    
+    if (!placedAnyAtCurrentX) {
+      const maxOccupiedAtCurrentX = existingPlacements
+        .filter(p => p.x_start_in >= currentX - LONGITUDINAL_SPACING)
+        .reduce((max, p) => Math.max(max, p.x_end_in), currentX);
+      
+      const newX = maxOccupiedAtCurrentX + LONGITUDINAL_SPACING;
+      if (newX <= currentX) {
+        currentX += 50;
+      } else {
+        currentX = newX;
+      }
+    }
+  }
+  
+  for (const item of itemsToPlace) {
+    unplaced.push(item);
+    console.log(`[PlaceRollingStock] Could not place ${item.description}`);
   }
 
   const maxOccupiedX = existingPlacements.length > 0
@@ -540,13 +497,26 @@ function placeRollingStock(
   
   const totalLength = existingPlacements.reduce((sum, p) => sum + p.length_in, 0);
   
+  console.log(`[PlaceRollingStock] Summary: ${placements.length} placed, ${unplaced.length} unplaced, maxX=${maxOccupiedX}`);
+  
   return { placements, nextX: maxOccupiedX, unplaced, totalLength };
 }
 
 // ============================================================================
-// PALLET PLACEMENT (Dimension-based, no fixed stations)
+// PALLET PLACEMENT (CoB-aware bilateral placement)
 // ============================================================================
 
+/**
+ * CoB-aware pallet placement algorithm
+ * 
+ * Strategy per USAF T.O. 1C-17A-9:
+ * 1. Calculate target CG position for middle of CoB envelope
+ * 2. Sort pallets by weight (heaviest first)
+ * 3. Place pallets bilaterally from target CG - heavy pallets near center
+ * 4. Alternate fore/aft placement to maintain balance
+ * 
+ * This ensures the weighted average position of pallets falls within the CoB envelope.
+ */
 function placePallets(
   pallets: Pallet463L[],
   aircraftSpec: AircraftSpec,
@@ -561,41 +531,106 @@ function placePallets(
   const placements: PalletPlacement[] = [];
   const unplaced: Pallet463L[] = [];
 
-  const sortedPallets = sortPalletsWithWeaponsPriority(pallets);
+  if (pallets.length === 0) {
+    return { placements, unplaced, nextX: startX, totalWeight: currentWeight };
+  }
+
   const PALLET_LENGTH = PALLET_463L.length;
   const PALLET_WIDTH = PALLET_463L.width;
   const PALLET_HALF_WIDTH = PALLET_WIDTH / 2;
   const SPACING = 4;
+  const PALLET_SLOT = PALLET_LENGTH + SPACING;
 
-  let currentX = startX;
-  let runningWeight = currentWeight;
   const maxX = aircraftSpec.cargo_length;
   const maxPayload = aircraftSpec.max_payload;
+  const bayStart = aircraftSpec.stations[0]?.rdl_distance || 245;
+  
+  const targetCobPercent = (aircraftSpec.cob_min_percent + aircraftSpec.cob_max_percent) / 2;
+  const targetStationCG = aircraftSpec.lemac_station + (targetCobPercent / 100) * aircraftSpec.mac_length;
+  const targetSolverCG = targetStationCG - bayStart;
+  
+  console.log(`[PlacePallets] CoB-aware placement: target=${targetCobPercent.toFixed(1)}% MAC, targetCG=${targetSolverCG.toFixed(0)}" (solver coords)`);
+
+  const usableLength = maxX - startX;
+  const maxSlots = Math.floor(usableLength / PALLET_SLOT);
+  
+  if (maxSlots <= 0) {
+    unplaced.push(...pallets);
+    return { placements, unplaced, nextX: startX, totalWeight: currentWeight };
+  }
+
+  const slotPositions: number[] = [];
+  for (let i = 0; i < maxSlots; i++) {
+    slotPositions.push(startX + i * PALLET_SLOT);
+  }
+
+  const sortedPallets = [...pallets].sort((a, b) => {
+    const aHasWeapons = a.items.some(item => isWeaponsItem(item.description));
+    const bHasWeapons = b.items.some(item => isWeaponsItem(item.description));
+    if (aHasWeapons && !bHasWeapons) return -1;
+    if (!aHasWeapons && bHasWeapons) return 1;
+    return b.gross_weight - a.gross_weight;
+  });
+
+  const centerSlotIndex = Math.floor((targetSolverCG - startX) / PALLET_SLOT);
+  const validCenterIndex = Math.max(0, Math.min(maxSlots - 1, centerSlotIndex));
+  
+  console.log(`[PlacePallets] Center slot index: ${validCenterIndex} of ${maxSlots} slots (startX=${startX})`);
+
+  const assignedSlots: Map<number, Pallet463L> = new Map();
+  let runningWeight = currentWeight;
 
   for (const pallet of sortedPallets) {
-    if (currentX + PALLET_LENGTH > maxX) {
-      unplaced.push(pallet);
-      continue;
-    }
-    
     if (runningWeight + pallet.gross_weight > maxPayload) {
       unplaced.push(pallet);
       continue;
     }
-    
-    const isOnRamp = currentX >= (maxX - aircraftSpec.ramp_length);
-    const maxPositionWeight = isOnRamp 
-      ? aircraftSpec.ramp_position_weight 
-      : aircraftSpec.per_position_weight;
 
-    if (pallet.gross_weight > maxPositionWeight) {
-      unplaced.push(pallet);
-      continue;
+    let bestSlot = -1;
+    let bestDistance = Infinity;
+
+    for (let offset = 0; offset < maxSlots; offset++) {
+      for (const dir of [0, 1, -1]) {
+        const candidateIndex = validCenterIndex + (dir === 0 ? 0 : dir * offset);
+        
+        if (candidateIndex < 0 || candidateIndex >= maxSlots) continue;
+        if (assignedSlots.has(candidateIndex)) continue;
+        
+        const slotX = slotPositions[candidateIndex];
+        const isOnRamp = slotX >= (maxX - aircraftSpec.ramp_length);
+        const maxPositionWeight = isOnRamp 
+          ? aircraftSpec.ramp_position_weight 
+          : aircraftSpec.per_position_weight;
+
+        if (pallet.gross_weight > maxPositionWeight) continue;
+
+        const armPosition = slotX + PALLET_LENGTH / 2;
+        const distanceFromTarget = Math.abs(armPosition - targetSolverCG);
+        
+        if (distanceFromTarget < bestDistance) {
+          bestDistance = distanceFromTarget;
+          bestSlot = candidateIndex;
+        }
+      }
+      
+      if (bestSlot !== -1) break;
     }
 
-    const xStart = currentX;
+    if (bestSlot !== -1) {
+      assignedSlots.set(bestSlot, pallet);
+      runningWeight += pallet.gross_weight;
+    } else {
+      unplaced.push(pallet);
+    }
+  }
+
+  const sortedAssignments = [...assignedSlots.entries()].sort((a, b) => a[0] - b[0]);
+  
+  for (const [slotIndex, pallet] of sortedAssignments) {
+    const xStart = slotPositions[slotIndex];
     const xEnd = xStart + PALLET_LENGTH;
     const armPosition = xStart + PALLET_LENGTH / 2;
+    const isOnRamp = xStart >= (maxX - aircraftSpec.ramp_length);
     
     const placement: PalletPlacement = {
       pallet: pallet,
@@ -612,14 +647,31 @@ function placePallets(
     };
 
     placements.push(placement);
-    runningWeight += pallet.gross_weight;
-    currentX = xEnd + SPACING;
+    console.log(`[PlacePallets] Placed ${pallet.id} (${pallet.gross_weight}lb) at slot ${slotIndex}, x=${xStart}"`);
+  }
+
+  const maxOccupiedX = placements.length > 0
+    ? Math.max(...placements.map(p => p.x_end_in!))
+    : startX;
+
+  if (placements.length > 0) {
+    let totalMoment = 0;
+    let totalPalletWeight = 0;
+    for (const p of placements) {
+      const arm = p.x_start_in! + PALLET_LENGTH / 2;
+      totalMoment += p.pallet.gross_weight * arm;
+      totalPalletWeight += p.pallet.gross_weight;
+    }
+    const actualCG = totalPalletWeight > 0 ? totalMoment / totalPalletWeight : 0;
+    const stationCG = actualCG + bayStart;
+    const actualCobPercent = ((stationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
+    console.log(`[PlacePallets] Result: ${placements.length} pallets, actualCG=${actualCG.toFixed(0)}", CoB=${actualCobPercent.toFixed(1)}% MAC`);
   }
 
   return { 
     placements, 
     unplaced, 
-    nextX: currentX,
+    nextX: maxOccupiedX + SPACING,
     totalWeight: runningWeight
   };
 }
