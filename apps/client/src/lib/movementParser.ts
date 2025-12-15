@@ -402,7 +402,8 @@ function classifyItem(
   // Section 4.1: Rolling stock detection
   const hasRollingKeyword = ROLLING_STOCK_KEYWORDS.some(keyword => description.includes(keyword));
   const isLongItem = length >= 1.5 * width && (length >= 120 || width >= 90);
-  const isHeavyEquipment = weight >= 3000 && !hasTextHint;
+  // Heavy equipment threshold: 5000 lbs (raised from 3000 to avoid misclassifying heavy pallets)
+  const isHeavyEquipment = weight >= 5000 && !hasTextHint;
 
   if (hasRollingKeyword || isLongItem || isHeavyEquipment) {
     reasons.push('ROLLING_STOCK_DIM_OR_TEXT_MATCH');
