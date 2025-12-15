@@ -49,6 +49,20 @@ Core data models include:
 
 ## December 2025
 
+### CoB-Aware Pallet & Lateral Placement Fix (15/12/2025)
+- **Issue 1**: Negative CoB (-43.5%) when pallets placed front-to-back
+- **Issue 2**: Rolling stock placed in single line instead of side-by-side
+- **Fix - Lateral Placement**: New lane-based algorithm in `placeRollingStock()`:
+  - Finds lateral gaps before advancing X position
+  - Places items side-by-side when they fit (e.g., 53" wide items in 216" C-17 bay)
+  - Only advances X when lateral space is exhausted
+- **Fix - CoB-Aware Pallet Placement**: New algorithm in `placePallets()`:
+  - Calculates target CG position (center of 16-40% MAC envelope for C-17 = 28%)
+  - Places heavier pallets near target CG
+  - Uses bilateral placement strategy per USAF T.O. 1C-17A-9
+  - Ensures weighted average position falls within CoB envelope
+- **File**: `apps/client/src/lib/aircraftSolver.ts`
+
 ### Stress Test Suite for Edge Cases (15/12/2025)
 - **Test File**: `tests/stressTest.edgeCases.test.ts` - 27 comprehensive tests
 - **Edge Case Handler Fixes**: Added overlength (>104" pallet), overweight (>10,000 lb pallet), and cargo bay dimension validation
