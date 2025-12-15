@@ -414,7 +414,9 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     // Cargo Bay: Stations 245 to 1215 (970" length)
     // CG Envelope: 16% - 40% MAC for cargo operations
     // Target CG: 28% MAC (center of envelope)
-    // cargo_bay_fs_start: FS where solver X=0 begins, calibrated so centered cargo ≈ 28% MAC
+    // cargo_bay_fs_start: FS offset added to solver arm for CG calculation
+    // Calibrated so front positions → ~16% MAC, mid → ~28%, aft → ~38%
+    // Formula: LEMAC - (0.16 × MAC) + adjustment for station data alignment
     cob_min_percent: 16,
     cob_max_percent: 40,
     mac_length: 309.5,
@@ -484,7 +486,9 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     // Cargo Bay: Stations 245 to 605 (360" length)
     // CG Envelope: 18% - 33% MAC for cargo operations
     // Target CG: 25.5% MAC (center of envelope)
-    // cargo_bay_fs_start: FS where solver X=0 begins, calibrated so centered cargo ≈ 25.5% MAC
+    // cargo_bay_fs_start: FS offset added to solver arm for CG calculation
+    // Calibrated so front positions → ~18% MAC, mid → ~25.5%, aft → ~33%
+    // Formula: LEMAC - (0.18 × MAC) + adjustment for station data alignment
     cob_min_percent: 18,
     cob_max_percent: 33,
     mac_length: 164.5,
