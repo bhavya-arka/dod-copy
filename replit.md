@@ -45,6 +45,20 @@ Core data models include:
 -   **`AircraftLoadPlan`**: Details the complete aircraft load, including pallets, rolling stock, PAX, and CoB calculations.
 -   **`AllocationResult`**: The full allocation solution with all aircraft and summary metrics.
 
+# Recent Changes
+
+## December 2025
+
+### Flight Manager Node Position Bug Fix (15/12/2025)
+- **Race Condition Fix**: Fixed bug where connecting flight/airport nodes would reset their positions
+- **Root Cause**: Positions weren't saved to `layoutRef` before graph regeneration due to async useEffect timing
+- **Solution**: Added `syncPositionsToLayoutRef` helper that synchronously saves positions before state changes
+- **File**: `apps/client/src/components/FlightManagerFlowchart.tsx`
+
+### PDF Export Layout Fix (14/12/2025)
+- **Fixed TypeScript Errors**: Resolved 10 LSP errors in `pdfExport.ts` where pallet properties were incorrectly accessed
+- **Improved ICODES Layout**: Increased SVG scale from 0.55 to 0.72 for less cramped diagrams in printed PDFs
+
 # External Dependencies
 
 **Database Services**:
