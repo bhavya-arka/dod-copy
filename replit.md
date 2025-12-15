@@ -49,6 +49,17 @@ Core data models include:
 
 ## December 2025
 
+### Complete CoB Calculation System Rewrite (15/12/2025)
+- **Issue**: CoB values showing impossible percentages (70%, 128%, 255%) for front-loaded cargo
+- **Root Cause**: Physical cargo bay (1056" for C-17) is much larger than CG envelope range (24% MAC = ~74"), causing front cargo to produce mathematically negative %MAC
+- **Solution - Clamping**: Added `clamped_mac_percent` field to CGResult interface, clamped to 0-100% for display while preserving raw physics values for internal calculations
+- **Solution - Normalized Visual Markers**: ICODESViewer and LoadPlan3DViewer now normalize CoB position within the envelope:
+  - CoB = 16% (forward limit) → marker at left edge
+  - CoB = 28% (target) → marker at center
+  - CoB = 40% (aft limit) → marker at right edge
+- **Solution - Center-Out Placement Fix**: When rolling stock occupies front of cargo bay, pallets now center in AVAILABLE space instead of targeting X=528 which may be blocked
+- **Files**: `apps/client/src/lib/aircraftSolver.ts`, `apps/client/src/components/ICODESViewer.tsx`, `apps/client/src/components/LoadPlan3DViewer.tsx`
+
 ### FlightManagerFlowchart Architectural Redesign (15/12/2025)
 - **Issue**: Nodes reset positions when adding new flights/bases, connections don't link properly
 - **Solution**: Created GraphStore module (`apps/client/src/lib/graphStore.ts`) with:
