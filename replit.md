@@ -61,12 +61,18 @@ Core data models include:
   - Pallet Distribution by Aircraft bar chart
 - **Files**: `apps/client/src/context/MissionContext.tsx`, `apps/client/src/components/AnalyticsPanel.tsx`
 
-### Center of Balance Formula Fix (15/12/2025)
-- **Bug**: CoB calculation in aircraftSolver.ts used incorrect linear interpolation formula instead of proper MAC-based calculation
-- **Root Cause**: Original formula mapped CG position to a percentage using `cob_min + normalized_position * (cob_max - cob_min)`, which doesn't match standard MAC calculation
-- **Solution**: Fixed to use proper MAC formula: `CoB% = ((Station_CG - LEMAC) / MAC_Length) * 100`
-- **Coordinate Conversion**: Solver uses 0-based coordinates, so bay_start offset is added to convert to station coordinates before MAC calculation
-- **File**: `apps/client/src/lib/aircraftSolver.ts`
+### CoB Computation Stack Audit (15/12/2025)
+- **Audit Scope**: Full audit of CoB calculation across domainUtils.ts, aircraftSolver.ts, geometry/validation.ts, and 3D rendering
+- **Issue Found**: domainUtils.ts used `forward_offset` (180") instead of `bayStart` (first station RDL = 245") for coordinate conversion
+- **Issue Found**: LoadPlan3DViewer.tsx rendered CoB marker at station coordinates but 3D model uses 0-based cargo-relative coordinates
+- **Fix**: domainUtils.ts now uses `bayStart` from `spec.stations[0].rdl_distance` consistent with aircraftSolver.ts
+- **Fix**: LoadPlan3DViewer.tsx now subtracts `bayStart` from `center_of_balance` for both 3D marker and MiniMap
+- **Formula Confirmed**: `CoB% = ((Station_CG - LEMAC) / MAC_Length) * 100`
+- **Coordinate Systems Documented**:
+  - Station/RDL coordinates: From aircraft datum (245-1215 for C-17)
+  - Solver coordinates: 0-based from cargo bay start
+  - 3D coordinates: 0-based from cargo bay start (matches solver)
+- **Files**: `apps/client/src/lib/domainUtils.ts`, `apps/client/src/components/LoadPlan3DViewer.tsx`
 
 ### Database-Backed Manifest Storage (15/12/2025)
 - **Feature**: Manifest edits now persist to the database so changes (like marking items as hazmat) are saved
