@@ -50,21 +50,21 @@ export default function AuthScreen({ onLogin, onRegister }: AuthScreenProps) {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 gradient-mesh flex items-center justify-center p-8">
+    <div className="min-h-screen bg-neutral-50 gradient-mesh flex items-center justify-center p-4 sm:p-8 overflow-auto">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
       >
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto mb-4 bg-primary rounded-2xl flex items-center justify-center shadow-glass">
-            <span className="text-white font-bold text-2xl">A</span>
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 bg-primary rounded-2xl flex items-center justify-center shadow-glass">
+            <span className="text-white font-bold text-xl sm:text-2xl">A</span>
           </div>
-          <h1 className="text-3xl font-bold text-neutral-900 tracking-tight mb-2">Arka Cargo Operations</h1>
-          <p className="text-neutral-500">PACAF Airlift Planning System</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 tracking-tight mb-2">Arka Cargo Operations</h1>
+          <p className="text-neutral-500 text-sm sm:text-base">PACAF Airlift Planning System</p>
         </div>
 
-        <div className="glass-card p-8">
+        <div className="glass-card p-5 sm:p-8">
           <div className="flex mb-6 bg-neutral-100 rounded-xl p-1">
             <button
               onClick={() => setMode('login')}

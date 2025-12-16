@@ -134,78 +134,86 @@ export default function UploadScreen({
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 gradient-mesh flex flex-col">
-      <header className="p-6 flex justify-between items-center border-b border-neutral-200/50">
-        <div className="flex items-center space-x-4">
-          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-soft">
-            <span className="text-white font-bold text-xl">A</span>
+    <div className="min-h-screen bg-neutral-50 gradient-mesh flex flex-col overflow-auto">
+      <header className="p-4 sm:p-6 flex justify-between items-center border-b border-neutral-200/50">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 bg-primary rounded-xl flex items-center justify-center shadow-soft shrink-0">
+            <span className="text-white font-bold text-lg sm:text-xl">A</span>
           </div>
-          <div>
-            <h1 className="text-neutral-900 font-bold text-xl">Arka Cargo Operations</h1>
-            <p className="text-neutral-500 text-sm">Movement Load Planning System</p>
+          <div className="min-w-0">
+            <h1 className="text-neutral-900 font-bold text-base sm:text-xl truncate">Arka Cargo Operations</h1>
+            <p className="text-neutral-500 text-xs sm:text-sm hidden sm:block">Movement Load Planning System</p>
           </div>
         </div>
-        <div className="badge">
+        <div className="badge text-xs">
           v1.0
         </div>
       </header>
 
-      <main className="flex-1 flex items-center justify-center p-8">
-        <div className="max-w-2xl w-full space-y-8">
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
+        <div className="max-w-2xl w-full space-y-6 sm:space-y-8">
           <motion.div
             className="text-center"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <h2 className="text-4xl font-bold text-neutral-900 mb-4 tracking-tight">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-neutral-900 mb-3 sm:mb-4 tracking-tight">
               Upload Movement List
             </h2>
-            <p className="text-neutral-500 text-lg">
+            <p className="text-neutral-500 text-sm sm:text-base lg:text-lg">
               Upload your sanitized UTC dataset to generate optimized load plans
             </p>
           </motion.div>
 
           <motion.div
-            className="space-y-4"
+            className="space-y-3 sm:space-y-4"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
             <label className="text-neutral-700 text-sm font-medium">Select Aircraft Type</label>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <button
                 onClick={() => onAircraftSelect('C-17')}
-                className={`glass-card p-6 text-left transition-all duration-200 ${
+                className={`glass-card p-4 sm:p-6 text-left transition-all duration-200 ${
                   selectedAircraft === 'C-17'
                     ? 'ring-2 ring-primary ring-offset-2 shadow-glass-lg'
                     : 'hover:shadow-glass-lg hover:-translate-y-0.5'
                 }`}
               >
-                <div className="text-3xl mb-3">✈️</div>
-                <h3 className="font-bold text-lg text-neutral-900">C-17 Globemaster III</h3>
-                <p className="text-sm text-neutral-500 mt-1">18 pallet positions</p>
-                <p className="text-sm text-neutral-500">170,900 lb payload</p>
+                <div className="flex sm:block items-center gap-3 sm:gap-0">
+                  <div className="text-2xl sm:text-3xl sm:mb-3">✈️</div>
+                  <div>
+                    <h3 className="font-bold text-base sm:text-lg text-neutral-900">C-17 Globemaster III</h3>
+                    <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">18 pallet positions</p>
+                    <p className="text-xs sm:text-sm text-neutral-500">170,900 lb payload</p>
+                  </div>
+                </div>
                 {selectedAircraft === 'C-17' && (
-                  <div className="mt-3">
-                    <span className="badge-primary">Selected</span>
+                  <div className="mt-2 sm:mt-3">
+                    <span className="badge-primary text-xs">Selected</span>
                   </div>
                 )}
               </button>
               <button
                 onClick={() => onAircraftSelect('C-130')}
-                className={`glass-card p-6 text-left transition-all duration-200 ${
+                className={`glass-card p-4 sm:p-6 text-left transition-all duration-200 ${
                   selectedAircraft === 'C-130'
                     ? 'ring-2 ring-primary ring-offset-2 shadow-glass-lg'
                     : 'hover:shadow-glass-lg hover:-translate-y-0.5'
                 }`}
               >
-                <div className="text-3xl mb-3">🛩️</div>
-                <h3 className="font-bold text-lg text-neutral-900">C-130H/J Hercules</h3>
-                <p className="text-sm text-neutral-500 mt-1">6 pallet positions</p>
-                <p className="text-sm text-neutral-500">42,000 lb payload</p>
+                <div className="flex sm:block items-center gap-3 sm:gap-0">
+                  <div className="text-2xl sm:text-3xl sm:mb-3">🛩️</div>
+                  <div>
+                    <h3 className="font-bold text-base sm:text-lg text-neutral-900">C-130H/J Hercules</h3>
+                    <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">6 pallet positions</p>
+                    <p className="text-xs sm:text-sm text-neutral-500">42,000 lb payload</p>
+                  </div>
+                </div>
                 {selectedAircraft === 'C-130' && (
-                  <div className="mt-3">
-                    <span className="badge-primary">Selected</span>
+                  <div className="mt-2 sm:mt-3">
+                    <span className="badge-primary text-xs">Selected</span>
                   </div>
                 )}
               </button>
@@ -218,7 +226,7 @@ export default function UploadScreen({
             transition={{ delay: 0.2 }}
           >
             <div
-              className={`relative glass-card p-12 text-center transition-all duration-200 ${
+              className={`relative glass-card p-8 sm:p-12 text-center transition-all duration-200 ${
                 dragActive
                   ? 'ring-2 ring-primary ring-offset-2 bg-primary/5'
                   : fileName
@@ -238,23 +246,23 @@ export default function UploadScreen({
               />
               
               {fileName ? (
-                <div className="space-y-3">
-                  <div className="w-16 h-16 mx-auto bg-green-100 rounded-2xl flex items-center justify-center">
-                    <span className="text-3xl">📄</span>
+                <div className="space-y-2 sm:space-y-3">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto bg-green-100 rounded-2xl flex items-center justify-center">
+                    <span className="text-2xl sm:text-3xl">📄</span>
                   </div>
-                  <p className="text-green-700 font-medium text-lg">{fileName}</p>
-                  <p className="text-neutral-500 text-sm">Click or drop to replace</p>
+                  <p className="text-green-700 font-medium text-base sm:text-lg break-all">{fileName}</p>
+                  <p className="text-neutral-500 text-xs sm:text-sm">Click or drop to replace</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="w-16 h-16 mx-auto bg-neutral-100 rounded-2xl flex items-center justify-center">
-                    <span className="text-3xl">📁</span>
+                <div className="space-y-3 sm:space-y-4">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto bg-neutral-100 rounded-2xl flex items-center justify-center">
+                    <span className="text-2xl sm:text-3xl">📁</span>
                   </div>
                   <div>
-                    <p className="text-neutral-900 font-medium text-lg">
+                    <p className="text-neutral-900 font-medium text-base sm:text-lg">
                       Drop your movement list here
                     </p>
-                    <p className="text-neutral-500 text-sm mt-1">
+                    <p className="text-neutral-500 text-xs sm:text-sm mt-1">
                       or click to browse (CSV, XLSX, or JSON)
                     </p>
                   </div>

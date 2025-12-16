@@ -177,32 +177,32 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
 
       case 'manifest':
         return (
-          <div className="p-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="section-title">Movement Manifest</h2>
+          <div className="p-4 sm:p-6 lg:p-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <h2 className="section-title text-xl sm:text-2xl">Movement Manifest</h2>
               <div className="flex items-center gap-2">
                 <div className="flex items-center bg-neutral-100 rounded-lg p-0.5">
                   <button
                     onClick={() => setManifestViewMode('table')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                    className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                       manifestViewMode === 'table'
                         ? 'bg-white text-neutral-900 shadow-sm'
                         : 'text-neutral-600 hover:text-neutral-900'
                     }`}
                   >
                     <Table className="w-3.5 h-3.5" />
-                    Table
+                    <span className="hidden sm:inline">Table</span>
                   </button>
                   <button
                     onClick={() => setManifestViewMode('spreadsheet')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                    className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                       manifestViewMode === 'spreadsheet'
                         ? 'bg-white text-neutral-900 shadow-sm'
                         : 'text-neutral-600 hover:text-neutral-900'
                     }`}
                   >
                     <Grid3X3 className="w-3.5 h-3.5" />
-                    Spreadsheet
+                    <span className="hidden sm:inline">Spreadsheet</span>
                   </button>
                 </div>
               </div>
@@ -305,24 +305,24 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
 
       case 'schedules':
         return (
-          <div className="p-8">
-            <h2 className="section-title mb-6">Flight Schedules</h2>
-            <div className="glass-card p-6">
+          <div className="p-4 sm:p-6 lg:p-8">
+            <h2 className="section-title text-xl sm:text-2xl mb-4 sm:mb-6">Flight Schedules</h2>
+            <div className="glass-card p-4 sm:p-6">
               {mission.splitFlights.length > 0 ? (
                 <div className="space-y-3">
                   {mission.splitFlights.map(flight => (
-                    <div key={flight.id} className="flex items-center justify-between p-4 bg-neutral-50 rounded-xl border border-neutral-200/50">
+                    <div key={flight.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 p-3 sm:p-4 bg-neutral-50 rounded-xl border border-neutral-200/50">
                       <div>
-                        <div className="text-neutral-900 font-bold">{flight.callsign}</div>
-                        <div className="text-neutral-500 text-sm">
+                        <div className="text-neutral-900 font-bold text-sm sm:text-base">{flight.callsign}</div>
+                        <div className="text-neutral-500 text-xs sm:text-sm">
                           {flight.origin.icao} → {flight.destination.icao}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-green-600 font-mono text-sm">
+                      <div className="flex sm:flex-col gap-3 sm:gap-0 sm:text-right text-xs sm:text-sm">
+                        <div className="text-green-600 font-mono">
                           DEP: {flight.scheduled_departure.toLocaleTimeString('en-US', { hour12: false })}Z
                         </div>
-                        <div className="text-primary font-mono text-sm">
+                        <div className="text-primary font-mono">
                           ARR: {flight.scheduled_arrival.toLocaleTimeString('en-US', { hour12: false })}Z
                         </div>
                       </div>
@@ -330,11 +330,11 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-neutral-500 py-8">
-                  <p>No flights scheduled yet.</p>
+                <div className="text-center text-neutral-500 py-6 sm:py-8">
+                  <p className="text-sm sm:text-base">No flights scheduled yet.</p>
                   <button
                     onClick={() => mission.setCurrentTab('cargo_split')}
-                    className="mt-4 btn-primary"
+                    className="mt-4 btn-primary text-sm"
                   >
                     Configure Flights
                   </button>
@@ -350,9 +350,9 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
           : [];
         
         return (
-          <div className="p-8">
-            <h2 className="section-title mb-6">Weather at Bases</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="p-4 sm:p-6 lg:p-8">
+            <h2 className="section-title text-xl sm:text-2xl mb-4 sm:mb-6">Weather at Bases</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               {baseIcaos.length > 0 ? (
                 baseIcaos.map(icao => {
                   const base = mission.splitFlights.find(f => f.origin.icao === icao)?.origin ||
