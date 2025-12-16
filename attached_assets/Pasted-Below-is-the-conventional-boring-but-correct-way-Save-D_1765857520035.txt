@@ -1,0 +1,344 @@
+Below is the **conventional, boring-but-correct way** “Save Draft” + “Recall Draft” is typically implemented in production systems. This is framework-agnostic and matches what you’d see in CRMs, CMSs, flight planning tools, load planners, etc.
+
+I’ll break it into **data model**, **API/control flow**, **permissions**, and **common edge cases**.
+
+---
+
+## 1. Core Concepts (Mental Model)
+
+A **draft** is:
+
+* A **persisted snapshot** of an in-progress object
+* **Owned by a user** (or a team)
+* **Not authoritative / not published**
+* **Recoverable, overwritable, and deletable**
+
+Key properties:
+
+* Multiple drafts per user (sometimes per object)
+* Drafts may be **autosaved**
+* Drafts may be **promoted** into a final record
+
+---
+
+## 2. Conventional Database Modeling
+
+### Option A — Draft Table (Most Common)
+
+You keep drafts **separate** from finalized records.
+
+```sql
+users
+-----
+id (pk)
+email
+...
+
+drafts
+------
+id (pk)
+user_id (fk -> users.id)
+entity_type           -- "load_plan", "manifest", "flight", etc
+entity_id NULLABLE    -- if editing an existing object
+status                -- 'draft' | 'submitted' | 'archived'
+data JSONB             -- full snapshot of the form / model
+version INT
+created_at
+updated_at
+last_accessed_at
+```
+
+Why this works:
+
+* Clean separation between **unfinished** and **official**
+* Easy autosave
+* No risk of half-valid data polluting prod tables
+
+This is the **most conventional** pattern.
+
+---
+
+### Option B — Draft Flag on Main Table (Less Flexible)
+
+```sql
+load_plans
+----------
+id
+user_id
+is_draft BOOLEAN
+data JSONB
+```
+
+Downsides:
+
+* Harder to support multiple drafts
+* Harder to distinguish shared vs personal
+* Risky if validation rules differ
+
+Used in simpler systems only.
+
+---
+
+### Option C — Versioned Snapshots (Advanced)
+
+```sql
+load_plan_versions
+------------------
+id
+load_plan_id
+user_id
+version
+is_draft
+snapshot JSONB
+```
+
+Used when:
+
+* Audit trails matter
+* Rollbacks are required
+* Multiple editors exist
+
+---
+
+## 3. What Gets Stored in `data`
+
+**Always store the full snapshot**, not deltas.
+
+```json
+{
+  "formState": { ... },
+  "cargo": [ ... ],
+  "aircraft": "C-17",
+  "constraints": { ... },
+  "uiState": {
+    "expandedPanels": ["cargo", "fuel"]
+  }
+}
+```
+
+Why:
+
+* Deterministic restore
+* Easy debugging
+* Safe against schema evolution (with migrations)
+
+---
+
+## 4. Save Draft Control Flow
+
+### Frontend
+
+**User action**
+
+* Click “Save Draft”
+* OR autosave every N seconds
+
+**Frontend sends**
+
+```http
+POST /api/drafts
+```
+
+```json
+{
+  "entityType": "load_plan",
+  "entityId": null,
+  "data": { ... },
+  "version": 3
+}
+```
+
+---
+
+### Backend
+
+**Steps**
+
+1. Authenticate user
+2. Validate minimal structure (NOT full business rules)
+3. If draft exists → UPDATE
+4. Else → INSERT
+5. Return draft ID + timestamp
+
+```ts
+if (draftExists) {
+  updateDraft(draftId, data, version + 1)
+} else {
+  createDraft(userId, entityType, data)
+}
+```
+
+---
+
+### Response
+
+```json
+{
+  "draftId": "d_123",
+  "savedAt": "2025-12-15T21:14:03Z"
+}
+```
+
+---
+
+## 5. Recall Draft Control Flow
+
+### List Drafts
+
+```http
+GET /api/drafts?entityType=load_plan
+```
+
+Backend:
+
+```sql
+SELECT id, updated_at
+FROM drafts
+WHERE user_id = $1
+  AND entity_type = 'load_plan'
+ORDER BY updated_at DESC;
+```
+
+---
+
+### Load Draft
+
+```http
+GET /api/drafts/:id
+```
+
+Backend:
+
+1. Verify `draft.user_id === current_user`
+2. Return `data`
+
+Frontend:
+
+* Rehydrate form state
+* Restore UI state
+* Resume autosave
+
+---
+
+## 6. Promote Draft → Final Object
+
+This is a **transactional operation**.
+
+### Flow
+
+1. User clicks “Submit / Publish”
+2. Backend:
+
+   * Validate full business rules
+   * Create or update final entity
+   * Mark draft as `submitted` or delete it
+
+```sql
+BEGIN;
+
+INSERT INTO load_plans (...) VALUES (...);
+
+UPDATE drafts
+SET status = 'submitted'
+WHERE id = $draftId;
+
+COMMIT;
+```
+
+---
+
+## 7. Autosave (Industry Standard)
+
+* Debounced (e.g., every 5–15 seconds)
+* No user notification unless failure
+* Silent overwrite of same draft ID
+
+Common logic:
+
+```ts
+if (hasChangesSinceLastSave) {
+  saveDraft()
+}
+```
+
+---
+
+## 8. Permissions & Ownership Rules
+
+Typical rules:
+
+* Draft is **only visible to owner**
+* Draft cannot be shared unless explicitly supported
+* Admins may see drafts (optional)
+
+Enforced at query level:
+
+```sql
+WHERE id = $draftId
+  AND user_id = $currentUserId
+```
+
+---
+
+## 9. Deletion & Cleanup
+
+### Manual
+
+* “Delete Draft” button
+
+### Automatic
+
+* Background job:
+
+```sql
+DELETE FROM drafts
+WHERE updated_at < now() - interval '30 days'
+AND status = 'draft';
+```
+
+---
+
+## 10. Common Edge Cases (Handled in Good Systems)
+
+| Problem               | Solution                                           |
+| --------------------- | -------------------------------------------------- |
+| Multiple tabs         | Version field + last write wins                    |
+| Schema changes        | Migration on load                                  |
+| User logs out         | Draft remains                                      |
+| Crash mid-edit        | Autosave                                           |
+| Partial invalid state | Drafts bypass full validation                      |
+| Duplicate drafts      | Enforce unique `(user_id, entity_type, entity_id)` |
+
+---
+
+## 11. Minimal State Machine
+
+```text
+DRAFT → DRAFT (autosave)
+DRAFT → SUBMITTED
+DRAFT → DELETED
+```
+
+No complex transitions needed.
+
+---
+
+## 12. TL;DR (Industry Standard)
+
+* Drafts live in their **own table**
+* Tied **1:1 to user**
+* Store **entire snapshot**
+* Autosave overwrites same draft
+* Final submit promotes → real table
+* Drafts bypass strict validation
+
+---
+
+If you want next:
+
+* Exact **Postgres schema**
+* **REST vs GraphQL** patterns
+* **Autosave conflict resolution**
+* **Multi-user collaborative drafts**
+
+Just say which.

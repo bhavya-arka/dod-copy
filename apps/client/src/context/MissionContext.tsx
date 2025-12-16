@@ -503,7 +503,17 @@ export function MissionProvider({
   }, [allocationResult, splitFlights, routes]);
 
   const saveConfiguration = useCallback(async (name: string) => {
-    if (!allocationResult) return;
+    if (!allocationResult) {
+      console.error('[MissionContext] Cannot save: No allocation result');
+      setError('Cannot save: No allocation data available');
+      return;
+    }
+    
+    if (!parseResult) {
+      console.error('[MissionContext] Cannot save: No movement data (parseResult is null)');
+      setError('Cannot save: No movement data available. Please upload a movement list first.');
+      return;
+    }
     
     const config: MissionConfiguration = {
       id: `config-${Date.now()}`,
@@ -593,7 +603,15 @@ export function MissionProvider({
   }, [allocationResult, splitFlights, routes, parseResult]);
 
   const updateConfiguration = useCallback(async (planId: number) => {
-    if (!allocationResult) return;
+    if (!allocationResult) {
+      console.error('[MissionContext] Cannot update: No allocation result');
+      return;
+    }
+    
+    if (!parseResult) {
+      console.error('[MissionContext] Cannot update: No movement data (parseResult is null)');
+      return;
+    }
     
     try {
       const itemCount = allocationResult.total_pallets + 

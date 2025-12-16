@@ -97,32 +97,71 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
       
       const plan = await response.json();
       
-      if (plan.allocation_data && plan.movement_data) {
-        const allocationResult = plan.allocation_data as AllocationResult;
-        const movementData = plan.movement_data as ParseResult;
-        const classifiedItems = classifyItems(movementData);
+      // Check for allocation_data - this is required
+      if (!plan.allocation_data) {
+        throw new Error('Flight plan has no allocation data. Please create a new plan.');
+      }
+      
+      // allocation_data is stored as { allocation_result, split_flights, routes }
+      // We need to unwrap allocation_result from the wrapper
+      const savedAllocationData = plan.allocation_data as {
+        allocation_result?: AllocationResult;
+        split_flights?: any[];
+        routes?: any[];
+      } | AllocationResult;
+      
+      // Handle both wrapped format (new) and direct format (legacy)
+      const allocationResult: AllocationResult = 
+        'allocation_result' in savedAllocationData && savedAllocationData.allocation_result
+          ? savedAllocationData.allocation_result
+          : savedAllocationData as AllocationResult;
+      
+      // Validate allocationResult has required properties
+      if (!allocationResult || !allocationResult.load_plans) {
+        console.error('[LoadSavedPlan] Invalid allocation result structure:', allocationResult);
+        throw new Error('Flight plan data is corrupted. Please create a new plan.');
+      }
+      
+      // Handle movement_data - may be null for older plans
+      let movementData: ParseResult | null = null;
+      let classifiedItems: ClassifiedItems | null = null;
+      let combinedInsights: InsightsSummary;
+      
+      if (plan.movement_data && plan.movement_data.items) {
+        // Movement data exists - full restore
+        movementData = plan.movement_data as ParseResult;
+        classifiedItems = classifyItems(movementData);
         
         const movementInsights = analyzeMovementList(movementData.items, classifiedItems);
         const allocationInsights = analyzeAllocation(allocationResult);
         
-        const combinedInsights: InsightsSummary = {
+        combinedInsights = {
           ...movementInsights,
           insights: [...movementInsights.insights, ...allocationInsights]
         };
-
-        setState(prev => ({
-          ...prev,
-          movementData,
-          classifiedItems,
-          allocationResult,
-          insights: combinedInsights,
-          selectedAircraft: allocationResult.aircraft_type || 'C-17',
-          isProcessing: false,
-          currentScreen: 'mission_workspace'
-        }));
       } else {
-        throw new Error('Flight plan has no saved data. Please upload a movement list.');
+        // No movement data - limited restore with just allocation insights
+        console.warn('[LoadSavedPlan] No movement_data found, using allocation-only insights');
+        const allocationInsights = analyzeAllocation(allocationResult);
+        combinedInsights = {
+          insights: allocationInsights,
+          weight_drivers: [],
+          volume_drivers: [],
+          critical_items: [],
+          optimization_opportunities: ['Movement data unavailable - some features may be limited']
+        };
       }
+
+      setState(prev => ({
+        ...prev,
+        movementData,
+        classifiedItems,
+        allocationResult,
+        insights: combinedInsights,
+        selectedAircraft: allocationResult.aircraft_type || 'C-17',
+        isProcessing: false,
+        currentScreen: 'mission_workspace'
+      }));
     } catch (error) {
       setState(prev => ({
         ...prev,

@@ -26,13 +26,16 @@ export function analyzeMovementList(
 ): InsightsSummary {
   const insights: AIInsight[] = [];
   
-  const totalWeight = items.reduce((sum, i) => sum + i.weight_each_lb * i.quantity, 0);
-  const totalVolume = items.reduce((sum, i) => {
+  // Defensive check: ensure items array exists and is valid
+  const safeItems = items && Array.isArray(items) ? items : [];
+  
+  const totalWeight = safeItems.reduce((sum, i) => sum + i.weight_each_lb * i.quantity, 0);
+  const totalVolume = safeItems.reduce((sum, i) => {
     const vol = (i.length_in * i.width_in * i.height_in) / 1728;
     return sum + vol * i.quantity;
   }, 0);
   
-  const weightDrivers = items
+  const weightDrivers = safeItems
     .map(i => ({
       item_id: i.item_id,
       description: i.description,
@@ -42,7 +45,7 @@ export function analyzeMovementList(
     .sort((a, b) => b.weight - a.weight)
     .slice(0, 5);
   
-  const volumeDrivers = items
+  const volumeDrivers = safeItems
     .map(i => {
       const vol = (i.length_in * i.width_in * i.height_in * i.quantity) / 1728;
       return {
@@ -98,7 +101,7 @@ export function analyzeMovementList(
     });
   }
   
-  const hazmatItems = items.filter(i => i.hazmat_flag);
+  const hazmatItems = safeItems.filter(i => i.hazmat_flag);
   if (hazmatItems.length > 0) {
     const hazmatWeight = hazmatItems.reduce((sum, i) => sum + i.weight_each_lb * i.quantity, 0);
     insights.push({
@@ -142,7 +145,7 @@ export function analyzeMovementList(
     });
   }
   
-  const criticalItems = items.filter(i => 
+  const criticalItems = safeItems.filter(i => 
     i.weight_each_lb > 8000 || 
     i.length_in > 100 || 
     i.width_in > 100

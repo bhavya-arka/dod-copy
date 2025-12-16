@@ -145,7 +145,8 @@ export function generateParsedClassificationSummary(classified: ClassifiedCargoI
 // ============================================================================
 
 export function classifyItems(parseResult: ParseResult): ClassifiedItems {
-  const items = parseResult.items;
+  // Defensive check: ensure parseResult and items exist
+  const items = parseResult?.items && Array.isArray(parseResult.items) ? parseResult.items : [];
 
   // Section 3.1: By Phase
   const advon_items = items.filter(item => item.advon_flag === true);
