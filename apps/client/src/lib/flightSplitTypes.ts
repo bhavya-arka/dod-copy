@@ -111,7 +111,7 @@ export function calculateCenterOfBalance(flight: SplitFlight): number {
   let totalWeight = 0;
   const spec = AIRCRAFT_SPECS[flight.aircraft_type];
   
-  // Pallet position_coord is already RDL station distance (absolute)
+  // Pallet position_coord is RDL station distance (absolute position from aircraft datum)
   flight.pallets.forEach((placement) => {
     totalMoment += placement.pallet.gross_weight * placement.position_coord;
     totalWeight += placement.pallet.gross_weight;
@@ -124,6 +124,14 @@ export function calculateCenterOfBalance(flight: SplitFlight): number {
     totalWeight += vehicle.weight;
   });
   
+  // Add PAX weight if present (seated at ~40% of cargo length from forward offset)
+  if (flight.pax_count > 0) {
+    const paxWeight = flight.pax_count * 225; // Standard pax weight with gear
+    const paxStation = spec.forward_offset + (spec.cargo_length * 0.4);
+    totalMoment += paxWeight * paxStation;
+    totalWeight += paxWeight;
+  }
+  
   if (totalWeight === 0) return 27.5;
   
   // Calculate CG station (inches from aircraft datum)
@@ -131,7 +139,10 @@ export function calculateCenterOfBalance(flight: SplitFlight): number {
   
   // Calculate CoB as percentage of MAC using correct formula
   // CoB% = ((CG Station - LEMAC) / MAC Length) × 100
-  return ((cgStation - spec.lemac_station) / spec.mac_length) * 100;
+  const cobPercent = ((cgStation - spec.lemac_station) / spec.mac_length) * 100;
+  
+  // Clamp to 0-100% for display
+  return Math.max(0, Math.min(100, cobPercent));
 }
 
 export function estimateWeatherDelay(

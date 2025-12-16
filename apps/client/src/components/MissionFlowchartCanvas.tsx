@@ -418,6 +418,7 @@ interface AirbaseNodeData {
   outgoingFlights: string[];
   availableCargo: {
     palletCount: number;
+    rollingStockCount: number;
     totalWeight: number;
   };
   [key: string]: unknown;
@@ -622,12 +623,17 @@ const AirbaseNode = ({ data, selected }: NodeProps) => {
         </div>
       </div>
 
-      {availableCargo && (availableCargo.palletCount > 0 || availableCargo.totalWeight > 0) && (
+      {availableCargo && (availableCargo.palletCount > 0 || availableCargo.rollingStockCount > 0 || availableCargo.totalWeight > 0) && (
         <div className="mt-2 bg-amber-100/80 rounded-lg px-2 py-1.5 text-center border border-amber-200">
           <div className="flex items-center justify-center gap-2 text-xs">
             <FiPackage className="text-amber-600" size={12} />
             <span className="text-amber-800 font-medium">
-              {availableCargo.palletCount} pallets available
+              {availableCargo.palletCount + availableCargo.rollingStockCount} cargo available
+              {(availableCargo.palletCount > 0 || availableCargo.rollingStockCount > 0) && (
+                <span className="text-amber-600 font-normal ml-1">
+                  ({availableCargo.palletCount}P / {availableCargo.rollingStockCount}V)
+                </span>
+              )}
             </span>
             <span className="text-amber-600">
               ({Math.round(availableCargo.totalWeight / 1000)}K lb)
@@ -753,18 +759,26 @@ function buildGraphFromFlights(flights: SplitFlight[], manuallyAddedFlights?: Se
   dagreGraph.setGraph({ rankdir: 'LR', nodesep: 80, ranksep: 200 });
 
   // Calculate available cargo at each airbase (incoming - outgoing)
+  // Includes both pallets and rolling stock (vehicles)
   const calculateAvailableCargo = (baseId: string) => {
     const incomingFlights = flights.filter(f => f.destination.base_id === baseId);
     const outgoingFlights = flights.filter(f => f.origin.base_id === baseId);
     
+    // Pallets
     const incomingPallets = incomingFlights.reduce((sum, f) => sum + f.pallets.length, 0);
-    const incomingWeight = incomingFlights.reduce((sum, f) => sum + calculateFlightWeight(f), 0);
-    
     const outgoingPallets = outgoingFlights.reduce((sum, f) => sum + f.pallets.length, 0);
+    
+    // Rolling stock (vehicles)
+    const incomingRollingStock = incomingFlights.reduce((sum, f) => sum + (f.rolling_stock?.length || 0), 0);
+    const outgoingRollingStock = outgoingFlights.reduce((sum, f) => sum + (f.rolling_stock?.length || 0), 0);
+    
+    // Weight (includes both pallets and rolling stock)
+    const incomingWeight = incomingFlights.reduce((sum, f) => sum + calculateFlightWeight(f), 0);
     const outgoingWeight = outgoingFlights.reduce((sum, f) => sum + calculateFlightWeight(f), 0);
     
     return {
       palletCount: Math.max(0, incomingPallets - outgoingPallets),
+      rollingStockCount: Math.max(0, incomingRollingStock - outgoingRollingStock),
       totalWeight: Math.max(0, incomingWeight - outgoingWeight),
     };
   };
@@ -1610,7 +1624,7 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
         isDestination: false,
         incomingFlights: [],
         outgoingFlights: [],
-        availableCargo: { palletCount: 0, totalWeight: 0 },
+        availableCargo: { palletCount: 0, rollingStockCount: 0, totalWeight: 0 },
       } as AirbaseNodeData,
     };
     
