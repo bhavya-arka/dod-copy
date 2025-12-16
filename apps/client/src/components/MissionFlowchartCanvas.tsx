@@ -1240,16 +1240,79 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
     // Preserve manually added nodes (like standalone airbases) that aren't from splitFlights
     setNodes(currentNodes => {
       const manualNodes = currentNodes.filter(n => manuallyAddedNodesRef.current.has(n.id));
-      // Merge: use graph nodes as base, but add any manual nodes not already present
-      const graphNodeIds = new Set(enrichedNodes.map(n => n.id));
-      const nodesToAdd = manualNodes.filter(n => !graphNodeIds.has(n.id));
+      
+      // Extract base_ids from graph nodes to check for duplicates
+      const graphBaseIds = new Set(
+        enrichedNodes
+          .filter(n => n.type === 'airbase')
+          .map(n => (n.data as any)?.baseId)
+          .filter(Boolean)
+      );
+      
+      // Filter manual nodes: don't add if same base_id already exists in graph
+      const nodesToAdd = manualNodes.filter(n => {
+        if (n.type === 'airbase') {
+          const baseId = (n.data as any)?.baseId;
+          // Skip if this base_id already exists in graph nodes
+          if (baseId && graphBaseIds.has(baseId)) {
+            return false;
+          }
+        }
+        // Check ID uniqueness for other types
+        const graphNodeIds = new Set(enrichedNodes.map(gn => gn.id));
+        return !graphNodeIds.has(n.id);
+      });
+      
       return [...enrichedNodes, ...nodesToAdd];
+    });
+    
+    // Build a map of old manual node IDs to new graph node IDs (for base_id matching)
+    const manualToGraphIdMap = new Map<string, string>();
+    const nodesToRemoveFromManualRef: string[] = [];
+    
+    for (const manualNode of Array.from(manuallyAddedNodesRef.current)) {
+      if (manualNode.startsWith('base-')) {
+        // Extract base_id from manual node ID (format: base-{base_id}-{timestamp})
+        const parts = manualNode.split('-');
+        const baseId = parts.slice(1, -1).join('-'); // Get base_id without timestamp
+        // Find matching graph node
+        const graphNode = enrichedNodes.find(n => 
+          n.type === 'airbase' && (n.data as any)?.baseId === baseId
+        );
+        if (graphNode && graphNode.id !== manualNode) {
+          manualToGraphIdMap.set(manualNode, graphNode.id);
+          nodesToRemoveFromManualRef.push(manualNode);
+        }
+      }
+    }
+    
+    // Clean up replaced manual nodes from the ref
+    nodesToRemoveFromManualRef.forEach(nodeId => {
+      manuallyAddedNodesRef.current.delete(nodeId);
     });
     
     // Preserve manually added edges when graph rebuilds
     const graphEdgeKeys = new Set(graph.edges.map(e => `${e.source}->${e.target}`));
-    const manualEdgesToPreserve = Array.from(manuallyAddedEdgesRef.current.values())
-      .filter(e => !graphEdgeKeys.has(`${e.source}->${e.target}`));
+    const manualEdgesToPreserve: Edge[] = [];
+    
+    for (const [edgeId, edge] of manuallyAddedEdgesRef.current.entries()) {
+      // Update edge source/target if they were remapped
+      const newSource = manualToGraphIdMap.get(edge.source) || edge.source;
+      const newTarget = manualToGraphIdMap.get(edge.target) || edge.target;
+      
+      if (newSource !== edge.source || newTarget !== edge.target) {
+        // Update the ref with remapped edge
+        const remappedEdge = { ...edge, source: newSource, target: newTarget };
+        manuallyAddedEdgesRef.current.set(edgeId, remappedEdge);
+        
+        // Add to preserve list if not a duplicate
+        if (!graphEdgeKeys.has(`${newSource}->${newTarget}`)) {
+          manualEdgesToPreserve.push(remappedEdge);
+        }
+      } else if (!graphEdgeKeys.has(`${edge.source}->${edge.target}`)) {
+        manualEdgesToPreserve.push(edge);
+      }
+    }
     
     setEdges([...graph.edges, ...manualEdgesToPreserve]);
   }, [splitFlights, setNodes, setEdges, enrichNodesWithCallbacks]);

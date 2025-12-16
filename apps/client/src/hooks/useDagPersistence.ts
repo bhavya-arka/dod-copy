@@ -197,13 +197,29 @@ export function useDagPersistence({
 
       const result = await dagApi.edges.create(dagEdge);
 
-      if (result.error) throw new Error(result.error);
+      if (result.error) {
+        // Handle duplicate edge gracefully - edge already exists, not an error
+        if (result.error.toLowerCase().includes('already exists')) {
+          console.log(`DAG edge already exists: ${edge.source} -> ${edge.target}`);
+          setSyncStatus('saved');
+          setTimeout(() => setSyncStatus('idle'), 2000);
+          return;
+        }
+        throw new Error(result.error);
+      }
 
       console.log(`DAG edge saved: ${edge.source} -> ${edge.target}`);
       setSyncStatus('saved');
       setTimeout(() => setSyncStatus('idle'), 2000);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save edge';
+      // Also handle duplicate edge in catch block
+      if (message.toLowerCase().includes('already exists')) {
+        console.log(`DAG edge already exists: ${edge.source} -> ${edge.target}`);
+        setSyncStatus('saved');
+        setTimeout(() => setSyncStatus('idle'), 2000);
+        return;
+      }
       setError(message);
       setSyncStatus('error');
       console.error('DAG save edge error:', message);
