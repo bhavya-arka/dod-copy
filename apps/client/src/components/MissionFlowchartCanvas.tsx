@@ -970,6 +970,8 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
   const manuallyAddedNodesRef = useRef<Set<string>>(new Set());
   // Track manually added flights that should NOT have auto-edges created
   const manuallyAddedFlightsRef = useRef<Set<string>>(new Set());
+  // Track manually added edges that should be preserved when graph rebuilds
+  const manuallyAddedEdgesRef = useRef<Map<string, Edge>>(new Map());
 
   // Define handlers first (before enrichNodesWithCallbacks)
   const handleExportPDF = useCallback(() => {
@@ -1219,6 +1221,9 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
       markerEnd: { type: MarkerType.ArrowClosed, color: isHazmat ? '#eab308' : isAdvon ? '#f97316' : '#6366f1' },
     };
     
+    // Track this as a manually added edge to preserve it when graph rebuilds
+    manuallyAddedEdgesRef.current.set(newEdge.id, newEdge as Edge);
+    
     setEdges(eds => addEdge(newEdge as Edge, eds));
     
     if (dagSyncEnabled && isAuthenticated) {
@@ -1241,7 +1246,12 @@ function FlowchartCanvasInner({ splitFlights, allocationResult, onFlightsChange,
       return [...enrichedNodes, ...nodesToAdd];
     });
     
-    setEdges(graph.edges);
+    // Preserve manually added edges when graph rebuilds
+    const graphEdgeKeys = new Set(graph.edges.map(e => `${e.source}->${e.target}`));
+    const manualEdgesToPreserve = Array.from(manuallyAddedEdgesRef.current.values())
+      .filter(e => !graphEdgeKeys.has(`${e.source}->${e.target}`));
+    
+    setEdges([...graph.edges, ...manualEdgesToPreserve]);
   }, [splitFlights, setNodes, setEdges, enrichNodesWithCallbacks]);
 
   useEffect(() => {
