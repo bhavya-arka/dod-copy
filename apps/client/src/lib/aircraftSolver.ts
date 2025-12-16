@@ -845,9 +845,10 @@ function placeRollingStock(
         // Ignore heuristic score entirely - we want balance over "centrality"
         const aDistFromTarget = Math.abs(a.projectedCG - targetCGPercent);
         const bDistFromTarget = Math.abs(b.projectedCG - targetCGPercent);
-        if (Math.abs(aDistFromTarget - bDistFromTarget) < 0.5) {
-          // Tie-breaker: prefer AFT (higher CG) - easier to recover from aft-heavy
-          // by placing lighter items forward than recovering from nose-heavy
+        if (Math.abs(aDistFromTarget - bDistFromTarget) < 0.01) {
+          // Tie-breaker (only when truly equal): prefer AFT (higher CG) - easier to 
+          // recover from aft-heavy by placing lighter items forward
+          console.log(`[PlaceRollingStock] Tie-breaker: ${a.projectedCG.toFixed(1)}% vs ${b.projectedCG.toFixed(1)}% - preferring aft`);
           return b.projectedCG - a.projectedCG; // Higher CG wins
         }
         return aDistFromTarget - bDistFromTarget;
