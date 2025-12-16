@@ -342,6 +342,7 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
           className="min-h-screen"
         >
           <MissionProvider
+            parseResult={state.movementData}
             allocationResult={state.allocationResult}
             classifiedItems={state.classifiedItems}
             selectedAircraft={state.selectedAircraft}

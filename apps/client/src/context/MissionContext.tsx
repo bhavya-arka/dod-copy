@@ -140,6 +140,7 @@ export function useMission(): MissionContextType {
 
 interface MissionProviderProps {
   children: ReactNode;
+  parseResult?: ParseResult | null;
   allocationResult?: AllocationResult | null;
   classifiedItems?: ClassifiedItems | null;
   selectedAircraft?: AircraftType;
@@ -147,13 +148,14 @@ interface MissionProviderProps {
 }
 
 export function MissionProvider({ 
-  children, 
+  children,
+  parseResult: initialParseResult,
   allocationResult: initialAllocation,
   classifiedItems: initialClassified,
   selectedAircraft: initialAircraft = 'C-17',
   insights: initialInsights
 }: MissionProviderProps) {
-  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
+  const [parseResult, setParseResult] = useState<ParseResult | null>(initialParseResult || null);
   const [classifiedItems, setClassifiedItems] = useState<ClassifiedItems | null>(initialClassified || null);
   const [allocationResult, setAllocationResult] = useState<AllocationResult | null>(initialAllocation || null);
   const [insights, setInsights] = useState<InsightsSummary | null>(initialInsights || null);
@@ -172,6 +174,11 @@ export function MissionProvider({
   
   const [analytics, setAnalytics] = useState<MissionAnalytics | null>(null);
   const [fuelBreakdown, setFuelBreakdown] = useState<FuelCostBreakdown | null>(null);
+
+  // Sync parseResult from props when it changes - always mirror the prop value
+  useEffect(() => {
+    setParseResult(initialParseResult ?? null);
+  }, [initialParseResult]);
 
   useEffect(() => {
     if (allocationResult) {
@@ -532,6 +539,7 @@ export function MissionProvider({
             split_flights: splitFlights,
             routes
           },
+          movement_data: parseResult,
           movement_items_count: Math.max(itemCount, 1),
           total_weight_lb: Math.round(allocationResult.total_weight) || 0,
           aircraft_count: allocationResult.total_aircraft || 1
@@ -582,7 +590,7 @@ export function MissionProvider({
     } catch (error) {
       console.error('Failed to save flight plan to database:', error);
     }
-  }, [allocationResult, splitFlights, routes]);
+  }, [allocationResult, splitFlights, routes, parseResult]);
 
   const updateConfiguration = useCallback(async (planId: number) => {
     if (!allocationResult) return;
@@ -604,6 +612,7 @@ export function MissionProvider({
             split_flights: splitFlights,
             routes
           },
+          movement_data: parseResult,
           movement_items_count: Math.max(itemCount, 1),
           total_weight_lb: Math.round(allocationResult.total_weight) || 0,
           aircraft_count: allocationResult.total_aircraft || 1
@@ -621,7 +630,7 @@ export function MissionProvider({
     } catch (error) {
       console.error('Failed to update flight plan:', error);
     }
-  }, [allocationResult, splitFlights, routes]);
+  }, [allocationResult, splitFlights, routes, parseResult]);
 
   const updatePlanSchedules = useCallback(async (planId: number, flights?: SplitFlight[]) => {
     const flightsToSave = flights || splitFlights;
