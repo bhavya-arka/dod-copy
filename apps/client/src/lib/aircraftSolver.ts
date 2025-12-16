@@ -845,6 +845,11 @@ function placeRollingStock(
         // Ignore heuristic score entirely - we want balance over "centrality"
         const aDistFromTarget = Math.abs(a.projectedCG - targetCGPercent);
         const bDistFromTarget = Math.abs(b.projectedCG - targetCGPercent);
+        if (Math.abs(aDistFromTarget - bDistFromTarget) < 0.5) {
+          // Tie-breaker: prefer AFT (higher CG) - easier to recover from aft-heavy
+          // by placing lighter items forward than recovering from nose-heavy
+          return b.projectedCG - a.projectedCG; // Higher CG wins
+        }
         return aDistFromTarget - bDistFromTarget;
       });
       const best = worseningCandidates[0];
