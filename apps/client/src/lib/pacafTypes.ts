@@ -308,6 +308,9 @@ export interface AircraftSpec {
   lemac_station: number;         // Leading Edge of MAC station (inches from datum)
   cargo_bay_fs_start: number;    // Fuselage Station (FS) where solver X=0 begins (for CG calculations)
   
+  // Derived: Envelope limits in station coordinates (computed from LEMAC + %MAC)
+  // These are calculated at runtime to avoid duplication
+  
   // Station-specific constraints
   stations: StationConstraint[];
   
@@ -530,6 +533,60 @@ export function getStationConstraint(aircraftType: AircraftType, position: numbe
 export function getRDLDistance(aircraftType: AircraftType, position: number): number {
   const station = getStationConstraint(aircraftType, position);
   return station?.rdl_distance || 0;
+}
+
+/**
+ * Calculate envelope limits in station coordinates (inches from datum)
+ * Per aircraft W&B technical orders, the CG envelope is defined as %MAC
+ * This converts those limits to station coordinates for physics calculations
+ */
+export function getEnvelopeLimitsStation(spec: AircraftSpec): { 
+  fwdLimit: number; 
+  aftLimit: number; 
+  usableLength: number;
+  targetStation: number;
+} {
+  // Forward limit = LEMAC + (fwd%MAC × MAC_length)
+  const fwdLimit = spec.lemac_station + (spec.cob_min_percent / 100) * spec.mac_length;
+  // Aft limit = LEMAC + (aft%MAC × MAC_length)  
+  const aftLimit = spec.lemac_station + (spec.cob_max_percent / 100) * spec.mac_length;
+  // Usable envelope range
+  const usableLength = aftLimit - fwdLimit;
+  // Target station (midpoint of envelope)
+  const targetStation = (fwdLimit + aftLimit) / 2;
+  
+  return { fwdLimit, aftLimit, usableLength, targetStation };
+}
+
+/**
+ * Convert station CG to envelope percentage (0-100% of usable envelope)
+ * Unlike %MAC, this produces values where:
+ * - Forward limit = 0%
+ * - Aft limit = 100%
+ * - Target (center) = 50%
+ * 
+ * This is more intuitive for load balancing and avoids negative values
+ */
+export function stationToEnvelopePercent(stationCG: number, spec: AircraftSpec): {
+  percent: number;
+  status: 'FORWARD_OF_LIMIT' | 'AFT_OF_LIMIT' | 'WITHIN_LIMITS';
+  macPercent: number; // Still provide %MAC for display
+} {
+  const { fwdLimit, aftLimit, usableLength } = getEnvelopeLimitsStation(spec);
+  
+  // Calculate %MAC (the standard display value)
+  const macPercent = ((stationCG - spec.lemac_station) / spec.mac_length) * 100;
+  
+  // Calculate envelope percentage
+  if (stationCG < fwdLimit) {
+    return { percent: 0, status: 'FORWARD_OF_LIMIT', macPercent };
+  }
+  if (stationCG > aftLimit) {
+    return { percent: 100, status: 'AFT_OF_LIMIT', macPercent };
+  }
+  
+  const percent = ((stationCG - fwdLimit) / usableLength) * 100;
+  return { percent, status: 'WITHIN_LIMITS', macPercent };
 }
 
 /**

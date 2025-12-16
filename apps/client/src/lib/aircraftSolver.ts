@@ -24,7 +24,9 @@ import {
   ClassifiedItems,
   AIRCRAFT_SPECS,
   PALLET_463L,
-  PAX_WEIGHT_LB
+  PAX_WEIGHT_LB,
+  getEnvelopeLimitsStation,
+  stationToEnvelopePercent
 } from './pacafTypes';
 import { processPalletization, PalletizationResult, resetPalletCounter } from './palletizationEngine';
 import { sortByLengthDescending, sortByWeightDescending } from './classificationEngine';
@@ -432,10 +434,11 @@ function scorePlacementPosition(
   currentWeight: number,
   targetCGPercent: number,
   aircraftSpec: AircraftSpec
-): { score: number; projectedCGPercent: number; projectedStationCG: number } {
+): { score: number; projectedCGPercent: number; projectedStationCG: number; envelopeStatus: string } {
   const bayStart = aircraftSpec.cargo_bay_fs_start;
-  const minCG = aircraftSpec.cob_min_percent;
-  const maxCG = aircraftSpec.cob_max_percent;
+  
+  // Get envelope limits in station coordinates
+  const { fwdLimit, aftLimit, targetStation } = getEnvelopeLimitsStation(aircraftSpec);
   
   // Calculate arm to center of item in station coordinates
   const arm = xPosition + (itemLength / 2) + bayStart;
@@ -444,29 +447,39 @@ function scorePlacementPosition(
   const newWeight = currentWeight + weight;
   const newMoment = currentMoment + (weight * arm);
   
-  // Calculate new CG
+  // Calculate new CG in station coordinates
   const newStationCG = newWeight > 0 ? newMoment / newWeight : bayStart;
-  const newCGPercent = ((newStationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
   
-  // Base score = deviation from target (lower is better)
-  let score = Math.abs(newCGPercent - targetCGPercent);
+  // Use envelope-based conversion for accurate status
+  const envelopeResult = stationToEnvelopePercent(newStationCG, aircraftSpec);
+  const newCGPercent = envelopeResult.macPercent; // Keep %MAC for display compatibility
   
-  // CRITICAL: Add heavy penalty for positions that push CG outside envelope
-  // This ensures we STRONGLY prefer staying within 16-40% MAC even if slightly off target
-  if (newCGPercent < minCG) {
-    // Forward of envelope - add penalty based on how far outside
-    const forwardPenalty = (minCG - newCGPercent) * 10; // 10x penalty for each % outside
+  // ENVELOPE-BASED SCORING: Use station deviation from target, not just %MAC
+  // This produces more physically accurate scores
+  const stationDeviationFromTarget = Math.abs(newStationCG - targetStation);
+  
+  // Convert station deviation to a normalized score (per inch of deviation)
+  // Normalize by usable envelope length so scores are comparable
+  const envelopeLength = aftLimit - fwdLimit;
+  let score = (stationDeviationFromTarget / envelopeLength) * 100;
+  
+  // CRITICAL: Add heavy penalty for positions outside envelope
+  // Use station-based limits for accurate boundary detection
+  if (newStationCG < fwdLimit) {
+    // Forward of envelope - penalty based on station distance outside
+    const forwardPenalty = ((fwdLimit - newStationCG) / envelopeLength) * 1000;
     score += forwardPenalty;
-  } else if (newCGPercent > maxCG) {
-    // Aft of envelope - add penalty based on how far outside
-    const aftPenalty = (newCGPercent - maxCG) * 10;
+  } else if (newStationCG > aftLimit) {
+    // Aft of envelope - penalty based on station distance outside
+    const aftPenalty = ((newStationCG - aftLimit) / envelopeLength) * 1000;
     score += aftPenalty;
   }
   
   return { 
     score, 
     projectedCGPercent: newCGPercent,
-    projectedStationCG: newStationCG
+    projectedStationCG: newStationCG,
+    envelopeStatus: envelopeResult.status
   };
 }
 
