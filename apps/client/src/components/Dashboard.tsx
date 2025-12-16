@@ -135,17 +135,17 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 gradient-mesh p-8">
-      <header className="flex justify-between items-center mb-8">
+    <div className="min-h-screen bg-neutral-50 gradient-mesh p-4 sm:p-6 md:p-8 overflow-auto">
+      <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">Arka Cargo Operations</h1>
-          <p className="text-neutral-500">Welcome back, {user.username}</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 tracking-tight">Arka Cargo Operations</h1>
+          <p className="text-neutral-500 text-sm sm:text-base">Welcome back, {user.username}</p>
         </div>
-        <div className="flex items-center space-x-4">
-          <span className="text-neutral-500 text-sm">{user.email}</span>
+        <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
+          <span className="text-neutral-500 text-xs sm:text-sm truncate max-w-[150px] sm:max-w-none">{user.email}</span>
           <button
             onClick={onLogout}
-            className="btn-secondary"
+            className="btn-secondary text-sm px-4 py-2 whitespace-nowrap"
           >
             Sign Out
           </button>
@@ -153,11 +153,11 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
       </header>
 
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex space-x-1 bg-neutral-100 rounded-xl p-1">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+          <div className="flex space-x-1 bg-neutral-100 rounded-xl p-1 overflow-x-auto">
             <button
               onClick={() => setActiveTab('all')}
-              className={`px-4 py-2 rounded-lg text-sm transition ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm transition whitespace-nowrap ${
                 activeTab === 'all' 
                   ? 'bg-white text-neutral-900 shadow-soft font-medium' 
                   : 'text-neutral-500 hover:text-neutral-700'
@@ -167,7 +167,7 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
             </button>
             <button
               onClick={() => setActiveTab('draft')}
-              className={`px-4 py-2 rounded-lg text-sm transition ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm transition whitespace-nowrap ${
                 activeTab === 'draft' 
                   ? 'bg-white text-neutral-900 shadow-soft font-medium' 
                   : 'text-neutral-500 hover:text-neutral-700'
@@ -177,7 +177,7 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
             </button>
             <button
               onClick={() => setActiveTab('complete')}
-              className={`px-4 py-2 rounded-lg text-sm transition ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm transition whitespace-nowrap ${
                 activeTab === 'complete' 
                   ? 'bg-white text-neutral-900 shadow-soft font-medium' 
                   : 'text-neutral-500 hover:text-neutral-700'
@@ -188,7 +188,7 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
           </div>
           <button
             onClick={onStartNew}
-            className="btn-primary flex items-center space-x-2"
+            className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
           >
             <span>+</span>
             <span>New Flight Plan</span>
@@ -236,7 +236,7 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className={`glass-card p-6 card-hover ${
+                  className={`glass-card p-4 sm:p-6 card-hover ${
                     plan.status === 'complete' 
                       ? 'border-l-4 border-l-green-500' 
                       : plan.status === 'draft' 
@@ -244,14 +244,14 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
                       : ''
                   }`}
                 >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
+                  <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                         <span className="text-lg">
                           {plan.status === 'complete' ? '✅' : '📝'}
                         </span>
-                        <h3 className="text-xl text-neutral-900 font-medium">{plan.name}</h3>
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        <h3 className="text-lg sm:text-xl text-neutral-900 font-medium truncate">{plan.name}</h3>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium shrink-0 ${
                           plan.status === 'complete' 
                             ? 'bg-green-100 text-green-700'
                             : plan.status === 'draft'
@@ -261,7 +261,7 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
                           {plan.status.toUpperCase()}
                         </span>
                       </div>
-                      <div className="flex items-center space-x-4 text-sm text-neutral-500">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-neutral-500">
                         <span className="badge">{plan.movement_items_count} items</span>
                         <span className="badge">{(plan.total_weight_lb / 1000).toFixed(1)}K lbs</span>
                         <span className="badge">
@@ -269,7 +269,7 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
                             ? `${plan.schedules.length} flights` 
                             : `${plan.aircraft_count} aircraft`}
                         </span>
-                        <span>Updated {formatDate(plan.updated_at)}</span>
+                        <span className="text-neutral-400">Updated {formatDate(plan.updated_at)}</span>
                       </div>
                       {plan.schedules && plan.schedules.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-neutral-200/50">
@@ -373,25 +373,26 @@ export default function Dashboard({ user, onLogout, onStartNew, onLoadPlan }: Da
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-2 shrink-0">
                       {plan.status === 'draft' && (
                         <button
                           onClick={() => handleMarkComplete(plan.id)}
-                          className="bg-green-50 hover:bg-green-100 text-green-600 px-3 py-2 rounded-xl transition text-sm flex items-center space-x-1"
+                          className="bg-green-50 hover:bg-green-100 text-green-600 px-3 py-2 rounded-xl transition text-xs sm:text-sm flex items-center space-x-1"
                         >
                           <span>✓</span>
-                          <span>Mark Complete</span>
+                          <span className="hidden xs:inline">Mark Complete</span>
+                          <span className="xs:hidden">Complete</span>
                         </button>
                       )}
                       <button
                         onClick={() => onLoadPlan(plan.id)}
-                        className="btn-primary text-sm"
+                        className="btn-primary text-xs sm:text-sm px-4 py-2"
                       >
                         Open
                       </button>
                       <button
                         onClick={() => handleDelete(plan.id)}
-                        className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-xl transition text-sm"
+                        className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-xl transition text-xs sm:text-sm"
                       >
                         Delete
                       </button>
