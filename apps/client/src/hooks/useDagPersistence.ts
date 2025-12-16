@@ -20,6 +20,7 @@ export interface UseDagPersistenceOptions {
   enabled: boolean;
   onLoadedNodes?: (nodes: Node[]) => void;
   onLoadedEdges?: (edges: Edge[]) => void;
+  getNodes?: () => Node[];
 }
 
 export interface UseDagPersistenceResult {
@@ -40,6 +41,7 @@ export function useDagPersistence({
   enabled,
   onLoadedNodes,
   onLoadedEdges,
+  getNodes,
 }: UseDagPersistenceOptions): UseDagPersistenceResult {
   const [isLoading, setIsLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<DagSyncStatus>('idle');
@@ -116,14 +118,58 @@ export function useDagPersistence({
     }
   }, [enabled, userId]);
 
+  const saveNodeInternal = useCallback(async (node: Node): Promise<string | null> => {
+    if (!enabled || !userId) return null;
+
+    try {
+      const dagNode = reactFlowNodeToDagNode(node, userId);
+      const result = await dagApi.nodes.create(dagNode);
+
+      if (result.error) throw new Error(result.error);
+      if (result.data) {
+        nodeIdMapRef.current.set(node.id, result.data.id);
+        console.log(`DAG node saved: ${node.id} -> ${result.data.id}`);
+        return result.data.id;
+      }
+      return null;
+    } catch (err) {
+      console.error('DAG save node error:', err);
+      return null;
+    }
+  }, [enabled, userId]);
+
   const saveEdge = useCallback(async (edge: Edge) => {
     if (!enabled || !userId) return;
 
-    const sourceDagId = nodeIdMapRef.current.get(edge.source);
-    const targetDagId = nodeIdMapRef.current.get(edge.target);
+    let sourceDagId = nodeIdMapRef.current.get(edge.source);
+    let targetDagId = nodeIdMapRef.current.get(edge.target);
 
+    // If nodes are missing, try to save them first
     if (!sourceDagId || !targetDagId) {
-      console.warn('DAG save edge skipped: source or target node not yet saved to DAG', {
+      const currentNodes = getNodes?.() || [];
+
+      if (!sourceDagId) {
+        const sourceNode = currentNodes.find(n => n.id === edge.source);
+        if (sourceNode) {
+          console.log(`DAG edge: saving missing source node ${edge.source}`);
+          const savedId = await saveNodeInternal(sourceNode);
+          if (savedId) sourceDagId = savedId;
+        }
+      }
+
+      if (!targetDagId) {
+        const targetNode = currentNodes.find(n => n.id === edge.target);
+        if (targetNode) {
+          console.log(`DAG edge: saving missing target node ${edge.target}`);
+          const savedId = await saveNodeInternal(targetNode);
+          if (savedId) targetDagId = savedId;
+        }
+      }
+    }
+
+    // Check again after attempting to save
+    if (!sourceDagId || !targetDagId) {
+      console.warn('DAG save edge skipped: source or target node could not be saved', {
         source: edge.source,
         target: edge.target,
         sourceDagId,
@@ -153,6 +199,7 @@ export function useDagPersistence({
 
       if (result.error) throw new Error(result.error);
 
+      console.log(`DAG edge saved: ${edge.source} -> ${edge.target}`);
       setSyncStatus('saved');
       setTimeout(() => setSyncStatus('idle'), 2000);
     } catch (err) {
@@ -161,7 +208,7 @@ export function useDagPersistence({
       setSyncStatus('error');
       console.error('DAG save edge error:', message);
     }
-  }, [enabled, userId]);
+  }, [enabled, userId, getNodes, saveNodeInternal]);
 
   const flushPositionUpdates = useCallback(async () => {
     if (!enabled || !userId || positionUpdateQueue.current.size === 0) return;
