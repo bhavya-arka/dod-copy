@@ -76,6 +76,14 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
     isProcessing: false,
     error: null
   });
+  
+  const [activePlanId, setActivePlanId] = useState<number | null>(null);
+  const [activePlanName, setActivePlanName] = useState<string | null>(null);
+
+  const handlePlanChange = useCallback((planInfo: { id: number | null; name: string | null }) => {
+    setActivePlanId(planInfo.id);
+    setActivePlanName(planInfo.name);
+  }, []);
 
   useEffect(() => {
     if (loadPlanId) {
@@ -151,6 +159,9 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
           optimization_opportunities: ['Movement data unavailable - some features may be limited']
         };
       }
+
+      setActivePlanId(plan.id);
+      setActivePlanName(plan.name);
 
       setState(prev => ({
         ...prev,
@@ -256,16 +267,28 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
 
   const handleBack = useCallback(() => {
     setState(prev => {
+      if (prev.currentScreen === 'mission_workspace') {
+        // Clear plan state when leaving workspace to prevent stale remounts
+        setActivePlanId(null);
+        setActivePlanName(null);
+        if (onDashboard) {
+          onDashboard();
+          return prev;
+        }
+        return { ...prev, currentScreen: 'upload' };
+      }
       let newScreen: typeof prev.currentScreen = 'upload';
       if (prev.currentScreen === 'load_plans') newScreen = 'brief';
       else if (prev.currentScreen === 'route_planning') newScreen = 'load_plans';
-      else if (prev.currentScreen === 'mission_workspace') newScreen = 'load_plans';
       else if (prev.currentScreen === 'brief') newScreen = 'upload';
       return { ...prev, currentScreen: newScreen };
     });
-  }, []);
+  }, [onDashboard]);
 
   const handleHome = useCallback(() => {
+    // Clear plan state when going home
+    setActivePlanId(null);
+    setActivePlanName(null);
     setState(prev => ({
       ...prev,
       currentScreen: 'upload',
@@ -381,11 +404,15 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
           className="min-h-screen"
         >
           <MissionProvider
+            key={`mission-${activePlanId ?? 'new'}`}
             parseResult={state.movementData}
             allocationResult={state.allocationResult}
             classifiedItems={state.classifiedItems}
             selectedAircraft={state.selectedAircraft}
             insights={state.insights}
+            activePlanId={activePlanId}
+            activePlanName={activePlanName}
+            onPlanChange={handlePlanChange}
           >
             <MissionWorkspace onBack={handleBack} onHome={handleHome} />
           </MissionProvider>

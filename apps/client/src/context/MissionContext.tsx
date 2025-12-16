@@ -88,6 +88,10 @@ interface MissionContextType {
   isProcessing: boolean;
   error: string | null;
   
+  // Plan tracking - tracks currently loaded plan from database
+  activePlanId: number | null;
+  activePlanName: string | null;
+  
   // Configurations
   savedConfigurations: MissionConfiguration[];
   activeConfigurationId: string | null;
@@ -109,9 +113,11 @@ interface MissionContextType {
   setCurrentTab: (tab: MissionTab) => void;
   setIsProcessing: (processing: boolean) => void;
   setError: (error: string | null) => void;
+  setActivePlan: (id: number | null, name: string | null) => void;
   
   // Configuration management
-  saveConfiguration: (name: string) => Promise<void>;
+  saveConfiguration: (name?: string) => Promise<void>;
+  savePlanAs: (name: string) => Promise<void>;
   updateConfiguration: (planId: number) => Promise<void>;
   updatePlanSchedules: (planId: number, flights?: SplitFlight[]) => Promise<void>;
   loadConfiguration: (id: string) => void;
@@ -145,6 +151,9 @@ interface MissionProviderProps {
   classifiedItems?: ClassifiedItems | null;
   selectedAircraft?: AircraftType;
   insights?: InsightsSummary | null;
+  activePlanId?: number | null;
+  activePlanName?: string | null;
+  onPlanChange?: (planInfo: { id: number | null; name: string | null }) => void;
 }
 
 export function MissionProvider({ 
@@ -153,7 +162,10 @@ export function MissionProvider({
   allocationResult: initialAllocation,
   classifiedItems: initialClassified,
   selectedAircraft: initialAircraft = 'C-17',
-  insights: initialInsights
+  insights: initialInsights,
+  activePlanId: initialPlanId,
+  activePlanName: initialPlanName,
+  onPlanChange
 }: MissionProviderProps) {
   const [parseResult, setParseResult] = useState<ParseResult | null>(initialParseResult || null);
   const [classifiedItems, setClassifiedItems] = useState<ClassifiedItems | null>(initialClassified || null);
@@ -169,16 +181,36 @@ export function MissionProvider({
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  const [activePlanId, setActivePlanId] = useState<number | null>(initialPlanId ?? null);
+  const [activePlanName, setActivePlanName] = useState<string | null>(initialPlanName ?? null);
+  
   const [savedConfigurations, setSavedConfigurations] = useState<MissionConfiguration[]>([]);
   const [activeConfigurationId, setActiveConfigurationId] = useState<string | null>(null);
   
   const [analytics, setAnalytics] = useState<MissionAnalytics | null>(null);
   const [fuelBreakdown, setFuelBreakdown] = useState<FuelCostBreakdown | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Sync parseResult from props when it changes - always mirror the prop value
   useEffect(() => {
     setParseResult(initialParseResult ?? null);
   }, [initialParseResult]);
+
+  // Sync activePlanId/Name from props when they change (e.g., when loading a saved plan)
+  // Only sync when props are concrete non-null values to avoid overwriting internal state
+  useEffect(() => {
+    if (initialPlanId !== undefined && initialPlanId !== null) {
+      setActivePlanId(initialPlanId);
+    }
+    if (initialPlanName !== undefined && initialPlanName !== null) {
+      setActivePlanName(initialPlanName);
+    }
+  }, [initialPlanId, initialPlanName]);
+
+  // Notify parent when activePlan changes (after save/load/reset operations)
+  useEffect(() => {
+    onPlanChange?.({ id: activePlanId, name: activePlanName });
+  }, [activePlanId, activePlanName, onPlanChange]);
 
   useEffect(() => {
     if (allocationResult) {
@@ -502,7 +534,136 @@ export function MissionProvider({
     });
   }, [allocationResult, splitFlights, routes]);
 
-  const saveConfiguration = useCallback(async (name: string) => {
+  const setActivePlan = useCallback((id: number | null, name: string | null) => {
+    setActivePlanId(id);
+    setActivePlanName(name);
+  }, []);
+
+  const saveConfiguration = useCallback(async (name?: string) => {
+    if (isSaving) {
+      console.warn('[MissionContext] Save already in progress');
+      return;
+    }
+    
+    if (!allocationResult) {
+      console.error('[MissionContext] Cannot save: No allocation result');
+      setError('Cannot save: No allocation data available');
+      return;
+    }
+    
+    if (!parseResult) {
+      console.error('[MissionContext] Cannot save: No movement data (parseResult is null)');
+      setError('Cannot save: No movement data available. Please upload a movement list first.');
+      return;
+    }
+
+    if (activePlanId) {
+      await updateConfiguration(activePlanId);
+      return;
+    }
+
+    if (!name) {
+      console.error('[MissionContext] Cannot save new plan: No name provided');
+      setError('Cannot save: Please provide a name for the new plan');
+      return;
+    }
+    
+    setIsSaving(true);
+    
+    const config: MissionConfiguration = {
+      id: `config-${Date.now()}`,
+      name,
+      created_at: new Date(),
+      updated_at: new Date(),
+      status: 'draft',
+      allocation_result: allocationResult,
+      split_flights: splitFlights,
+      routes,
+      notes: ''
+    };
+    
+    setSavedConfigurations(prev => [...prev, config]);
+    setActiveConfigurationId(config.id);
+    
+    try {
+      const itemCount = allocationResult.total_pallets + 
+                        allocationResult.total_rolling_stock + 
+                        (allocationResult.total_pax > 0 ? 1 : 0);
+      
+      const response = await fetch('/api/flight-plans', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          name,
+          status: 'draft',
+          allocation_data: {
+            allocation_result: allocationResult,
+            split_flights: splitFlights,
+            routes
+          },
+          movement_data: parseResult,
+          movement_items_count: Math.max(itemCount, 1),
+          total_weight_lb: Math.round(allocationResult.total_weight) || 0,
+          aircraft_count: allocationResult.total_aircraft || 1
+        }),
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to save flight plan:', await response.text());
+        setIsSaving(false);
+        return;
+      }
+      
+      const savedPlan = await response.json();
+      
+      setActivePlanId(savedPlan.id);
+      setActivePlanName(name);
+      
+      if (splitFlights.length > 0 && savedPlan.id) {
+        const schedulesToSave = splitFlights.map(flight => ({
+          callsign: flight.callsign,
+          aircraft_type: flight.aircraft_type,
+          aircraft_id: flight.aircraft_id,
+          origin_icao: flight.origin.icao,
+          origin_name: flight.origin.name,
+          destination_icao: flight.destination.icao,
+          destination_name: flight.destination.name,
+          scheduled_departure: flight.scheduled_departure.toISOString(),
+          scheduled_arrival: flight.scheduled_arrival.toISOString(),
+          total_weight_lb: flight.total_weight_lb,
+          pax_count: flight.pax_count,
+          pallet_count: flight.pallets.length,
+          rolling_stock_count: flight.rolling_stock.length,
+          center_of_balance_percent: flight.center_of_balance_percent,
+          is_modified: flight.is_modified || false
+        }));
+        
+        try {
+          const scheduleResponse = await fetch(`/api/flight-plans/${savedPlan.id}/schedules`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ schedules: schedulesToSave })
+          });
+          
+          if (!scheduleResponse.ok) {
+            console.error('Failed to save flight schedules:', await scheduleResponse.text());
+          }
+        } catch (scheduleError) {
+          console.error('Failed to save flight schedules:', scheduleError);
+        }
+      }
+      setIsSaving(false);
+    } catch (error) {
+      console.error('Failed to save flight plan to database:', error);
+      setIsSaving(false);
+    }
+  }, [allocationResult, splitFlights, routes, parseResult, activePlanId, isSaving]);
+
+  const savePlanAs = useCallback(async (name: string) => {
     if (!allocationResult) {
       console.error('[MissionContext] Cannot save: No allocation result');
       setError('Cannot save: No allocation data available');
@@ -563,6 +724,9 @@ export function MissionProvider({
       
       const savedPlan = await response.json();
       
+      setActivePlanId(savedPlan.id);
+      setActivePlanName(name);
+      
       if (splitFlights.length > 0 && savedPlan.id) {
         const schedulesToSave = splitFlights.map(flight => ({
           callsign: flight.callsign,
@@ -603,6 +767,11 @@ export function MissionProvider({
   }, [allocationResult, splitFlights, routes, parseResult]);
 
   const updateConfiguration = useCallback(async (planId: number) => {
+    if (isSaving) {
+      console.warn('[MissionContext] Save already in progress');
+      return;
+    }
+    
     if (!allocationResult) {
       console.error('[MissionContext] Cannot update: No allocation result');
       return;
@@ -612,6 +781,8 @@ export function MissionProvider({
       console.error('[MissionContext] Cannot update: No movement data (parseResult is null)');
       return;
     }
+    
+    setIsSaving(true);
     
     try {
       const itemCount = allocationResult.total_pallets + 
@@ -639,16 +810,19 @@ export function MissionProvider({
       
       if (!response.ok) {
         console.error('Failed to update flight plan:', await response.text());
+        setIsSaving(false);
         return;
       }
       
       if (splitFlights.length > 0) {
         await updatePlanSchedules(planId, splitFlights);
       }
+      setIsSaving(false);
     } catch (error) {
       console.error('Failed to update flight plan:', error);
+      setIsSaving(false);
     }
-  }, [allocationResult, splitFlights, routes, parseResult]);
+  }, [allocationResult, splitFlights, routes, parseResult, isSaving]);
 
   const updatePlanSchedules = useCallback(async (planId: number, flights?: SplitFlight[]) => {
     const flightsToSave = flights || splitFlights;
@@ -721,6 +895,8 @@ export function MissionProvider({
     setCurrentTab('flights');
     setError(null);
     setActiveConfigurationId(null);
+    setActivePlanId(null);
+    setActivePlanName(null);
     setAnalytics(null);
     setFuelBreakdown(null);
   }, []);
@@ -738,6 +914,8 @@ export function MissionProvider({
     currentTab,
     isProcessing,
     error,
+    activePlanId,
+    activePlanName,
     savedConfigurations,
     activeConfigurationId,
     analytics,
@@ -754,7 +932,9 @@ export function MissionProvider({
     setCurrentTab,
     setIsProcessing,
     setError,
+    setActivePlan,
     saveConfiguration,
+    savePlanAs,
     updateConfiguration,
     updatePlanSchedules,
     loadConfiguration,
@@ -766,8 +946,10 @@ export function MissionProvider({
   }), [
     parseResult, classifiedItems, allocationResult, insights, splitFlights, routes, manifestId,
     selectedAircraft, selectedAircraftIndex, currentTab, isProcessing, error,
+    activePlanId, activePlanName,
     savedConfigurations, activeConfigurationId, analytics, fuelBreakdown,
-    saveConfiguration, updateConfiguration, updatePlanSchedules, loadConfiguration, deleteConfiguration, compareConfigurations,
+    setActivePlan, saveConfiguration, savePlanAs, updateConfiguration, updatePlanSchedules, 
+    loadConfiguration, deleteConfiguration, compareConfigurations,
     calculateAnalytics, calculateFuelBreakdown, resetMission
   ]);
 

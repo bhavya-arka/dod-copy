@@ -206,8 +206,8 @@ export default function MissionNavbar({ onDashboard, showTabs = true, loadedPlan
         {mission.allocationResult && (
           <button
             onClick={async () => {
-              if (loadedPlan) {
-                await mission.updateConfiguration(loadedPlan.id);
+              if (mission.activePlanId) {
+                await mission.updateConfiguration(mission.activePlanId);
                 alert('Flight plan saved!');
               } else {
                 const name = prompt('Enter a name for this flight plan:');
