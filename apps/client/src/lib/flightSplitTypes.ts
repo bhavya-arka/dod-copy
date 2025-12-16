@@ -111,23 +111,28 @@ export function calculateCenterOfBalance(flight: SplitFlight): number {
   let totalWeight = 0;
   const spec = AIRCRAFT_SPECS[flight.aircraft_type];
   
-  // Pallet position_coord is RDL station distance (absolute position from aircraft datum)
+  // Pallet position_coord is cargo-relative center position, convert to station using cargo_bay_fs_start
+  // (calibrated FS datum for CG calculations, consistent with aircraftSolver)
   flight.pallets.forEach((placement) => {
-    totalMoment += placement.pallet.gross_weight * placement.position_coord;
+    const palletStation = placement.position_coord + spec.cargo_bay_fs_start;
+    totalMoment += placement.pallet.gross_weight * palletStation;
     totalWeight += placement.pallet.gross_weight;
   });
   
-  // Vehicle position.z is cargo-relative, add forward_offset to get aircraft station
+  // Vehicle position.z is cargo-relative center, convert to station using cargo_bay_fs_start
+  // (calibrated FS datum for CG calculations, consistent with aircraftSolver)
   flight.rolling_stock.forEach((vehicle) => {
-    const vehicleStation = vehicle.position.z + spec.forward_offset;
+    const vehicleStation = vehicle.position.z + spec.cargo_bay_fs_start;
     totalMoment += vehicle.weight * vehicleStation;
     totalWeight += vehicle.weight;
   });
   
-  // Add PAX weight if present (seated at ~40% of cargo length from forward offset)
+  // Add PAX weight if present (seated at ~40% of cargo length from cargo bay start)
+  // Add 50" for half of the 100" seating zone to match solver calculation
   if (flight.pax_count > 0) {
     const paxWeight = flight.pax_count * 225; // Standard pax weight with gear
-    const paxStation = spec.forward_offset + (spec.cargo_length * 0.4);
+    const paxSeatingZoneCenter = (spec.cargo_length * 0.4) + 50; // +50" = half of 100" seating zone
+    const paxStation = spec.cargo_bay_fs_start + paxSeatingZoneCenter;
     totalMoment += paxWeight * paxStation;
     totalWeight += paxWeight;
   }
