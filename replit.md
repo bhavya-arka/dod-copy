@@ -43,6 +43,13 @@ Key data models include:
 -   **`AircraftLoadPlan`**: Details complete aircraft load and CoB calculations.
 -   **`AllocationResult`**: The comprehensive allocation solution.
 
+## Save/Load Architecture
+Flight plans are persisted via `/api/flight-plans`:
+-   **Save payload**: `allocation_data: { allocation_result, split_flights, routes }` + `movement_data: parseResult`
+-   **Load handling**: Unwraps `allocation_result` from wrapper, supports legacy direct format
+-   **Defensive guards**: Both `allocationResult` AND `parseResult` must exist before saving
+-   **Graceful degradation**: Plans without movement_data load with allocation-only insights
+
 # External Dependencies
 
 **Database Services**:
