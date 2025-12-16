@@ -210,9 +210,11 @@ const FlightDetailModal = ({ flight, insights, onClose }: FlightDetailModalProps
               <div className="text-xs text-neutral-500">of {Math.round(maxPayload / 1000)}K max</div>
             </div>
             <div className="bg-neutral-50 rounded-xl p-4">
-              <div className="text-sm text-neutral-500">Pallets</div>
-              <div className="text-2xl font-bold text-neutral-900">{flight.pallets.length}</div>
-              <div className="text-xs text-neutral-500">positions loaded</div>
+              <div className="text-sm text-neutral-500">Cargo</div>
+              <div className="text-2xl font-bold text-neutral-900">{flight.pallets.length + flight.rolling_stock.length}</div>
+              <div className="text-xs text-neutral-500">
+                {flight.pallets.length} pallets, {flight.rolling_stock.length} vehicles
+              </div>
             </div>
             <div className="bg-neutral-50 rounded-xl p-4">
               <div className="text-sm text-neutral-500">Center of Balance</div>
@@ -227,13 +229,28 @@ const FlightDetailModal = ({ flight, insights, onClose }: FlightDetailModalProps
           
           <div className="mb-6">
             <h3 className="font-bold text-neutral-900 mb-3">Cargo Manifest</h3>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
+            <div className="space-y-2 max-h-48 overflow-y-auto">
               {flight.pallets.map((p, idx) => (
-                <div key={idx} className="flex justify-between items-center bg-neutral-50 rounded-lg px-3 py-2">
-                  <span className="text-sm font-medium">{p.pallet.id}</span>
+                <div key={`pallet-${idx}`} className="flex justify-between items-center bg-neutral-50 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">Pallet</span>
+                    <span className="text-sm font-medium">{p.pallet.id}</span>
+                  </div>
                   <span className="text-sm text-neutral-500">{p.pallet.gross_weight.toLocaleString()} lbs</span>
                 </div>
               ))}
+              {flight.rolling_stock.map((v, idx) => (
+                <div key={`vehicle-${idx}`} className="flex justify-between items-center bg-neutral-50 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded">Vehicle</span>
+                    <span className="text-sm font-medium">{v.item?.description || `${v.item_id}`}</span>
+                  </div>
+                  <span className="text-sm text-neutral-500">{v.weight.toLocaleString()} lbs</span>
+                </div>
+              ))}
+              {flight.pallets.length === 0 && flight.rolling_stock.length === 0 && (
+                <div className="text-center py-4 text-neutral-400 text-sm">No cargo loaded</div>
+              )}
             </div>
           </div>
           

@@ -2582,8 +2582,9 @@ function FlightDetailModal({ flight, insights, allFlights, onClose, onTransferPa
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-4 gap-4">
             <div className="bg-neutral-50 rounded-xl p-4 text-center">
-              <div className="text-2xl font-bold text-neutral-900">{flight.pallets.length}</div>
-              <div className="text-sm text-neutral-500">Pallets</div>
+              <div className="text-2xl font-bold text-neutral-900">{flight.pallets.length + flight.rolling_stock.length}</div>
+              <div className="text-sm text-neutral-500">Cargo Items</div>
+              <div className="text-xs text-neutral-400">{flight.pallets.length}P / {flight.rolling_stock.length}V</div>
             </div>
             <div className="bg-neutral-50 rounded-xl p-4 text-center">
               <div className="text-2xl font-bold text-neutral-900">{Math.round(calculateFlightWeight(flight) / 1000)}K</div>
@@ -2703,13 +2704,14 @@ function FlightDetailModal({ flight, insights, allFlights, onClose, onTransferPa
               </motion.div>
             )}
             
-            <div className="bg-neutral-50 rounded-xl p-4 max-h-48 overflow-y-auto">
+            <div className="bg-neutral-50 rounded-xl p-4 max-h-64 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-neutral-500 border-b">
                     {showTransferPanel && <th className="pb-2 w-8"></th>}
-                    <th className="pb-2">Pallet ID</th>
-                    <th className="pb-2">Items</th>
+                    <th className="pb-2">Type</th>
+                    <th className="pb-2">ID</th>
+                    <th className="pb-2">Description</th>
                     <th className="pb-2 text-right">Weight</th>
                     <th className="pb-2 text-right">Flags</th>
                   </tr>
@@ -2717,7 +2719,7 @@ function FlightDetailModal({ flight, insights, allFlights, onClose, onTransferPa
                 <tbody>
                   {flight.pallets.map((p, idx) => (
                     <tr 
-                      key={idx} 
+                      key={`pallet-${idx}`} 
                       className={`border-b border-neutral-100 transition-colors ${
                         showTransferPanel ? 'cursor-pointer hover:bg-blue-50' : ''
                       } ${selectedPallets.has(p.pallet.id) ? 'bg-blue-100' : ''}`}
@@ -2734,6 +2736,9 @@ function FlightDetailModal({ flight, insights, allFlights, onClose, onTransferPa
                           />
                         </td>
                       )}
+                      <td className="py-2">
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">Pallet</span>
+                      </td>
                       <td className="py-2 font-medium">{p.pallet.id}</td>
                       <td className="py-2 text-neutral-600">{p.pallet.items.length} items</td>
                       <td className="py-2 text-right">{p.pallet.gross_weight.toLocaleString()} lb</td>
@@ -2742,6 +2747,30 @@ function FlightDetailModal({ flight, insights, allFlights, onClose, onTransferPa
                       </td>
                     </tr>
                   ))}
+                  {flight.rolling_stock.map((v, idx) => (
+                    <tr 
+                      key={`vehicle-${idx}`} 
+                      className="border-b border-neutral-100"
+                    >
+                      {showTransferPanel && <td className="py-2"></td>}
+                      <td className="py-2">
+                        <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded">Vehicle</span>
+                      </td>
+                      <td className="py-2 font-medium">{v.item_id}</td>
+                      <td className="py-2 text-neutral-600">
+                        {v.item?.description || `${v.length}"×${v.width}"×${v.height}"`}
+                      </td>
+                      <td className="py-2 text-right">{v.weight.toLocaleString()} lb</td>
+                      <td className="py-2 text-right"></td>
+                    </tr>
+                  ))}
+                  {flight.pallets.length === 0 && flight.rolling_stock.length === 0 && (
+                    <tr>
+                      <td colSpan={showTransferPanel ? 6 : 5} className="py-4 text-center text-neutral-400">
+                        No cargo loaded
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
