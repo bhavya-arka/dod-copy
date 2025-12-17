@@ -334,8 +334,13 @@ export default function LoadPlanViewer({
   const wrappedOnHome = onHome ? () => interceptNavigation(onHome) : undefined;
   const wrappedOnLogout = onLogout ? () => interceptNavigation(onLogout) : undefined;
 
+  // When embedded (hideNavigation=true), don't add extra wrappers that conflict with parent layout
+  const containerClass = hideNavigation 
+    ? "" 
+    : "min-h-screen bg-neutral-50 gradient-mesh";
+
   return (
-    <div className="min-h-screen bg-neutral-50 gradient-mesh">
+    <div className={containerClass}>
       <UnsavedChangesModal
         isOpen={showUnsavedModal}
         onNavigateAnyway={handleNavigateAnyway}
@@ -557,8 +562,8 @@ export default function LoadPlanViewer({
         </div>
       )}
 
-      <div className="flex h-[calc(100vh-64px)]">
-        <aside className="w-72 border-r border-neutral-200/50 bg-white/50 backdrop-blur-sm overflow-y-auto scrollbar-thin">
+      <div className={`flex ${hideNavigation ? 'min-h-[600px]' : 'h-[calc(100vh-64px)]'}`}>
+        <aside className="w-72 border-r border-neutral-200/50 bg-white/50 backdrop-blur-sm overflow-y-auto scrollbar-thin flex-shrink-0">
           <div className="p-4 border-b border-neutral-200/50">
             <div className="flex space-x-1 bg-neutral-100 rounded-xl p-1">
               {[
