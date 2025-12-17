@@ -333,3 +333,38 @@ export const insertManifestSchema = createInsertSchema(manifests).omit({
 
 export type InsertManifest = z.infer<typeof insertManifestSchema>;
 export type Manifest = typeof manifests.$inferSelect;
+
+// ============================================================================
+// AI INSIGHTS TABLE (Bedrock integration with caching)
+// ============================================================================
+
+// AI Insights - caches Bedrock-generated insights with hash-based invalidation
+export const aiInsightTypeEnum = [
+  'allocation_summary',
+  'cob_analysis', 
+  'pallet_review',
+  'route_planning',
+  'compliance',
+  'mission_briefing'
+] as const;
+export type AiInsightType = typeof aiInsightTypeEnum[number];
+
+export const aiInsights = pgTable("ai_insights", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  flight_plan_id: integer("flight_plan_id"), // nullable for non-plan-specific insights
+  insight_type: text("insight_type").notNull(), // one of aiInsightTypeEnum
+  input_hash: text("input_hash").notNull(), // SHA256 hash of input data for cache validation
+  insight_data: jsonb("insight_data").notNull(), // The generated insight JSON
+  token_usage: jsonb("token_usage"), // Track token consumption for cost monitoring
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  regenerated_at: timestamp("regenerated_at"), // Tracks manual recalculations
+});
+
+export const insertAiInsightSchema = createInsertSchema(aiInsights).omit({
+  id: true,
+  created_at: true,
+});
+
+export type InsertAiInsight = z.infer<typeof insertAiInsightSchema>;
+export type AiInsight = typeof aiInsights.$inferSelect;

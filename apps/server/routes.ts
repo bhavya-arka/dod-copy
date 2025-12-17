@@ -1507,6 +1507,167 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================================================
+  // AI INSIGHTS API (Bedrock integration with caching)
+  // ============================================================================
+
+  // Import bedrock service lazily to avoid initialization issues
+  const getBedrockService = async () => {
+    const { generateInsight, generateInputHash, checkBedrockHealth } = await import("./services/bedrockService");
+    return { generateInsight, generateInputHash, checkBedrockHealth };
+  };
+
+  // Helper to map snake_case DB response to camelCase for frontend
+  const mapInsightToCamelCase = (insight: any) => ({
+    id: insight.id,
+    userId: insight.user_id,
+    flightPlanId: insight.flight_plan_id,
+    insightType: insight.insight_type,
+    inputHash: insight.input_hash,
+    content: insight.insight_data,
+    modelId: "amazon.nova-lite-v1:0",
+    tokenUsage: insight.token_usage ? {
+      inputTokens: insight.token_usage.inputTokens || 0,
+      outputTokens: insight.token_usage.outputTokens || 0,
+      totalTokens: (insight.token_usage.inputTokens || 0) + (insight.token_usage.outputTokens || 0)
+    } : null,
+    generatedAt: insight.created_at,
+    regeneratedAt: insight.regenerated_at,
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+  });
+
+  // Health check for Bedrock
+  app.get("/api/insights/health", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { checkBedrockHealth } = await getBedrockService();
+      const health = await checkBedrockHealth();
+      res.json(health);
+    } catch (error) {
+      console.error("[Insights] Health check error:", error);
+      res.status(500).json({ 
+        healthy: false, 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
+    }
+  });
+
+  // Get all insights for a flight plan (from cache)
+  app.get("/api/insights/flight-plan/:planId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const planId = parseInt(req.params.planId);
+      if (isNaN(planId)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+      
+      const insights = await storage.getAiInsightsByPlan(req.user!.id, planId);
+      // Map to camelCase for frontend
+      res.json(insights.map(mapInsightToCamelCase));
+    } catch (error) {
+      console.error("[Insights] Failed to get insights:", error);
+      res.status(500).json({ error: "Failed to retrieve insights" });
+    }
+  });
+
+  // Generate or retrieve cached insight
+  app.post("/api/insights/generate", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { type, inputData, flightPlanId, forceRegenerate = false } = req.body;
+      
+      if (!type || !inputData) {
+        return res.status(400).json({ error: "Missing required fields: type, inputData" });
+      }
+
+      const validTypes = ['allocation_summary', 'cob_analysis', 'pallet_review', 'route_planning', 'compliance', 'mission_briefing'];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ error: `Invalid insight type. Must be one of: ${validTypes.join(', ')}` });
+      }
+
+      const { generateInsight, generateInputHash } = await getBedrockService();
+      // Include flightPlanId in hash for proper cache isolation
+      const inputHash = generateInputHash({ type, ...inputData }, flightPlanId || null);
+      
+      // Check cache first (unless force regenerate)
+      if (!forceRegenerate) {
+        const cachedInsight = await storage.getAiInsight(
+          req.user!.id,
+          flightPlanId || null,
+          type,
+          inputHash
+        );
+        
+        if (cachedInsight) {
+          console.log(`[Insights] Cache hit for ${type}`);
+          return res.json({
+            insight: {
+              ...mapInsightToCamelCase(cachedInsight),
+              fromCache: true
+            },
+            fromCache: true
+          });
+        }
+      }
+
+      console.log(`[Insights] Generating new insight for ${type}${forceRegenerate ? ' (forced)' : ''}`);
+      
+      // Generate new insight
+      const result = await generateInsight({
+        type,
+        inputData,
+        userId: String(req.user!.id),
+        flightPlanId: flightPlanId || null,
+        forceRegenerate
+      });
+
+      // Save to database for caching
+      const savedInsight = await storage.createAiInsight({
+        user_id: req.user!.id,
+        flight_plan_id: flightPlanId || null,
+        insight_type: type,
+        input_hash: inputHash,
+        insight_data: result.insight,
+        token_usage: result.tokenUsage
+      });
+
+      // Map to camelCase for frontend and wrap in expected format
+      const mappedInsight = {
+        ...mapInsightToCamelCase(savedInsight),
+        fromCache: false
+      };
+      res.json({
+        insight: mappedInsight,
+        fromCache: false
+      });
+    } catch (error) {
+      console.error("[Insights] Generation error:", error);
+      
+      // Handle rate limit errors specially
+      if (error instanceof Error && error.message.includes("Rate limit")) {
+        return res.status(429).json({ error: error.message });
+      }
+      
+      res.status(500).json({ 
+        error: "Failed to generate insight",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Delete all insights for a flight plan
+  app.delete("/api/insights/flight-plan/:planId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const planId = parseInt(req.params.planId);
+      if (isNaN(planId)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+      
+      await storage.deleteAiInsightsByPlan(req.user!.id, planId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("[Insights] Delete error:", error);
+      res.status(500).json({ error: "Failed to delete insights" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

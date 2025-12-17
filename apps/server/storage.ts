@@ -7,7 +7,8 @@ import {
   flightNodes, type FlightNode, type InsertFlightNode,
   flightEdges, type FlightEdge, type InsertFlightEdge,
   portInventory, type PortInventory, type InsertPortInventory,
-  manifests, type Manifest, type InsertManifest
+  manifests, type Manifest, type InsertManifest,
+  aiInsights, type AiInsight, type InsertAiInsight, type AiInsightType
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gt } from "drizzle-orm";
@@ -77,6 +78,13 @@ export interface IStorage {
   updateManifest(id: number, userId: number, data: Partial<InsertManifest>): Promise<Manifest | undefined>;
   updateManifestItem(manifestId: number, userId: number, itemIndex: number, itemData: Record<string, any>): Promise<Manifest | undefined>;
   deleteManifest(id: number, userId: number): Promise<void>;
+  
+  // AI Insight methods (user-scoped with caching)
+  getAiInsight(userId: number, flightPlanId: number | null, insightType: AiInsightType, inputHash: string): Promise<AiInsight | undefined>;
+  getAiInsightsByPlan(userId: number, flightPlanId: number): Promise<AiInsight[]>;
+  createAiInsight(insight: InsertAiInsight): Promise<AiInsight>;
+  updateAiInsight(id: number, userId: number, data: Partial<InsertAiInsight>): Promise<AiInsight | undefined>;
+  deleteAiInsightsByPlan(userId: number, flightPlanId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -452,6 +460,64 @@ export class DatabaseStorage implements IStorage {
   async deleteManifest(id: number, userId: number): Promise<void> {
     await db.delete(manifests)
       .where(and(eq(manifests.id, id), eq(manifests.user_id, userId)));
+  }
+
+  // ============================================================================
+  // AI INSIGHT METHODS (with caching support)
+  // ============================================================================
+
+  async getAiInsight(
+    userId: number, 
+    flightPlanId: number | null, 
+    insightType: AiInsightType, 
+    inputHash: string
+  ): Promise<AiInsight | undefined> {
+    const conditions = [
+      eq(aiInsights.user_id, userId),
+      eq(aiInsights.insight_type, insightType),
+      eq(aiInsights.input_hash, inputHash)
+    ];
+    
+    if (flightPlanId !== null) {
+      conditions.push(eq(aiInsights.flight_plan_id, flightPlanId));
+    }
+    
+    const [insight] = await db.select()
+      .from(aiInsights)
+      .where(and(...conditions));
+    return insight;
+  }
+
+  async getAiInsightsByPlan(userId: number, flightPlanId: number): Promise<AiInsight[]> {
+    return await db.select()
+      .from(aiInsights)
+      .where(and(
+        eq(aiInsights.user_id, userId),
+        eq(aiInsights.flight_plan_id, flightPlanId)
+      ))
+      .orderBy(desc(aiInsights.created_at));
+  }
+
+  async createAiInsight(insight: InsertAiInsight): Promise<AiInsight> {
+    const [created] = await db.insert(aiInsights).values(insight as any).returning();
+    return created;
+  }
+
+  async updateAiInsight(id: number, userId: number, data: Partial<InsertAiInsight>): Promise<AiInsight | undefined> {
+    const [updated] = await db
+      .update(aiInsights)
+      .set({ ...data, regenerated_at: new Date() } as any)
+      .where(and(eq(aiInsights.id, id), eq(aiInsights.user_id, userId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteAiInsightsByPlan(userId: number, flightPlanId: number): Promise<void> {
+    await db.delete(aiInsights)
+      .where(and(
+        eq(aiInsights.user_id, userId),
+        eq(aiInsights.flight_plan_id, flightPlanId)
+      ));
   }
 }
 
