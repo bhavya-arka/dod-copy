@@ -19,7 +19,24 @@ import type { AiInsightType } from "@shared/schema";
 // Configuration
 const AWS_REGION = process.env.AWS_REGION || "us-east-2";
 const KNOWLEDGE_BASE_ID = process.env.AWS_BEDROCK_KNOWLEDGE_BASE_ID || "";
-const MODEL_ID = "amazon.nova-lite-v1:0";
+// Use US regional inference profile for Nova Lite (required for on-demand access)
+const MODEL_ID = "us.amazon.nova-lite-v1:0";
+
+// Sanitize AWS credentials - trim whitespace that may have been introduced during copy/paste
+function getAwsCredentials() {
+  const accessKeyId = (process.env.AWS_ACCESS_KEY_ID || "").trim();
+  const secretAccessKey = (process.env.AWS_SECRET_ACCESS_KEY || "").trim();
+  
+  // Validate format
+  if (accessKeyId && accessKeyId.length !== 20) {
+    console.warn(`[Bedrock] Warning: AWS_ACCESS_KEY_ID has unexpected length ${accessKeyId.length} (expected 20)`);
+  }
+  if (secretAccessKey && secretAccessKey.length !== 40) {
+    console.warn(`[Bedrock] Warning: AWS_SECRET_ACCESS_KEY has unexpected length ${secretAccessKey.length} (expected 40)`);
+  }
+  
+  return { accessKeyId, secretAccessKey };
+}
 
 // Rate limiting configuration
 const RATE_LIMIT = {
@@ -34,11 +51,12 @@ let agentClient: BedrockAgentRuntimeClient | null = null;
 
 function getBedrockRuntimeClient(): BedrockRuntimeClient {
   if (!runtimeClient) {
+    const creds = getAwsCredentials();
     runtimeClient = new BedrockRuntimeClient({
       region: AWS_REGION,
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ""
+        accessKeyId: creds.accessKeyId,
+        secretAccessKey: creds.secretAccessKey
       }
     });
   }
@@ -47,11 +65,12 @@ function getBedrockRuntimeClient(): BedrockRuntimeClient {
 
 function getBedrockAgentClient(): BedrockAgentRuntimeClient {
   if (!agentClient) {
+    const creds = getAwsCredentials();
     agentClient = new BedrockAgentRuntimeClient({
       region: AWS_REGION,
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ""
+        accessKeyId: creds.accessKeyId,
+        secretAccessKey: creds.secretAccessKey
       }
     });
   }
