@@ -623,8 +623,8 @@ export default function MissionWorkspace({
         onPlanStatusChange={onPlanStatusChange}
       />
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="container max-w-7xl">
+      <main className="flex-1 overflow-y-auto pb-8">
+        <div className="container mx-auto max-w-7xl">
           <AnimatePresence mode="wait">
             <motion.div
               key={mission.currentTab}
@@ -632,7 +632,7 @@ export default function MissionWorkspace({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="w-full max-w-full"
+              className="w-full"
             >
               {renderTabContent()}
             </motion.div>

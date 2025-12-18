@@ -152,7 +152,7 @@ export default function AnalyticsPanel({ onSaveConfiguration }: AnalyticsPanelPr
   }, [mission.allocationResult]);
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl py-6 sm:py-8">
+    <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 w-full">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <h2 className="section-title">Mission Analytics</h2>
         <div className="flex items-center space-x-3">
