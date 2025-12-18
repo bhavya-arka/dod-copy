@@ -177,3 +177,43 @@ All AI operations include debug logging with prefixes:
 - Added comprehensive debug logging throughout the AI pipeline
 - Made model ID and rate limits configurable via environment variables
 - Added input validation for rate limit configuration with safe defaults
+
+## Mixed Fleet Optimization (Dec 2024)
+Added comprehensive aircraft availability and mixed fleet optimization:
+
+### Database Schema
+- `aircraft_types`: C-17, C-130H, C-130J definitions with cost per flight hour
+- `aircraft_capacity_profiles`: Max payload, pallet positions, operational limits
+- `plan_aircraft_availability`: Per-plan availability counts and lock status
+- `plan_solutions`: Optimization results storage
+
+### Backend API Endpoints
+- `GET /api/aircraft-types`: Fetch all active aircraft types with capacity profiles
+- `POST /api/plans/:planId/fleet-availability`: Save availability settings
+- `POST /api/plans/:planId/optimize`: Run mixed fleet optimization
+
+### Fleet Optimizer Algorithm
+- Generates candidate fleet mixes based on available aircraft
+- Scoring function with configurable policy weights:
+  - PREFERRED_FIRST: Prioritize user's preferred aircraft
+  - OPTIMIZE_COST: Minimize total flight cost
+  - MIN_AIRCRAFT: Use fewest aircraft possible
+  - USER_LOCKED: Only use unlocked aircraft types
+- Returns FEASIBLE, PARTIAL, or INFEASIBLE solution status
+- Includes comparison data for preferred-only vs optimal solution
+
+### Upload Screen UI
+- Dynamic aircraft availability inputs with count steppers
+- Lock/unlock toggle per aircraft type
+- Preferred aircraft dropdown
+- Mixed fleet policy selector
+- Preference strength slider (0-100)
+- Validation: requires at least one available aircraft
+
+### Fleet Optimization Results Component
+- Status badge (green/yellow/red for feasibility)
+- Aircraft used vs available table with utilization bars
+- Metrics cards: total aircraft, cost, utilization, CoB
+- "Why This Mix" explanation panel
+- Comparison view for preferred-only vs chosen solution
+- Shortfall alerts for partial/infeasible solutions
