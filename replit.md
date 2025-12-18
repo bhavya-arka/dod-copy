@@ -217,3 +217,39 @@ Added comprehensive aircraft availability and mixed fleet optimization:
 - "Why This Mix" explanation panel
 - Comparison view for preferred-only vs chosen solution
 - Shortfall alerts for partial/infeasible solutions
+
+## Lateral Pallet Placement & Seat Visualization (Dec 2024)
+Enhanced cargo optimization with 2D grid-based pallet placement and passenger seat visualization.
+
+### Lateral Lane Configuration
+- **C-17**: 2 lateral lanes (Left Lane at y=-50", Right Lane at y=+50")
+- **C-130**: 1 center lane (y=0")
+- Lane configs defined in `AIRCRAFT_LANE_CONFIGS` in pacafTypes.ts
+- Helper functions: `getAircraftLaneConfig()`, `calculateLateralBounds()`
+
+### Grid-Based Pallet Placement (aircraftSolver.ts)
+- Pallets placed in 2D grid: longitudinal rows × lateral lanes
+- C-17 can fit 2 pallets side-by-side (88" + 12" gap + 88" = 188" < 216" cargo width)
+- Algorithm fills both lanes at each row before advancing (balanced bilateral loading)
+- Each PalletPlacement has `lateral_placement: { y_center_in, y_left_in, y_right_in }`
+- Lateral moment tracking for balanced lateral CG
+
+### Seat Zone System
+- Seat zones defined per aircraft in `AIRCRAFT_SPECS.seat_zones[]`
+- Each zone: `{ id, name, capacity, xStartIn, xEndIn, yOffsetIn, side }`
+- C-17: 102 seats (4 zones: Left/Right Forward and Aft)
+- C-130: 92 seats (3 zones: Left, Right, Center rows)
+
+### ICODES 2D Visualization Updates
+- Pallets render side-by-side using `lateral_placement.y_center_in`
+- Seat zone overlays rendered along aircraft walls
+- Occupied seats shown in indigo color based on `pax_count`
+- Seat capacity labels (e.g., "15/27") per zone
+- Legend entries for empty/occupied seats
+
+### 3D Visualization Updates (SeatZone3D component)
+- Individual seat meshes rendered per zone
+- Seat dimensions: 18" × 20" × 30" with backrest
+- Occupied seats shown in blue, unoccupied in gray
+- Seats fill front-to-back based on `loadPlan.pax_count`
+- Zone name labels above each seat group
