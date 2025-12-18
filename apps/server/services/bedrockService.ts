@@ -134,11 +134,23 @@ export function generateInputHash(data: any, flightPlanId?: number | null): stri
   return crypto.createHash("sha256").update(normalized).digest("hex");
 }
 
+// Guardrail instructions added to all prompts
+const GUARDRAIL_INSTRUCTIONS = `
+IMPORTANT GUARDRAILS - You MUST follow these rules:
+1. NEVER give percentage-based quality ratings implying the optimization is incomplete (e.g., "80% optimal", "could be 20% better")
+2. NEVER suggest the system's optimization algorithm is flawed or could produce significantly better results
+3. Present the allocation as the OPTIMAL solution given the constraints (aircraft availability, cargo dimensions, weight limits)
+4. Frame any suggestions as OPERATIONAL considerations or situational enhancements, NOT corrections to the algorithm
+5. Focus on INFORMING the user about the load plan, not critiquing the optimization quality
+6. If there are genuine constraint violations or safety issues, report them factually without implying algorithmic failure
+7. Use phrases like "the optimized solution" or "this allocation" rather than "this could be improved by X%"
+`;
+
 // System prompts for each insight type - strict JSON output
 const SYSTEM_PROMPTS: Record<AiInsightType, string> = {
   allocation_summary: `You are a military airlift planning expert analyzing cargo allocation for PACAF operations.
-Your task is to provide an executive summary of the load plan with optimization suggestions and risk flags.
-
+Your task is to provide an executive summary of the load plan with operational notes and safety flags.
+${GUARDRAIL_INSTRUCTIONS}
 CRITICAL: You must respond with ONLY valid JSON in this exact format:
 {
   "summary": "Brief 2-3 sentence overview of the allocation",
@@ -156,7 +168,7 @@ Do not include any text outside the JSON object.`,
 
   cob_analysis: `You are a Center of Balance (CoB) specialist for military cargo aircraft.
 Analyze the CoB calculations and provide safety assessment based on MAC percentages and position weights.
-
+${GUARDRAIL_INSTRUCTIONS}
 CRITICAL: You must respond with ONLY valid JSON in this exact format:
 {
   "cob_assessment": {
@@ -175,7 +187,7 @@ Do not include any text outside the JSON object.`,
 
   pallet_review: `You are a 463L pallet configuration expert for military airlift operations.
 Review pallet contents and provide efficiency analysis, tiedown recommendations, and hazmat proximity checks.
-
+${GUARDRAIL_INSTRUCTIONS}
 CRITICAL: You must respond with ONLY valid JSON in this exact format:
 {
   "pallet_efficiency": {
@@ -192,8 +204,8 @@ CRITICAL: You must respond with ONLY valid JSON in this exact format:
 Do not include any text outside the JSON object.`,
 
   route_planning: `You are a military airlift route planning specialist.
-Analyze route data and provide optimization suggestions, fuel efficiency notes, and alternate route recommendations.
-
+Analyze route data and provide operational notes, fuel efficiency tips, and alternate route recommendations.
+${GUARDRAIL_INSTRUCTIONS}
 CRITICAL: You must respond with ONLY valid JSON in this exact format:
 {
   "route_assessment": {
@@ -211,7 +223,7 @@ Do not include any text outside the JSON object.`,
 
   compliance: `You are a military cargo compliance officer specializing in USAF and DoD regulations.
 Review the cargo manifest and provide regulation citations, compliance checklist, and hazmat handling requirements.
-
+${GUARDRAIL_INSTRUCTIONS}
 CRITICAL: You must respond with ONLY valid JSON in this exact format:
 {
   "compliance_status": "compliant|needs_review|non_compliant",
@@ -229,7 +241,7 @@ Do not include any text outside the JSON object.`,
 
   mission_briefing: `You are a military mission briefing specialist for PACAF airlift operations.
 Generate a concise executive summary suitable for command briefing.
-
+${GUARDRAIL_INSTRUCTIONS}
 CRITICAL: You must respond with ONLY valid JSON in this exact format:
 {
   "mission_overview": "1-2 paragraph executive summary",
@@ -248,8 +260,8 @@ CRITICAL: You must respond with ONLY valid JSON in this exact format:
 Do not include any text outside the JSON object.`,
 
   mission_analytics: `You are a military airlift mission analytics expert providing comprehensive structured analytics for PACAF operations.
-Analyze all mission data and provide detailed metrics, performance assessments, and actionable advice.
-
+Analyze all mission data and provide detailed metrics, operational assessments, and actionable advice.
+${GUARDRAIL_INSTRUCTIONS}
 CRITICAL: You must respond with ONLY valid JSON in this exact format:
 {
   "mission_summary": {
