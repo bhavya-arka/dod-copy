@@ -47,7 +47,7 @@
     @apply font-sans antialiased bg-background text-foreground;
     margin: 0;
     padding: 0;
-    overflow: hidden;
+    overflow-x: hidden;
     width: 100vw;
     height: 100vh;
     -webkit-font-smoothing: antialiased;
@@ -55,10 +55,11 @@
   }
 }
 
+body,
 #root {
   width: 100%;
   height: 100%;
-  position: fixed;
+  position: relative;
 }
 
 canvas {
@@ -70,7 +71,7 @@ canvas {
 @layer components {
   .glass-panel {
     @apply bg-white/70 backdrop-blur-xl border border-white/20 rounded-2xl;
-    box-shadow: 
+    box-shadow:
       0 8px 32px rgba(0, 0, 0, 0.08),
       inset 0 1px 0 rgba(255, 255, 255, 0.6);
   }
@@ -231,7 +232,7 @@ canvas {
   }
 
   .gradient-mesh {
-    background: 
+    background:
       radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
       radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.08) 0px, transparent 50%),
       radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.05) 0px, transparent 50%),
@@ -244,35 +245,47 @@ canvas {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fadeUp {
-  from { 
+  from {
     opacity: 0;
     transform: translateY(10px);
   }
-  to { 
+
+  to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
 @keyframes slideIn {
-  from { 
+  from {
     opacity: 0;
     transform: translateX(-10px);
   }
-  to { 
+
+  to {
     opacity: 1;
     transform: translateX(0);
   }
 }
 
 @keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .animate-spin-slow {

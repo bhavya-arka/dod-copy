@@ -415,7 +415,7 @@ export default function MissionWorkspace({
 
       case "schedules":
         return (
-          <div className="flex flex-col gap-6 h-full">
+          <div className="flex flex-col gap-6 h-screen">
             <h2 className="section-title text-xl sm:text-2xl">
               Flight Schedules
             </h2>
@@ -487,7 +487,7 @@ export default function MissionWorkspace({
             : [];
 
         return (
-          <div className="flex flex-col gap-6 h-full">
+          <div className="flex flex-col gap-6 h-screen overflow-y-auto">
             <h2 className="section-title text-xl sm:text-2xl">
               Weather at Bases
             </h2>

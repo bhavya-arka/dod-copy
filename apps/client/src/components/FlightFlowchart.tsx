@@ -495,7 +495,7 @@ export default function FlightFlowchart({
   );
 
   return (
-    <div className="relative w-full h-full flex flex-col min-h-0 overflow-hidden">
+    <div className="relative w-full h-fit flex flex-col min-h-0 overflow-hidden">
       <div className="flex-1 min-h-0 overflow-hidden rounded-xl border border-neutral-200 bg-gradient-to-br from-neutral-50 to-neutral-100">
         <ReactFlow
           nodes={nodes}

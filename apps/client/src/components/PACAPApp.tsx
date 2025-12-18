@@ -335,15 +335,6 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
             error={state.error}
             onFleetAvailabilityChange={handleFleetAvailabilityChange}
           />
-          {/* Demo: Load Sample Data Button */}
-          <div className="fixed bottom-8 right-8">
-            <button
-              onClick={handleLoadSampleData}
-              className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transition"
-            >
-              Load Demo Data
-            </button>
-          </div>
         </motion.div>
       )}
 
