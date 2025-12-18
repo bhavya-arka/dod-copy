@@ -60,22 +60,31 @@ interface UseAiInsightsReturn {
 }
 
 async function fetchInsights(flightPlanId: number): Promise<AiInsight[]> {
+  console.log("[AiInsights:DEBUG] Fetching insights", { flightPlanId });
+  
   const response = await fetch(`/api/insights/flight-plan/${flightPlanId}`, {
     credentials: 'include',
   });
 
   if (!response.ok) {
     if (response.status === 404) {
+      console.log("[AiInsights:DEBUG] No insights found (404)", { flightPlanId });
       return [];
     }
     const errorText = await response.text();
-    throw new Error(errorText || `Failed to fetch insights: ${response.status}`);
+    const error = new Error(errorText || `Failed to fetch insights: ${response.status}`);
+    console.error("[AiInsights:ERROR]", error);
+    throw error;
   }
 
-  return response.json();
+  const insights = await response.json();
+  console.log("[AiInsights:DEBUG] Insights fetched successfully", { flightPlanId, count: insights.length });
+  return insights;
 }
 
 async function generateInsightApi(request: GenerateInsightRequest): Promise<GenerateInsightResponse> {
+  console.log("[AiInsights:DEBUG] Generating insight", { type: request.type, flightPlanId: request.flightPlanId });
+  
   const response = await fetch('/api/insights/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -88,13 +97,18 @@ async function generateInsightApi(request: GenerateInsightRequest): Promise<Gene
       const retryAfter = response.headers.get('Retry-After');
       const error = new Error('Rate limit exceeded. Please try again later.') as Error & { retryAfter?: number };
       error.retryAfter = retryAfter ? parseInt(retryAfter, 10) : 60;
+      console.error("[AiInsights:ERROR]", error);
       throw error;
     }
     const errorText = await response.text();
-    throw new Error(errorText || `Failed to generate insight: ${response.status}`);
+    const error = new Error(errorText || `Failed to generate insight: ${response.status}`);
+    console.error("[AiInsights:ERROR]", error);
+    throw error;
   }
 
-  return response.json();
+  const data = await response.json();
+  console.log("[AiInsights:DEBUG] Insight received", { type: request.type, fromCache: data.fromCache });
+  return data;
 }
 
 export function useAiInsights({ flightPlanId, enabled = true }: UseAiInsightsOptions): UseAiInsightsReturn {
@@ -120,6 +134,7 @@ export function useAiInsights({ flightPlanId, enabled = true }: UseAiInsightsOpt
   const mutation = useMutation({
     mutationFn: generateInsightApi,
     onSuccess: (data) => {
+      console.log("[AiInsights:DEBUG] Mutation success", { insightType: data.insight.insightType, fromCache: data.fromCache });
       setIsRateLimited(false);
       setRateLimitRetryAfter(null);
       queryClient.setQueryData<AiInsight[]>(queryKey, (oldData = []) => {
@@ -135,6 +150,7 @@ export function useAiInsights({ flightPlanId, enabled = true }: UseAiInsightsOpt
       });
     },
     onError: (err: Error & { retryAfter?: number }) => {
+      console.error("[AiInsights:ERROR]", err);
       if (err.message.includes('Rate limit')) {
         setIsRateLimited(true);
         setRateLimitRetryAfter(err.retryAfter || 60);

@@ -14,7 +14,10 @@ import {
 } from "@aws-sdk/client-bedrock-agent-runtime";
 
 import crypto from "crypto";
-import type { AiInsightType } from "@shared/schema";
+import type { AiInsightType as SharedAiInsightType } from "@shared/schema";
+
+// Define type locally as fallback if import fails
+type AiInsightType = SharedAiInsightType | 'allocation_summary' | 'cob_analysis' | 'pallet_review' | 'route_planning' | 'compliance' | 'mission_briefing';
 
 // Configuration
 const AWS_REGION = process.env.AWS_REGION || "us-east-2";
@@ -240,6 +243,8 @@ async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 
     return "";
   }
 
+  console.log("[Bedrock:DEBUG] Retrieving KB context", { query });
+
   try {
     const client = getBedrockAgentClient();
     const command = new RetrieveCommand({
@@ -255,6 +260,7 @@ async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 
     const response = await client.send(command);
     
     if (!response.retrievalResults || response.retrievalResults.length === 0) {
+      console.log("[Bedrock:DEBUG] KB context retrieved", { contextLength: 0 });
       return "";
     }
 
@@ -263,9 +269,10 @@ async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 
       .filter(text => text.length > 0)
       .join("\n\n---\n\n");
 
+    console.log("[Bedrock:DEBUG] KB context retrieved", { contextLength: context.length });
     return context;
   } catch (error) {
-    console.error("[Bedrock] Knowledge base retrieval error:", error);
+    console.error("[Bedrock:ERROR]", error);
     return "";
   }
 }
@@ -276,81 +283,90 @@ async function invokeModel(
   userPrompt: string,
   context: string
 ): Promise<{ result: any; tokenUsage: { inputTokens: number; outputTokens: number } }> {
-  const client = getBedrockRuntimeClient();
-
-  const fullPrompt = context
-    ? `Reference Information from Regulations:\n${context}\n\n---\n\nUser Query:\n${userPrompt}`
-    : userPrompt;
-
-  const requestBody = {
-    schemaVersion: "messages-v1",
-    messages: [
-      {
-        role: "user",
-        content: [{ text: fullPrompt }]
-      }
-    ],
-    system: [{ text: systemPrompt }],
-    inferenceConfig: {
-      max_new_tokens: 2048,
-      temperature: 0.3,
-      top_p: 0.9
-    }
-  };
-
-  const command = new InvokeModelCommand({
-    modelId: MODEL_ID,
-    contentType: "application/json",
-    accept: "application/json",
-    body: JSON.stringify(requestBody)
-  });
-
-  const response = await client.send(command);
-  const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-
-  // Extract text from Nova response format
-  let resultText = "";
-  if (responseBody.output?.message?.content) {
-    resultText = responseBody.output.message.content
-      .map((c: any) => c.text || "")
-      .join("");
-  }
-
-  // Parse and validate JSON from response
-  let parsedResult: any;
-  let isValidJson = false;
+  console.log("[Bedrock:DEBUG] Invoking model", { modelId: MODEL_ID });
+  
   try {
-    // Try to extract JSON from the response
-    const jsonMatch = resultText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      parsedResult = JSON.parse(jsonMatch[0]);
-      // Validate it's a proper object (not null)
-      isValidJson = parsedResult !== null && typeof parsedResult === 'object';
+    const client = getBedrockRuntimeClient();
+
+    const fullPrompt = context
+      ? `Reference Information from Regulations:\n${context}\n\n---\n\nUser Query:\n${userPrompt}`
+      : userPrompt;
+
+    const requestBody = {
+      schemaVersion: "messages-v1",
+      messages: [
+        {
+          role: "user",
+          content: [{ text: fullPrompt }]
+        }
+      ],
+      system: [{ text: systemPrompt }],
+      inferenceConfig: {
+        max_new_tokens: 2048,
+        temperature: 0.3,
+        top_p: 0.9
+      }
+    };
+
+    const command = new InvokeModelCommand({
+      modelId: MODEL_ID,
+      contentType: "application/json",
+      accept: "application/json",
+      body: JSON.stringify(requestBody)
+    });
+
+    const response = await client.send(command);
+    const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+
+    // Extract text from Nova response format
+    let resultText = "";
+    if (responseBody.output?.message?.content) {
+      resultText = responseBody.output.message.content
+        .map((c: any) => c.text || "")
+        .join("");
     }
-    
-    if (!isValidJson) {
+
+    // Parse and validate JSON from response
+    let parsedResult: any;
+    let isValidJson = false;
+    try {
+      // Try to extract JSON from the response
+      const jsonMatch = resultText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsedResult = JSON.parse(jsonMatch[0]);
+        // Validate it's a proper object (not null)
+        isValidJson = parsedResult !== null && typeof parsedResult === 'object';
+      }
+      
+      if (!isValidJson) {
+        parsedResult = {
+          error: true,
+          errorType: "json_extraction_failed",
+          message: "No valid JSON object found in model response",
+          rawResponse: resultText.substring(0, 500) // Truncate for safety
+        };
+      }
+    } catch (e) {
       parsedResult = {
         error: true,
-        errorType: "json_extraction_failed",
-        message: "No valid JSON object found in model response",
+        errorType: "json_parse_error",
+        message: e instanceof Error ? e.message : "Failed to parse JSON",
         rawResponse: resultText.substring(0, 500) // Truncate for safety
       };
     }
-  } catch (e) {
-    parsedResult = {
-      error: true,
-      errorType: "json_parse_error",
-      message: e instanceof Error ? e.message : "Failed to parse JSON",
-      rawResponse: resultText.substring(0, 500) // Truncate for safety
+
+    const tokenUsage = {
+      inputTokens: responseBody.usage?.inputTokens || 0,
+      outputTokens: responseBody.usage?.outputTokens || 0
     };
+
+    console.log("[Bedrock:DEBUG] Model response received", { tokenUsage, hasValidJson: isValidJson });
+
+    return { result: parsedResult, tokenUsage };
+  } catch (error) {
+    console.error("[Bedrock:ERROR]", error);
+    throw error;
   }
-
-  const tokenUsage = {
-    inputTokens: responseBody.usage?.inputTokens || 0,
-    outputTokens: responseBody.usage?.outputTokens || 0
-  };
-
-  return { result: parsedResult, tokenUsage };
 }
 
 // Main function to generate insight
@@ -374,63 +390,71 @@ export async function generateInsight(
 ): Promise<InsightResult> {
   const { type, inputData, userId, flightPlanId, forceRegenerate = false } = options;
 
-  // Rate limit check
-  const rateCheck = checkRateLimit(userId);
-  if (!rateCheck.allowed) {
-    throw new Error(`Rate limit exceeded. Try again in ${Math.ceil((rateCheck.retryAfterMs || 60000) / 1000)} seconds.`);
-  }
-
   // Include flightPlanId in hash to ensure proper cache isolation per flight plan
   const inputHash = generateInputHash({ type, ...inputData }, flightPlanId);
-  const systemPrompt = SYSTEM_PROMPTS[type];
+  
+  console.log("[Bedrock:DEBUG] Starting insight generation", { type, flightPlanId, inputHash });
 
-  if (!systemPrompt) {
-    throw new Error(`Unknown insight type: ${type}`);
+  try {
+    // Rate limit check
+    const rateCheck = checkRateLimit(userId);
+    if (!rateCheck.allowed) {
+      throw new Error(`Rate limit exceeded. Try again in ${Math.ceil((rateCheck.retryAfterMs || 60000) / 1000)} seconds.`);
+    }
+
+    const systemPrompt = SYSTEM_PROMPTS[type];
+
+    if (!systemPrompt) {
+      throw new Error(`Unknown insight type: ${type}`);
+    }
+
+    // Build user prompt based on insight type
+    let userPrompt = "";
+    let kbQuery = "";
+
+    switch (type) {
+      case "allocation_summary":
+        userPrompt = `Analyze this cargo allocation:\n${JSON.stringify(inputData, null, 2)}`;
+        kbQuery = "military cargo allocation regulations weight limits";
+        break;
+      case "cob_analysis":
+        userPrompt = `Analyze Center of Balance for this load:\n${JSON.stringify(inputData, null, 2)}`;
+        kbQuery = "aircraft center of gravity MAC percentage safety limits";
+        break;
+      case "pallet_review":
+        userPrompt = `Review this 463L pallet configuration:\n${JSON.stringify(inputData, null, 2)}`;
+        kbQuery = "463L pallet tiedown hazmat cargo stacking regulations";
+        break;
+      case "route_planning":
+        userPrompt = `Analyze this airlift route:\n${JSON.stringify(inputData, null, 2)}`;
+        kbQuery = "military airlift route planning fuel efficiency";
+        break;
+      case "compliance":
+        userPrompt = `Check compliance for this cargo manifest:\n${JSON.stringify(inputData, null, 2)}`;
+        kbQuery = "DoD cargo transportation regulations hazmat compliance";
+        break;
+      case "mission_briefing":
+        userPrompt = `Generate mission briefing for:\n${JSON.stringify(inputData, null, 2)}`;
+        kbQuery = "military mission briefing format requirements";
+        break;
+    }
+
+    // Retrieve knowledge base context
+    const kbContext = await retrieveKnowledgeBaseContext(kbQuery);
+
+    // Invoke model
+    const { result, tokenUsage } = await invokeModel(systemPrompt, userPrompt, kbContext);
+
+    return {
+      insight: result,
+      inputHash,
+      tokenUsage,
+      fromCache: false
+    };
+  } catch (error) {
+    console.error("[Bedrock:ERROR]", error);
+    throw error;
   }
-
-  // Build user prompt based on insight type
-  let userPrompt = "";
-  let kbQuery = "";
-
-  switch (type) {
-    case "allocation_summary":
-      userPrompt = `Analyze this cargo allocation:\n${JSON.stringify(inputData, null, 2)}`;
-      kbQuery = "military cargo allocation regulations weight limits";
-      break;
-    case "cob_analysis":
-      userPrompt = `Analyze Center of Balance for this load:\n${JSON.stringify(inputData, null, 2)}`;
-      kbQuery = "aircraft center of gravity MAC percentage safety limits";
-      break;
-    case "pallet_review":
-      userPrompt = `Review this 463L pallet configuration:\n${JSON.stringify(inputData, null, 2)}`;
-      kbQuery = "463L pallet tiedown hazmat cargo stacking regulations";
-      break;
-    case "route_planning":
-      userPrompt = `Analyze this airlift route:\n${JSON.stringify(inputData, null, 2)}`;
-      kbQuery = "military airlift route planning fuel efficiency";
-      break;
-    case "compliance":
-      userPrompt = `Check compliance for this cargo manifest:\n${JSON.stringify(inputData, null, 2)}`;
-      kbQuery = "DoD cargo transportation regulations hazmat compliance";
-      break;
-    case "mission_briefing":
-      userPrompt = `Generate mission briefing for:\n${JSON.stringify(inputData, null, 2)}`;
-      kbQuery = "military mission briefing format requirements";
-      break;
-  }
-
-  // Retrieve knowledge base context
-  const kbContext = await retrieveKnowledgeBaseContext(kbQuery);
-
-  // Invoke model
-  const { result, tokenUsage } = await invokeModel(systemPrompt, userPrompt, kbContext);
-
-  return {
-    insight: result,
-    inputHash,
-    tokenUsage,
-    fromCache: false
-  };
 }
 
 // Health check for Bedrock connectivity
