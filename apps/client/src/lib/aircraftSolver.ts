@@ -1207,7 +1207,7 @@ function placePallets(
   return { 
     placements, 
     unplaced, 
-    nextX: maxOccupiedX + SPACING,
+    nextX: maxOccupiedX + 4, // 4" spacing between cargo sections
     totalWeight: runningWeight,
     totalMoment: runningMoment
   };
