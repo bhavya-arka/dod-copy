@@ -335,13 +335,14 @@ export default function LoadPlanViewer({
   const wrappedOnLogout = onLogout ? () => interceptNavigation(onLogout) : undefined;
 
   return (
-    <div className={hideNavigation ? "flex flex-col" : "min-h-screen bg-neutral-50 gradient-mesh flex flex-col"}>
+    <div className={hideNavigation ? "flex flex-col h-full w-full" : "min-h-screen bg-neutral-50 gradient-mesh flex flex-col"}>
       <UnsavedChangesModal
         isOpen={showUnsavedModal}
         onNavigateAnyway={handleNavigateAnyway}
         onGoBack={handleGoBackToEditing}
       />
 
+      {!hideNavigation && (
       <header className="p-3 border-b border-neutral-200/50 flex justify-between items-center bg-white/80 backdrop-blur-xl z-10 shadow-soft">
         <div className="flex items-center space-x-3">
           {wrappedOnDashboard && (
@@ -522,6 +523,7 @@ export default function LoadPlanViewer({
           )}
         </div>
       </header>
+      )}
 
       {saveError && (
         <div className="mx-4 mt-4 glass-card bg-red-50/80 border-red-200 p-4">
