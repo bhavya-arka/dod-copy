@@ -69,7 +69,6 @@ interface PACAPAppProps {
 export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId }: PACAPAppProps) {
   const [state, setState] = useState<AppState>({
     currentScreen: 'upload',
-    selectedAircraft: 'C-17',
     movementData: null,
     classifiedItems: null,
     allocationResult: null,
@@ -175,7 +174,6 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
         classifiedItems,
         allocationResult,
         insights: combinedInsights,
-        selectedAircraft: allocationResult.aircraft_type || 'C-17',
         isProcessing: false,
         currentScreen: 'mission_workspace'
       }));
@@ -204,8 +202,18 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
       // Step 2: Classify items (Spec Section 3)
       const classified = classifyItems(parseResult);
 
-      // Step 3: Run aircraft allocation solver (Spec Section 8)
-      const allocation = solveAircraftAllocation(classified, state.selectedAircraft);
+      // Step 3: Run aircraft allocation solver with fleet availability (Spec Section 8)
+      // Use fleet availability if set, otherwise default to unlimited C-17s
+      const fleet: FleetAvailability = fleetAvailability || {
+        types: [
+          { typeId: 'C17', count: 50, locked: false },
+          { typeId: 'C130', count: 50, locked: false }
+        ],
+        preferredType: 'C17',
+        mixedFleetMode: 'PREFERRED_FIRST',
+        preferenceStrength: 100
+      };
+      const allocation = solveAircraftAllocation(classified, fleet);
 
       // Step 4: Generate insights (Spec Section 13)
       const movementInsights = analyzeMovementList(parseResult.items, classified);
@@ -234,34 +242,11 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
         error: error instanceof Error ? error.message : 'Unknown error occurred'
       }));
     }
-  }, [state.selectedAircraft]);
+  }, [fleetAvailability]);
 
   const handleFileUpload = useCallback((content: string, filename: string) => {
     processMovementList(content, filename);
   }, [processMovementList]);
-
-  const handleAircraftSelect = useCallback((type: AircraftType) => {
-    setState(prev => ({ ...prev, selectedAircraft: type }));
-    
-    // Re-process if we already have data
-    if (state.movementData) {
-      const classified = classifyItems(state.movementData);
-      const allocation = solveAircraftAllocation(classified, type);
-      const movementInsights = analyzeMovementList(state.movementData.items, classified);
-      const allocationInsights = analyzeAllocation(allocation);
-      
-      setState(prev => ({
-        ...prev,
-        selectedAircraft: type,
-        classifiedItems: classified,
-        allocationResult: allocation,
-        insights: {
-          ...movementInsights,
-          insights: [...movementInsights.insights, ...allocationInsights]
-        }
-      }));
-    }
-  }, [state.movementData]);
 
   const handleLoadSampleData = useCallback(() => {
     processMovementList(SAMPLE_CSV, 'sample_movement_list.csv');
@@ -329,8 +314,6 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
         >
           <UploadScreen
             onFileUpload={handleFileUpload}
-            onAircraftSelect={handleAircraftSelect}
-            selectedAircraft={state.selectedAircraft}
             isProcessing={state.isProcessing}
             error={state.error}
             onFleetAvailabilityChange={handleFleetAvailabilityChange}
@@ -406,7 +389,6 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
             parseResult={state.movementData}
             allocationResult={state.allocationResult}
             classifiedItems={state.classifiedItems}
-            selectedAircraft={state.selectedAircraft}
             insights={state.insights}
             activePlanId={activePlanId}
             activePlanName={activePlanName}

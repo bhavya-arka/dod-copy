@@ -699,6 +699,20 @@ export interface AircraftLoadPlan {
   seat_utilization_percent: number; // Percentage of seats used
 }
 
+export interface FleetUsage {
+  typeId: string;
+  available: number;
+  used: number;
+}
+
+export interface AllocationShortfall {
+  unloadedWeight: number;
+  unloadedPallets: number;
+  unloadedRollingStock: number;
+  unloadedPax: number;
+  reason: string;
+}
+
 export interface AllocationResult {
   aircraft_type: AircraftType;
   total_aircraft: number;
@@ -724,6 +738,11 @@ export interface AllocationResult {
   
   // Warnings and issues
   warnings: string[];
+  
+  // Fleet feasibility (new for multi-fleet allocation)
+  feasible: boolean;                // Whether all cargo was loaded
+  fleetUsage: FleetUsage[];         // How many of each type were used
+  shortfall?: AllocationShortfall;  // Details when not feasible
 }
 
 // ============================================================================
@@ -860,7 +879,6 @@ export type AppScreen = 'upload' | 'brief' | 'load_plans' | 'detail' | 'route_pl
 
 export interface AppState {
   currentScreen: AppScreen;
-  selectedAircraft: AircraftType;
   movementData: ParseResult | null;
   classifiedItems: ClassifiedItems | null;
   allocationResult: AllocationResult | null;

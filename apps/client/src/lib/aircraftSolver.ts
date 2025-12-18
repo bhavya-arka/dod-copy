@@ -26,7 +26,10 @@ import {
   PALLET_463L,
   PAX_WEIGHT_LB,
   getEnvelopeLimitsStation,
-  stationToEnvelopePercent
+  stationToEnvelopePercent,
+  FleetAvailability,
+  FleetUsage,
+  AllocationShortfall
 } from './pacafTypes';
 import { processPalletization, PalletizationResult, resetPalletCounter } from './palletizationEngine';
 import { sortByLengthDescending, sortByWeightDescending } from './classificationEngine';
@@ -1308,9 +1311,44 @@ function hasCargoInQueue(queue: AllocationQueue): boolean {
   );
 }
 
+/**
+ * Get available aircraft types from fleet availability, sorted by priority
+ * Priority: 1) Preferred type first (if available), 2) Then by max payload (largest first)
+ */
+function getAvailableFleetTypes(
+  fleetAvailability: FleetAvailability
+): { typeId: string; aircraftType: AircraftType; available: number; spec: AircraftSpec }[] {
+  const available = fleetAvailability.types
+    .filter(t => t.count > 0 && !t.locked)
+    .map(t => {
+      const aircraftType = t.typeId === 'C17' ? 'C-17' : 'C-130' as AircraftType;
+      const spec = AIRCRAFT_SPECS[aircraftType];
+      return {
+        typeId: t.typeId,
+        aircraftType,
+        available: t.count,
+        spec
+      };
+    });
+
+  // Sort by priority: preferred first, then by max payload
+  available.sort((a, b) => {
+    const aIsPreferred = fleetAvailability.preferredType === a.typeId;
+    const bIsPreferred = fleetAvailability.preferredType === b.typeId;
+    
+    if (aIsPreferred && !bIsPreferred) return -1;
+    if (!aIsPreferred && bIsPreferred) return 1;
+    
+    // Otherwise sort by max payload (largest first)
+    return b.spec.max_payload - a.spec.max_payload;
+  });
+
+  return available;
+}
+
 export function solveAircraftAllocation(
   classifiedItems: ClassifiedItems,
-  aircraftType: AircraftType
+  fleetAvailability: FleetAvailability
 ): AllocationResult {
   const warnings: string[] = [];
   const loadPlans: AircraftLoadPlan[] = [];
@@ -1318,15 +1356,71 @@ export function solveAircraftAllocation(
   
   resetPalletCounter();
   
+  // Get available fleet types sorted by priority
+  const availableTypes = getAvailableFleetTypes(fleetAvailability);
+  
+  // Track usage per type
+  const fleetUsage: Map<string, { available: number; used: number }> = new Map();
+  for (const t of fleetAvailability.types) {
+    fleetUsage.set(t.typeId, { available: t.count, used: 0 });
+  }
+  
+  // Determine primary aircraft type for result (first available or C-17 as default)
+  const primaryType: AircraftType = availableTypes.length > 0 
+    ? availableTypes[0].aircraftType 
+    : 'C-17';
+  
   // Debug logging
-  console.log('[AircraftSolver] Starting allocation:', {
-    aircraftType,
+  console.log('[AircraftSolver] Starting fleet-aware allocation:', {
+    availableTypes: availableTypes.map(t => ({ type: t.aircraftType, available: t.available })),
+    preferredType: fleetAvailability.preferredType,
     totalRollingStock: classifiedItems.rolling_stock.length,
     totalPrebuiltPallets: classifiedItems.prebuilt_pallets.length,
     totalLooseItems: classifiedItems.loose_items.length,
-    totalPaxItems: classifiedItems.pax_items.length,
-    rollingStockItems: classifiedItems.rolling_stock.map(i => ({ id: i.item_id, desc: i.description, type: i.type }))
+    totalPaxItems: classifiedItems.pax_items.length
   });
+  
+  // If no aircraft available, return empty result
+  if (availableTypes.length === 0) {
+    unloadedItems.push(...classifiedItems.rolling_stock);
+    unloadedItems.push(...classifiedItems.prebuilt_pallets);
+    unloadedItems.push(...classifiedItems.loose_items);
+    
+    const totalUnloadedPax = classifiedItems.pax_items.reduce((sum, p) => sum + (p.pax_count || 1), 0);
+    const totalUnloadedWeight = unloadedItems.reduce((sum, i) => sum + i.weight_each_lb, 0);
+    
+    return {
+      aircraft_type: 'C-17',
+      total_aircraft: 0,
+      advon_aircraft: 0,
+      main_aircraft: 0,
+      load_plans: [],
+      total_weight: 0,
+      total_pallets: 0,
+      total_rolling_stock: 0,
+      total_pax: 0,
+      total_pax_weight: 0,
+      total_seat_capacity: 0,
+      total_seats_used: 0,
+      overall_seat_utilization: 0,
+      unloaded_items: unloadedItems,
+      unloaded_pax: totalUnloadedPax,
+      warnings: ['No aircraft available in fleet'],
+      feasible: false,
+      fleetUsage: Array.from(fleetUsage.entries()).map(([typeId, usage]) => ({
+        typeId,
+        available: usage.available,
+        used: usage.used
+      })),
+      shortfall: {
+        unloadedWeight: totalUnloadedWeight,
+        unloadedPallets: classifiedItems.prebuilt_pallets.length,
+        unloadedRollingStock: classifiedItems.rolling_stock.length,
+        unloadedPax: totalUnloadedPax,
+        reason: 'No aircraft available in fleet'
+      }
+    };
+  }
   
   const advonIds = new Set(classifiedItems.advon_items.map(i => i.item_id));
   
@@ -1341,8 +1435,7 @@ export function solveAircraftAllocation(
     advonPaxTotal,
     mainPaxItems: mainPaxItems.length,
     mainPaxTotal,
-    totalPaxItems: classifiedItems.pax_items.length,
-    paxItemDetails: classifiedItems.pax_items.map(p => ({ id: p.item_id, pax_count: p.pax_count, advon: advonIds.has(p.item_id) }))
+    totalPaxItems: classifiedItems.pax_items.length
   });
   
   const advonInput: SolverInput = {
@@ -1374,18 +1467,47 @@ export function solveAircraftAllocation(
   const MAX_AIRCRAFT = 50;
   
   let totalUnloadedPax = 0;
+  let currentTypeIndex = 0;
   
+  // Helper to get next available aircraft
+  const getNextAircraft = (): { type: AircraftType; typeId: string } | null => {
+    while (currentTypeIndex < availableTypes.length) {
+      const typeInfo = availableTypes[currentTypeIndex];
+      const usage = fleetUsage.get(typeInfo.typeId)!;
+      if (usage.used < usage.available) {
+        return { type: typeInfo.aircraftType, typeId: typeInfo.typeId };
+      }
+      currentTypeIndex++;
+    }
+    return null;
+  };
+  
+  // Process ADVON queue
   while (hasCargoInQueue(advonQueue)) {
-    const result = loadSingleAircraftFromQueue(advonQueue, aircraftType, advonSequence);
-    
-    if (result.itemsLoaded === 0) {
+    const aircraft = getNextAircraft();
+    if (!aircraft) {
+      // No more aircraft available
       for (const pallet of advonQueue.pallets) {
         unloadedItems.push(...pallet.items);
       }
       unloadedItems.push(...advonQueue.rolling_stock);
-      warnings.push(`ADVON: ${advonQueue.pallets.length} pallets and ${advonQueue.rolling_stock.length} vehicles could not fit on any aircraft`);
+      warnings.push(`ADVON: Fleet exhausted - ${advonQueue.pallets.length} pallets and ${advonQueue.rolling_stock.length} vehicles could not be loaded`);
       break;
     }
+    
+    const result = loadSingleAircraftFromQueue(advonQueue, aircraft.type, advonSequence);
+    
+    if (result.itemsLoaded === 0) {
+      // This aircraft type can't fit remaining cargo, try next type
+      const usage = fleetUsage.get(aircraft.typeId)!;
+      usage.used = usage.available; // Mark this type as exhausted for this cargo
+      currentTypeIndex++;
+      continue;
+    }
+    
+    // Update fleet usage
+    const usage = fleetUsage.get(aircraft.typeId)!;
+    usage.used++;
     
     loadPlans.push(result.loadPlan);
     totalUnloadedPax += result.unloadedPax;
@@ -1398,20 +1520,36 @@ export function solveAircraftAllocation(
     }
   }
   
+  // Reset type index for MAIN phase
+  currentTypeIndex = 0;
   let mainQueue = mainPrep.queue;
   let mainSequence = 1;
   
   while (hasCargoInQueue(mainQueue)) {
-    const result = loadSingleAircraftFromQueue(mainQueue, aircraftType, mainSequence);
-    
-    if (result.itemsLoaded === 0) {
+    const aircraft = getNextAircraft();
+    if (!aircraft) {
+      // No more aircraft available
       for (const pallet of mainQueue.pallets) {
         unloadedItems.push(...pallet.items);
       }
       unloadedItems.push(...mainQueue.rolling_stock);
-      warnings.push(`MAIN: ${mainQueue.pallets.length} pallets and ${mainQueue.rolling_stock.length} vehicles could not fit on any aircraft`);
+      warnings.push(`MAIN: Fleet exhausted - ${mainQueue.pallets.length} pallets and ${mainQueue.rolling_stock.length} vehicles could not be loaded`);
       break;
     }
+    
+    const result = loadSingleAircraftFromQueue(mainQueue, aircraft.type, mainSequence);
+    
+    if (result.itemsLoaded === 0) {
+      // This aircraft type can't fit remaining cargo, try next type
+      const usage = fleetUsage.get(aircraft.typeId)!;
+      usage.used = usage.available; // Mark this type as exhausted for this cargo
+      currentTypeIndex++;
+      continue;
+    }
+    
+    // Update fleet usage
+    const usage = fleetUsage.get(aircraft.typeId)!;
+    usage.used++;
     
     loadPlans.push(result.loadPlan);
     totalUnloadedPax += result.unloadedPax;
@@ -1437,6 +1575,9 @@ export function solveAircraftAllocation(
   const totalSeatsUsed = loadPlans.reduce((sum, p) => sum + p.seats_used, 0);
   const overallSeatUtilization = totalSeatCapacity > 0 ? (totalSeatsUsed / totalSeatCapacity) * 100 : 0;
   
+  // Calculate feasibility
+  const feasible = unloadedItems.length === 0 && totalUnloadedPax === 0;
+  
   if (unloadedItems.length > 0) {
     warnings.push(`${unloadedItems.length} items could not be loaded`);
   }
@@ -1445,8 +1586,28 @@ export function solveAircraftAllocation(
     warnings.push(`${totalUnloadedPax} PAX could not be loaded due to seat/weight constraints`);
   }
   
+  // Build fleet usage array
+  const fleetUsageArray: FleetUsage[] = Array.from(fleetUsage.entries()).map(([typeId, usage]) => ({
+    typeId,
+    available: usage.available,
+    used: usage.used
+  }));
+  
+  // Build shortfall if not feasible
+  let shortfall: AllocationShortfall | undefined;
+  if (!feasible) {
+    const unloadedWeight = unloadedItems.reduce((sum, i) => sum + i.weight_each_lb, 0);
+    shortfall = {
+      unloadedWeight,
+      unloadedPallets: unloadedItems.filter(i => i.type === 'PREBUILT_PALLET' || i.type === 'PALLETIZABLE').length,
+      unloadedRollingStock: unloadedItems.filter(i => i.type === 'ROLLING_STOCK').length,
+      unloadedPax: totalUnloadedPax,
+      reason: `Fleet capacity insufficient: ${unloadedItems.length} items and ${totalUnloadedPax} PAX could not be loaded`
+    };
+  }
+  
   return {
-    aircraft_type: aircraftType,
+    aircraft_type: primaryType,
     total_aircraft: loadPlans.length,
     advon_aircraft: advonPlans.length,
     main_aircraft: mainPlans.length,
@@ -1461,7 +1622,10 @@ export function solveAircraftAllocation(
     overall_seat_utilization: overallSeatUtilization,
     unloaded_items: unloadedItems,
     unloaded_pax: totalUnloadedPax,
-    warnings
+    warnings,
+    feasible,
+    fleetUsage: fleetUsageArray,
+    shortfall
   };
 }
 

@@ -23,8 +23,6 @@ import { Minus, Plus, Lock, Unlock, ChevronDown, Info, CheckCircle } from "lucid
 
 interface UploadScreenProps {
   onFileUpload: (content: string, filename: string) => void;
-  onAircraftSelect: (type: AircraftType) => void;
-  selectedAircraft: AircraftType;
   isProcessing: boolean;
   error: string | null;
   onFleetAvailabilityChange?: (availability: FleetAvailability) => void;
@@ -39,8 +37,6 @@ const MIXED_FLEET_POLICIES: { value: MixedFleetMode; label: string }[] = [
 
 export default function UploadScreen({
   onFileUpload,
-  onAircraftSelect,
-  selectedAircraft,
   isProcessing,
   error,
   onFleetAvailabilityChange,
@@ -185,7 +181,7 @@ export default function UploadScreen({
         types: fleetAvailability,
         preferredType,
         mixedFleetMode,
-        preferenceStrength,
+        preferenceStrength: preferenceStrength / 100,
       });
     }
   }, [
@@ -406,75 +402,6 @@ export default function UploadScreen({
                 Upload your sanitized UTC dataset to generate optimized load
                 plans
               </p>
-            </motion.div>
-
-            <motion.div
-              className="space-y-3 sm:space-y-4"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <label className="text-neutral-700 text-sm font-medium">
-                Select Aircraft Type
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                <button
-                  onClick={() => onAircraftSelect("C-17")}
-                  className={`glass-card p-4 sm:p-6 text-left transition-all duration-200 ${
-                    selectedAircraft === "C-17"
-                      ? "ring-2 ring-primary ring-offset-2 shadow-glass-lg"
-                      : "hover:shadow-glass-lg hover:-translate-y-0.5"
-                  }`}
-                >
-                  <div className="flex sm:block items-center gap-3 sm:gap-0">
-                    <div className="text-2xl sm:text-3xl sm:mb-3">✈️</div>
-                    <div>
-                      <h3 className="font-bold text-base sm:text-lg text-neutral-900">
-                        C-17 Globemaster III
-                      </h3>
-                      <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">
-                        18 pallet positions
-                      </p>
-                      <p className="text-xs sm:text-sm text-neutral-500">
-                        170,900 lb payload
-                      </p>
-                    </div>
-                  </div>
-                  {selectedAircraft === "C-17" && (
-                    <div className="mt-2 sm:mt-3">
-                      <span className="badge-primary text-xs">Selected</span>
-                    </div>
-                  )}
-                </button>
-                <button
-                  onClick={() => onAircraftSelect("C-130")}
-                  className={`glass-card p-4 sm:p-6 text-left transition-all duration-200 ${
-                    selectedAircraft === "C-130"
-                      ? "ring-2 ring-primary ring-offset-2 shadow-glass-lg"
-                      : "hover:shadow-glass-lg hover:-translate-y-0.5"
-                  }`}
-                >
-                  <div className="flex sm:block items-center gap-3 sm:gap-0">
-                    <div className="text-2xl sm:text-3xl sm:mb-3">🛩️</div>
-                    <div>
-                      <h3 className="font-bold text-base sm:text-lg text-neutral-900">
-                        C-130H/J Hercules
-                      </h3>
-                      <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">
-                        6 pallet positions
-                      </p>
-                      <p className="text-xs sm:text-sm text-neutral-500">
-                        42,000 lb payload
-                      </p>
-                    </div>
-                  </div>
-                  {selectedAircraft === "C-130" && (
-                    <div className="mt-2 sm:mt-3">
-                      <span className="badge-primary text-xs">Selected</span>
-                    </div>
-                  )}
-                </button>
-              </div>
             </motion.div>
 
             <motion.div

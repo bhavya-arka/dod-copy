@@ -149,7 +149,6 @@ interface MissionProviderProps {
   parseResult?: ParseResult | null;
   allocationResult?: AllocationResult | null;
   classifiedItems?: ClassifiedItems | null;
-  selectedAircraft?: AircraftType;
   insights?: InsightsSummary | null;
   activePlanId?: number | null;
   activePlanName?: string | null;
@@ -162,7 +161,6 @@ export function MissionProvider({
   parseResult: initialParseResult,
   allocationResult: initialAllocation,
   classifiedItems: initialClassified,
-  selectedAircraft: initialAircraft = 'C-17',
   insights: initialInsights,
   activePlanId: initialPlanId,
   activePlanName: initialPlanName,
@@ -177,7 +175,10 @@ export function MissionProvider({
   const [routes, setRoutes] = useState<FlightRoute[]>([]);
   const [manifestId, setManifestId] = useState<number | null>(null);
   
-  const [selectedAircraft, setSelectedAircraft] = useState<AircraftType>(initialAircraft);
+  // Derive selectedAircraft from allocationResult - uses the primary aircraft type from allocation
+  const [selectedAircraft, setSelectedAircraft] = useState<AircraftType>(
+    initialAllocation?.aircraft_type || 'C-17'
+  );
   const [selectedAircraftIndex, setSelectedAircraftIndex] = useState(0);
   const [currentTab, setCurrentTab] = useState<MissionTab>('flights');
   const [isProcessing, setIsProcessing] = useState(false);
