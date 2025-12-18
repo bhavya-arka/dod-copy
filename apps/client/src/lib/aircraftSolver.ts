@@ -1026,9 +1026,11 @@ function placePallets(
   const PALLET_LENGTH = PALLET_463L.length;
   const PALLET_WIDTH = PALLET_463L.width;
   const PALLET_HALF_WIDTH = PALLET_WIDTH / 2;
-  const SPACING = 4;
-  const PALLET_SLOT = PALLET_LENGTH + SPACING;
-
+  
+  // Use aircraft-specific pallet positions from spec instead of calculating from pallet dimensions
+  // C-17: 18 positions (9 rows × 2 lanes)
+  // C-130: 6 positions (6 rows × 1 lane) - pallets oriented with 88" dimension longitudinal
+  const maxPositions = aircraftSpec.pallet_positions;
   const maxX = aircraftSpec.cargo_length;
   const maxPayload = aircraftSpec.max_payload;
   const bayStart = aircraftSpec.cargo_bay_fs_start;
@@ -1036,6 +1038,11 @@ function placePallets(
   // Get lateral lane configuration for this aircraft type
   const laneConfig = getAircraftLaneConfig(aircraftSpec.type);
   const laneCount = laneConfig.lane_count;
+  
+  // Calculate slot width based on aircraft's configured pallet positions
+  // This allows proper spacing for each aircraft type
+  const maxRows = Math.ceil(maxPositions / laneCount);
+  const PALLET_SLOT = maxX / maxRows; // Dynamic slot width based on aircraft config
   
   const targetCobPercent = (aircraftSpec.cob_min_percent + aircraftSpec.cob_max_percent) / 2;
   const targetStationCG = aircraftSpec.lemac_station + (targetCobPercent / 100) * aircraftSpec.mac_length;
@@ -1047,10 +1054,7 @@ function placePallets(
     currentCGPercent = ((currentStationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
   }
   
-  console.log(`[PlacePallets] CoB-aware lateral placement: ${laneCount} lanes, currentCG=${currentCGPercent.toFixed(1)}% MAC, target=${targetCobPercent.toFixed(1)}% MAC`);
-
-  const usableLength = maxX - startX;
-  const maxRows = Math.floor(usableLength / PALLET_SLOT);
+  console.log(`[PlacePallets] CoB-aware lateral placement: ${laneCount} lanes, ${maxRows} rows, slotWidth=${PALLET_SLOT.toFixed(1)}", currentCG=${currentCGPercent.toFixed(1)}% MAC, target=${targetCobPercent.toFixed(1)}% MAC`);
   
   if (maxRows <= 0) {
     unplaced.push(...pallets);
@@ -1058,11 +1062,19 @@ function placePallets(
   }
 
   // Generate all available slots (longitudinal row × lateral lane combinations)
-  // For C-17: 9 rows × 2 lanes = 18 slots (but can fit 36 pallets with rows)
-  // For C-130: 4 rows × 1 lane = 4 slots
+  // For C-17: 9 rows × 2 lanes = 18 slots
+  // For C-130: 6 rows × 1 lane = 6 slots
+  // Note: PALLET_SLOT may be smaller than PALLET_LENGTH to achieve correct position count
+  // Last position may extend onto ramp - this is valid for ramp-rated cargo
   const allSlots: LateralSlot[] = [];
   for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
     const xStart = startX + rowIndex * PALLET_SLOT;
+    const xEnd = xStart + PALLET_LENGTH;
+    
+    // Skip slot if it would extend completely beyond cargo area (including ramp)
+    const totalUsableLength = maxX + aircraftSpec.ramp_length;
+    if (xEnd > totalUsableLength) continue;
+    
     const isOnRamp = xStart >= (maxX - aircraftSpec.ramp_length);
     
     for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {

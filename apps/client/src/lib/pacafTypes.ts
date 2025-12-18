@@ -555,17 +555,19 @@ export const AIRCRAFT_SPECS: Record<AircraftType, AircraftSpec> = {
     // Center of Balance (% MAC) - Per T.O. 1C-130H-9
     // LEMAC: 494.5" from aircraft datum (nose)
     // MAC Length: 164.5"
-    // Cargo Bay: Stations 245 to 605 (360" length)
+    // Cargo Bay: Stations 245 to 737 (492" length)
     // CG Envelope: 18% - 33% MAC for cargo operations
     // Target CG: 25.5% MAC (center of envelope)
     // cargo_bay_fs_start: FS datum where solver X=0 begins
-    // Formula: targetStation - targetCG = (LEMAC + 0.255×MAC) - 246 = 536.5 - 246 = 290"
-    // This ensures: centered cargo at targetCG produces ~25.5% MAC
+    // Formula: targetStation = LEMAC + 0.255×MAC = 494.5 + 41.95 = 536.45"
+    // For centered cargo at x=246 with pallet center offset of 54":
+    // cargo_bay_fs_start = targetStation - 246 - 54 = 536.45 - 300 = 236.45"
+    // This ensures: centered cargo produces ~25.5% MAC
     cob_min_percent: 18,
     cob_max_percent: 33,
     mac_length: 164.5,
     lemac_station: 494.5,
-    cargo_bay_fs_start: 290,
+    cargo_bay_fs_start: 236,
     
     // Station constraints
     stations: C130_STATIONS,

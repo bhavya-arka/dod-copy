@@ -116,17 +116,23 @@ const FlightNode = ({ data }: NodeProps) => {
         {flight.origin.icao} → {flight.destination.icao}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-        <div className="bg-white/80 rounded-lg px-2 py-1">
-          <span className="text-neutral-500">Pallets</span>
-          <span className="font-bold text-neutral-900 ml-1">
+      <div className="grid grid-cols-3 gap-1 text-xs mb-2">
+        <div className="bg-white/80 rounded-lg px-1.5 py-1 text-center">
+          <span className="text-neutral-500 block text-[10px]">PLT</span>
+          <span className="font-bold text-neutral-900">
             {flight.pallets.length}
           </span>
         </div>
-        <div className="bg-white/80 rounded-lg px-2 py-1">
-          <span className="text-neutral-500">Weight</span>
-          <span className="font-bold text-neutral-900 ml-1">
-            {Math.round(weight / 1000)}K
+        <div className="bg-white/80 rounded-lg px-1.5 py-1 text-center">
+          <span className="text-neutral-500 block text-[10px]">ROLL STK</span>
+          <span className="font-bold text-neutral-900">
+            {flight.rolling_stock.length}
+          </span>
+        </div>
+        <div className="bg-white/80 rounded-lg px-1.5 py-1 text-center">
+          <span className="text-neutral-500 block text-[10px]">LBS</span>
+          <span className="font-bold text-neutral-900">
+            {weight.toLocaleString()}
           </span>
         </div>
       </div>
@@ -134,7 +140,7 @@ const FlightNode = ({ data }: NodeProps) => {
       <div className="mb-2">
         <div className="flex justify-between text-xs text-neutral-500 mb-1">
           <span>Capacity</span>
-          <span>{utilization.toFixed(0)}%</span>
+          <span>{weight.toLocaleString()} / {maxPayload.toLocaleString()} lb</span>
         </div>
         <div className="w-full bg-neutral-200 rounded-full h-1.5">
           <div
