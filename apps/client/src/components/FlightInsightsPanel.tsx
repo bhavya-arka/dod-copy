@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, RefreshCw, AlertTriangle, CheckCircle, Info, Plane, Package, Users, Scale } from 'lucide-react';
+import { Bot, RefreshCw, AlertTriangle, CheckCircle, Info, Plane, Package, Users, Scale, Fuel, ArrowRightLeft, Shield, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAiInsights, AiInsight } from '../hooks/useAiInsights';
 import { AllocationResult } from '../lib/pacafTypes';
 
@@ -20,17 +20,47 @@ interface FlightAllocationAnalysis {
     total_cargo_weight_lb: number;
     average_utilization_percent: number;
   };
+  aircraft_selection_rationale?: {
+    c17_rationale: string;
+    c130_rationale: string;
+    fleet_mix_reasoning: string;
+  };
   allocation_issues: Array<{
     severity: 'critical' | 'warning' | 'info';
     title: string;
     description: string;
     recommendation: string;
   }>;
+  cargo_shift_recommendations?: Array<{
+    from_aircraft: string;
+    to_aircraft: string;
+    item_description: string;
+    reason: string;
+  }>;
   cob_summary: {
     aircraft_in_envelope: number;
     aircraft_out_of_envelope: number;
     worst_offender: string | null;
     corrective_action: string;
+    per_aircraft_cob?: Array<{
+      aircraft_id: string;
+      cob_percent: number;
+      status: 'in_envelope' | 'marginal' | 'out_of_envelope';
+    }>;
+  };
+  special_cargo_notes?: {
+    advon_items: string;
+    hazmat_items: string;
+    oversized_items: string;
+  };
+  pax_analysis?: {
+    total_passengers: number;
+    seat_utilization: string;
+    pax_considerations: string;
+  };
+  fueling_considerations?: {
+    estimated_fuel_impact: string;
+    range_notes: string;
   };
   fleet_shortage_analysis: {
     has_unloaded_cargo: boolean;
@@ -166,6 +196,12 @@ export default function FlightInsightsPanel({
     }
   };
 
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
   const safeAnalysis = useMemo(() => {
     if (!analysisContent) return null;
     return {
@@ -178,13 +214,38 @@ export default function FlightInsightsPanel({
         total_cargo_weight_lb: analysisContent.fleet_status?.total_cargo_weight_lb ?? 0,
         average_utilization_percent: analysisContent.fleet_status?.average_utilization_percent ?? 0,
       },
+      aircraft_selection_rationale: analysisContent.aircraft_selection_rationale ? {
+        c17_rationale: analysisContent.aircraft_selection_rationale.c17_rationale || '',
+        c130_rationale: analysisContent.aircraft_selection_rationale.c130_rationale || '',
+        fleet_mix_reasoning: analysisContent.aircraft_selection_rationale.fleet_mix_reasoning || '',
+      } : null,
       allocation_issues: Array.isArray(analysisContent.allocation_issues) ? analysisContent.allocation_issues : [],
+      cargo_shift_recommendations: Array.isArray(analysisContent.cargo_shift_recommendations) 
+        ? analysisContent.cargo_shift_recommendations 
+        : [],
       cob_summary: {
         aircraft_in_envelope: analysisContent.cob_summary?.aircraft_in_envelope ?? 0,
         aircraft_out_of_envelope: analysisContent.cob_summary?.aircraft_out_of_envelope ?? 0,
         worst_offender: analysisContent.cob_summary?.worst_offender || null,
         corrective_action: analysisContent.cob_summary?.corrective_action || '',
+        per_aircraft_cob: Array.isArray(analysisContent.cob_summary?.per_aircraft_cob)
+          ? analysisContent.cob_summary.per_aircraft_cob
+          : [],
       },
+      special_cargo_notes: analysisContent.special_cargo_notes ? {
+        advon_items: analysisContent.special_cargo_notes.advon_items || '',
+        hazmat_items: analysisContent.special_cargo_notes.hazmat_items || '',
+        oversized_items: analysisContent.special_cargo_notes.oversized_items || '',
+      } : null,
+      pax_analysis: analysisContent.pax_analysis ? {
+        total_passengers: analysisContent.pax_analysis.total_passengers ?? 0,
+        seat_utilization: analysisContent.pax_analysis.seat_utilization || '',
+        pax_considerations: analysisContent.pax_analysis.pax_considerations || '',
+      } : null,
+      fueling_considerations: analysisContent.fueling_considerations ? {
+        estimated_fuel_impact: analysisContent.fueling_considerations.estimated_fuel_impact || '',
+        range_notes: analysisContent.fueling_considerations.range_notes || '',
+      } : null,
       fleet_shortage_analysis: {
         has_unloaded_cargo: analysisContent.fleet_shortage_analysis?.has_unloaded_cargo ?? false,
         unloaded_item_count: analysisContent.fleet_shortage_analysis?.unloaded_item_count ?? 0,
@@ -209,10 +270,11 @@ export default function FlightInsightsPanel({
           onClick={handleGenerate}
           disabled={isGenerating || isRateLimited || flightPlanId <= 0}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-            isGenerating || isRateLimited
+            isGenerating || isRateLimited || flightPlanId <= 0
               ? 'bg-neutral-200 text-neutral-500 cursor-not-allowed'
               : 'bg-primary text-white hover:bg-primary/90'
           }`}
+          title={flightPlanId <= 0 ? 'Save flight plan first to enable insights' : undefined}
         >
           <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
           {currentInsight ? 'Regenerate' : 'Generate'}
@@ -231,7 +293,15 @@ export default function FlightInsightsPanel({
         </div>
       )}
 
-      {!currentInsight && !isGenerating && (
+      {!currentInsight && !isGenerating && flightPlanId <= 0 && (
+        <div className="text-center py-8 text-neutral-500">
+          <Bot className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
+          <p className="text-sm">Save your flight plan to enable AI-powered insights</p>
+          <p className="text-xs mt-2 text-neutral-400">Go to Mission Workspace to save your plan</p>
+        </div>
+      )}
+
+      {!currentInsight && !isGenerating && flightPlanId > 0 && (
         <div className="text-center py-8 text-neutral-500">
           <Bot className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
           <p className="text-sm">Click Generate to get AI-powered analysis of your flight allocation</p>
@@ -370,6 +440,190 @@ export default function FlightInsightsPanel({
                     <CheckCircle className="w-4 h-4 text-green-600" />
                     <span className="text-sm text-green-700">All aircraft within CoB envelope</span>
                   </div>
+                </div>
+              )}
+
+              {/* Aircraft Selection Rationale */}
+              {safeAnalysis.aircraft_selection_rationale && (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <button 
+                    onClick={() => toggleSection('rationale')}
+                    className="w-full flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Plane className="w-4 h-4 text-slate-600" />
+                      <h3 className="font-medium text-slate-700">Aircraft Selection Rationale</h3>
+                    </div>
+                    {expandedSections.rationale ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                  {expandedSections.rationale && (
+                    <div className="mt-3 space-y-2 text-sm text-slate-600">
+                      {safeAnalysis.aircraft_selection_rationale.c17_rationale && (
+                        <div className="bg-white rounded p-2">
+                          <span className="font-medium text-slate-700">C-17:</span> {safeAnalysis.aircraft_selection_rationale.c17_rationale}
+                        </div>
+                      )}
+                      {safeAnalysis.aircraft_selection_rationale.c130_rationale && (
+                        <div className="bg-white rounded p-2">
+                          <span className="font-medium text-slate-700">C-130:</span> {safeAnalysis.aircraft_selection_rationale.c130_rationale}
+                        </div>
+                      )}
+                      {safeAnalysis.aircraft_selection_rationale.fleet_mix_reasoning && (
+                        <div className="bg-white rounded p-2 italic">
+                          {safeAnalysis.aircraft_selection_rationale.fleet_mix_reasoning}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Cargo Shift Recommendations */}
+              {safeAnalysis.cargo_shift_recommendations.length > 0 && (
+                <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200">
+                  <button 
+                    onClick={() => toggleSection('shifts')}
+                    className="w-full flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
+                      <h3 className="font-medium text-indigo-700">Cargo Shift Recommendations</h3>
+                    </div>
+                    {expandedSections.shifts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                  {expandedSections.shifts && (
+                    <div className="mt-3 space-y-2">
+                      {safeAnalysis.cargo_shift_recommendations.map((shift, idx) => (
+                        <div key={idx} className="bg-white rounded p-2 text-sm">
+                          <div className="font-medium text-indigo-700">
+                            {shift.from_aircraft} → {shift.to_aircraft}
+                          </div>
+                          <div className="text-indigo-600">{shift.item_description}</div>
+                          <div className="text-xs text-indigo-500 italic mt-1">{shift.reason}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Special Cargo Notes (ADVON/HAZMAT) */}
+              {safeAnalysis.special_cargo_notes && (
+                <div className="p-3 rounded-xl bg-orange-50 border border-orange-200">
+                  <button 
+                    onClick={() => toggleSection('cargo')}
+                    className="w-full flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-orange-600" />
+                      <h3 className="font-medium text-orange-700">Special Cargo Notes</h3>
+                    </div>
+                    {expandedSections.cargo ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                  {expandedSections.cargo && (
+                    <div className="mt-3 space-y-2 text-sm">
+                      {safeAnalysis.special_cargo_notes.advon_items && (
+                        <div className="bg-white rounded p-2">
+                          <span className="font-medium text-orange-700">ADVON:</span>
+                          <span className="text-orange-600 ml-1">{safeAnalysis.special_cargo_notes.advon_items}</span>
+                        </div>
+                      )}
+                      {safeAnalysis.special_cargo_notes.hazmat_items && (
+                        <div className="bg-white rounded p-2">
+                          <span className="font-medium text-red-700">HAZMAT:</span>
+                          <span className="text-red-600 ml-1">{safeAnalysis.special_cargo_notes.hazmat_items}</span>
+                        </div>
+                      )}
+                      {safeAnalysis.special_cargo_notes.oversized_items && (
+                        <div className="bg-white rounded p-2">
+                          <span className="font-medium text-orange-700">Oversized:</span>
+                          <span className="text-orange-600 ml-1">{safeAnalysis.special_cargo_notes.oversized_items}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* PAX Analysis */}
+              {safeAnalysis.pax_analysis && safeAnalysis.pax_analysis.total_passengers > 0 && (
+                <div className="p-3 rounded-xl bg-purple-50 border border-purple-200">
+                  <button 
+                    onClick={() => toggleSection('pax')}
+                    className="w-full flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-purple-600" />
+                      <h3 className="font-medium text-purple-700">PAX Analysis ({safeAnalysis.pax_analysis.total_passengers})</h3>
+                    </div>
+                    {expandedSections.pax ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                  {expandedSections.pax && (
+                    <div className="mt-3 space-y-2 text-sm text-purple-600">
+                      {safeAnalysis.pax_analysis.seat_utilization && (
+                        <div className="bg-white rounded p-2">{safeAnalysis.pax_analysis.seat_utilization}</div>
+                      )}
+                      {safeAnalysis.pax_analysis.pax_considerations && (
+                        <div className="bg-white rounded p-2 italic">{safeAnalysis.pax_analysis.pax_considerations}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Fueling Considerations */}
+              {safeAnalysis.fueling_considerations && (
+                <div className="p-3 rounded-xl bg-cyan-50 border border-cyan-200">
+                  <button 
+                    onClick={() => toggleSection('fuel')}
+                    className="w-full flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Fuel className="w-4 h-4 text-cyan-600" />
+                      <h3 className="font-medium text-cyan-700">Fueling Considerations</h3>
+                    </div>
+                    {expandedSections.fuel ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                  {expandedSections.fuel && (
+                    <div className="mt-3 space-y-2 text-sm text-cyan-600">
+                      {safeAnalysis.fueling_considerations.estimated_fuel_impact && (
+                        <div className="bg-white rounded p-2">{safeAnalysis.fueling_considerations.estimated_fuel_impact}</div>
+                      )}
+                      {safeAnalysis.fueling_considerations.range_notes && (
+                        <div className="bg-white rounded p-2 italic">{safeAnalysis.fueling_considerations.range_notes}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Per-Aircraft CoB Details */}
+              {safeAnalysis.cob_summary.per_aircraft_cob && safeAnalysis.cob_summary.per_aircraft_cob.length > 0 && (
+                <div className="p-3 rounded-xl bg-teal-50 border border-teal-200">
+                  <button 
+                    onClick={() => toggleSection('cob_details')}
+                    className="w-full flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Scale className="w-4 h-4 text-teal-600" />
+                      <h3 className="font-medium text-teal-700">Per-Aircraft CoB Details</h3>
+                    </div>
+                    {expandedSections.cob_details ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                  {expandedSections.cob_details && (
+                    <div className="mt-3 space-y-1">
+                      {safeAnalysis.cob_summary.per_aircraft_cob.map((ac, idx) => (
+                        <div key={idx} className={`flex justify-between items-center rounded px-2 py-1 text-sm ${
+                          ac.status === 'in_envelope' ? 'bg-green-100 text-green-700' :
+                          ac.status === 'marginal' ? 'bg-amber-100 text-amber-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          <span className="font-medium">{ac.aircraft_id}</span>
+                          <span>{ac.cob_percent.toFixed(1)}% MAC</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

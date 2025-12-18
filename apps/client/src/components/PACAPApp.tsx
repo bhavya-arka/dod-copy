@@ -362,6 +362,7 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
             onDashboard={onDashboard}
             onLogout={onLogout}
             userEmail={userEmail}
+            flightPlanId={activePlanId ?? undefined}
           />
         </motion.div>
       )}

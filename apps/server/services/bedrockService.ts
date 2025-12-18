@@ -301,7 +301,7 @@ Guidelines for generating analytics:
 Do not include any text outside the JSON object.`,
 
   flight_allocation_analysis: `You are a PACAF military airlift mission planner providing a comprehensive flight allocation analysis.
-Analyze the full allocation data including aircraft utilization, center of balance status, unloaded items, and fleet constraints.
+Analyze the full allocation data including aircraft utilization, center of balance status, unloaded items, fleet constraints, and operational considerations.
 ${GUARDRAIL_INSTRUCTIONS}
 CRITICAL: You must respond with ONLY valid JSON in this exact format:
 {
@@ -314,14 +314,39 @@ CRITICAL: You must respond with ONLY valid JSON in this exact format:
     "total_cargo_weight_lb": <number>,
     "average_utilization_percent": <number>
   },
+  "aircraft_selection_rationale": {
+    "c17_rationale": "Explain why C-17s were selected/not selected for this mission",
+    "c130_rationale": "Explain why C-130s were selected/not selected for this mission",
+    "fleet_mix_reasoning": "Explain the overall fleet composition decision"
+  },
   "allocation_issues": [
     {"severity": "critical|warning|info", "title": "short title", "description": "detailed explanation", "recommendation": "actionable suggestion"}
+  ],
+  "cargo_shift_recommendations": [
+    {"from_aircraft": "aircraft_id", "to_aircraft": "aircraft_id", "item_description": "what to move", "reason": "why this shift improves balance/utilization"}
   ],
   "cob_summary": {
     "aircraft_in_envelope": <number>,
     "aircraft_out_of_envelope": <number>,
     "worst_offender": "aircraft_id or null if all good",
-    "corrective_action": "action to take if any aircraft out of envelope"
+    "corrective_action": "action to take if any aircraft out of envelope",
+    "per_aircraft_cob": [
+      {"aircraft_id": "string", "cob_percent": <number>, "status": "in_envelope|marginal|out_of_envelope"}
+    ]
+  },
+  "special_cargo_notes": {
+    "advon_items": "Summary of ADVON phase items and their priority placement",
+    "hazmat_items": "Summary of hazardous materials requiring special handling/placarding",
+    "oversized_items": "Summary of any oversized cargo requiring special loading"
+  },
+  "pax_analysis": {
+    "total_passengers": <number>,
+    "seat_utilization": "Summary of passenger seating across aircraft",
+    "pax_considerations": "Notes on passenger accommodation and safety"
+  },
+  "fueling_considerations": {
+    "estimated_fuel_impact": "How cargo weight affects fuel planning",
+    "range_notes": "Any notes on mission range based on load weights"
   },
   "fleet_shortage_analysis": {
     "has_unloaded_cargo": <boolean>,
@@ -340,6 +365,10 @@ Special Instructions:
 - Consider aircraft payload capacity: C-17 max 170,900 lb, C-130 max 42,000 lb
 - Provide specific recommendations based on unloaded cargo weight and dimensions
 - Center of Balance issues should always be flagged as critical if out of envelope
+- For cargo_shift_recommendations, analyze if moving items between aircraft would improve CoB or utilization
+- ADVON items require priority placement on first available aircraft
+- HAZMAT items require special handling notes and cannot be loaded near passengers
+- Consider fuel range implications when aircraft are heavily loaded
 
 Do not include any text outside the JSON object.`
 };
