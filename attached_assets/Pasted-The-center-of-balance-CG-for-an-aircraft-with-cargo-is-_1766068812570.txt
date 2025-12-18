@@ -1,0 +1,16 @@
+The center of balance (CG) for an aircraft with cargo is the single point where its total weight is concentrated, determined by calculating each item's weight (cargo, fuel, people) multiplied by its distance from a reference point (moment) and dividing the total moments by the total weight; placing heavy cargo forward shifts the CG forward, while aft placement shifts it back, and keeping the CG within forward/aft limits is crucial for stability, affecting control, takeoff, and landing, with deviations causing nose-heavy or tail-heavy conditions. 
+Key Concepts for Cargo Loading
+Center of Gravity (CG): The balance point where the aircraft's entire weight is assumed to act.
+Moments: Calculated by multiplying an item's weight by its distance (arm) from a fixed reference point (datum).
+CG Limits: The forward and aft boundaries specified by the manufacturer where the CG must stay for safe flight. 
+How Cargo Affects CG
+Forward CG: Loading heavy cargo in the front moves the CG forward, making the aircraft nose-heavy, requiring more elevator to raise the nose, and potentially causing runway overruns.
+Aft CG: Placing heavy cargo in the back moves the CG aft, creating a tail-heavy condition, reducing stabilizer effectiveness, and making the aircraft unstable, potentially leading to stalls or uncontrollable pitch. 
+Calculation Steps (Simplified)
+Identify Weights & Arms: List weights of cargo, fuel, passengers, etc., and their distances (arms) from the aircraft's datum.
+Calculate Moments: Multiply each weight by its arm (Weight x Arm = Moment).
+Sum Totals: Add all weights to get Total Weight, and all moments to get Total Moment.
+Find CG: Divide Total Moment by Total Weight (CG = Total Moment / Total Weight) to find the CG's location (e.g., in inches from the datum).
+Verify Limits: Ensure the calculated CG falls within the aircraft's forward and aft limits. 
+Cargo Specifics
+For large or complex cargo, the shipper must provide the weight and balance point (center of balance) for each item, often marked with specific labels, as per regulations. 

@@ -433,29 +433,26 @@ function ICODESDiagram({
       })}
       
       {showCoB && (() => {
-        // FIXED: Normalize CoB position within the CG envelope for accurate visual representation
-        // The visual marker should show the CoB position relative to the envelope:
-        // - If CoB = min_allowed (16% for C-17), marker at forward edge
-        // - If CoB = mid-point (28% for C-17), marker at center
-        // - If CoB = max_allowed (40% for C-17), marker at aft edge
+        // FIX: Show ACTUAL CG position in cargo bay, not clamped to envelope
+        // The CoB percentage is relative to the MAC (Mean Aerodynamic Chord)
+        // We need to convert this to a physical position in the cargo bay
         
-        const cobPercent = loadPlan.cob_percent; // Already clamped to 0-100%
-        const minAllowed = spec.cob_min_percent; // e.g., 16% for C-17
-        const maxAllowed = spec.cob_max_percent; // e.g., 40% for C-17
+        const cobPercent = loadPlan.cob_percent;
         
-        // Normalize within the envelope range [0, 1]
-        // Then map to cargo bay length for visual display
-        let normalized: number;
-        if (cobPercent <= minAllowed) {
-          normalized = 0; // At or before forward limit
-        } else if (cobPercent >= maxAllowed) {
-          normalized = 1; // At or after aft limit
-        } else {
-          normalized = (cobPercent - minAllowed) / (maxAllowed - minAllowed);
-        }
+        // Calculate actual CG station (inches from aircraft datum)
+        // CG station = LEMAC + (cob_percent/100) * MAC_length
+        const cgStation = spec.lemac_station + (cobPercent / 100) * spec.mac_length;
+        
+        // Convert station to position in cargo bay (from forward edge)
+        // Position in bay = CG station - cargo_bay_fs_start
+        const positionInBay = cgStation - spec.cargo_bay_fs_start;
+        
+        // Normalize to visual length [0, 1]
+        // Clamp to visible range (can be slightly outside cargo bay for extreme cases)
+        const normalized = Math.max(0, Math.min(1, positionInBay / spec.cargo_length));
         
         // Position marker along the cargo bay length
-        // Forward (left) is X=0, Aft (right) is X=cargo_length
+        // Forward (left) is X=50, Aft (right) is X=50+length
         const cobX = 50 + normalized * length;
         
         return (
