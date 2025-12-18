@@ -1074,11 +1074,15 @@ function placePallets(
   const laneConfig = getAircraftLaneConfig(aircraftSpec.type);
   const laneCount = laneConfig.lane_count;
   
-  // Calculate spacing between stations (use station data or fallback to calculation)
+  // Calculate number of rows based on pallet positions and lanes
+  // C-17: 18 positions / 2 lanes = 9 rows
+  // C-130: 6 positions / 1 lane = 6 rows
   const maxRows = Math.ceil(maxPositions / laneCount);
-  const PALLET_SLOT = stations.length >= 2 
-    ? (stations[1].rdl_distance - stations[0].rdl_distance) 
-    : (maxX / maxRows);
+  
+  // CRITICAL: Slot spacing MUST be based on actual pallet dimensions, not station data
+  // 463L pallet: 108" × 88". Add 4" clearance between pallets.
+  const PALLET_CLEARANCE = 4;  // 4" gap between pallets per regulations
+  const PALLET_SLOT = PALLET_LONG + PALLET_CLEARANCE;  // 112" for C-17, 92" for C-130
   
   const targetCobPercent = (aircraftSpec.cob_min_percent + aircraftSpec.cob_max_percent) / 2;
   const targetStationCG = aircraftSpec.lemac_station + (targetCobPercent / 100) * aircraftSpec.mac_length;
@@ -1090,54 +1094,50 @@ function placePallets(
     currentCGPercent = ((currentStationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
   }
   
-  console.log(`[PlacePallets] CoB-aware lateral placement: ${laneCount} lanes, ${maxRows} rows, slotWidth=${PALLET_SLOT.toFixed(1)}", currentCG=${currentCGPercent.toFixed(1)}% MAC, target=${targetCobPercent.toFixed(1)}% MAC`);
+  console.log(`[PlacePallets] Discrete station placement: ${laneCount} lanes, ${maxRows} rows, palletSize=${PALLET_LONG}"×${PALLET_LAT}", slotSpacing=${PALLET_SLOT}", currentCG=${currentCGPercent.toFixed(1)}% MAC`);
   
   if (maxRows <= 0) {
     unplaced.push(...pallets);
     return { placements, unplaced, nextX: startX, totalWeight: currentWeight, totalMoment: currentMoment };
   }
 
-  // Generate all available slots from station-based positions
-  // For C-17: 9 rows × 2 lanes = 18 slots
-  // For C-130: 6 rows × 1 lane = 6 slots
-  // Station rdl_distance is the FORWARD edge of each pallet position (FS from nose)
+  // Generate all available slots using discrete station positions
+  // Each slot represents one pallet position (rowIndex, laneIndex)
+  // Slots are spaced to prevent any overlap between adjacent pallets
   const allSlots: LateralSlot[] = [];
   
-  // First station offset in solver coordinates
-  const firstStationOffset = stations.length > 0 
+  // First pallet position starts at the forward-most station
+  // Use station data for the first position, then space evenly based on pallet dimensions
+  const firstRowX = stations.length > 0 
     ? Math.max(0, stations[0].rdl_distance - bayStart)
     : 0;
   
+  // Total usable length including ramp area
+  const totalUsableLength = maxX + aircraftSpec.ramp_length;
+  const rampStartX = maxX - aircraftSpec.ramp_length;
+  
   for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
-    // Use station-derived position if available, otherwise use calculated spacing
-    let xStart: number;
-    if (stations.length > rowIndex) {
-      // Station rdl_distance is the forward edge of the pallet position
-      xStart = stations[rowIndex].rdl_distance - bayStart;
-    } else {
-      // Fallback: calculated spacing from first station
-      xStart = firstStationOffset + rowIndex * PALLET_SLOT;
-    }
-    
-    // Ensure xStart is not negative (cargo bay boundary)
-    if (xStart < 0) xStart = 0;
-    
+    // Calculate x position for this row based on pallet dimensions
+    // This ensures pallets are spaced correctly regardless of station data
+    const xStart = firstRowX + (rowIndex * PALLET_SLOT);
     const xEnd = xStart + PALLET_LONG;
     
-    // Skip slot if it would extend completely beyond cargo area (including ramp)
-    const totalUsableLength = maxX + aircraftSpec.ramp_length;
-    if (xEnd > totalUsableLength) continue;
+    // Skip row if pallet would extend beyond cargo area
+    if (xEnd > totalUsableLength) {
+      console.log(`[PlacePallets] Row ${rowIndex} skipped: xEnd=${xEnd.toFixed(0)}" exceeds ${totalUsableLength.toFixed(0)}"`);
+      continue;
+    }
     
-    const isOnRamp = stations.length > rowIndex 
-      ? stations[rowIndex].is_ramp 
-      : (xStart >= (maxX - aircraftSpec.ramp_length));
+    // Determine if this row is on the ramp (for weight restrictions)
+    const isOnRamp = xStart >= rampStartX;
     
+    // Create a slot for each lateral lane at this row
     for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
       const lane = laneConfig.lanes[laneIndex];
       allSlots.push({
         rowIndex,
         laneIndex,
-        slotKey: `${rowIndex}_${laneIndex}`,
+        slotKey: `row${rowIndex}_lane${laneIndex}`,  // Unique key for tracking
         x_start: xStart,
         y_center: lane.y_center_in,
         isOnRamp
@@ -1145,7 +1145,21 @@ function placePallets(
     }
   }
 
-  console.log(`[PlacePallets] Generated ${allSlots.length} slots (${maxRows} rows × ${laneCount} lanes)`);
+  console.log(`[PlacePallets] Generated ${allSlots.length} slots (${maxRows} rows × ${laneCount} lanes), first at x=${firstRowX.toFixed(0)}", last at x=${allSlots.length > 0 ? allSlots[allSlots.length-1].x_start.toFixed(0) : 'N/A'}"`);
+  
+  // Validate no slot overlap
+  const sortedByX = [...allSlots].sort((a, b) => a.x_start - b.x_start || a.laneIndex - b.laneIndex);
+  for (let i = 1; i < sortedByX.length; i++) {
+    const prev = sortedByX[i-1];
+    const curr = sortedByX[i];
+    // Only check same-lane overlap (different lanes can have same x)
+    if (prev.laneIndex === curr.laneIndex) {
+      const prevEnd = prev.x_start + PALLET_LONG;
+      if (prevEnd > curr.x_start) {
+        console.error(`[PlacePallets] OVERLAP DETECTED: ${prev.slotKey} ends at ${prevEnd.toFixed(0)}" but ${curr.slotKey} starts at ${curr.x_start.toFixed(0)}"`);
+      }
+    }
+  }
 
   // Sort pallets: weapons priority, then by weight (heaviest first)
   const sortedPallets = [...pallets].sort((a, b) => {
@@ -1320,12 +1334,15 @@ function loadSingleAircraftFromQueue(
   const PALLET_LAT = isC130 ? PALLET_463L.length : PALLET_463L.width;
   const PALLET_HALF_LAT = PALLET_LAT / 2;
   
-  const palletOccupiedZones: OccupiedZone[] = palletResult.placements.map(p => ({
-    x_start: p.x_start_in ?? 0,
-    x_end: (p.x_start_in ?? 0) + PALLET_LONG,
-    y_left: (p.y_center_in ?? 0) - PALLET_HALF_LAT,
-    y_right: (p.y_center_in ?? 0) + PALLET_HALF_LAT
-  }));
+  const palletOccupiedZones: OccupiedZone[] = palletResult.placements.map(p => {
+    const yCenter = p.lateral_placement?.y_center_in ?? 0;
+    return {
+      x_start: p.x_start_in ?? 0,
+      x_end: (p.x_start_in ?? 0) + PALLET_LONG,
+      y_left: yCenter - PALLET_HALF_LAT,
+      y_right: yCenter + PALLET_HALF_LAT
+    };
+  });
   
   console.log(`[LoadAircraft] ${aircraftId}: ${palletResult.placements.length} pallets placed, ${palletOccupiedZones.length} zones reserved`);
   
