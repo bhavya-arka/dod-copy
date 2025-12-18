@@ -868,3 +868,39 @@ export interface AppState {
   isProcessing: boolean;
   error: string | null;
 }
+
+// ============================================================================
+// SECTION 13: FLEET AVAILABILITY (Mixed Fleet Optimization)
+// ============================================================================
+
+export type MixedFleetMode = 'PREFERRED_FIRST' | 'OPTIMIZE_COST' | 'MIN_AIRCRAFT' | 'USER_LOCKED';
+
+export interface FleetTypeAvailability {
+  typeId: string;
+  count: number;
+  locked: boolean;
+}
+
+export interface FleetAvailability {
+  types: FleetTypeAvailability[];
+  preferredType: string | null;
+  mixedFleetMode: MixedFleetMode;
+  preferenceStrength: number;
+}
+
+export interface AircraftTypeWithProfile {
+  id: string;
+  display_name: string;
+  active: boolean;
+  capacity_model_version: string;
+  capacityProfile: {
+    id: number;
+    aircraft_type_id: string;
+    version: string;
+    max_payload_lb: number;
+    max_pallet_positions: number | null;
+    cargo_bay_dims: { length: number; width: number; height: number };
+    notes: string | null;
+    default_cost_params: Record<string, unknown>;
+  } | null;
+}

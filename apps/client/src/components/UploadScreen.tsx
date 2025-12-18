@@ -5,13 +5,15 @@
  * Home screen with movement list upload and aircraft selection.
  * Updated with minimalist glass UI design.
  * Supports CSV, XLSX, and manual entry.
+ * Includes mixed fleet optimization controls.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AircraftType } from '../lib/pacafTypes';
+import { AircraftType, FleetAvailability, FleetTypeAvailability, MixedFleetMode, AircraftTypeWithProfile } from '../lib/pacafTypes';
 import * as XLSX from 'xlsx';
 import ManualCargoEntry, { CargoItem, escapeCSV } from './ManualCargoEntry';
+import { Minus, Plus, Lock, Unlock, ChevronDown, Info } from 'lucide-react';
 
 interface UploadScreenProps {
   onFileUpload: (content: string, filename: string) => void;
@@ -19,19 +21,185 @@ interface UploadScreenProps {
   selectedAircraft: AircraftType;
   isProcessing: boolean;
   error: string | null;
+  onFleetAvailabilityChange?: (availability: FleetAvailability) => void;
 }
+
+const MIXED_FLEET_POLICIES: { value: MixedFleetMode; label: string }[] = [
+  { value: 'PREFERRED_FIRST', label: 'Preferred First (Default)' },
+  { value: 'OPTIMIZE_COST', label: 'Optimize Cost' },
+  { value: 'MIN_AIRCRAFT', label: 'Minimize Aircraft' },
+  { value: 'USER_LOCKED', label: 'Only Selected Types' },
+];
 
 export default function UploadScreen({
   onFileUpload,
   onAircraftSelect,
   selectedAircraft,
   isProcessing,
-  error
+  error,
+  onFleetAvailabilityChange
 }: UploadScreenProps) {
   const [dragActive, setDragActive] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [xlsxError, setXlsxError] = useState<string | null>(null);
+
+  const [aircraftTypes, setAircraftTypes] = useState<AircraftTypeWithProfile[]>([]);
+  const [loadingAircraft, setLoadingAircraft] = useState(true);
+  const [aircraftError, setAircraftError] = useState<string | null>(null);
+
+  const [fleetAvailability, setFleetAvailability] = useState<FleetTypeAvailability[]>([]);
+  const [preferredType, setPreferredType] = useState<string | null>(null);
+  const [mixedFleetMode, setMixedFleetMode] = useState<MixedFleetMode>('PREFERRED_FIRST');
+  const [preferenceStrength, setPreferenceStrength] = useState(50);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchAircraftTypes = async () => {
+      try {
+        setLoadingAircraft(true);
+        setAircraftError(null);
+        
+        const response = await fetch('/api/aircraft-types', {
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          if (response.status === 401) {
+            setAircraftTypes([
+              {
+                id: 'C17',
+                display_name: 'C-17 Globemaster III',
+                active: true,
+                capacity_model_version: 'v1',
+                capacityProfile: {
+                  id: 1,
+                  aircraft_type_id: 'C17',
+                  version: 'v1',
+                  max_payload_lb: 170900,
+                  max_pallet_positions: 18,
+                  cargo_bay_dims: { length: 1056, width: 216, height: 148 },
+                  notes: null,
+                  default_cost_params: {}
+                }
+              },
+              {
+                id: 'C130',
+                display_name: 'C-130H/J Hercules',
+                active: true,
+                capacity_model_version: 'v1',
+                capacityProfile: {
+                  id: 2,
+                  aircraft_type_id: 'C130',
+                  version: 'v1',
+                  max_payload_lb: 42000,
+                  max_pallet_positions: 6,
+                  cargo_bay_dims: { length: 492, width: 123, height: 108 },
+                  notes: null,
+                  default_cost_params: {}
+                }
+              }
+            ]);
+            setLoadingAircraft(false);
+            return;
+          }
+          throw new Error('Failed to fetch aircraft types');
+        }
+        
+        const data = await response.json();
+        setAircraftTypes(data);
+      } catch (err) {
+        console.error('Error fetching aircraft types:', err);
+        setAircraftError(err instanceof Error ? err.message : 'Unknown error');
+        setAircraftTypes([
+          {
+            id: 'C17',
+            display_name: 'C-17 Globemaster III',
+            active: true,
+            capacity_model_version: 'v1',
+            capacityProfile: {
+              id: 1,
+              aircraft_type_id: 'C17',
+              version: 'v1',
+              max_payload_lb: 170900,
+              max_pallet_positions: 18,
+              cargo_bay_dims: { length: 1056, width: 216, height: 148 },
+              notes: null,
+              default_cost_params: {}
+            }
+          },
+          {
+            id: 'C130',
+            display_name: 'C-130H/J Hercules',
+            active: true,
+            capacity_model_version: 'v1',
+            capacityProfile: {
+              id: 2,
+              aircraft_type_id: 'C130',
+              version: 'v1',
+              max_payload_lb: 42000,
+              max_pallet_positions: 6,
+              cargo_bay_dims: { length: 492, width: 123, height: 108 },
+              notes: null,
+              default_cost_params: {}
+            }
+          }
+        ]);
+      } finally {
+        setLoadingAircraft(false);
+      }
+    };
+
+    fetchAircraftTypes();
+  }, []);
+
+  useEffect(() => {
+    if (aircraftTypes.length > 0 && fleetAvailability.length === 0) {
+      setFleetAvailability(
+        aircraftTypes.map(type => ({
+          typeId: type.id,
+          count: 0,
+          locked: false,
+        }))
+      );
+    }
+  }, [aircraftTypes, fleetAvailability.length]);
+
+  useEffect(() => {
+    if (onFleetAvailabilityChange && fleetAvailability.length > 0) {
+      onFleetAvailabilityChange({
+        types: fleetAvailability,
+        preferredType,
+        mixedFleetMode,
+        preferenceStrength,
+      });
+    }
+  }, [fleetAvailability, preferredType, mixedFleetMode, preferenceStrength, onFleetAvailabilityChange]);
+
+  const hasAvailableAircraft = fleetAvailability.some(a => a.count > 0 && !a.locked);
+
+  const updateAvailability = (typeId: string, field: 'count' | 'locked', value: number | boolean) => {
+    setFleetAvailability(prev =>
+      prev.map(a =>
+        a.typeId === typeId ? { ...a, [field]: value } : a
+      )
+    );
+    setAvailabilityError(null);
+  };
+
+  const incrementCount = (typeId: string) => {
+    const current = fleetAvailability.find(a => a.typeId === typeId);
+    if (current) {
+      updateAvailability(typeId, 'count', current.count + 1);
+    }
+  };
+
+  const decrementCount = (typeId: string) => {
+    const current = fleetAvailability.find(a => a.typeId === typeId);
+    if (current && current.count > 0) {
+      updateAvailability(typeId, 'count', current.count - 1);
+    }
+  };
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -67,6 +235,11 @@ export default function UploadScreen({
   };
 
   const handleFile = (file: File) => {
+    if (!hasAvailableAircraft) {
+      setAvailabilityError('Please set at least one aircraft with availability > 0 before uploading.');
+      return;
+    }
+    
     setXlsxError(null);
     const isXLSX = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
     
@@ -103,6 +276,11 @@ export default function UploadScreen({
   };
 
   const handleManualSubmit = (items: CargoItem[]) => {
+    if (!hasAvailableAircraft) {
+      setAvailabilityError('Please set at least one aircraft with availability > 0 before submitting.');
+      return;
+    }
+    
     const headers = ['Description', 'Length', 'Width', 'Height', 'Weight', 'Lead TCN', 'PAX'];
     const rows = items.map(item => {
       if (item.isPaxOnly) {
@@ -133,6 +311,10 @@ export default function UploadScreen({
     onFileUpload(csvContent, 'manual_entry.csv');
   };
 
+  const formatWeight = (lbs: number) => {
+    return new Intl.NumberFormat('en-US', { style: 'decimal' }).format(lbs) + ' lb';
+  };
+
   return (
     <div className="min-h-screen bg-neutral-50 gradient-mesh flex flex-col">
       <header className="p-4 sm:p-6 flex justify-between items-center border-b border-neutral-200/50 shrink-0">
@@ -150,9 +332,9 @@ export default function UploadScreen({
         </div>
       </header>
 
-      <main className="flex-1 flex items-center justify-center overflow-y-auto py-8 px-4">
-        <div className="container mx-auto max-w-7xl flex items-center justify-center">
-          <div className="max-w-2xl w-full max-w-full space-y-6 sm:space-y-8">
+      <main className="flex-1 flex items-start justify-center overflow-y-auto py-8 px-4">
+        <div className="container mx-auto max-w-7xl flex items-start justify-center">
+          <div className="max-w-2xl w-full space-y-6 sm:space-y-8">
           <motion.div
             className="text-center"
             initial={{ opacity: 0, y: -20 }}
@@ -269,6 +451,187 @@ export default function UploadScreen({
                   </div>
                 </div>
               )}
+            </div>
+          </motion.div>
+
+          <motion.div
+            className="space-y-4"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <div className="flex items-center justify-between">
+              <label className="text-neutral-700 text-sm font-medium">Available Aircraft (Required)</label>
+              {loadingAircraft && (
+                <div className="flex items-center gap-2 text-xs text-neutral-500">
+                  <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  Loading...
+                </div>
+              )}
+            </div>
+
+            <div className="glass-card p-4 sm:p-6 space-y-4">
+              <div className="flex items-start gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+                <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                <div className="text-xs text-blue-700 space-y-1">
+                  <p>We will not exceed availability counts.</p>
+                  <p>If a plan is not feasible, we'll show shortfalls and best-effort allocations.</p>
+                </div>
+              </div>
+
+              {aircraftError && (
+                <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  <p className="text-xs text-amber-700">Using default aircraft types (API unavailable)</p>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {aircraftTypes.map((type) => {
+                  const availability = fleetAvailability.find(a => a.typeId === type.id);
+                  const count = availability?.count ?? 0;
+                  const isLocked = availability?.locked ?? false;
+                  const profile = type.capacityProfile;
+
+                  return (
+                    <div
+                      key={type.id}
+                      className={`p-4 rounded-xl border transition-all ${
+                        isLocked
+                          ? 'bg-neutral-100 border-neutral-200 opacity-60'
+                          : count > 0
+                            ? 'bg-green-50/50 border-green-200'
+                            : 'bg-white border-neutral-200'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-neutral-900">{type.display_name}</h4>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500 mt-1">
+                            {profile && (
+                              <>
+                                <span>Payload: {formatWeight(profile.max_payload_lb)}</span>
+                                {profile.max_pallet_positions && (
+                                  <span>Pallets: {profile.max_pallet_positions}</span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 sm:gap-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => decrementCount(type.id)}
+                              disabled={count === 0 || isLocked}
+                              className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <input
+                              type="number"
+                              min="0"
+                              value={count}
+                              onChange={(e) => updateAvailability(type.id, 'count', Math.max(0, parseInt(e.target.value) || 0))}
+                              disabled={isLocked}
+                              className="w-16 h-8 text-center border border-neutral-300 rounded-lg text-sm font-medium disabled:bg-neutral-100 disabled:cursor-not-allowed"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => incrementCount(type.id)}
+                              disabled={isLocked}
+                              className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => updateAvailability(type.id, 'locked', !isLocked)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                              isLocked
+                                ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                            }`}
+                          >
+                            {isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                            {isLocked ? 'Locked' : 'Lock'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {availabilityError && (
+                <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                  <p className="text-xs text-red-700">{availabilityError}</p>
+                </div>
+              )}
+
+              <div className="pt-4 border-t border-neutral-200 space-y-4">
+                <h5 className="text-sm font-medium text-neutral-700">Optimization Preferences</h5>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-neutral-600">Preferred Aircraft Type</label>
+                    <div className="relative">
+                      <select
+                        value={preferredType || ''}
+                        onChange={(e) => setPreferredType(e.target.value || null)}
+                        className="w-full h-10 px-3 pr-8 border border-neutral-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                      >
+                        <option value="">None</option>
+                        {aircraftTypes.filter(t => t.active).map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.display_name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-neutral-600">Mixed Fleet Policy</label>
+                    <div className="relative">
+                      <select
+                        value={mixedFleetMode}
+                        onChange={(e) => setMixedFleetMode(e.target.value as MixedFleetMode)}
+                        className="w-full h-10 px-3 pr-8 border border-neutral-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                      >
+                        {MIXED_FLEET_POLICIES.map((policy) => (
+                          <option key={policy.value} value={policy.value}>
+                            {policy.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-neutral-600">Preference Strength</label>
+                    <span className="text-xs text-neutral-500">{preferenceStrength}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={preferenceStrength}
+                    onChange={(e) => setPreferenceStrength(parseInt(e.target.value))}
+                    className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                  <div className="flex justify-between text-xs text-neutral-400">
+                    <span>Flexible</span>
+                    <span>Strict</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </motion.div>
 
