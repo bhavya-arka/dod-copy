@@ -437,7 +437,7 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 gradient-mesh">
+    <div className="min-h-screen bg-neutral-50 gradient-mesh overflow-y-auto">
       <MissionNavbar 
         onDashboard={handleNavigateAway} 
         showTabs={true} 
@@ -445,7 +445,7 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
         onPlanStatusChange={onPlanStatusChange}
       />
       
-      <main className="flex-1">
+      <main className="pb-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={mission.currentTab}

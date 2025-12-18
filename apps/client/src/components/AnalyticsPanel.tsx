@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useMission, MissionConfiguration, MissionAnalytics, FuelCostBreakdown, AircraftCostBreakdown } from '../context/MissionContext';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { AIRCRAFT_SPECS } from '../lib/routeTypes';
+import AiInsightsPanel from './AiInsightsPanel';
 
 interface AnalyticsPanelProps {
   onSaveConfiguration: (name: string) => void;
@@ -380,7 +381,7 @@ export default function AnalyticsPanel({ onSaveConfiguration }: AnalyticsPanelPr
                 <span className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
                   <span className="text-purple-600">🤖</span>
                 </span>
-                AI Insights
+                Quick Insights
               </h3>
               <div className="space-y-3">
                 {aiFeedback.map((insight, idx) => (
@@ -391,6 +392,34 @@ export default function AnalyticsPanel({ onSaveConfiguration }: AnalyticsPanelPr
                 ))}
               </div>
             </div>
+          )}
+
+          {/* AWS Bedrock AI Insights */}
+          {mission.activePlanId && mission.allocationResult && (
+            <AiInsightsPanel
+              flightPlanId={mission.activePlanId}
+              inputData={{
+                aircraft_count: mission.allocationResult.load_plans.length,
+                aircraft_types: [...new Set(mission.allocationResult.load_plans.map(p => p.aircraft_type))],
+                total_weight: mission.allocationResult.load_plans.reduce((sum, p) => sum + p.total_weight, 0),
+                total_pallets: mission.allocationResult.load_plans.reduce((sum, p) => sum + p.pallets.length, 0),
+                total_rolling_stock: mission.allocationResult.load_plans.reduce((sum, p) => sum + p.rolling_stock.length, 0),
+                average_cob: mission.analytics?.average_cob_percent || 0,
+                utilization: mission.analytics?.utilization_percent || 0,
+                routes: mission.routes.map(r => ({ name: r.name, distance_nm: r.total_distance_nm, legs: r.legs.length })),
+                load_plans: mission.allocationResult.load_plans.map(p => ({
+                  aircraft_id: p.aircraft_id,
+                  aircraft_type: p.aircraft_type,
+                  phase: p.phase,
+                  weight: p.total_weight,
+                  cob_percent: p.cob_percent,
+                  cob_in_envelope: p.cob_in_envelope,
+                  payload_used_percent: p.payload_used_percent,
+                  pallets: p.pallets.length,
+                  rolling_stock: p.rolling_stock.length
+                }))
+              }}
+            />
           )}
 
           {cargoTypeData.length > 0 && (
