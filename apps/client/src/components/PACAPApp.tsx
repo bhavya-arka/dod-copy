@@ -145,7 +145,9 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
         movementData = plan.movement_data as ParseResult;
         classifiedItems = classifyItems(movementData);
         
-        const movementInsights = analyzeMovementList(movementData.items, classifiedItems);
+        const movementInsights = analyzeMovementList(movementData.items, classifiedItems, {
+          allocationResult: allocationResult
+        });
         const allocationInsights = analyzeAllocation(allocationResult);
         
         combinedInsights = {
@@ -216,7 +218,10 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
       const allocation = solveAircraftAllocation(classified, fleet);
 
       // Step 4: Generate insights (Spec Section 13)
-      const movementInsights = analyzeMovementList(parseResult.items, classified);
+      // Pass allocation context for accurate aircraft-specific insights (SSOT)
+      const movementInsights = analyzeMovementList(parseResult.items, classified, {
+        allocationResult: allocation
+      });
       const allocationInsights = analyzeAllocation(allocation);
       
       const combinedInsights: InsightsSummary = {

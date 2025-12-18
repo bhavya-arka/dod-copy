@@ -253,3 +253,37 @@ Enhanced cargo optimization with 2D grid-based pallet placement and passenger se
 - Occupied seats shown in blue, unoccupied in gray
 - Seats fill front-to-back based on `loadPlan.pax_count`
 - Zone name labels above each seat group
+
+## AI Insights Engine SSOT Refactor (Dec 2024)
+Refactored insightsEngine.ts to follow Single Source of Truth (SSOT) principle for all aircraft-specific data.
+
+### Helper Functions (insightsEngine.ts)
+- `getSupportedAircraftTypes()`: Returns all types from AIRCRAFT_SPECS
+- `formatSeatCapacityInfo(types?)`: Dynamic seat capacity text (e.g., "C-130 can seat 92 PAX")
+- `formatPayloadCapacityInfo(types?)`: Dynamic payload text
+- `formatPalletPositionInfo(types?)`: Dynamic pallet position text
+- `getAircraftTypesFromAllocation(result)`: Extract unique types from AllocationResult
+
+### analyzeMovementList Updates
+- Accepts optional `AnalyzeMovementListOptions` with `allocationResult` context
+- PAX planning insight uses dynamic `formatSeatCapacityInfo()` instead of hardcoded text
+- Rolling stock oversize detection uses allocation context to determine limiting aircraft
+- Aircraft comparison uses dynamic calculation across all supported types
+
+### analyzeAllocation PAX Insights
+- Per-aircraft seat utilization insights with aircraft-specific capacity
+- Multi-aircraft PAX distribution summary
+- All data sourced from `AIRCRAFT_SPECS[plan.aircraft_type]`
+
+### Mixed Fleet Support
+- `explainAircraftCount()`: Handles mixed fleet with type breakdown
+- `explainSecondAircraft()`: Uses actual aircraft type from load plan
+- All functions support arbitrary aircraft types dynamically
+
+### AI Guardrails (bedrockService.ts)
+Added guardrails to all AI system prompts to prevent contradictory feedback:
+1. Never give percentage-based quality ratings (e.g., "80% optimal")
+2. Never suggest the optimization algorithm is flawed
+3. Present allocations as optimal given constraints
+4. Frame suggestions as operational considerations, not corrections
+5. Focus on informing, not critiquing optimization quality

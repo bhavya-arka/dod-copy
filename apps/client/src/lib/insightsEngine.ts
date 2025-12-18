@@ -4,6 +4,9 @@
  * 
  * Generates summaries, insights, anomaly detection, and optimization recommendations.
  * Enhanced with actionable, data-driven insights.
+ * 
+ * SSOT Principle: All aircraft-specific data (seat capacity, payload limits, dimensions)
+ * MUST be sourced from AIRCRAFT_SPECS to ensure consistency across the application.
  */
 
 import {
@@ -13,8 +16,88 @@ import {
   AIInsight,
   InsightsSummary,
   AircraftLoadPlan,
+  AircraftType,
   AIRCRAFT_SPECS
 } from './pacafTypes';
+
+// ============================================================================
+// HELPER FUNCTIONS FOR DYNAMIC AIRCRAFT-SPECIFIC INSIGHTS (SSOT)
+// ============================================================================
+
+/**
+ * Get all supported aircraft types from AIRCRAFT_SPECS
+ */
+export function getSupportedAircraftTypes(): AircraftType[] {
+  return Object.keys(AIRCRAFT_SPECS) as AircraftType[];
+}
+
+/**
+ * Generate a seat capacity description for specific aircraft types
+ * @param aircraftTypes - Array of aircraft types to include (defaults to all)
+ * @returns Formatted string like "C-17 can seat 102 PAX, C-130 can seat 92 PAX"
+ */
+export function formatSeatCapacityInfo(aircraftTypes?: AircraftType[]): string {
+  const types = aircraftTypes || getSupportedAircraftTypes();
+  return types
+    .map(type => {
+      const spec = AIRCRAFT_SPECS[type];
+      return `${type} can seat ${spec.seat_capacity} PAX`;
+    })
+    .join(', ');
+}
+
+/**
+ * Generate seat capacity info for a single aircraft type
+ */
+export function formatSingleAircraftSeatInfo(aircraftType: AircraftType): string {
+  const spec = AIRCRAFT_SPECS[aircraftType];
+  return `This ${aircraftType} can seat up to ${spec.seat_capacity} passengers`;
+}
+
+/**
+ * Get payload capacity description for aircraft types
+ */
+export function formatPayloadCapacityInfo(aircraftTypes?: AircraftType[]): string {
+  const types = aircraftTypes || getSupportedAircraftTypes();
+  return types
+    .map(type => {
+      const spec = AIRCRAFT_SPECS[type];
+      return `${type}: ${(spec.max_payload / 1000).toFixed(0)}K lbs`;
+    })
+    .join(', ');
+}
+
+/**
+ * Get pallet position info for aircraft types
+ */
+export function formatPalletPositionInfo(aircraftTypes?: AircraftType[]): string {
+  const types = aircraftTypes || getSupportedAircraftTypes();
+  return types
+    .map(type => {
+      const spec = AIRCRAFT_SPECS[type];
+      return `${type}: ${spec.pallet_positions} positions`;
+    })
+    .join(', ');
+}
+
+/**
+ * Extract unique aircraft types from an allocation result
+ */
+export function getAircraftTypesFromAllocation(result: AllocationResult): AircraftType[] {
+  const types = new Set<AircraftType>();
+  result.load_plans.forEach(plan => types.add(plan.aircraft_type));
+  return Array.from(types);
+}
+
+/**
+ * Options for movement list analysis
+ */
+export interface AnalyzeMovementListOptions {
+  /** Aircraft types being used in allocation (if known) */
+  allocatedAircraftTypes?: AircraftType[];
+  /** Full allocation result for context-aware insights */
+  allocationResult?: AllocationResult;
+}
 
 // ============================================================================
 // SECTION 13.1: MOVEMENT LIST SUMMARIZATION
@@ -22,8 +105,12 @@ import {
 
 export function analyzeMovementList(
   items: MovementItem[],
-  classifiedItems: ClassifiedItems
+  classifiedItems: ClassifiedItems,
+  options?: AnalyzeMovementListOptions
 ): InsightsSummary {
+  // Determine which aircraft types to reference in insights
+  const aircraftTypes = options?.allocatedAircraftTypes || 
+    (options?.allocationResult ? getAircraftTypesFromAllocation(options.allocationResult) : undefined);
   const insights: AIInsight[] = [];
   
   // Defensive check: ensure items array exists and is valid
@@ -74,19 +161,49 @@ export function analyzeMovementList(
   if (classifiedItems.rolling_stock.length > 0) {
     const rsItems = classifiedItems.rolling_stock;
     const totalRsWeight = rsItems.reduce((sum, i) => sum + i.weight_each_lb, 0);
-    const oversizeItems = rsItems.filter(i => 
-      i.width_in > AIRCRAFT_SPECS['C-130'].ramp_clearance_width
+    
+    // Determine which aircraft types to check against (SSOT from AIRCRAFT_SPECS)
+    // Use allocated types if available, otherwise check against all types
+    const relevantTypes = aircraftTypes || getSupportedAircraftTypes();
+    
+    // Find the smallest ramp clearance among allocated/available aircraft
+    const minRampWidth = Math.min(
+      ...relevantTypes.map(type => AIRCRAFT_SPECS[type].ramp_clearance_width)
     );
+    const limitingType = relevantTypes.find(
+      type => AIRCRAFT_SPECS[type].ramp_clearance_width === minRampWidth
+    ) || relevantTypes[0];
+    
+    // Check for oversize items that exceed the limiting aircraft's ramp width
+    const oversizeItems = rsItems.filter(i => i.width_in > minRampWidth);
     
     if (oversizeItems.length > 0) {
+      // Find aircraft types that CAN handle these oversize items
+      // First check within relevant types (mission-specific), then fall back to all types
+      let capableTypes = relevantTypes.filter(type => {
+        const spec = AIRCRAFT_SPECS[type];
+        return oversizeItems.every(item => item.width_in <= spec.ramp_clearance_width);
+      });
+      
+      // If no capable types in mission, check all available aircraft types
+      if (capableTypes.length === 0) {
+        capableTypes = getSupportedAircraftTypes().filter(type => {
+          const spec = AIRCRAFT_SPECS[type];
+          return oversizeItems.every(item => item.width_in <= spec.ramp_clearance_width);
+        });
+      }
+      
+      const capableTypesStr = capableTypes.length > 0 ? capableTypes.join('/') : 'larger aircraft';
+      const limitingSpec = AIRCRAFT_SPECS[limitingType];
+      
       insights.push({
-        id: 'c17_required',
+        id: 'oversize_vehicle_constraint',
         category: 'risk_factor',
         severity: 'warning',
-        title: 'C-17 Required for Rolling Stock',
-        description: `${oversizeItems.length} vehicle(s) exceed C-130 ramp width (${AIRCRAFT_SPECS['C-130'].ramp_clearance_width}"). These MUST use C-17 transport.`,
+        title: `${capableTypesStr} Required for Rolling Stock`,
+        description: `${oversizeItems.length} vehicle(s) exceed ${limitingType} ramp width (${limitingSpec.ramp_clearance_width}"). These require ${capableTypesStr} transport.`,
         affected_items: oversizeItems.map(i => i.item_id),
-        recommendation: `Allocate ${Math.ceil(oversizeItems.length / 2)} C-17 aircraft minimum for these ${oversizeItems.length} oversize vehicles.`
+        recommendation: `Allocate ${capableTypesStr} aircraft for these ${oversizeItems.length} oversize vehicles.`
       });
     }
 
@@ -132,12 +249,15 @@ export function analyzeMovementList(
   const totalPax = classifiedItems.pax_items.reduce((sum, i) => sum + (i.pax_count || 1), 0);
   if (totalPax > 0) {
     const paxWeight = totalPax * 225;
+    // Generate seat capacity info dynamically from AIRCRAFT_SPECS
+    const seatCapacityInfo = formatSeatCapacityInfo(aircraftTypes);
+    
     insights.push({
       id: 'pax_planning',
       category: 'recommendation',
       severity: 'info',
       title: `Personnel Movement: ${totalPax} PAX`,
-      description: `Passengers add ${paxWeight.toLocaleString()} lbs (at 225 lbs/person with gear). C-17 can seat 102 PAX, C-130 can seat 92 PAX.`,
+      description: `Passengers add ${paxWeight.toLocaleString()} lbs (at 225 lbs/person with gear). ${seatCapacityInfo}.`,
       affected_items: classifiedItems.pax_items.map(i => i.item_id),
       recommendation: totalPax > 50 
         ? 'Consider dedicated PAX aircraft to avoid mixing personnel with hazmat or heavy cargo.'
@@ -177,15 +297,29 @@ export function analyzeMovementList(
     );
   }
 
-  const c17Capacity = AIRCRAFT_SPECS['C-17'].max_payload;
-  const c130Capacity = AIRCRAFT_SPECS['C-130'].max_payload;
-  const minC17s = Math.ceil(totalWeight / c17Capacity);
-  const minC130s = Math.ceil(totalWeight / c130Capacity);
+  // Calculate minimum aircraft needed for each type (SSOT from AIRCRAFT_SPECS)
+  const aircraftRequirements = getSupportedAircraftTypes().map(type => {
+    const spec = AIRCRAFT_SPECS[type];
+    return {
+      type,
+      capacity: spec.max_payload,
+      minRequired: Math.ceil(totalWeight / spec.max_payload)
+    };
+  });
   
-  if (totalWeight < c130Capacity * 2 && totalWeight > c17Capacity) {
-    optimizationOpportunities.push(
-      `Mission weight (${(totalWeight/1000).toFixed(0)}K lbs) is optimal for ${minC17s} C-17 vs ${minC130s} C-130. C-17 provides better utilization.`
-    );
+  // Find most efficient aircraft type (fewest required)
+  const sortedByEfficiency = [...aircraftRequirements].sort((a, b) => a.minRequired - b.minRequired);
+  
+  // Only suggest aircraft comparison if there's a meaningful difference
+  if (sortedByEfficiency.length >= 2) {
+    const mostEfficient = sortedByEfficiency[0];
+    const leastEfficient = sortedByEfficiency[sortedByEfficiency.length - 1];
+    
+    if (mostEfficient.minRequired < leastEfficient.minRequired) {
+      optimizationOpportunities.push(
+        `Mission weight (${(totalWeight/1000).toFixed(0)}K lbs) requires ${mostEfficient.minRequired} ${mostEfficient.type} vs ${leastEfficient.minRequired} ${leastEfficient.type}. ${mostEfficient.type} provides better utilization.`
+      );
+    }
   }
   
   return {
@@ -292,6 +426,48 @@ export function analyzeAllocation(result: AllocationResult): AIInsight[] {
       recommendation: 'Consider combining lighter pallets to free positions for additional cargo.'
     });
   }
+
+  // PAX seat utilization insights (SSOT from AIRCRAFT_SPECS)
+  const paxPlans = result.load_plans.filter(p => p.pax_count > 0);
+  if (paxPlans.length > 0) {
+    paxPlans.forEach(plan => {
+      const spec = AIRCRAFT_SPECS[plan.aircraft_type];
+      const seatUtilization = spec.seat_capacity > 0 
+        ? (plan.pax_count / spec.seat_capacity) * 100 
+        : 0;
+      
+      if (seatUtilization > 90) {
+        insights.push({
+          id: `high_pax_utilization_${plan.aircraft_id}`,
+          category: 'recommendation',
+          severity: 'info',
+          title: `High Seat Utilization: ${plan.aircraft_id}`,
+          description: `${plan.pax_count}/${spec.seat_capacity} seats occupied (${seatUtilization.toFixed(0)}%). This ${plan.aircraft_type} is near passenger capacity.`,
+          affected_items: [plan.aircraft_id],
+          recommendation: 'Verify emergency exit access and crew ratio requirements are met.'
+        });
+      }
+    });
+    
+    // Summary for multi-aircraft PAX movement
+    if (paxPlans.length > 1) {
+      const totalPax = paxPlans.reduce((sum, p) => sum + p.pax_count, 0);
+      const totalSeats = paxPlans.reduce((sum, p) => sum + AIRCRAFT_SPECS[p.aircraft_type].seat_capacity, 0);
+      const overallUtilization = totalSeats > 0 ? (totalPax / totalSeats) * 100 : 0;
+      
+      insights.push({
+        id: 'pax_distribution_summary',
+        category: 'recommendation',
+        severity: 'info',
+        title: `PAX Distribution: ${totalPax} Across ${paxPlans.length} Aircraft`,
+        description: `Overall seat utilization at ${overallUtilization.toFixed(0)}% (${totalPax}/${totalSeats} available seats).`,
+        affected_items: paxPlans.map(p => p.aircraft_id),
+        recommendation: overallUtilization < 50 
+          ? 'Consider consolidating passengers to fewer aircraft.'
+          : 'Passenger distribution is balanced across the fleet.'
+      });
+    }
+  }
   
   return insights;
 }
@@ -301,24 +477,42 @@ export function analyzeAllocation(result: AllocationResult): AIInsight[] {
 // ============================================================================
 
 export function explainAircraftCount(result: AllocationResult): string {
-  const spec = AIRCRAFT_SPECS[result.aircraft_type];
+  // Get unique aircraft types from the allocation (supports mixed fleet)
+  const aircraftTypes = getAircraftTypesFromAllocation(result);
+  const isMixedFleet = aircraftTypes.length > 1;
   
-  const byWeight = Math.ceil(result.total_weight / spec.max_payload);
-  const byPositions = Math.ceil(result.total_pallets / spec.pallet_positions);
+  let explanation = '';
   
-  let explanation = `The solver determined ${result.total_aircraft} ${result.aircraft_type} aircraft are required.\n\n`;
+  if (isMixedFleet) {
+    // Mixed fleet explanation
+    const typeBreakdown = aircraftTypes.map(type => {
+      const count = result.load_plans.filter(p => p.aircraft_type === type).length;
+      return `${count} ${type}`;
+    }).join(', ');
+    
+    explanation = `The solver determined ${result.total_aircraft} aircraft are required (${typeBreakdown}).\n\n`;
+  } else {
+    // Single fleet type
+    const primaryType = aircraftTypes[0] || result.aircraft_type;
+    const spec = AIRCRAFT_SPECS[primaryType];
+    
+    const byWeight = Math.ceil(result.total_weight / spec.max_payload);
+    const byPositions = Math.ceil(result.total_pallets / spec.pallet_positions);
+    
+    explanation = `The solver determined ${result.total_aircraft} ${primaryType} aircraft are required.\n\n`;
+    
+    explanation += `Limiting Factors:\n`;
+    explanation += `- Weight constraint: ${byWeight} aircraft needed (${result.total_weight.toLocaleString()} lbs / ${spec.max_payload.toLocaleString()} lbs per aircraft)\n`;
+    explanation += `- Position constraint: ${byPositions} aircraft needed (${result.total_pallets} pallets / ${spec.pallet_positions} positions per aircraft)\n`;
+  }
   
   if (result.advon_aircraft > 0) {
-    explanation += `ADVON Phase: ${result.advon_aircraft} aircraft\n`;
+    explanation += `\nADVON Phase: ${result.advon_aircraft} aircraft\n`;
   }
-  explanation += `MAIN Phase: ${result.main_aircraft} aircraft\n\n`;
-  
-  explanation += `Limiting Factors:\n`;
-  explanation += `- Weight constraint: ${byWeight} aircraft needed (${result.total_weight.toLocaleString()} lbs / ${spec.max_payload.toLocaleString()} lbs per aircraft)\n`;
-  explanation += `- Position constraint: ${byPositions} aircraft needed (${result.total_pallets} pallets / ${spec.pallet_positions} positions per aircraft)\n`;
+  explanation += `MAIN Phase: ${result.main_aircraft} aircraft\n`;
   
   if (result.total_rolling_stock > 0) {
-    explanation += `- Rolling stock: ${result.total_rolling_stock} vehicles loaded first per aircraft\n`;
+    explanation += `\nRolling stock: ${result.total_rolling_stock} vehicles loaded\n`;
   }
   
   return explanation;
@@ -332,7 +526,8 @@ export function explainSecondAircraft(result: AllocationResult): string {
   const secondAircraft = result.load_plans[1];
   const firstAircraft = result.load_plans[0];
   
-  let explanation = `The second ${result.aircraft_type} was required because:\n\n`;
+  // Use the actual aircraft type from the load plan (supports mixed fleet)
+  let explanation = `The second aircraft (${secondAircraft.aircraft_type}) was required because:\n\n`;
   
   if (firstAircraft.payload_used_percent > 90) {
     explanation += `1. First aircraft reached ${firstAircraft.payload_used_percent.toFixed(0)}% of payload capacity.\n`;
