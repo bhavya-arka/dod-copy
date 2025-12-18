@@ -344,25 +344,6 @@ export default function LoadPlanViewer({
 
       <header className="p-3 border-b border-neutral-200/50 flex justify-between items-center bg-white/80 backdrop-blur-xl z-10 shadow-soft">
         <div className="flex items-center space-x-3">
-          {wrappedOnDashboard && (
-            <button
-              onClick={wrappedOnDashboard}
-              className="flex items-center space-x-1 text-neutral-600 hover:text-neutral-900 transition btn-ghost"
-            >
-              <span>←</span>
-              <span>Dashboard</span>
-            </button>
-          )}
-          {!wrappedOnDashboard && (
-            <button
-              onClick={wrappedOnBack}
-              className="flex items-center space-x-1 text-neutral-600 hover:text-neutral-900 transition btn-ghost"
-            >
-              <span>←</span>
-              <span>Back</span>
-            </button>
-          )}
-          <div className="h-5 w-px bg-neutral-200" />
           <h1 className="text-neutral-900 font-bold text-sm">Load Plan Details</h1>
           {isEditing && (
             <span className="badge bg-amber-100 text-amber-700 border-amber-200">
