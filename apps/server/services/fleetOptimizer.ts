@@ -229,7 +229,8 @@ export function scoreSolution(
   mode: MixedFleetMode,
   totalWeightLb: number,
   maxPossibleCost: number,
-  maxPossibleAircraft: number
+  maxPossibleAircraft: number,
+  preferenceStrength: number = 50
 ): number {
   const weights = POLICY_WEIGHTS[mode];
   
@@ -240,7 +241,8 @@ export function scoreSolution(
     ? Math.min(1, totalWeightLb / candidate.totalCapacity)
     : 0;
   
-  const adjustedPreferenceScore = candidate.preferenceScore;
+  const strengthMultiplier = preferenceStrength / 50;
+  const adjustedPreferenceScore = candidate.preferenceScore * strengthMultiplier;
   
   const score = 
     (weights.preference * adjustedPreferenceScore) +
@@ -272,7 +274,34 @@ export function runOptimization(input: OptimizationInput): OptimizationResult {
     };
   }
 
-  const candidates = generateCandidateFleets(totalWeightLb, availability, preferredTypeId);
+  let effectiveAvailability = availability;
+  if (mode === 'USER_LOCKED') {
+    effectiveAvailability = availability.filter(a => !a.locked);
+  }
+
+  const totalAvailableCapacity = effectiveAvailability.reduce(
+    (sum, a) => sum + (a.count * a.maxPayloadLb),
+    0
+  );
+  
+  if (totalAvailableCapacity === 0) {
+    return {
+      status: 'INFEASIBLE',
+      aircraftUsed: {},
+      unallocatedCargoIds: cargoIds,
+      metrics: {
+        totalCost: 0,
+        totalAircraft: 0,
+        utilization: 0,
+        cobAverage: 0,
+      },
+      explanation: mode === 'USER_LOCKED' 
+        ? 'No unlocked aircraft available. All specified aircraft types are locked.'
+        : 'No aircraft available to carry cargo.',
+    };
+  }
+
+  const candidates = generateCandidateFleets(totalWeightLb, effectiveAvailability, preferredTypeId);
   
   if (candidates.length === 0) {
     return {
@@ -293,10 +322,10 @@ export function runOptimization(input: OptimizationInput): OptimizationResult {
   const maxAircraft = Math.max(...candidates.map(c => c.totalAircraft), 1);
 
   let bestCandidate = candidates[0];
-  let bestScore = scoreSolution(bestCandidate, mode, totalWeightLb, maxCost, maxAircraft);
+  let bestScore = scoreSolution(bestCandidate, mode, totalWeightLb, maxCost, maxAircraft, preferenceStrength);
   
   for (const candidate of candidates.slice(1)) {
-    const score = scoreSolution(candidate, mode, totalWeightLb, maxCost, maxAircraft);
+    const score = scoreSolution(candidate, mode, totalWeightLb, maxCost, maxAircraft, preferenceStrength);
     if (score > bestScore) {
       bestScore = score;
       bestCandidate = candidate;
@@ -309,6 +338,7 @@ export function runOptimization(input: OptimizationInput): OptimizationResult {
     totalCost: number;
     totalAircraft: number;
   } | null = null;
+  
   if (preferredTypeId && mode !== 'PREFERRED_FIRST') {
     const preferredOnlyCandidates = candidates.filter(c => {
       const types = Object.keys(c.aircraftUsed);
@@ -320,14 +350,20 @@ export function runOptimization(input: OptimizationInput): OptimizationResult {
         c.totalCapacity >= totalWeightLb && c.totalCost < best.totalCost ? c : best
       , preferredOnlyCandidates[0]);
       
-      if (bestPreferred.totalCapacity >= totalWeightLb) {
-        preferredOnlySolution = {
-          status: 'FEASIBLE' as SolutionStatus,
-          aircraftUsed: bestPreferred.aircraftUsed,
-          totalCost: bestPreferred.totalCost,
-          totalAircraft: bestPreferred.totalAircraft,
-        };
-      }
+      const preferredIsFeasible = bestPreferred.totalCapacity >= totalWeightLb;
+      preferredOnlySolution = {
+        status: preferredIsFeasible ? 'FEASIBLE' : 'INFEASIBLE',
+        aircraftUsed: bestPreferred.aircraftUsed,
+        totalCost: bestPreferred.totalCost,
+        totalAircraft: bestPreferred.totalAircraft,
+      };
+    } else {
+      preferredOnlySolution = {
+        status: 'INFEASIBLE',
+        aircraftUsed: {},
+        totalCost: 0,
+        totalAircraft: 0,
+      };
     }
   }
 

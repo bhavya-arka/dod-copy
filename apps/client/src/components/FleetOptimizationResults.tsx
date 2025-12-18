@@ -27,10 +27,10 @@ interface FleetOptimizationResultsProps {
     explanation: string;
     comparisonData?: {
       preferredOnlySolution: {
+        status: 'FEASIBLE' | 'PARTIAL' | 'INFEASIBLE';
         aircraftUsed: Record<string, number>;
         totalCost: number;
         totalAircraft: number;
-        feasible: boolean;
       };
       chosenSolutionRationale: string;
     };
@@ -292,12 +292,12 @@ export default function FleetOptimizationResults({
                 <h4 className="font-medium text-neutral-700">Preferred-Only Solution</h4>
                 <span
                   className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                    solution.comparisonData.preferredOnlySolution.feasible
+                    solution.comparisonData.preferredOnlySolution.status === 'FEASIBLE'
                       ? 'bg-green-100 text-green-700'
                       : 'bg-red-100 text-red-700'
                   }`}
                 >
-                  {solution.comparisonData.preferredOnlySolution.feasible
+                  {solution.comparisonData.preferredOnlySolution.status === 'FEASIBLE'
                     ? 'Feasible'
                     : 'Infeasible'}
                 </span>

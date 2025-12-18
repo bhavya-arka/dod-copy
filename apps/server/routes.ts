@@ -1728,7 +1728,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Flight plan not found" });
       }
 
-      const { availability } = req.body;
+      const { availability, preferred_aircraft_type_id, mixed_fleet_mode, preference_strength } = req.body;
       if (!Array.isArray(availability)) {
         return res.status(400).json({ error: "availability must be an array" });
       }
@@ -1742,6 +1742,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await aircraftService.setFleetAvailability(planId, availability);
+      
+      const planUpdates: Record<string, any> = {};
+      if (preferred_aircraft_type_id !== undefined) {
+        planUpdates.preferred_aircraft_type_id = preferred_aircraft_type_id;
+      }
+      if (mixed_fleet_mode !== undefined) {
+        planUpdates.mixed_fleet_mode = mixed_fleet_mode;
+      }
+      if (preference_strength !== undefined) {
+        planUpdates.preference_strength = preference_strength;
+      }
+      
+      if (Object.keys(planUpdates).length > 0) {
+        await storage.updateFlightPlan(planId, req.user!.id, planUpdates);
+      }
       
       const updated = await aircraftService.getFleetAvailability(planId);
       res.json({ 

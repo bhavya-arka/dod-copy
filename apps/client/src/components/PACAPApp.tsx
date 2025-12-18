@@ -14,7 +14,8 @@ import {
   ParseResult,
   ClassifiedItems,
   AllocationResult,
-  InsightsSummary
+  InsightsSummary,
+  FleetAvailability
 } from '../lib/pacafTypes';
 import { parseMovementList } from '../lib/movementParser';
 import { classifyItems } from '../lib/classificationEngine';
@@ -79,6 +80,11 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
   
   const [activePlanId, setActivePlanId] = useState<number | null>(null);
   const [activePlanName, setActivePlanName] = useState<string | null>(null);
+  const [fleetAvailability, setFleetAvailability] = useState<FleetAvailability | null>(null);
+
+  const handleFleetAvailabilityChange = useCallback((availability: FleetAvailability) => {
+    setFleetAvailability(availability);
+  }, []);
 
   const handlePlanChange = useCallback((planInfo: { id: number | null; name: string | null }) => {
     setActivePlanId(planInfo.id);
@@ -327,6 +333,7 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
             selectedAircraft={state.selectedAircraft}
             isProcessing={state.isProcessing}
             error={state.error}
+            onFleetAvailabilityChange={handleFleetAvailabilityChange}
           />
           {/* Demo: Load Sample Data Button */}
           <div className="fixed bottom-8 right-8">
@@ -413,6 +420,7 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
             activePlanId={activePlanId}
             activePlanName={activePlanName}
             onPlanChange={handlePlanChange}
+            fleetAvailability={fleetAvailability}
           >
             <MissionWorkspace onBack={handleBack} onHome={handleHome} />
           </MissionProvider>

@@ -4,7 +4,7 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, ReactNode } from 'react';
-import { AircraftType, AllocationResult, InsightsSummary, ParseResult, ClassifiedItems } from '../lib/pacafTypes';
+import { AircraftType, AllocationResult, InsightsSummary, ParseResult, ClassifiedItems, FleetAvailability } from '../lib/pacafTypes';
 import { SplitFlight } from '../lib/flightSplitTypes';
 import { FlightRoute, AIRCRAFT_SPECS, DEFAULT_FUEL_CONFIG, FuelCalculationConfig } from '../lib/routeTypes';
 
@@ -154,6 +154,7 @@ interface MissionProviderProps {
   activePlanId?: number | null;
   activePlanName?: string | null;
   onPlanChange?: (planInfo: { id: number | null; name: string | null }) => void;
+  fleetAvailability?: FleetAvailability | null;
 }
 
 export function MissionProvider({ 
@@ -165,7 +166,8 @@ export function MissionProvider({
   insights: initialInsights,
   activePlanId: initialPlanId,
   activePlanName: initialPlanName,
-  onPlanChange
+  onPlanChange,
+  fleetAvailability: initialFleetAvailability
 }: MissionProviderProps) {
   const [parseResult, setParseResult] = useState<ParseResult | null>(initialParseResult || null);
   const [classifiedItems, setClassifiedItems] = useState<ClassifiedItems | null>(initialClassified || null);
@@ -190,6 +192,13 @@ export function MissionProvider({
   const [analytics, setAnalytics] = useState<MissionAnalytics | null>(null);
   const [fuelBreakdown, setFuelBreakdown] = useState<FuelCostBreakdown | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [fleetAvailability, setFleetAvailability] = useState<FleetAvailability | null>(initialFleetAvailability ?? null);
+
+  useEffect(() => {
+    if (initialFleetAvailability) {
+      setFleetAvailability(initialFleetAvailability);
+    }
+  }, [initialFleetAvailability]);
 
   // Sync parseResult from props when it changes - always mirror the prop value
   useEffect(() => {
@@ -656,12 +665,41 @@ export function MissionProvider({
           console.error('Failed to save flight schedules:', scheduleError);
         }
       }
+
+      if (fleetAvailability && savedPlan.id) {
+        try {
+          const availabilityPayload = fleetAvailability.types.map(t => ({
+            typeId: t.typeId,
+            count: t.count,
+            locked: t.locked,
+          }));
+          
+          const fleetResponse = await fetch(`/api/plans/${savedPlan.id}/fleet-availability`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ 
+              availability: availabilityPayload,
+              preferred_aircraft_type_id: fleetAvailability.preferredType,
+              mixed_fleet_mode: fleetAvailability.mixedFleetMode,
+              preference_strength: fleetAvailability.preferenceStrength
+            })
+          });
+          
+          if (!fleetResponse.ok) {
+            console.error('Failed to save fleet availability:', await fleetResponse.text());
+          }
+        } catch (fleetError) {
+          console.error('Failed to save fleet availability:', fleetError);
+        }
+      }
+
       setIsSaving(false);
     } catch (error) {
       console.error('Failed to save flight plan to database:', error);
       setIsSaving(false);
     }
-  }, [allocationResult, splitFlights, routes, parseResult, activePlanId, isSaving]);
+  }, [allocationResult, splitFlights, routes, parseResult, activePlanId, isSaving, fleetAvailability]);
 
   const savePlanAs = useCallback(async (name: string) => {
     if (!allocationResult) {
