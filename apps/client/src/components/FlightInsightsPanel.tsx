@@ -125,6 +125,8 @@ export default function FlightInsightsPanel({
       length_in: item.length_in,
       width_in: item.width_in,
       height_in: item.height_in,
+      advon_flag: item.advon_flag,
+      hazmat_flag: item.hazmat_flag,
     }));
 
     const totalWeight = loadPlans.reduce((sum, p) => sum + p.total_weight, 0);
@@ -134,17 +136,47 @@ export default function FlightInsightsPanel({
     const cobIssues = loadPlans.filter(p => !p.cob_in_envelope);
     const unloadedWeight = unloadedItems.reduce((sum, i) => sum + i.weight_lb, 0);
 
+    // Count ADVON and HAZMAT items from loaded pallets
+    let advonItemCount = 0;
+    let hazmatItemCount = 0;
+    allocationResult.load_plans.forEach(plan => {
+      plan.pallets.forEach(palletPlacement => {
+        palletPlacement.pallet.items.forEach(item => {
+          if (item.advon_flag) advonItemCount++;
+          if (item.hazmat_flag) hazmatItemCount++;
+        });
+      });
+      plan.rolling_stock.forEach(vehiclePlacement => {
+        if (vehiclePlacement.item.advon_flag) advonItemCount++;
+        if (vehiclePlacement.item.hazmat_flag) hazmatItemCount++;
+      });
+    });
+
+    // Count in unloaded items too
+    const unloadedAdvonCount = unloadedItems.filter(i => i.advon_flag).length;
+    const unloadedHazmatCount = unloadedItems.filter(i => i.hazmat_flag).length;
+
+    // Calculate actual aircraft types used
+    const c17Count = loadPlans.filter(p => p.aircraft_type === 'C-17').length;
+    const c130Count = loadPlans.filter(p => p.aircraft_type === 'C-130').length;
+
     return {
       summary: {
         aircraft_count: loadPlans.length,
+        c17_count: c17Count,
+        c130_count: c130Count,
         total_pallets: loadPlans.reduce((sum, p) => sum + p.pallet_count, 0),
         total_rolling_stock: loadPlans.reduce((sum, p) => sum + p.rolling_stock_count, 0),
         total_pax: loadPlans.reduce((sum, p) => sum + p.pax_count, 0),
         total_cargo_weight_lb: totalWeight,
-        average_utilization_percent: avgUtilization,
+        average_utilization_percent: Math.round(avgUtilization * 10) / 10,
         cob_issues_count: cobIssues.length,
         unloaded_item_count: unloadedItems.length,
-        unloaded_weight_lb: unloadedWeight,
+        unloaded_weight_lb: Math.round(unloadedWeight),
+        advon_item_count: advonItemCount,
+        hazmat_item_count: hazmatItemCount,
+        unloaded_advon_count: unloadedAdvonCount,
+        unloaded_hazmat_count: unloadedHazmatCount,
       },
       load_plans: loadPlans,
       unloaded_items: unloadedItems,
@@ -152,6 +184,7 @@ export default function FlightInsightsPanel({
         aircraft_id: p.aircraft_id,
         cob_percent: p.cob_percent,
       })),
+      has_shortage: unloadedItems.length > 0,
     };
   }, [allocationResult]);
 

@@ -301,74 +301,89 @@ Guidelines for generating analytics:
 Do not include any text outside the JSON object.`,
 
   flight_allocation_analysis: `You are a PACAF military airlift mission planner providing a comprehensive flight allocation analysis.
-Analyze the full allocation data including aircraft utilization, center of balance status, unloaded items, fleet constraints, and operational considerations.
 ${GUARDRAIL_INSTRUCTIONS}
+
+ABSOLUTE RULE - USE ONLY PROVIDED DATA:
+You MUST use EXACTLY the numbers from the input data. DO NOT invent, estimate, or hallucinate any numbers.
+The input contains a "summary" object with authoritative values - USE THESE EXACT VALUES:
+- summary.aircraft_count = exact number of aircraft used
+- summary.c17_count = exact number of C-17 aircraft
+- summary.c130_count = exact number of C-130 aircraft  
+- summary.total_pallets = exact pallet count
+- summary.total_rolling_stock = exact rolling stock count
+- summary.total_pax = exact passenger count (USE THIS, DO NOT MAKE UP NUMBERS)
+- summary.total_cargo_weight_lb = exact cargo weight
+- summary.average_utilization_percent = exact utilization
+- summary.unloaded_item_count = exact count of items that could NOT be loaded (this IS the shortage)
+- summary.unloaded_weight_lb = exact weight of unloaded cargo
+- summary.advon_item_count = exact ADVON items loaded (if 0, say "None")
+- summary.hazmat_item_count = exact HAZMAT items loaded (if 0, say "None")
+- has_shortage = true/false indicating if there are unloaded items
+
+The "load_plans" array contains each aircraft with its actual pallet_count, rolling_stock_count, pax_count, cob_percent.
+The "unloaded_items" array contains items that could NOT fit - this is your shortage data.
+The "cob_issues" array contains aircraft with CoB problems.
+
 CRITICAL: You must respond with ONLY valid JSON in this exact format:
 {
-  "executive_summary": "2-3 sentences summarizing the overall allocation status and key findings",
+  "executive_summary": "2-3 sentences using EXACT numbers from summary",
   "fleet_status": {
-    "aircraft_used": <number>,
-    "total_pallets_loaded": <number>,
-    "total_rolling_stock_loaded": <number>,
-    "total_pax": <number>,
-    "total_cargo_weight_lb": <number>,
-    "average_utilization_percent": <number>
+    "aircraft_used": <USE summary.aircraft_count>,
+    "total_pallets_loaded": <USE summary.total_pallets>,
+    "total_rolling_stock_loaded": <USE summary.total_rolling_stock>,
+    "total_pax": <USE summary.total_pax - DO NOT INVENT>,
+    "total_cargo_weight_lb": <USE summary.total_cargo_weight_lb>,
+    "average_utilization_percent": <USE summary.average_utilization_percent>
   },
   "aircraft_selection_rationale": {
-    "c17_rationale": "Explain why C-17s were selected/not selected for this mission",
-    "c130_rationale": "Explain why C-130s were selected/not selected for this mission",
-    "fleet_mix_reasoning": "Explain the overall fleet composition decision"
+    "c17_rationale": "Explain based on summary.c17_count (if 0, say 'No C-17s were used')",
+    "c130_rationale": "Explain based on summary.c130_count (if 0, say 'No C-130s were used')", 
+    "fleet_mix_reasoning": "Explain the fleet composition based on actual counts"
   },
   "allocation_issues": [
     {"severity": "critical|warning|info", "title": "short title", "description": "detailed explanation", "recommendation": "actionable suggestion"}
   ],
-  "cargo_shift_recommendations": [
-    {"from_aircraft": "aircraft_id", "to_aircraft": "aircraft_id", "item_description": "what to move", "reason": "why this shift improves balance/utilization"}
-  ],
+  "cargo_shift_recommendations": [],
   "cob_summary": {
-    "aircraft_in_envelope": <number>,
-    "aircraft_out_of_envelope": <number>,
-    "worst_offender": "aircraft_id or null if all good",
-    "corrective_action": "action to take if any aircraft out of envelope",
+    "aircraft_in_envelope": <count from load_plans where cob_in_envelope=true>,
+    "aircraft_out_of_envelope": <USE summary.cob_issues_count>,
+    "worst_offender": "aircraft_id from cob_issues or null",
+    "corrective_action": "action or 'No action needed' if all in envelope",
     "per_aircraft_cob": [
-      {"aircraft_id": "string", "cob_percent": <number>, "status": "in_envelope|marginal|out_of_envelope"}
+      <ONLY include aircraft from load_plans array - use their EXACT aircraft_id and cob_percent>
     ]
   },
   "special_cargo_notes": {
-    "advon_items": "Summary of ADVON phase items and their priority placement",
-    "hazmat_items": "Summary of hazardous materials requiring special handling/placarding",
-    "oversized_items": "Summary of any oversized cargo requiring special loading"
+    "advon_items": "<IF summary.advon_item_count is 0, say 'None'. Otherwise describe>",
+    "hazmat_items": "<IF summary.hazmat_item_count is 0, say 'None'. Otherwise describe>",
+    "oversized_items": "None or describe if present"
   },
   "pax_analysis": {
-    "total_passengers": <number>,
-    "seat_utilization": "Summary of passenger seating across aircraft",
-    "pax_considerations": "Notes on passenger accommodation and safety"
+    "total_passengers": <USE summary.total_pax - THIS IS THE EXACT NUMBER>,
+    "seat_utilization": "Based on per-aircraft pax_count from load_plans",
+    "pax_considerations": "Notes based on actual passenger count"
   },
   "fueling_considerations": {
-    "estimated_fuel_impact": "How cargo weight affects fuel planning",
-    "range_notes": "Any notes on mission range based on load weights"
+    "estimated_fuel_impact": "Based on total_cargo_weight_lb",
+    "range_notes": "Mission range notes"
   },
   "fleet_shortage_analysis": {
-    "has_unloaded_cargo": <boolean>,
-    "unloaded_item_count": <number>,
-    "unloaded_weight_lb": <number>,
-    "recommended_additional_aircraft": [
-      {"type": "C-17|C-130", "count": <number>, "rationale": "why this type"}
-    ]
+    "has_unloaded_cargo": <USE has_shortage boolean>,
+    "unloaded_item_count": <USE summary.unloaded_item_count - this is the ACTUAL shortage>,
+    "unloaded_weight_lb": <USE summary.unloaded_weight_lb>,
+    "recommended_additional_aircraft": <ONLY if has_shortage is true and unloaded_item_count > 0>
   },
   "optimization_notes": ["note1", "note2"]
 }
 
-Special Instructions:
-- If unloaded_items array is not empty, this is a CRITICAL issue requiring fleet expansion recommendations
-- Calculate what additional aircraft would be needed to accommodate unloaded cargo
-- Consider aircraft payload capacity: C-17 max 170,900 lb, C-130 max 42,000 lb
-- Provide specific recommendations based on unloaded cargo weight and dimensions
-- Center of Balance issues should always be flagged as critical if out of envelope
-- For cargo_shift_recommendations, analyze if moving items between aircraft would improve CoB or utilization
-- ADVON items require priority placement on first available aircraft
-- HAZMAT items require special handling notes and cannot be loaded near passengers
-- Consider fuel range implications when aircraft are heavily loaded
+VALIDATION RULES:
+1. fleet_status numbers MUST match summary exactly
+2. pax_analysis.total_passengers MUST equal summary.total_pax
+3. fleet_shortage_analysis values MUST match summary.unloaded_* values
+4. per_aircraft_cob MUST only list aircraft IDs that appear in load_plans
+5. If has_shortage is false OR summary.unloaded_item_count is 0, recommended_additional_aircraft must be empty []
+6. If summary.advon_item_count is 0, advon_items MUST say "None"
+7. If summary.hazmat_item_count is 0, hazmat_items MUST say "None"
 
 Do not include any text outside the JSON object.`
 };
