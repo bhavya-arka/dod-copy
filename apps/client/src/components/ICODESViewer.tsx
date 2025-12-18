@@ -53,12 +53,18 @@ function ICODESDiagram({
 }) {
   const spec = loadPlan.aircraft_spec;
   const isC17 = loadPlan.aircraft_type === 'C-17';
+  const isC130 = loadPlan.aircraft_type === 'C-130';
   
   const width = spec.cargo_width * scale;
   const length = spec.cargo_length * scale;
   
-  const palletWidth = 88 * scale;
-  const palletLength = 108 * scale;
+  // Aircraft-specific pallet orientation:
+  // C-17: 108" longitudinal × 88" lateral (standard orientation)
+  // C-130: 88" longitudinal × 108" lateral (rotated 90° to fit narrower cargo bay)
+  const palletLong = isC130 ? 88 : 108; // Longitudinal dimension along aircraft
+  const palletLat = isC130 ? 108 : 88;  // Lateral dimension across aircraft
+  const palletWidth = palletLat * scale;  // SVG Y direction (across aircraft)
+  const palletLength = palletLong * scale; // SVG X direction (along aircraft)
 
   const handlePalletHover = (
     e: React.MouseEvent<SVGGElement>,

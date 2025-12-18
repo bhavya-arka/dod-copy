@@ -1023,13 +1023,17 @@ function placePallets(
     return { placements, unplaced, nextX: startX, totalWeight: currentWeight, totalMoment: currentMoment };
   }
 
-  const PALLET_LENGTH = PALLET_463L.length;
-  const PALLET_WIDTH = PALLET_463L.width;
-  const PALLET_HALF_WIDTH = PALLET_WIDTH / 2;
+  // Aircraft-specific pallet orientation:
+  // C-17: 108" longitudinal × 88" lateral (2 lanes, standard orientation)
+  // C-130: 88" longitudinal × 108" lateral (1 lane, rotated 90°)
+  const isC130 = aircraftSpec.type === 'C-130';
+  const PALLET_LONG = isC130 ? PALLET_463L.width : PALLET_463L.length; // Longitudinal dimension
+  const PALLET_LAT = isC130 ? PALLET_463L.length : PALLET_463L.width;  // Lateral dimension
+  const PALLET_HALF_LAT = PALLET_LAT / 2;
   
-  // Use aircraft-specific pallet positions from spec instead of calculating from pallet dimensions
-  // C-17: 18 positions (9 rows × 2 lanes)
-  // C-130: 6 positions (6 rows × 1 lane) - pallets oriented with 88" dimension longitudinal
+  // Use station-based positions from AIRCRAFT_SPECS for accurate placement
+  // These are discrete positions verified per technical orders
+  const stations = aircraftSpec.stations;
   const maxPositions = aircraftSpec.pallet_positions;
   const maxX = aircraftSpec.cargo_length;
   const maxPayload = aircraftSpec.max_payload;
@@ -1039,10 +1043,11 @@ function placePallets(
   const laneConfig = getAircraftLaneConfig(aircraftSpec.type);
   const laneCount = laneConfig.lane_count;
   
-  // Calculate slot width based on aircraft's configured pallet positions
-  // This allows proper spacing for each aircraft type
+  // Calculate spacing between stations (use station data or fallback to calculation)
   const maxRows = Math.ceil(maxPositions / laneCount);
-  const PALLET_SLOT = maxX / maxRows; // Dynamic slot width based on aircraft config
+  const PALLET_SLOT = stations.length >= 2 
+    ? (stations[1].rdl_distance - stations[0].rdl_distance) 
+    : (maxX / maxRows);
   
   const targetCobPercent = (aircraftSpec.cob_min_percent + aircraftSpec.cob_max_percent) / 2;
   const targetStationCG = aircraftSpec.lemac_station + (targetCobPercent / 100) * aircraftSpec.mac_length;
@@ -1061,21 +1066,40 @@ function placePallets(
     return { placements, unplaced, nextX: startX, totalWeight: currentWeight, totalMoment: currentMoment };
   }
 
-  // Generate all available slots (longitudinal row × lateral lane combinations)
+  // Generate all available slots from station-based positions
   // For C-17: 9 rows × 2 lanes = 18 slots
   // For C-130: 6 rows × 1 lane = 6 slots
-  // Note: PALLET_SLOT may be smaller than PALLET_LENGTH to achieve correct position count
-  // Last position may extend onto ramp - this is valid for ramp-rated cargo
+  // Station rdl_distance is the FORWARD edge of each pallet position (FS from nose)
   const allSlots: LateralSlot[] = [];
+  
+  // First station offset in solver coordinates
+  const firstStationOffset = stations.length > 0 
+    ? Math.max(0, stations[0].rdl_distance - bayStart)
+    : 0;
+  
   for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
-    const xStart = startX + rowIndex * PALLET_SLOT;
-    const xEnd = xStart + PALLET_LENGTH;
+    // Use station-derived position if available, otherwise use calculated spacing
+    let xStart: number;
+    if (stations.length > rowIndex) {
+      // Station rdl_distance is the forward edge of the pallet position
+      xStart = stations[rowIndex].rdl_distance - bayStart;
+    } else {
+      // Fallback: calculated spacing from first station
+      xStart = firstStationOffset + rowIndex * PALLET_SLOT;
+    }
+    
+    // Ensure xStart is not negative (cargo bay boundary)
+    if (xStart < 0) xStart = 0;
+    
+    const xEnd = xStart + PALLET_LONG;
     
     // Skip slot if it would extend completely beyond cargo area (including ramp)
     const totalUsableLength = maxX + aircraftSpec.ramp_length;
     if (xEnd > totalUsableLength) continue;
     
-    const isOnRamp = xStart >= (maxX - aircraftSpec.ramp_length);
+    const isOnRamp = stations.length > rowIndex 
+      ? stations[rowIndex].is_ramp 
+      : (xStart >= (maxX - aircraftSpec.ramp_length));
     
     for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
       const lane = laneConfig.lanes[laneIndex];
@@ -1132,7 +1156,7 @@ function placePallets(
       // Score this slot by how close it brings CG to target
       const { score, projectedCGPercent } = scorePlacementPosition(
         slot.x_start,
-        PALLET_LENGTH,
+        PALLET_LONG,
         pallet.gross_weight,
         runningMoment,
         runningWeight,
@@ -1162,18 +1186,18 @@ function placePallets(
       assignedSlots.add(bestSlot.slotKey);
       
       // Update running totals
-      const arm = bestSlot.x_start + (PALLET_LENGTH / 2) + bayStart;
+      const arm = bestSlot.x_start + (PALLET_LONG / 2) + bayStart;
       runningMoment += pallet.gross_weight * arm;
       runningWeight += pallet.gross_weight;
       runningLateralMoment += pallet.gross_weight * bestSlot.y_center;
       
       // Calculate lateral bounds for this lane position
-      const lateralBounds = calculateLateralBounds(bestSlot.y_center, PALLET_WIDTH);
+      const lateralBounds = calculateLateralBounds(bestSlot.y_center, PALLET_LAT);
       
       const placement: PalletPlacement = {
         pallet: pallet,
         position_index: placements.length,
-        position_coord: bestSlot.x_start + PALLET_LENGTH / 2,
+        position_coord: bestSlot.x_start + PALLET_LONG / 2,
         is_ramp: bestSlot.isOnRamp,
         lateral_placement: {
           y_center_in: bestSlot.y_center,
@@ -1181,7 +1205,7 @@ function placePallets(
           y_right_in: lateralBounds.y_right_in
         },
         x_start_in: bestSlot.x_start,
-        x_end_in: bestSlot.x_start + PALLET_LENGTH
+        x_end_in: bestSlot.x_start + PALLET_LONG
       };
 
       placements.push(placement);
@@ -1248,11 +1272,16 @@ function loadSingleAircraftFromQueue(
   // Place rolling stock with CoB-optimizing algorithm
   const rsResult = placeRollingStock(queue.rolling_stock, spec, 0, aircraftId);
   
-  // Calculate pallet start position (after rolling stock, if any)
-  const palletStartX = rsResult.nextX > 0 ? rsResult.nextX + 12 : 0;
+  // IMPORTANT: Pallets start from position 0, not after rolling stock
+  // The pallet placement algorithm uses discrete station positions that
+  // are separate from rolling stock floor space. Rolling stock uses floor
+  // rails while pallets lock into pallet positions on the 463L rail system.
+  // This prevents the issue of pallets being pushed to aft end when
+  // rolling stock occupies forward positions.
+  const palletStartX = 0;
   
   // Pass running weight and moment from rolling stock to pallet placement
-  // This allows pallets to balance the load
+  // This allows pallets to balance the load by choosing optimal positions
   const palletResult = placePallets(
     queue.pallets, 
     spec, 
