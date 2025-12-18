@@ -7,15 +7,25 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import "@fontsource/inter";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import PACAPApp from "./components/PACAPApp";
 import AuthScreen from "./components/AuthScreen";
 import Dashboard from "./components/Dashboard";
 import { motion } from "framer-motion";
 import { useAuthProvider, AuthContext, User } from "./hooks/useAuth";
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      retry: 1,
+    },
+  },
+});
+
 type AppMode = 'loading' | 'auth' | 'dashboard' | 'planning';
 
-function App() {
+function AppContent() {
   const auth = useAuthProvider();
   const [appMode, setAppMode] = useState<AppMode>('loading');
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
@@ -50,7 +60,6 @@ function App() {
     setAppMode('auth');
   }, [auth]);
 
-  // Loading screen
   if (appMode === 'loading') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-black flex items-center justify-center">
@@ -66,7 +75,6 @@ function App() {
     );
   }
 
-  // Auth screen
   if (appMode === 'auth') {
     return (
       <AuthContext.Provider value={auth}>
@@ -75,7 +83,6 @@ function App() {
     );
   }
 
-  // Dashboard screen
   if (appMode === 'dashboard' && auth.user) {
     return (
       <AuthContext.Provider value={auth}>
@@ -89,7 +96,6 @@ function App() {
     );
   }
 
-  // Planning mode
   return (
     <AuthContext.Provider value={auth}>
       <PACAPApp 
@@ -99,6 +105,14 @@ function App() {
         loadPlanId={selectedPlanId}
       />
     </AuthContext.Provider>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppContent />
+    </QueryClientProvider>
   );
 }
 
