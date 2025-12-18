@@ -7,6 +7,18 @@ import {
   INSIGHT_TYPE_LABELS,
   INSIGHT_TYPE_DESCRIPTIONS,
 } from '../hooks/useAiInsights';
+import {
+  Package,
+  Scale,
+  Target,
+  Map,
+  CheckCircle,
+  ClipboardList,
+  BarChart3,
+  AlertTriangle,
+  RefreshCw,
+  Bot
+} from 'lucide-react';
 
 interface AiInsightsPanelProps {
   flightPlanId: number;
@@ -24,14 +36,14 @@ const INSIGHT_TYPES: InsightType[] = [
   'mission_analytics',
 ];
 
-const INSIGHT_ICONS: Record<InsightType, string> = {
-  allocation_summary: '📦',
-  cob_analysis: '⚖️',
-  pallet_review: '🎯',
-  route_planning: '🗺️',
-  compliance: '✅',
-  mission_briefing: '📋',
-  mission_analytics: '📊',
+const INSIGHT_ICONS: Record<InsightType, React.ReactNode> = {
+  allocation_summary: <Package className="w-5 h-5" />,
+  cob_analysis: <Scale className="w-5 h-5" />,
+  pallet_review: <Target className="w-5 h-5" />,
+  route_planning: <Map className="w-5 h-5" />,
+  compliance: <CheckCircle className="w-5 h-5" />,
+  mission_briefing: <ClipboardList className="w-5 h-5" />,
+  mission_analytics: <BarChart3 className="w-5 h-5" />,
 };
 
 export default function AiInsightsPanel({
@@ -102,7 +114,9 @@ export default function AiInsightsPanel({
     return (
       <div className={`glass-card p-6 ${className}`}>
         <div className="text-center text-neutral-500 py-8">
-          <span className="text-4xl mb-4 block">🤖</span>
+          <div className="mb-4 flex justify-center">
+            <Bot className="w-10 h-10 text-neutral-400" />
+          </div>
           <p>Select a flight plan to view AI insights</p>
         </div>
       </div>
@@ -114,8 +128,8 @@ export default function AiInsightsPanel({
       <div className="p-4 sm:p-6 border-b border-neutral-200/50">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center space-x-3">
-            <span className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-xl">
-              🤖
+            <span className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+              <Bot className="w-5 h-5 text-purple-600" />
             </span>
             <div>
               <h2 className="text-lg font-bold text-neutral-900">AI Insights</h2>
@@ -266,7 +280,7 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
   return (
     <div className="flex flex-col items-center justify-center py-12">
       <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center mb-4">
-        <span className="text-2xl">⚠️</span>
+        <AlertTriangle className="w-6 h-6 text-red-600" />
       </div>
       <p className="text-red-600 font-medium mb-2">Failed to load insights</p>
       <p className="text-neutral-500 text-sm mb-4">{error}</p>
@@ -348,7 +362,7 @@ function InsightContent({
           disabled={isRegenerating}
           className="btn-ghost text-xs px-3 py-1.5 flex items-center gap-1 disabled:opacity-50"
         >
-          <span className={isRegenerating ? 'animate-spin' : ''}>🔄</span>
+          <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
           Regenerate
         </button>
       </div>
