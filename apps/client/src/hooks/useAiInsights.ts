@@ -34,7 +34,7 @@ export interface AiInsight {
 export interface GenerateInsightRequest {
   type: InsightType;
   inputData: Record<string, unknown>;
-  flightPlanId: number;
+  flightPlanId: number | null;
   forceRegenerate?: boolean;
 }
 

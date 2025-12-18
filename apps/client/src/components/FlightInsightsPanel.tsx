@@ -164,7 +164,7 @@ export default function FlightInsightsPanel({
       await generateInsight({
         type: 'flight_allocation_analysis',
         inputData,
-        flightPlanId,
+        flightPlanId: flightPlanId > 0 ? flightPlanId : null,
         forceRegenerate: !!currentInsight,
       });
     } catch (err) {
@@ -268,13 +268,12 @@ export default function FlightInsightsPanel({
         </div>
         <button
           onClick={handleGenerate}
-          disabled={isGenerating || isRateLimited || flightPlanId <= 0}
+          disabled={isGenerating || isRateLimited}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-            isGenerating || isRateLimited || flightPlanId <= 0
+            isGenerating || isRateLimited
               ? 'bg-neutral-200 text-neutral-500 cursor-not-allowed'
               : 'bg-primary text-white hover:bg-primary/90'
           }`}
-          title={flightPlanId <= 0 ? 'Save flight plan first to enable insights' : undefined}
         >
           <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
           {currentInsight ? 'Regenerate' : 'Generate'}
@@ -293,15 +292,7 @@ export default function FlightInsightsPanel({
         </div>
       )}
 
-      {!currentInsight && !isGenerating && flightPlanId <= 0 && (
-        <div className="text-center py-8 text-neutral-500">
-          <Bot className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
-          <p className="text-sm">Save your flight plan to enable AI-powered insights</p>
-          <p className="text-xs mt-2 text-neutral-400">Go to Mission Workspace to save your plan</p>
-        </div>
-      )}
-
-      {!currentInsight && !isGenerating && flightPlanId > 0 && (
+      {!currentInsight && !isGenerating && (
         <div className="text-center py-8 text-neutral-500">
           <Bot className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
           <p className="text-sm">Click Generate to get AI-powered analysis of your flight allocation</p>
