@@ -14,7 +14,7 @@ import {
 } from "@aws-sdk/client-bedrock-agent-runtime";
 
 import crypto from "crypto";
-import type { AiInsightType } from "@shared/schema";
+import type { AiInsightType } from "../../../packages/shared/schema";
 
 // Configuration - all configurable via environment variables
 const AWS_REGION = process.env.AWS_REGION || "us-east-2";
@@ -245,6 +245,47 @@ CRITICAL: You must respond with ONLY valid JSON in this exact format:
   "risk_summary": "Brief risk assessment"
 }
 
+Do not include any text outside the JSON object.`,
+
+  mission_analytics: `You are a military airlift mission analytics expert providing comprehensive structured analytics for PACAF operations.
+Analyze all mission data and provide detailed metrics, performance assessments, and actionable advice.
+
+CRITICAL: You must respond with ONLY valid JSON in this exact format:
+{
+  "mission_summary": {
+    "total_aircraft": <number>,
+    "aircraft_breakdown": [{"type": "C-17|C-130", "count": <number>, "total_weight_lb": <number>}],
+    "total_pallets": <number>,
+    "total_weight_lb": <number>,
+    "total_pax": <number>
+  },
+  "route_details": [
+    {"flight_id": "string", "origin": "ICAO", "destination": "ICAO", "distance_nm": <number>, "cargo_weight_lb": <number>}
+  ],
+  "performance_metrics": {
+    "overall_utilization_percent": <number>,
+    "average_cob_percent": <number>,
+    "efficiency_grade": "A|B|C|D",
+    "cob_status": "all_in_envelope|some_marginal|issues_detected"
+  },
+  "advice_messages": [
+    {"priority": "high|medium|low", "category": "optimization|safety|compliance|efficiency", "message": "string", "action": "string"}
+  ],
+  "risk_assessment": {
+    "overall_risk": "low|medium|high",
+    "risk_factors": ["string"],
+    "mitigation_notes": ["string"]
+  }
+}
+
+Guidelines for generating analytics:
+- Calculate utilization based on actual vs maximum allowable cargo weight
+- Assign efficiency grades: A (>90%), B (75-90%), C (60-75%), D (<60%)
+- Prioritize advice by impact: high for safety/compliance, medium for efficiency, low for optimization
+- Include at least 2-4 actionable advice messages
+- Risk factors should identify specific concerns with cargo, routes, or timing
+- Mitigation notes should provide concrete steps to address each risk
+
 Do not include any text outside the JSON object.`
 };
 
@@ -448,6 +489,10 @@ export async function generateInsight(
       case "mission_briefing":
         userPrompt = `Generate mission briefing for:\n${JSON.stringify(inputData, null, 2)}`;
         kbQuery = "military mission briefing format requirements";
+        break;
+      case "mission_analytics":
+        userPrompt = `Generate comprehensive mission analytics for:\n${JSON.stringify(inputData, null, 2)}`;
+        kbQuery = "military airlift mission performance metrics efficiency optimization";
         break;
     }
 

@@ -21,6 +21,7 @@ const INSIGHT_TYPES: InsightType[] = [
   'route_planning',
   'compliance',
   'mission_briefing',
+  'mission_analytics',
 ];
 
 const INSIGHT_ICONS: Record<InsightType, string> = {
@@ -30,6 +31,7 @@ const INSIGHT_ICONS: Record<InsightType, string> = {
   route_planning: '🗺️',
   compliance: '✅',
   mission_briefing: '📋',
+  mission_analytics: '📊',
 };
 
 export default function AiInsightsPanel({
