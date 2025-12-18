@@ -600,13 +600,13 @@ export default function LoadPlanViewer({
           </div>
         </aside>
 
-        <main className="flex-1 p-4 sm:p-6 overflow-y-auto max-h-[calc(100vh-64px)]">
+        <main className="flex-1 flex flex-col min-h-0 p-4 sm:p-6">
           {currentSelectedPlan ? (
             <motion.div
               key={`${currentSelectedPlan.aircraft_id}-${viewMode}`}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="space-y-4 sm:space-y-6 w-full max-w-full"
+              className="flex-1 overflow-y-auto space-y-4 sm:space-y-6 w-full max-w-full"
             >
               {viewMode === '2d' ? (
                 <ICODESViewer loadPlan={currentSelectedPlan} />
