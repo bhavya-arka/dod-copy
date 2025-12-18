@@ -558,7 +558,7 @@ export default function LoadPlanViewer({
       )}
 
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        <aside className="w-full lg:w-72 border-b lg:border-b-0 lg:border-r border-neutral-200/50 bg-white/50 backdrop-blur-sm flex-shrink-0 lg:overflow-y-auto lg:max-h-[calc(100vh-64px)]">
+        <aside className="w-full lg:w-72 border-b lg:border-b-0 lg:border-r border-neutral-200/50 bg-white/50 backdrop-blur-sm flex-shrink-0 overflow-y-auto max-h-[50vh] lg:max-h-[calc(100vh-64px)]">
           <div className="p-4 border-b border-neutral-200/50">
             <div className="flex space-x-1 bg-neutral-100 rounded-xl p-1">
               {[
@@ -843,7 +843,7 @@ export default function LoadPlanViewer({
           )}
         </main>
 
-        <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-neutral-200/50 bg-white/50 backdrop-blur-sm p-4 lg:overflow-y-auto lg:max-h-[calc(100vh-64px)] shrink-0">
+        <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-neutral-200/50 bg-white/50 backdrop-blur-sm p-4 overflow-y-auto max-h-[50vh] lg:max-h-[calc(100vh-64px)] shrink-0">
           <h2 className="text-neutral-900 font-bold mb-4">AI Insights</h2>
           
           <div className="space-y-3">

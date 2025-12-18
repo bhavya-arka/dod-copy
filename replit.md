@@ -75,3 +75,20 @@ Flight plans are persisted via `/api/flight-plans`:
 -   TypeScript
 -   Vite
 -   ESBuild
+
+# Styling Guidelines (Dec 2024)
+
+## Container Rules
+- Page wrappers: `container mx-auto px-4 max-w-7xl py-8`
+- Full-height pages: `min-h-screen flex flex-col`
+- Scrollable sections: `overflow-y-auto max-h-[calc(100vh-XXpx)]` or `max-h-[50vh]` for mobile
+
+## Responsive Rules  
+- Grid breakpoints: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`
+- Mobile-first: always start with single-column on xs
+- No horizontal overflow: use `w-full max-w-full` and `overflow-x-auto` for tables
+
+## Component Boundaries
+- Spacing: `gap-4` to `gap-6`
+- Modals: `fixed inset-0 flex items-center justify-center` with `max-h-screen overflow-y-auto`
+- Sidebars on mobile: `max-h-[50vh]` with `overflow-y-auto`

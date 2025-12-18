@@ -178,7 +178,7 @@ export default function AnalyticsPanel({ onSaveConfiguration }: AnalyticsPanelPr
           {mission.analytics && (
             <div className="glass-card p-6">
               <h3 className="text-neutral-900 font-bold mb-4">Mission Summary</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard label="Total Aircraft" value={mission.analytics.total_aircraft} />
                 <StatCard label="Total Pallets" value={mission.analytics.total_pallets} />
                 <StatCard label="Total Weight" value={`${(mission.analytics.total_weight_lb / 1000).toFixed(0)}K lbs`} />
@@ -196,7 +196,7 @@ export default function AnalyticsPanel({ onSaveConfiguration }: AnalyticsPanelPr
               <div className="glass-card p-6">
                 <h3 className="text-neutral-900 font-bold mb-4">Cost Breakdown</h3>
                 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   <div className="stat-card">
                     <div className="stat-value text-blue-600">
                       ${(mission.fuelBreakdown.total_fuel_cost_usd / 1000).toFixed(0)}K
@@ -271,7 +271,7 @@ export default function AnalyticsPanel({ onSaveConfiguration }: AnalyticsPanelPr
               <div className="glass-card p-6">
                 <h3 className="text-neutral-900 font-bold mb-4">Fuel Efficiency Metrics</h3>
                 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   <div className="stat-card">
                     <div className="stat-value text-primary">
                       {(mission.fuelBreakdown.total_fuel_lb / 1000).toFixed(0)}K
@@ -701,7 +701,7 @@ function AircraftDetailView({ aircraft }: { aircraft: AircraftCostBreakdown }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <div className="bg-white/80 rounded-lg p-3">
           <div className="text-lg font-bold text-neutral-900">{aircraft.distance_nm.toLocaleString()}</div>
           <div className="text-xs text-neutral-500">Distance (NM)</div>
