@@ -436,3 +436,29 @@ export const insertAiInsightSchema = createInsertSchema(aiInsights).omit({
 
 export type InsertAiInsight = z.infer<typeof insertAiInsightSchema>;
 export type AiInsight = typeof aiInsights.$inferSelect;
+
+// ============================================================================
+// MANIFESTS TABLE
+// ============================================================================
+
+export const manifests = pgTable("manifests", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  name: text("name").notNull(),
+  flight_plan_id: integer("flight_plan_id"),
+  manifest_data: jsonb("manifest_data").notNull().default([]),
+  total_weight_lb: integer("total_weight_lb").notNull().default(0),
+  item_count: integer("item_count").notNull().default(0),
+  status: text("status").notNull().default('draft'),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertManifestSchema = createInsertSchema(manifests).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+
+export type InsertManifest = z.infer<typeof insertManifestSchema>;
+export type Manifest = typeof manifests.$inferSelect;
