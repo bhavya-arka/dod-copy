@@ -14,16 +14,15 @@ import {
 } from "@aws-sdk/client-bedrock-agent-runtime";
 
 import crypto from "crypto";
-import type { AiInsightType as SharedAiInsightType } from "@shared/schema";
+import type { AiInsightType } from "@shared/schema";
 
-// Define type locally as fallback if import fails
-type AiInsightType = SharedAiInsightType | 'allocation_summary' | 'cob_analysis' | 'pallet_review' | 'route_planning' | 'compliance' | 'mission_briefing';
-
-// Configuration
+// Configuration - all configurable via environment variables
 const AWS_REGION = process.env.AWS_REGION || "us-east-2";
 const KNOWLEDGE_BASE_ID = process.env.AWS_BEDROCK_KNOWLEDGE_BASE_ID || "";
-// Use US regional inference profile for Nova Lite (required for on-demand access)
-const MODEL_ID = "us.amazon.nova-lite-v1:0";
+// Model ID can be overridden via environment variable (default: Nova Lite with US regional inference profile)
+const MODEL_ID = process.env.AWS_BEDROCK_MODEL_ID || "us.amazon.nova-lite-v1:0";
+
+console.log(`[Bedrock:CONFIG] Region: ${AWS_REGION}, Model: ${MODEL_ID}, KB: ${KNOWLEDGE_BASE_ID ? "configured" : "not configured"}`);
 
 // Sanitize AWS credentials - trim whitespace that may have been introduced during copy/paste
 function getAwsCredentials() {
@@ -41,12 +40,25 @@ function getAwsCredentials() {
   return { accessKeyId, secretAccessKey };
 }
 
-// Rate limiting configuration
+// Rate limiting configuration - configurable via environment variables
+// Validate and parse rate limit values with safe defaults
+function parseRateLimit(envVar: string | undefined, defaultValue: number): number {
+  if (!envVar) return defaultValue;
+  const parsed = parseInt(envVar, 10);
+  if (isNaN(parsed) || parsed <= 0) {
+    console.warn(`[Bedrock:CONFIG] Invalid rate limit value "${envVar}", using default: ${defaultValue}`);
+    return defaultValue;
+  }
+  return parsed;
+}
+
 const RATE_LIMIT = {
-  maxRequestsPerMinute: 10,
-  maxRequestsPerHour: 100,
+  maxRequestsPerMinute: parseRateLimit(process.env.AI_RATE_LIMIT_PER_MINUTE, 10),
+  maxRequestsPerHour: parseRateLimit(process.env.AI_RATE_LIMIT_PER_HOUR, 100),
   requestWindow: new Map<string, number[]>()
 };
+
+console.log(`[Bedrock:CONFIG] Rate limits: ${RATE_LIMIT.maxRequestsPerMinute}/min, ${RATE_LIMIT.maxRequestsPerHour}/hour`);
 
 // Clients (lazy initialized)
 let runtimeClient: BedrockRuntimeClient | null = null;
