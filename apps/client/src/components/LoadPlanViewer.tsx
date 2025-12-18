@@ -562,8 +562,8 @@ export default function LoadPlanViewer({
         </div>
       )}
 
-      <div className={`flex ${hideNavigation ? 'min-h-[600px]' : 'h-[calc(100vh-64px)]'}`}>
-        <aside className="w-72 border-r border-neutral-200/50 bg-white/50 backdrop-blur-sm overflow-y-auto scrollbar-thin flex-shrink-0">
+      <div className="flex flex-col lg:flex-row min-h-[600px]">
+        <aside className="w-full lg:w-72 border-b lg:border-b-0 lg:border-r border-neutral-200/50 bg-white/50 backdrop-blur-sm flex-shrink-0">
           <div className="p-4 border-b border-neutral-200/50">
             <div className="flex space-x-1 bg-neutral-100 rounded-xl p-1">
               {[
@@ -624,7 +624,7 @@ export default function LoadPlanViewer({
           </div>
         </aside>
 
-        <main className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+        <main className="flex-1 p-6">
           {currentSelectedPlan ? (
             <motion.div
               key={`${currentSelectedPlan.aircraft_id}-${viewMode}`}
@@ -848,7 +848,7 @@ export default function LoadPlanViewer({
           )}
         </main>
 
-        <aside className="w-80 border-l border-neutral-200/50 bg-white/50 backdrop-blur-sm overflow-y-auto p-4 scrollbar-thin">
+        <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-neutral-200/50 bg-white/50 backdrop-blur-sm p-4">
           <h2 className="text-neutral-900 font-bold mb-4">AI Insights</h2>
           
           <div className="space-y-3">
