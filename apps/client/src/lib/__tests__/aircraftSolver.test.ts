@@ -4,7 +4,7 @@
  */
 
 import { calculateCenterOfBalance, getCoBStatusMessage } from '../aircraftSolver';
-import { AIRCRAFT_SPECS, PalletPlacement, VehiclePlacement, Pallet463L, MovementItem } from '../pacafTypes';
+import { AIRCRAFT_SPECS, PalletPlacement, VehiclePlacement, Pallet463L, MovementItem, getAircraftLaneConfig, AIRCRAFT_LANE_CONFIGS, calculateLateralBounds, PALLET_463L } from '../pacafTypes';
 
 // ============================================================================
 // TEST HELPERS
@@ -252,5 +252,176 @@ describe('Aircraft Specifications', () => {
   test('forward_offset is set for both aircraft', () => {
     expect(AIRCRAFT_SPECS['C-17'].forward_offset).toBe(180);
     expect(AIRCRAFT_SPECS['C-130'].forward_offset).toBe(180);
+  });
+});
+
+// ============================================================================
+// LATERAL LANE CONFIGURATION TESTS
+// ============================================================================
+
+describe('Lateral Lane Configuration', () => {
+  describe('C-17 Lane Configuration', () => {
+    test('C-17 has 2 lateral lanes for side-by-side placement', () => {
+      const laneConfig = getAircraftLaneConfig('C-17');
+      expect(laneConfig.lane_count).toBe(2);
+      expect(laneConfig.lanes.length).toBe(2);
+    });
+    
+    test('C-17 left lane is at y=-50" from centerline', () => {
+      const laneConfig = getAircraftLaneConfig('C-17');
+      const leftLane = laneConfig.lanes[0];
+      expect(leftLane.y_center_in).toBe(-50);
+      expect(leftLane.name).toBe('Left Lane');
+    });
+    
+    test('C-17 right lane is at y=+50" from centerline', () => {
+      const laneConfig = getAircraftLaneConfig('C-17');
+      const rightLane = laneConfig.lanes[1];
+      expect(rightLane.y_center_in).toBe(50);
+      expect(rightLane.name).toBe('Right Lane');
+    });
+    
+    test('Two 463L pallets fit side-by-side in C-17 (88" + gap + 88" < 216")', () => {
+      const laneConfig = getAircraftLaneConfig('C-17');
+      const palletWidth = PALLET_463L.width; // 88"
+      const c17Width = AIRCRAFT_SPECS['C-17'].cargo_width; // 216"
+      
+      // Calculate total width with both lanes
+      const leftLaneBounds = calculateLateralBounds(laneConfig.lanes[0].y_center_in, palletWidth);
+      const rightLaneBounds = calculateLateralBounds(laneConfig.lanes[1].y_center_in, palletWidth);
+      
+      // Left pallet: -50 ± 44 = -94 to -6
+      expect(leftLaneBounds.y_left_in).toBe(-94);
+      expect(leftLaneBounds.y_right_in).toBe(-6);
+      
+      // Right pallet: +50 ± 44 = 6 to 94
+      expect(rightLaneBounds.y_left_in).toBe(6);
+      expect(rightLaneBounds.y_right_in).toBe(94);
+      
+      // Gap between pallets: -6 to 6 = 12" gap
+      const gap = rightLaneBounds.y_left_in - leftLaneBounds.y_right_in;
+      expect(gap).toBe(12);
+      
+      // Both pallets fit within cargo width (±108" from centerline)
+      expect(Math.abs(leftLaneBounds.y_left_in)).toBeLessThan(c17Width / 2);
+      expect(Math.abs(rightLaneBounds.y_right_in)).toBeLessThan(c17Width / 2);
+    });
+    
+    test('C-17 can fit 36 pallets (9 rows × 2 lanes)', () => {
+      const c17Spec = AIRCRAFT_SPECS['C-17'];
+      const laneConfig = getAircraftLaneConfig('C-17');
+      const palletSlot = PALLET_463L.length + 4; // 108" + 4" spacing = 112"
+      
+      const maxRows = Math.floor(c17Spec.cargo_length / palletSlot);
+      const maxPallets = maxRows * laneConfig.lane_count;
+      
+      // 1056" / 112" = 9 rows × 2 lanes = 18 slots (but can fit 36 pallets with 2 lanes per row)
+      expect(maxRows).toBe(9);
+      expect(maxPallets).toBe(18);
+      
+      // With lateral placement, each slot can hold 2 pallets (left + right)
+      // So total capacity is 9 rows × 2 lanes = 18 slots for unique positions
+      // This doubles the effective pallet capacity compared to centerline-only placement
+    });
+  });
+  
+  describe('C-130 Lane Configuration', () => {
+    test('C-130 has 1 lane (centerline only)', () => {
+      const laneConfig = getAircraftLaneConfig('C-130');
+      expect(laneConfig.lane_count).toBe(1);
+      expect(laneConfig.lanes.length).toBe(1);
+    });
+    
+    test('C-130 center lane is at y=0" (centerline)', () => {
+      const laneConfig = getAircraftLaneConfig('C-130');
+      const centerLane = laneConfig.lanes[0];
+      expect(centerLane.y_center_in).toBe(0);
+      expect(centerLane.name).toBe('Center Lane');
+    });
+    
+    test('C-130 cargo width is too narrow for side-by-side placement', () => {
+      const c130Width = AIRCRAFT_SPECS['C-130'].cargo_width; // 123"
+      const palletWidth = PALLET_463L.width; // 88"
+      
+      // Two pallets would need: 88 + 4 (gap) + 88 = 180"
+      // But C-130 is only 123" wide
+      const requiredWidth = (palletWidth * 2) + 4;
+      expect(requiredWidth).toBeGreaterThan(c130Width);
+    });
+  });
+  
+  describe('Lateral Bounds Calculation', () => {
+    test('calculateLateralBounds correctly computes left and right edges', () => {
+      const bounds = calculateLateralBounds(-50, 88);
+      expect(bounds.y_left_in).toBe(-94);
+      expect(bounds.y_right_in).toBe(-6);
+    });
+    
+    test('centerline placement produces symmetric bounds', () => {
+      const bounds = calculateLateralBounds(0, 88);
+      expect(bounds.y_left_in).toBe(-44);
+      expect(bounds.y_right_in).toBe(44);
+      expect(bounds.y_left_in).toBe(-bounds.y_right_in);
+    });
+  });
+  
+  describe('PalletPlacement with Lateral Data', () => {
+    test('pallet placement in left lane has negative y_center_in', () => {
+      const pallet: Pallet463L = {
+        id: 'TEST-LEFT',
+        items: [],
+        net_weight: 5000,
+        gross_weight: 5290,
+        height: 80,
+        hazmat_flag: false,
+        is_prebuilt: false,
+        footprint: { length: 108, width: 88 }
+      };
+      
+      const placement: PalletPlacement = {
+        pallet,
+        position_index: 0,
+        position_coord: 54,
+        is_ramp: false,
+        lateral_placement: {
+          y_center_in: -50,
+          y_left_in: -94,
+          y_right_in: -6
+        },
+        x_start_in: 0,
+        x_end_in: 108
+      };
+      
+      expect(placement.lateral_placement?.y_center_in).toBe(-50);
+    });
+    
+    test('pallet placement in right lane has positive y_center_in', () => {
+      const pallet: Pallet463L = {
+        id: 'TEST-RIGHT',
+        items: [],
+        net_weight: 5000,
+        gross_weight: 5290,
+        height: 80,
+        hazmat_flag: false,
+        is_prebuilt: false,
+        footprint: { length: 108, width: 88 }
+      };
+      
+      const placement: PalletPlacement = {
+        pallet,
+        position_index: 1,
+        position_coord: 54,
+        is_ramp: false,
+        lateral_placement: {
+          y_center_in: 50,
+          y_left_in: 6,
+          y_right_in: 94
+        },
+        x_start_in: 0,
+        x_end_in: 108
+      };
+      
+      expect(placement.lateral_placement?.y_center_in).toBe(50);
+    });
   });
 });

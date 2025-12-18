@@ -19,7 +19,8 @@ import {
   PalletPlacement,
   VehiclePlacement,
   PALLET_463L,
-  PAX_WEIGHT_LB
+  PAX_WEIGHT_LB,
+  SeatZone
 } from '../lib/pacafTypes';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -942,6 +943,105 @@ function Vehicle3D({
   );
 }
 
+function SeatZone3D({ 
+  seatZone, 
+  scale,
+  occupiedCount,
+  startSeatIndex
+}: { 
+  seatZone: SeatZone; 
+  scale: number;
+  occupiedCount: number;
+  startSeatIndex: number;
+}) {
+  const SEAT_WIDTH_IN = 18;
+  const SEAT_DEPTH_IN = 20;
+  const SEAT_HEIGHT_IN = 30;
+  const SEAT_SPACING_IN = 20;
+  
+  const seatWidth = SEAT_WIDTH_IN * scale;
+  const seatDepth = SEAT_DEPTH_IN * scale;
+  const seatHeight = SEAT_HEIGHT_IN * scale;
+  
+  const seats = useMemo(() => {
+    const result: { x: number; z: number; isOccupied: boolean; seatIndex: number }[] = [];
+    
+    const zoneLength = seatZone.xEndIn - seatZone.xStartIn;
+    const numSeatsLongitudinal = Math.max(1, Math.floor(zoneLength / SEAT_SPACING_IN));
+    
+    const isCenterZone = seatZone.side === 'center';
+    const numRows = isCenterZone ? 2 : 1;
+    const rowSpacing = isCenterZone ? SEAT_DEPTH_IN * scale * 1.2 : 0;
+    
+    let globalSeatIndex = startSeatIndex;
+    
+    for (let row = 0; row < numRows; row++) {
+      for (let i = 0; i < numSeatsLongitudinal; i++) {
+        const zPosition = seatZone.xStartIn + (i + 0.5) * SEAT_SPACING_IN;
+        
+        let xOffset = seatZone.yOffsetIn * scale;
+        if (isCenterZone) {
+          xOffset += (row === 0 ? -rowSpacing / 2 : rowSpacing / 2);
+        }
+        
+        const isOccupied = globalSeatIndex < occupiedCount;
+        
+        result.push({
+          x: xOffset,
+          z: zPosition * scale,
+          isOccupied,
+          seatIndex: globalSeatIndex
+        });
+        
+        globalSeatIndex++;
+      }
+    }
+    
+    return result;
+  }, [seatZone, scale, occupiedCount, startSeatIndex]);
+  
+  const unoccupiedColor = '#9ca3af';
+  const occupiedColor = '#3b82f6';
+  
+  return (
+    <group>
+      {seats.map((seat, idx) => (
+        <group key={`seat-${seatZone.id}-${idx}`} position={[seat.x, 0, seat.z]}>
+          <mesh position={[0, seatHeight / 2 + 0.02, 0]}>
+            <boxGeometry args={[seatWidth, seatHeight, seatDepth]} />
+            <meshStandardMaterial 
+              color={seat.isOccupied ? occupiedColor : unoccupiedColor}
+              emissive={seat.isOccupied ? '#1e40af' : '#4b5563'}
+              emissiveIntensity={seat.isOccupied ? 0.2 : 0.05}
+            />
+          </mesh>
+          
+          <mesh position={[0, seatHeight * 0.8 + 0.02, -seatDepth * 0.4]}>
+            <boxGeometry args={[seatWidth, seatHeight * 0.6, seatDepth * 0.15]} />
+            <meshStandardMaterial 
+              color={seat.isOccupied ? occupiedColor : unoccupiedColor}
+              emissive={seat.isOccupied ? '#1e40af' : '#4b5563'}
+              emissiveIntensity={seat.isOccupied ? 0.2 : 0.05}
+            />
+          </mesh>
+        </group>
+      ))}
+      
+      {seats.length > 0 && (
+        <Html
+          position={[seatZone.yOffsetIn * scale, seatHeight + 0.15, ((seatZone.xStartIn + seatZone.xEndIn) / 2) * scale]}
+          center
+          style={{ pointerEvents: 'none' }}
+        >
+          <div className="px-1.5 py-0.5 rounded text-[10px] bg-slate-700/80 text-slate-200 whitespace-nowrap">
+            {seatZone.name}
+          </div>
+        </Html>
+      )}
+    </group>
+  );
+}
+
 function getVerticesFromGeometry(
   geometry: THREE.BufferGeometry,
   object: THREE.Object3D
@@ -1480,6 +1580,26 @@ function Scene({
           onSelect={onSelectCargo}
         />
       ))}
+      
+      {spec.seat_zones?.map((seatZone, zoneIndex) => {
+        let startIndex = 0;
+        for (let i = 0; i < zoneIndex; i++) {
+          const prevZone = spec.seat_zones[i];
+          const prevZoneLength = prevZone.xEndIn - prevZone.xStartIn;
+          const prevSeatsPerRow = Math.max(1, Math.floor(prevZoneLength / 20));
+          const prevRows = prevZone.side === 'center' ? 2 : 1;
+          startIndex += prevSeatsPerRow * prevRows;
+        }
+        return (
+          <SeatZone3D
+            key={seatZone.id}
+            seatZone={seatZone}
+            scale={scale}
+            occupiedCount={loadPlan.pax_count || 0}
+            startSeatIndex={startIndex}
+          />
+        );
+      })}
       
       {missingPositionItems.map((vehicle, idx) => (
         <MissingPositionItem

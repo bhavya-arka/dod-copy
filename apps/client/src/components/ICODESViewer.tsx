@@ -18,7 +18,8 @@ import {
   PalletPlacement,
   VehiclePlacement,
   PALLET_463L,
-  PAX_WEIGHT_LB
+  PAX_WEIGHT_LB,
+  SeatZone
 } from '../lib/pacafTypes';
 import EditableSpreadsheet, { SpreadsheetColumn, SpreadsheetRow } from './EditableSpreadsheet';
 
@@ -208,6 +209,99 @@ function ICODESDiagram({
           ))}
         </>
       )}
+
+      {/* Seat Zone Visualization */}
+      {spec.seat_zones && spec.seat_zones.length > 0 && (() => {
+        const totalCapacity = spec.seat_zones.reduce((sum, zone) => sum + zone.capacity, 0);
+        const paxCount = loadPlan.pax_count || 0;
+        let seatsAssigned = 0;
+        const seatZoneWidth = 20 * scale;
+
+        return spec.seat_zones.map((zone, idx) => {
+          const zoneStartX = 50 + zone.xStartIn * scale;
+          const zoneLength = (zone.xEndIn - zone.xStartIn) * scale;
+          
+          let zoneY: number;
+          if (zone.side === 'left') {
+            zoneY = 50 + 2;
+          } else if (zone.side === 'right') {
+            zoneY = 50 + width - seatZoneWidth - 2;
+          } else {
+            zoneY = 50 + (width / 2) - (seatZoneWidth / 2);
+          }
+
+          const seatsForThisZone = Math.min(zone.capacity, Math.max(0, paxCount - seatsAssigned));
+          seatsAssigned += seatsForThisZone;
+          const occupancyPercent = zone.capacity > 0 ? (seatsForThisZone / zone.capacity) * 100 : 0;
+
+          const occupiedLength = (zoneLength * occupancyPercent) / 100;
+
+          const seatRowCount = Math.ceil(zone.capacity / 10);
+          const seatSpacing = zoneLength / Math.max(seatRowCount, 1);
+
+          return (
+            <g key={`seat-zone-${zone.id}`}>
+              <rect
+                x={zoneStartX}
+                y={zoneY}
+                width={zoneLength}
+                height={seatZoneWidth}
+                fill="#f1f5f9"
+                stroke="#94a3b8"
+                strokeWidth={0.5}
+                rx={2}
+                opacity={0.8}
+              />
+              
+              {occupiedLength > 0 && (
+                <rect
+                  x={zoneStartX}
+                  y={zoneY}
+                  width={occupiedLength}
+                  height={seatZoneWidth}
+                  fill="#a5b4fc"
+                  stroke="#6366f1"
+                  strokeWidth={0.5}
+                  rx={2}
+                  opacity={0.7}
+                />
+              )}
+              
+              {!compact && Array.from({ length: Math.min(seatRowCount, 8) }).map((_, seatIdx) => {
+                const seatX = zoneStartX + seatSpacing * (seatIdx + 0.5);
+                const isFilled = seatIdx < Math.ceil((seatsForThisZone / zone.capacity) * Math.min(seatRowCount, 8));
+                return (
+                  <g key={`seat-${zone.id}-${seatIdx}`}>
+                    <rect
+                      x={seatX - 3}
+                      y={zoneY + seatZoneWidth / 2 - 3}
+                      width={6}
+                      height={6}
+                      fill={isFilled ? '#6366f1' : '#e2e8f0'}
+                      stroke={isFilled ? '#4f46e5' : '#cbd5e1'}
+                      strokeWidth={0.5}
+                      rx={1}
+                    />
+                  </g>
+                );
+              })}
+              
+              {!compact && (
+                <text
+                  x={zoneStartX + zoneLength / 2}
+                  y={zone.side === 'center' ? zoneY - 4 : (zone.side === 'left' ? zoneY + seatZoneWidth + 8 : zoneY - 4)}
+                  textAnchor="middle"
+                  fill="#64748b"
+                  fontSize={7}
+                  fontWeight="500"
+                >
+                  {seatsForThisZone}/{zone.capacity}
+                </text>
+              )}
+            </g>
+          );
+        });
+      })()}
       
       {loadPlan.pallets.map((placement, idx) => {
         const xCoord = placement.x_start_in ?? placement.position_coord - PALLET_463L.length / 2;
@@ -682,6 +776,14 @@ export default function ICODESViewer({
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-0.5 bg-green-500" style={{ borderStyle: 'dashed', borderWidth: 1 }}></div>
                     <span className="text-neutral-600">Center of Balance</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-3 rounded bg-slate-100 border border-slate-400"></div>
+                    <span className="text-neutral-600">Empty Seats</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-3 rounded bg-indigo-200 border border-indigo-500"></div>
+                    <span className="text-neutral-600">Occupied Seats</span>
                   </div>
                 </div>
               </div>

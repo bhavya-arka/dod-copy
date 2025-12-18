@@ -29,7 +29,10 @@ import {
   stationToEnvelopePercent,
   FleetAvailability,
   FleetUsage,
-  AllocationShortfall
+  AllocationShortfall,
+  getAircraftLaneConfig,
+  calculateLateralBounds,
+  AircraftLaneConfig
 } from './pacafTypes';
 import { processPalletization, PalletizationResult, resetPalletCounter } from './palletizationEngine';
 import { sortByLengthDescending, sortByWeightDescending } from './classificationEngine';
@@ -964,17 +967,38 @@ function placeRollingStock(
 }
 
 // ============================================================================
-// PALLET PLACEMENT (CoB-aware bilateral placement)
+// PALLET PLACEMENT (CoB-aware bilateral placement with lateral lanes)
 // ============================================================================
 
 /**
- * CoB-aware pallet placement algorithm
+ * Slot definition for lateral lane placement
+ * Each slot represents a unique position (longitudinal row + lateral lane)
+ */
+interface LateralSlot {
+  rowIndex: number;        // Longitudinal row index (0-based)
+  laneIndex: number;       // Lateral lane index (0 = left/-50", 1 = right/+50" for C-17)
+  slotKey: string;         // Unique key: "row_lane" e.g., "0_0", "0_1", "1_0"
+  x_start: number;         // Longitudinal start position
+  y_center: number;        // Lateral center position from centerline
+  isOnRamp: boolean;       // Whether this slot is on the ramp
+}
+
+/**
+ * CoB-aware pallet placement algorithm with lateral lane support
  * 
  * Strategy per USAF T.O. 1C-17A-9:
  * 1. Receive current weight/moment state from rolling stock placement
  * 2. Calculate how to balance the load by placing pallets optimally
  * 3. Use scorePlacementPosition to find best slot for each pallet
  * 4. Heavy pallets are placed first, scored by CG deviation
+ * 5. Support lateral lanes: C-17 has 2 lanes (left/right), C-130 has 1 lane (center)
+ * 
+ * Lateral Lane Configuration:
+ * - C-17: 2 lanes at y = -50" (left) and y = +50" (right)
+ * - C-130: 1 lane at y = 0" (center)
+ * 
+ * This allows C-17 to fit up to 36 pallets (9 longitudinal rows × 2 lateral lanes)
+ * instead of the previous 18 pallets (single centerline).
  * 
  * Key insight: If rolling stock made the load nose-heavy, we need to place
  * heavy pallets more toward the aft. If tail-heavy, place forward.
@@ -1009,9 +1033,12 @@ function placePallets(
   const maxPayload = aircraftSpec.max_payload;
   const bayStart = aircraftSpec.cargo_bay_fs_start;
   
+  // Get lateral lane configuration for this aircraft type
+  const laneConfig = getAircraftLaneConfig(aircraftSpec.type);
+  const laneCount = laneConfig.lane_count;
+  
   const targetCobPercent = (aircraftSpec.cob_min_percent + aircraftSpec.cob_max_percent) / 2;
   const targetStationCG = aircraftSpec.lemac_station + (targetCobPercent / 100) * aircraftSpec.mac_length;
-  const targetSolverCG = targetStationCG - bayStart;
   
   // Calculate current CG state from rolling stock
   let currentCGPercent = targetCobPercent;
@@ -1020,21 +1047,38 @@ function placePallets(
     currentCGPercent = ((currentStationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
   }
   
-  console.log(`[PlacePallets] CoB-aware placement: currentCG=${currentCGPercent.toFixed(1)}% MAC, target=${targetCobPercent.toFixed(1)}% MAC`);
+  console.log(`[PlacePallets] CoB-aware lateral placement: ${laneCount} lanes, currentCG=${currentCGPercent.toFixed(1)}% MAC, target=${targetCobPercent.toFixed(1)}% MAC`);
 
   const usableLength = maxX - startX;
-  const maxSlots = Math.floor(usableLength / PALLET_SLOT);
+  const maxRows = Math.floor(usableLength / PALLET_SLOT);
   
-  if (maxSlots <= 0) {
+  if (maxRows <= 0) {
     unplaced.push(...pallets);
     return { placements, unplaced, nextX: startX, totalWeight: currentWeight, totalMoment: currentMoment };
   }
 
-  // Generate slot positions
-  const slotPositions: number[] = [];
-  for (let i = 0; i < maxSlots; i++) {
-    slotPositions.push(startX + i * PALLET_SLOT);
+  // Generate all available slots (longitudinal row × lateral lane combinations)
+  // For C-17: 9 rows × 2 lanes = 18 slots (but can fit 36 pallets with rows)
+  // For C-130: 4 rows × 1 lane = 4 slots
+  const allSlots: LateralSlot[] = [];
+  for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
+    const xStart = startX + rowIndex * PALLET_SLOT;
+    const isOnRamp = xStart >= (maxX - aircraftSpec.ramp_length);
+    
+    for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
+      const lane = laneConfig.lanes[laneIndex];
+      allSlots.push({
+        rowIndex,
+        laneIndex,
+        slotKey: `${rowIndex}_${laneIndex}`,
+        x_start: xStart,
+        y_center: lane.y_center_in,
+        isOnRamp
+      });
+    }
   }
+
+  console.log(`[PlacePallets] Generated ${allSlots.length} slots (${maxRows} rows × ${laneCount} lanes)`);
 
   // Sort pallets: weapons priority, then by weight (heaviest first)
   const sortedPallets = [...pallets].sort((a, b) => {
@@ -1048,26 +1092,26 @@ function placePallets(
   // Track running totals (starting from rolling stock state)
   let runningWeight = currentWeight;
   let runningMoment = currentMoment;
-  const assignedSlots: Set<number> = new Set();
+  let runningLateralMoment = 0; // Track lateral moment for balanced loading
+  const assignedSlots: Set<string> = new Set();
 
   // For each pallet, find the slot that brings CG closest to target
+  // Prioritize filling both lanes at a row before moving to next row for balanced lateral loading
   for (const pallet of sortedPallets) {
     if (runningWeight + pallet.gross_weight > maxPayload) {
       unplaced.push(pallet);
       continue;
     }
 
-    let bestSlot = -1;
+    let bestSlot: LateralSlot | null = null;
     let bestScore = Infinity;
     let bestProjectedCG = 0;
 
     // Evaluate each available slot
-    for (let slotIndex = 0; slotIndex < maxSlots; slotIndex++) {
-      if (assignedSlots.has(slotIndex)) continue;
+    for (const slot of allSlots) {
+      if (assignedSlots.has(slot.slotKey)) continue;
       
-      const slotX = slotPositions[slotIndex];
-      const isOnRamp = slotX >= (maxX - aircraftSpec.ramp_length);
-      const maxPositionWeight = isOnRamp 
+      const maxPositionWeight = slot.isOnRamp 
         ? aircraftSpec.ramp_position_weight 
         : aircraftSpec.per_position_weight;
 
@@ -1075,7 +1119,7 @@ function placePallets(
 
       // Score this slot by how close it brings CG to target
       const { score, projectedCGPercent } = scorePlacementPosition(
-        slotX,
+        slot.x_start,
         PALLET_LENGTH,
         pallet.gross_weight,
         runningMoment,
@@ -1084,40 +1128,53 @@ function placePallets(
         aircraftSpec
       );
       
-      if (score < bestScore) {
-        bestScore = score;
-        bestSlot = slotIndex;
+      // For multi-lane aircraft, add a bonus for balanced lateral loading
+      // Prefer the lane that brings lateral CG closer to 0
+      let lateralScore = 0;
+      if (laneCount > 1) {
+        const newLateralMoment = runningLateralMoment + (pallet.gross_weight * slot.y_center);
+        const newLateralCG = Math.abs(newLateralMoment / (runningWeight + pallet.gross_weight));
+        lateralScore = newLateralCG * 0.1; // Small weight for lateral balance
+      }
+      
+      const totalScore = score + lateralScore;
+      
+      if (totalScore < bestScore) {
+        bestScore = totalScore;
+        bestSlot = slot;
         bestProjectedCG = projectedCGPercent;
       }
     }
 
-    if (bestSlot !== -1) {
-      assignedSlots.add(bestSlot);
+    if (bestSlot !== null) {
+      assignedSlots.add(bestSlot.slotKey);
       
       // Update running totals
-      const slotX = slotPositions[bestSlot];
-      const arm = slotX + (PALLET_LENGTH / 2) + bayStart;
+      const arm = bestSlot.x_start + (PALLET_LENGTH / 2) + bayStart;
       runningMoment += pallet.gross_weight * arm;
       runningWeight += pallet.gross_weight;
+      runningLateralMoment += pallet.gross_weight * bestSlot.y_center;
       
-      const isOnRamp = slotX >= (maxX - aircraftSpec.ramp_length);
+      // Calculate lateral bounds for this lane position
+      const lateralBounds = calculateLateralBounds(bestSlot.y_center, PALLET_WIDTH);
       
       const placement: PalletPlacement = {
         pallet: pallet,
         position_index: placements.length,
-        position_coord: slotX + PALLET_LENGTH / 2,
-        is_ramp: isOnRamp,
+        position_coord: bestSlot.x_start + PALLET_LENGTH / 2,
+        is_ramp: bestSlot.isOnRamp,
         lateral_placement: {
-          y_center_in: 0,
-          y_left_in: -PALLET_HALF_WIDTH,
-          y_right_in: PALLET_HALF_WIDTH
+          y_center_in: bestSlot.y_center,
+          y_left_in: lateralBounds.y_left_in,
+          y_right_in: lateralBounds.y_right_in
         },
-        x_start_in: slotX,
-        x_end_in: slotX + PALLET_LENGTH
+        x_start_in: bestSlot.x_start,
+        x_end_in: bestSlot.x_start + PALLET_LENGTH
       };
 
       placements.push(placement);
-      console.log(`[PlacePallets] Placed ${pallet.id} (${pallet.gross_weight}lb) at slot ${bestSlot}, x=${slotX}", projectedCG=${bestProjectedCG.toFixed(1)}%`);
+      const laneName = laneConfig.lanes[bestSlot.laneIndex].name;
+      console.log(`[PlacePallets] Placed ${pallet.id} (${pallet.gross_weight}lb) at row ${bestSlot.rowIndex}, ${laneName} (y=${bestSlot.y_center}"), x=${bestSlot.x_start}", projectedCG=${bestProjectedCG.toFixed(1)}%`);
     } else {
       unplaced.push(pallet);
     }
@@ -1131,7 +1188,8 @@ function placePallets(
   if (runningWeight > 0) {
     const finalStationCG = runningMoment / runningWeight;
     const finalCGPercent = ((finalStationCG - aircraftSpec.lemac_station) / aircraftSpec.mac_length) * 100;
-    console.log(`[PlacePallets] Result: ${placements.length} pallets, finalCG=${finalCGPercent.toFixed(1)}% MAC, target=${targetCobPercent.toFixed(1)}% MAC`);
+    const finalLateralCG = runningLateralMoment / runningWeight;
+    console.log(`[PlacePallets] Result: ${placements.length} pallets placed (${laneCount} lanes), finalCG=${finalCGPercent.toFixed(1)}% MAC, lateralCG=${finalLateralCG.toFixed(1)}", target=${targetCobPercent.toFixed(1)}% MAC`);
   }
 
   return { 

@@ -207,6 +207,75 @@ export const PALLET_463L = {
 
 export const PAX_WEIGHT_LB = 225; // Weight per person with gear (lbs)
 
+// ============================================================================
+// LATERAL LANE DEFINITIONS FOR PALLET PLACEMENT
+// ============================================================================
+
+/**
+ * Lateral lane configuration for side-by-side pallet placement
+ * Per lateral_placement_spec - C-17 can fit 2 pallets side-by-side
+ */
+export interface LateralLane {
+  lane_index: number;       // 0-indexed lane number
+  y_center_in: number;      // Lateral center position from centerline
+  name: string;             // Human-readable name (e.g., "Left Lane", "Right Lane")
+}
+
+export interface AircraftLaneConfig {
+  lane_count: number;       // Number of lateral lanes (1 for C-130, 2 for C-17)
+  lanes: LateralLane[];     // Lane definitions
+  pallet_width_in: number;  // 463L pallet width (88")
+  min_lateral_gap_in: number; // Minimum gap between side-by-side pallets
+}
+
+/**
+ * Lane configurations per aircraft type
+ * C-17: 216" cargo width, 463L pallets are 88" wide
+ *       Two pallets fit: 88 + 4 (gap) + 88 = 180" < 216"
+ *       Lane centers at ±50" from centerline
+ * C-130: 123" cargo width, only 1 pallet lane (centerline)
+ */
+export const AIRCRAFT_LANE_CONFIGS: Record<AircraftType, AircraftLaneConfig> = {
+  'C-17': {
+    lane_count: 2,
+    lanes: [
+      { lane_index: 0, y_center_in: -50, name: 'Left Lane' },
+      { lane_index: 1, y_center_in: 50, name: 'Right Lane' }
+    ],
+    pallet_width_in: 88,
+    min_lateral_gap_in: 4
+  },
+  'C-130': {
+    lane_count: 1,
+    lanes: [
+      { lane_index: 0, y_center_in: 0, name: 'Center Lane' }
+    ],
+    pallet_width_in: 88,
+    min_lateral_gap_in: 0
+  }
+};
+
+/**
+ * Get lane configuration for an aircraft type
+ */
+export function getAircraftLaneConfig(aircraftType: AircraftType): AircraftLaneConfig {
+  return AIRCRAFT_LANE_CONFIGS[aircraftType];
+}
+
+/**
+ * Calculate lateral placement bounds for a pallet in a specific lane
+ */
+export function calculateLateralBounds(
+  y_center_in: number,
+  pallet_width_in: number = PALLET_463L.width
+): { y_left_in: number; y_right_in: number } {
+  const halfWidth = pallet_width_in / 2;
+  return {
+    y_left_in: y_center_in - halfWidth,
+    y_right_in: y_center_in + halfWidth
+  };
+}
+
 export interface Pallet463L {
   id: string;
   items: MovementItem[];
