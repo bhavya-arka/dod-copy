@@ -92,3 +92,49 @@ Flight plans are persisted via `/api/flight-plans`:
 - Spacing: `gap-4` to `gap-6`
 - Modals: `fixed inset-0 flex items-center justify-center` with `max-h-screen overflow-y-auto`
 - Sidebars on mobile: `max-h-[50vh]` with `overflow-y-auto`
+
+## Layout Hierarchy (Updated Dec 2024)
+- Root App: `flex flex-col min-h-screen bg-gray-50`
+- Main content: `flex-1 overflow-y-auto overflow-x-hidden`
+- Container inside main: `container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-7xl` - **only ONE container level**
+- No nested containers with conflicting max-widths
+
+# AI Insights Configuration
+
+## AWS Bedrock Setup
+The AI insights system uses AWS Bedrock with Nova Lite model. All configuration is via environment variables:
+
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `AWS_REGION` | AWS region for Bedrock | `us-east-2` |
+| `AWS_ACCESS_KEY_ID` | AWS access key | (required) |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret key | (required) |
+| `AWS_BEDROCK_KNOWLEDGE_BASE_ID` | KB ID for retrieval | (optional) |
+| `AWS_BEDROCK_MODEL_ID` | Model to use | `us.amazon.nova-lite-v1:0` |
+| `AI_RATE_LIMIT_PER_MINUTE` | Max requests/min | `10` |
+| `AI_RATE_LIMIT_PER_HOUR` | Max requests/hour | `100` |
+
+## Insight Types
+- `allocation_summary`: Overview of cargo allocation
+- `cob_analysis`: Center of balance analysis
+- `pallet_review`: Pallet loading efficiency
+- `route_planning`: Route optimization
+- `compliance`: Regulatory compliance checks
+- `mission_briefing`: Executive summary
+
+## Debug Logging
+All AI operations include debug logging with prefixes:
+- Server: `[Bedrock:DEBUG]`, `[Bedrock:ERROR]`, `[Bedrock:CONFIG]`
+- Client: `[AiInsights:DEBUG]`, `[AiInsights:ERROR]`
+
+# Recent Changes (Dec 2024)
+
+## Layout Fixes
+- Fixed MissionWorkspace layout with proper flex hierarchy and overflow handling
+- Fixed AnalyticsPanel layout - removed conflicting container classes
+- Added `overflow-x-hidden` to prevent horizontal scroll
+
+## AI Insights Improvements
+- Added comprehensive debug logging throughout the AI pipeline
+- Made model ID and rate limits configurable via environment variables
+- Added input validation for rate limit configuration with safe defaults
