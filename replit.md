@@ -151,6 +151,15 @@ The AI insights system uses AWS Bedrock with Nova Lite model. All configuration 
 - `route_planning`: Route optimization
 - `compliance`: Regulatory compliance checks
 - `mission_briefing`: Executive summary
+- `mission_analytics`: Comprehensive analytics with performance metrics and actionable advice (NEW)
+
+### Mission Analytics JSON Output Structure
+The `mission_analytics` insight type returns structured JSON with:
+- `mission_summary`: Aircraft breakdown, pallet counts, total weight, PAX
+- `route_details`: Per-flight origin/destination, distance, cargo weight
+- `performance_metrics`: Utilization %, CoB %, efficiency grade (A-D)
+- `advice_messages`: Priority-tagged recommendations with category and action
+- `risk_assessment`: Overall risk level, factors, mitigation notes
 
 ## Debug Logging
 All AI operations include debug logging with prefixes:
