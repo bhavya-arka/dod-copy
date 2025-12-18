@@ -102,7 +102,7 @@ export default function AnalyticsPanel({ onSaveConfiguration }: AnalyticsPanelPr
   }, [selectedAircraftId, mission.fuelBreakdown]);
 
   const cargoTypeData = useMemo(() => {
-    if (!mission.allocationResult) return [];
+    if (!mission.allocationResult) return [] as { name: string; value: number; color: string }[];
     const plans = mission.allocationResult.load_plans;
     
     let palletWeight = 0;
@@ -115,7 +115,7 @@ export default function AnalyticsPanel({ onSaveConfiguration }: AnalyticsPanelPr
       paxWeight += plan.pax_weight || 0;
     }
     
-    const data = [];
+    const data: { name: string; value: number; color: string }[] = [];
     if (palletWeight > 0) data.push({ name: 'Palletized', value: palletWeight, color: '#3b82f6' });
     if (rollingStockWeight > 0) data.push({ name: 'Rolling Stock', value: rollingStockWeight, color: '#10b981' });
     if (paxWeight > 0) data.push({ name: 'PAX Weight', value: paxWeight, color: '#f59e0b' });
@@ -152,8 +152,8 @@ export default function AnalyticsPanel({ onSaveConfiguration }: AnalyticsPanelPr
   }, [mission.allocationResult]);
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl py-6 sm:py-8">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <h2 className="section-title">Mission Analytics</h2>
         <div className="flex items-center space-x-3">
           <button
