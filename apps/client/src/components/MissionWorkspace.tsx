@@ -623,8 +623,8 @@ export default function MissionWorkspace({
         onPlanStatusChange={onPlanStatusChange}
       />
 
-      <main className="flex-1 overflow-y-auto pb-8">
-        <div className="container mx-auto max-w-7xl">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-7xl">
           <AnimatePresence mode="wait">
             <motion.div
               key={mission.currentTab}

@@ -1,0 +1,156 @@
+SPEC SHEET — Tailwind Refactor for SPA with Nested Components
+🧱 Objective
+
+Refactor the entire SPA’s styling system to ensure:
+
+100% responsive layout across breakpoints.
+
+Proper scrolling and viewport management.
+
+Predictable nesting and containment behavior.
+
+Consistent Tailwind design tokens and spacing rules.
+
+⚙️ Core Layout Principles
+
+Root Container (App-level):
+
+Use flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100.
+
+All views should sit inside a main element with:
+
+<main className="flex-1 overflow-y-auto overflow-x-hidden container mx-auto px-4 py-6 max-w-7xl">
+
+
+Prevent horizontal scrolling globally:
+body { overflow-x: hidden; }
+
+Scroll Control:
+
+Only the main content region should scroll (overflow-y-auto).
+
+Sidebars, headers, and footers must be sticky or fixed if persistent.
+
+Avoid multiple scroll containers nested inside each other unless necessary.
+
+Component Nesting Rules:
+
+Parent containers manage spacing; children should not add extra outer margin.
+
+Use gap-4 or gap-6 consistently for spacing between child components.
+
+Nesting hierarchy should look like:
+
+App
+├── Layout (Navbar, Sidebar, Footer)
+│    ├── Header
+│    ├── Sidebar
+│    └── Main
+│          ├── PageSection
+│          │     ├── Card
+│          │     │     ├── Component (Chart/Table/Form)
+
+
+Each level defines:
+
+Layout spacing: gap, flex/grid alignment
+
+Content bounds: padding, width limits
+
+Scroll policy: overflow and height behavior
+
+📱 Responsiveness Guidelines
+
+Breakpoint Usage
+
+Use Tailwind prefixes:
+sm: (≥640px), md: (≥768px), lg: (≥1024px), xl: (≥1280px).
+
+Ensure no horizontal scroll at any breakpoint.
+
+Text should resize gracefully (text-sm md:text-base lg:text-lg).
+
+Use responsive grids:
+
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+
+Adaptive Components
+
+Cards: rounded-2xl shadow-md bg-white dark:bg-gray-800 p-6 w-full
+
+Tables: overflow-x-auto rounded-lg
+
+Modals: fixed inset-0 flex items-center justify-center overflow-y-auto
+
+Navigation
+
+Sidebar collapses into a top navigation drawer below md.
+
+Mobile menus use absolute z-50 with backdrop support.
+
+🧩 Reusable Component Rules
+Component Type	Layout Rules	Responsiveness Notes
+Card	flex flex-col rounded-2xl bg-white dark:bg-gray-800 p-4 shadow	Width w-full, max-width optional
+Form	flex flex-col gap-4	Use w-full md:w-1/2 for side-by-side layouts
+Table	w-full overflow-x-auto	Use min-w-max if many columns
+Chart	relative h-64 md:h-80	Ensure parent has overflow-hidden
+Modal	fixed inset-0 z-50 flex items-center justify-center	Add max-h-screen overflow-y-auto
+Button	px-4 py-2 rounded-lg font-semibold transition hover:scale-105	Color via Tailwind variants
+Section Header	text-xl md:text-2xl font-bold mb-4	Responsive typography
+🧭 Routing & SPA Considerations
+
+Page Transitions
+
+Use framer-motion or CSS transitions on route changes:
+
+<motion.main initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+
+
+Avoid re-mounting fixed components like Navbars.
+
+Dynamic Content Loading
+
+Wrap all pages in a <Suspense> boundary or equivalent loader with:
+
+<div className="flex justify-center items-center min-h-[50vh]">
+
+
+Ensure skeleton loaders respect w-full and h-auto.
+
+Error Boundaries / Empty States
+
+Use centered messages with responsive padding:
+flex flex-col items-center justify-center py-16 text-gray-500
+
+🧰 Refactor Steps for the Builder
+
+Identify layout roots (App, Layout, MainContainer).
+
+Normalize all nested containers:
+
+Replace inline or custom CSS with Tailwind classes.
+
+Remove conflicting h-screen and fixed heights unless part of a layout shell.
+
+Test every route for:
+
+No horizontal scroll.
+
+Correct vertical scroll area.
+
+Proper spacing across components.
+
+Standardize component imports and reuse layouts where possible.
+
+✅ Final Deliverables
+
+A fully responsive, scroll-safe, and visually consistent SPA.
+
+All layout and styling refactored into Tailwind utilities.
+
+No element overflows the viewport.
+
+Component nesting follows consistent spacing, alignment, and containment logic.
+
+Documented reusable layout components (e.g., PageContainer, Card, SectionWrapper
