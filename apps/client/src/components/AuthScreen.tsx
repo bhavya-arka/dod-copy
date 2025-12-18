@@ -50,12 +50,14 @@ export default function AuthScreen({ onLogin, onRegister }: AuthScreenProps) {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 gradient-mesh flex items-center justify-center p-4 sm:p-8 overflow-auto">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
-      >
+    <div className="min-h-screen bg-neutral-50 gradient-mesh flex flex-col">
+      <div className="flex-1 flex items-center justify-center overflow-y-auto py-8 px-4 sm:px-6 lg:px-8">
+        <div className="container mx-auto max-w-7xl flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-md"
+          >
         <div className="text-center mb-6 sm:mb-8">
           <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 bg-primary rounded-2xl flex items-center justify-center shadow-glass">
             <span className="text-white font-bold text-xl sm:text-2xl">A</span>
@@ -168,6 +170,8 @@ export default function AuthScreen({ onLogin, onRegister }: AuthScreenProps) {
           Secure military cargo planning and airlift coordination
         </p>
       </motion.div>
+        </div>
+      </div>
     </div>
   );
 }

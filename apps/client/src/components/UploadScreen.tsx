@@ -134,8 +134,8 @@ export default function UploadScreen({
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 gradient-mesh flex flex-col overflow-auto">
-      <header className="p-4 sm:p-6 flex justify-between items-center border-b border-neutral-200/50">
+    <div className="min-h-screen bg-neutral-50 gradient-mesh flex flex-col">
+      <header className="p-4 sm:p-6 flex justify-between items-center border-b border-neutral-200/50 shrink-0">
         <div className="flex items-center gap-3 sm:gap-4">
           <div className="w-9 h-9 sm:w-10 sm:h-10 bg-primary rounded-xl flex items-center justify-center shadow-soft shrink-0">
             <span className="text-white font-bold text-lg sm:text-xl">A</span>
@@ -150,8 +150,9 @@ export default function UploadScreen({
         </div>
       </header>
 
-      <main className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
-        <div className="max-w-2xl w-full space-y-6 sm:space-y-8">
+      <main className="flex-1 flex items-center justify-center overflow-y-auto py-8 px-4">
+        <div className="container mx-auto max-w-7xl flex items-center justify-center">
+          <div className="max-w-2xl w-full max-w-full space-y-6 sm:space-y-8">
           <motion.div
             className="text-center"
             initial={{ opacity: 0, y: -20 }}
@@ -317,6 +318,7 @@ export default function UploadScreen({
               </button>
             </p>
           </div>
+          </div>
         </div>
       </main>
 
@@ -329,7 +331,7 @@ export default function UploadScreen({
         )}
       </AnimatePresence>
 
-      <footer className="p-4 border-t border-neutral-200/50 text-center">
+      <footer className="p-4 border-t border-neutral-200/50 text-center shrink-0">
         <p className="text-neutral-400 text-sm">
           Arka Cargo Operations • For demonstration purposes only
         </p>

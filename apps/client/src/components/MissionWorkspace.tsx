@@ -437,7 +437,7 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
   };
 
   return (
-    <div className="bg-neutral-50 gradient-mesh">
+    <div className="min-h-screen bg-neutral-50 gradient-mesh flex flex-col">
       <MissionNavbar 
         onDashboard={handleNavigateAway} 
         showTabs={true} 
@@ -445,18 +445,21 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
         onPlanStatusChange={onPlanStatusChange}
       />
       
-      <main className="pb-8">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={mission.currentTab}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
-          >
-            {renderTabContent()}
-          </motion.div>
-        </AnimatePresence>
+      <main className="flex-1 overflow-y-auto">
+        <div className="container mx-auto px-4 max-w-7xl py-8">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={mission.currentTab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-full"
+            >
+              {renderTabContent()}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </main>
     </div>
   );

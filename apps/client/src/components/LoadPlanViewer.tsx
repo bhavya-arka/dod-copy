@@ -335,7 +335,7 @@ export default function LoadPlanViewer({
   const wrappedOnLogout = onLogout ? () => interceptNavigation(onLogout) : undefined;
 
   return (
-    <div className={hideNavigation ? "" : "bg-neutral-50 gradient-mesh"}>
+    <div className={hideNavigation ? "flex flex-col" : "min-h-screen bg-neutral-50 gradient-mesh flex flex-col"}>
       <UnsavedChangesModal
         isOpen={showUnsavedModal}
         onNavigateAnyway={handleNavigateAnyway}
@@ -557,8 +557,8 @@ export default function LoadPlanViewer({
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row">
-        <aside className="w-full lg:w-72 border-b lg:border-b-0 lg:border-r border-neutral-200/50 bg-white/50 backdrop-blur-sm flex-shrink-0">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        <aside className="w-full lg:w-72 border-b lg:border-b-0 lg:border-r border-neutral-200/50 bg-white/50 backdrop-blur-sm flex-shrink-0 lg:overflow-y-auto lg:max-h-[calc(100vh-64px)]">
           <div className="p-4 border-b border-neutral-200/50">
             <div className="flex space-x-1 bg-neutral-100 rounded-xl p-1">
               {[
@@ -619,13 +619,13 @@ export default function LoadPlanViewer({
           </div>
         </aside>
 
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto max-h-[calc(100vh-64px)]">
           {currentSelectedPlan ? (
             <motion.div
               key={`${currentSelectedPlan.aircraft_id}-${viewMode}`}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="space-y-6"
+              className="space-y-4 sm:space-y-6 w-full max-w-full"
             >
               {viewMode === '2d' ? (
                 <ICODESViewer loadPlan={currentSelectedPlan} />
@@ -639,13 +639,13 @@ export default function LoadPlanViewer({
                 </Suspense>
               )}
 
-              <div className="grid grid-cols-2 gap-6">
-                <div className="glass-card p-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <div className="glass-card p-4 w-full max-w-full">
                   <h3 className="text-neutral-900 font-bold mb-4">
                     Pallet Manifest
                     {isEditing && <span className="ml-2 text-sm font-normal text-amber-600">(Click to edit)</span>}
                   </h3>
-                  <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin">
+                  <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto scrollbar-thin">
                     {currentSelectedPlan.pallets.map(p => {
                       const itemCount = p.pallet.items?.length || 0;
                       const primaryDesc = itemCount > 0 ? p.pallet.items[0].description : p.pallet.id;
@@ -740,12 +740,12 @@ export default function LoadPlanViewer({
                   </div>
                 </div>
 
-                <div className="glass-card p-4">
+                <div className="glass-card p-4 w-full max-w-full">
                   <h3 className="text-neutral-900 font-bold mb-4">
                     Rolling Stock
                     {isEditing && <span className="ml-2 text-sm font-normal text-amber-600">(Click to edit)</span>}
                   </h3>
-                  <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin">
+                  <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto scrollbar-thin">
                     {currentSelectedPlan.rolling_stock.map(v => (
                       <div
                         key={String(v.item_id)}
@@ -806,9 +806,9 @@ export default function LoadPlanViewer({
                 </div>
               </div>
 
-              <div className="glass-card p-4">
+              <div className="glass-card p-4 w-full max-w-full">
                 <h3 className="text-neutral-900 font-bold mb-4">Load Summary</h3>
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                   <div className="stat-card">
                     <p className="stat-label">Total Weight</p>
                     <p className="stat-value text-xl">
@@ -843,7 +843,7 @@ export default function LoadPlanViewer({
           )}
         </main>
 
-        <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-neutral-200/50 bg-white/50 backdrop-blur-sm p-4">
+        <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-neutral-200/50 bg-white/50 backdrop-blur-sm p-4 lg:overflow-y-auto lg:max-h-[calc(100vh-64px)] shrink-0">
           <h2 className="text-neutral-900 font-bold mb-4">AI Insights</h2>
           
           <div className="space-y-3">

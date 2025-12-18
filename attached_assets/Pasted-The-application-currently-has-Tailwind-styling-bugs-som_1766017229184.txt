@@ -1,0 +1,62 @@
+The application currently has Tailwind styling bugs — some components don’t scroll properly, while others overflow off-screen on smaller viewports.
+
+I need you to go through the entire project and refactor all styling to enforce a consistent, responsive layout system.
+
+Apply these strict design and styling rules globally:
+
+Container Rules:
+
+Use container mx-auto px-4 for page-level wrappers.
+
+Max width: max-w-7xl.
+
+All pages should have vertical padding (py-8 or more).
+
+Flex & Grid Layouts:
+
+Always use flex flex-col for main vertical layouts.
+
+Avoid fixed heights unless absolutely necessary — prefer min-h-screen for full-height pages.
+
+Use overflow-y-auto or overflow-x-auto for scrollable sections.
+
+Responsive Rules:
+
+Use Tailwind responsive prefixes (sm:, md:, lg:, xl:) to make all layouts adaptive.
+
+No horizontal overflow on mobile. Ensure all components fit within w-full or max-w-full.
+
+Text and spacing should scale down gracefully on smaller screens.
+
+Scroll Behavior:
+
+Any component or section that can overflow vertically must include overflow-y-auto and max-h-[calc(100vh-<header/footer heights>)] if needed.
+
+Ensure no double-scrollbars appear on mobile.
+
+Component Boundaries:
+
+Use consistent spacing between components (gap-4 to gap-6).
+
+Buttons, cards, modals, tables, and forms should all stay within the viewport.
+
+For modals and dialogs, use fixed inset-0 flex items-center justify-center and max-h-screen overflow-y-auto.
+
+Typography and Padding:
+
+Use Tailwind typography scale (text-base, text-lg, etc.) — no inline styles.
+
+Use p-4, p-6, or p-8 consistently for internal padding.
+
+General Rules:
+
+Replace any hard-coded CSS with Tailwind utility classes.
+
+Check every page and component for overflow or responsiveness issues.
+
+Test layouts for sm, md, and lg breakpoints.
+
+Goal:
+Refactor the entire app’s Tailwind styling to follow these rules, ensuring full responsiveness and no scroll/overflow issues.
+
+Start by listing the files you’ll modify, then apply changes systematically. If you detect structural layout issues, fix them too (e.g., wrapping content in proper containers or adjusting flex/grid structure).
