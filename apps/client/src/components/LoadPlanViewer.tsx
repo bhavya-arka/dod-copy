@@ -698,10 +698,10 @@ export default function LoadPlanViewer({
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-neutral-500">
-                    {plan.pallets.length} pallets
+                    {plan.pallets.length} PLT{plan.rolling_stock.length > 0 ? `, ${plan.rolling_stock.length} RS` : ''}
                   </span>
                   <span className="text-neutral-500">
-                    {Math.round(plan.payload_used_percent)}%
+                    {plan.total_weight.toLocaleString()} lb
                   </span>
                 </div>
                 <div className="mt-2 h-1.5 bg-neutral-200 rounded-full overflow-hidden">
