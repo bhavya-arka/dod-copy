@@ -334,20 +334,15 @@ export default function LoadPlanViewer({
   const wrappedOnHome = onHome ? () => interceptNavigation(onHome) : undefined;
   const wrappedOnLogout = onLogout ? () => interceptNavigation(onLogout) : undefined;
 
-  // When embedded (hideNavigation=true), don't add extra wrappers that conflict with parent layout
-  const containerClass = hideNavigation 
-    ? "" 
-    : "min-h-screen bg-neutral-50 gradient-mesh";
-
   return (
-    <div className={containerClass}>
+    <div className={hideNavigation ? "" : "bg-neutral-50 gradient-mesh"}>
       <UnsavedChangesModal
         isOpen={showUnsavedModal}
         onNavigateAnyway={handleNavigateAnyway}
         onGoBack={handleGoBackToEditing}
       />
 
-      <header className="p-3 border-b border-neutral-200/50 flex justify-between items-center bg-white/80 backdrop-blur-xl sticky top-0 z-10 shadow-soft">
+      <header className="p-3 border-b border-neutral-200/50 flex justify-between items-center bg-white/80 backdrop-blur-xl z-10 shadow-soft">
         <div className="flex items-center space-x-3">
           {wrappedOnDashboard && (
             <button
@@ -562,7 +557,7 @@ export default function LoadPlanViewer({
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row min-h-[600px]">
+      <div className="flex flex-col lg:flex-row">
         <aside className="w-full lg:w-72 border-b lg:border-b-0 lg:border-r border-neutral-200/50 bg-white/50 backdrop-blur-sm flex-shrink-0">
           <div className="p-4 border-b border-neutral-200/50">
             <div className="flex space-x-1 bg-neutral-100 rounded-xl p-1">

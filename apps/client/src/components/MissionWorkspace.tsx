@@ -437,7 +437,7 @@ export default function MissionWorkspace({ onBack, onHome, onDashboard, loadedPl
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 gradient-mesh overflow-y-auto">
+    <div className="bg-neutral-50 gradient-mesh">
       <MissionNavbar 
         onDashboard={handleNavigateAway} 
         showTabs={true} 
