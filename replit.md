@@ -99,6 +99,33 @@ Flight plans are persisted via `/api/flight-plans`:
 - Container inside main: `container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-7xl` - **only ONE container level**
 - No nested containers with conflicting max-widths
 
+## SPA Component Pattern (CRITICAL)
+**Dashboard components must be "naked" - NO padding/margins on root elements!**
+
+The parent container controls all spacing. Child components should expose full-width, full-height surfaces.
+
+### Correct Pattern:
+```tsx
+// Dashboard component root - NAKED (no padding/margins)
+<div className="flex flex-col gap-6 h-full">
+  <header>...</header>
+  <div className="glass-card p-6">...</div>  // Cards have internal padding
+</div>
+```
+
+### Wrong Pattern:
+```tsx
+// DON'T add padding to dashboard component roots
+<div className="p-4 sm:p-6 lg:p-8 space-y-6">  // BAD - causes squishing
+  ...
+</div>
+```
+
+### Why This Matters:
+- Parent dashboard/container already provides uniform spacing via padding/gap
+- Adding padding to child components causes double-spacing and uneven appearance
+- Components get "squished" when loaded into dashboard containers
+
 # AI Insights Configuration
 
 ## AWS Bedrock Setup

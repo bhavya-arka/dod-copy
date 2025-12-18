@@ -257,8 +257,8 @@ export default function MissionWorkspace({
 
       case "manifest":
         return (
-          <div className="p-4 sm:p-6 lg:p-8">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <div className="flex flex-col gap-6 h-full">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <h2 className="section-title text-xl sm:text-2xl">
                 Movement Manifest
               </h2>
@@ -385,7 +385,7 @@ export default function MissionWorkspace({
             )}
 
             {mission.classifiedItems && (
-              <div className="mt-4 flex items-center justify-between">
+              <div className="flex items-center justify-between">
                 <div className="text-neutral-500 text-sm">
                   Total items:{" "}
                   {
@@ -415,8 +415,8 @@ export default function MissionWorkspace({
 
       case "schedules":
         return (
-          <div className="p-4 sm:p-6 lg:p-8">
-            <h2 className="section-title text-xl sm:text-2xl mb-4 sm:mb-6">
+          <div className="flex flex-col gap-6 h-full">
+            <h2 className="section-title text-xl sm:text-2xl">
               Flight Schedules
             </h2>
             <div className="glass-card p-4 sm:p-6">
@@ -487,8 +487,8 @@ export default function MissionWorkspace({
             : [];
 
         return (
-          <div className="p-4 sm:p-6 lg:p-8">
-            <h2 className="section-title text-xl sm:text-2xl mb-4 sm:mb-6">
+          <div className="flex flex-col gap-6 h-full">
+            <h2 className="section-title text-xl sm:text-2xl">
               Weather at Bases
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
