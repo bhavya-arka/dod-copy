@@ -211,7 +211,7 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
         ],
         preferredType: 'C17',
         mixedFleetMode: 'PREFERRED_FIRST',
-        preferenceStrength: 100
+        preferenceStrength: 0.5
       };
       const allocation = solveAircraftAllocation(classified, fleet);
 
