@@ -1,31 +1,34 @@
 /**
  * PACAF Airlift Demo - Load Plan Viewer
  * Spec Reference: Sections 10, 12
- * 
+ *
  * Displays detailed ICODES-style load plans for all aircraft.
  * Supports both 2D ICODES diagrams and interactive 3D visualization.
  * Updated with minimalist glass UI design and manifest editing functionality.
  */
 
-import React, { useState, Suspense, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, Suspense, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AllocationResult,
   AircraftLoadPlan,
   InsightsSummary,
   PalletPlacement,
-  VehiclePlacement
-} from '../lib/pacafTypes';
-import ICODESViewer from './ICODESViewer';
-import LoadPlan3DViewer from './LoadPlan3DViewer';
-import { exportLoadPlansToPDF, exportSingleLoadPlanToPDF } from '../lib/pdfExport';
-import { 
-  downloadAllICODESPlans, 
-  downloadA2IBundle, 
+  VehiclePlacement,
+} from "../lib/pacafTypes";
+import ICODESViewer from "./ICODESViewer";
+import LoadPlan3DViewer from "./LoadPlan3DViewer";
+import {
+  exportLoadPlansToPDF,
+  exportSingleLoadPlanToPDF,
+} from "../lib/pdfExport";
+import {
+  downloadAllICODESPlans,
+  downloadA2IBundle,
   generateA2IBundle,
-  downloadManifestCSV
-} from '../lib/icodesExport';
-import { generateWhyThisManyAircraft } from '../lib/explanationEngine';
+  downloadManifestCSV,
+} from "../lib/icodesExport";
+import { generateWhyThisManyAircraft } from "../lib/explanationEngine";
 
 interface LoadPlanViewerProps {
   allocationResult: AllocationResult;
@@ -43,7 +46,7 @@ interface LoadPlanViewerProps {
   onAllocationUpdate?: (updated: AllocationResult) => void;
 }
 
-type ViewMode = '2d' | '3d';
+type ViewMode = "2d" | "3d";
 
 interface UnsavedChangesModalProps {
   isOpen: boolean;
@@ -51,7 +54,11 @@ interface UnsavedChangesModalProps {
   onGoBack: () => void;
 }
 
-function UnsavedChangesModal({ isOpen, onNavigateAnyway, onGoBack }: UnsavedChangesModalProps) {
+function UnsavedChangesModal({
+  isOpen,
+  onNavigateAnyway,
+  onGoBack,
+}: UnsavedChangesModalProps) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -70,7 +77,9 @@ function UnsavedChangesModal({ isOpen, onNavigateAnyway, onGoBack }: UnsavedChan
             className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md"
           >
             <div className="glass-card p-6 shadow-glass-lg">
-              <h3 className="text-lg font-bold text-neutral-900 mb-2">Unsaved Changes</h3>
+              <h3 className="text-lg font-bold text-neutral-900 mb-2">
+                Unsaved Changes
+              </h3>
               <p className="text-neutral-600 mb-6">
                 You have unsaved changes that will be lost.
               </p>
@@ -109,44 +118,54 @@ export default function LoadPlanViewer({
   userEmail,
   hideNavigation = false,
   flightPlanId,
-  onAllocationUpdate
+  onAllocationUpdate,
 }: LoadPlanViewerProps) {
   const [selectedPlan, setSelectedPlan] = useState<AircraftLoadPlan | null>(
-    allocationResult.load_plans[0] || null
+    allocationResult.load_plans[0] || null,
   );
-  const [activeTab, setActiveTab] = useState<'advon' | 'main' | 'all'>('all');
-  const [viewMode, setViewMode] = useState<ViewMode>('2d');
+  const [activeTab, setActiveTab] = useState<"advon" | "main" | "all">("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("2d");
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [editedAllocation, setEditedAllocation] = useState<AllocationResult>(allocationResult);
+  const [editedAllocation, setEditedAllocation] =
+    useState<AllocationResult>(allocationResult);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
+  const [pendingNavigation, setPendingNavigation] = useState<
+    (() => void) | null
+  >(null);
 
-  const advonPlans = (isEditing ? editedAllocation : allocationResult).load_plans.filter(p => p.phase === 'ADVON');
-  const mainPlans = (isEditing ? editedAllocation : allocationResult).load_plans.filter(p => p.phase === 'MAIN');
+  const advonPlans = (
+    isEditing ? editedAllocation : allocationResult
+  ).load_plans.filter((p) => p.phase === "ADVON");
+  const mainPlans = (
+    isEditing ? editedAllocation : allocationResult
+  ).load_plans.filter((p) => p.phase === "MAIN");
 
-  const displayedPlans = activeTab === 'advon' 
-    ? advonPlans 
-    : activeTab === 'main' 
-      ? mainPlans 
-      : (isEditing ? editedAllocation : allocationResult).load_plans;
+  const displayedPlans =
+    activeTab === "advon"
+      ? advonPlans
+      : activeTab === "main"
+        ? mainPlans
+        : (isEditing ? editedAllocation : allocationResult).load_plans;
 
-  const currentSelectedPlan = isEditing 
-    ? editedAllocation.load_plans.find(p => p.aircraft_id === selectedPlan?.aircraft_id) || null
+  const currentSelectedPlan = isEditing
+    ? editedAllocation.load_plans.find(
+        (p) => p.aircraft_id === selectedPlan?.aircraft_id,
+      ) || null
     : selectedPlan;
 
   const handleExportPDF = () => {
     exportLoadPlansToPDF(allocationResult, insights, {
       includeInsights: true,
       includeDetailedManifest: true,
-      title: 'PACAF Load Plan Report'
+      title: "PACAF Load Plan Report",
     });
   };
 
@@ -193,7 +212,7 @@ export default function LoadPlanViewer({
 
   const handleSave = async () => {
     if (!flightPlanId) {
-      setSaveError('Cannot save: No flight plan ID available');
+      setSaveError("Cannot save: No flight plan ID available");
       return;
     }
 
@@ -202,19 +221,19 @@ export default function LoadPlanViewer({
 
     try {
       const response = await fetch(`/api/flight-plans/${flightPlanId}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        credentials: 'include',
+        credentials: "include",
         body: JSON.stringify({
-          allocation_data: editedAllocation
+          allocation_data: editedAllocation,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to save changes');
+        throw new Error(errorData.error || "Failed to save changes");
       }
 
       setSaveSuccess(true);
@@ -227,90 +246,127 @@ export default function LoadPlanViewer({
 
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Failed to save changes');
+      setSaveError(
+        error instanceof Error ? error.message : "Failed to save changes",
+      );
     } finally {
       setIsSaving(false);
     }
   };
 
-  const updatePalletField = useCallback((
-    aircraftId: string, 
-    palletId: string, 
-    field: 'weight' | 'description', 
-    value: string | number
-  ) => {
-    setEditedAllocation(prev => {
-      const newAllocation = JSON.parse(JSON.stringify(prev)) as AllocationResult;
-      const plan = newAllocation.load_plans.find(p => p.aircraft_id === aircraftId);
-      if (plan) {
-        const palletPlacement = plan.pallets.find(p => p.pallet.id === palletId);
-        if (palletPlacement) {
-          if (field === 'weight') {
-            const newWeight = typeof value === 'string' ? parseFloat(value) || 0 : value;
-            palletPlacement.pallet.gross_weight = newWeight;
-            palletPlacement.pallet.net_weight = newWeight - 355;
-          } else if (field === 'description' && palletPlacement.pallet.items && palletPlacement.pallet.items.length > 0) {
-            palletPlacement.pallet.items[0].description = value as string;
+  const updatePalletField = useCallback(
+    (
+      aircraftId: string,
+      palletId: string,
+      field: "weight" | "description",
+      value: string | number,
+    ) => {
+      setEditedAllocation((prev) => {
+        const newAllocation = JSON.parse(
+          JSON.stringify(prev),
+        ) as AllocationResult;
+        const plan = newAllocation.load_plans.find(
+          (p) => p.aircraft_id === aircraftId,
+        );
+        if (plan) {
+          const palletPlacement = plan.pallets.find(
+            (p) => p.pallet.id === palletId,
+          );
+          if (palletPlacement) {
+            if (field === "weight") {
+              const newWeight =
+                typeof value === "string" ? parseFloat(value) || 0 : value;
+              palletPlacement.pallet.gross_weight = newWeight;
+              palletPlacement.pallet.net_weight = newWeight - 355;
+            } else if (
+              field === "description" &&
+              palletPlacement.pallet.items &&
+              palletPlacement.pallet.items.length > 0
+            ) {
+              palletPlacement.pallet.items[0].description = value as string;
+            }
           }
         }
-      }
-      return newAllocation;
-    });
-    setHasUnsavedChanges(true);
-  }, []);
+        return newAllocation;
+      });
+      setHasUnsavedChanges(true);
+    },
+    [],
+  );
 
-  const updateVehicleField = useCallback((
-    aircraftId: string, 
-    itemId: string | number, 
-    field: 'weight' | 'description', 
-    value: string | number
-  ) => {
-    setEditedAllocation(prev => {
-      const newAllocation = JSON.parse(JSON.stringify(prev)) as AllocationResult;
-      const plan = newAllocation.load_plans.find(p => p.aircraft_id === aircraftId);
-      if (plan) {
-        const vehicle = plan.rolling_stock.find(v => String(v.item_id) === String(itemId));
-        if (vehicle) {
-          if (field === 'weight') {
-            vehicle.weight = typeof value === 'string' ? parseFloat(value) || 0 : value;
-          } else if (field === 'description') {
-            vehicle.item.description = value as string;
+  const updateVehicleField = useCallback(
+    (
+      aircraftId: string,
+      itemId: string | number,
+      field: "weight" | "description",
+      value: string | number,
+    ) => {
+      setEditedAllocation((prev) => {
+        const newAllocation = JSON.parse(
+          JSON.stringify(prev),
+        ) as AllocationResult;
+        const plan = newAllocation.load_plans.find(
+          (p) => p.aircraft_id === aircraftId,
+        );
+        if (plan) {
+          const vehicle = plan.rolling_stock.find(
+            (v) => String(v.item_id) === String(itemId),
+          );
+          if (vehicle) {
+            if (field === "weight") {
+              vehicle.weight =
+                typeof value === "string" ? parseFloat(value) || 0 : value;
+            } else if (field === "description") {
+              vehicle.item.description = value as string;
+            }
           }
         }
-      }
-      return newAllocation;
-    });
-    setHasUnsavedChanges(true);
-  }, []);
+        return newAllocation;
+      });
+      setHasUnsavedChanges(true);
+    },
+    [],
+  );
 
-  const updatePalletPosition = useCallback((
-    aircraftId: string, 
-    palletId: string, 
-    newPositionIndex: number
-  ) => {
-    setEditedAllocation(prev => {
-      const newAllocation = JSON.parse(JSON.stringify(prev)) as AllocationResult;
-      const plan = newAllocation.load_plans.find(p => p.aircraft_id === aircraftId);
-      if (plan) {
-        const palletPlacement = plan.pallets.find(p => p.pallet.id === palletId);
-        if (palletPlacement) {
-          palletPlacement.position_index = newPositionIndex;
-          palletPlacement.is_ramp = newPositionIndex >= (plan.aircraft_spec.pallet_positions - plan.aircraft_spec.ramp_positions.length);
+  const updatePalletPosition = useCallback(
+    (aircraftId: string, palletId: string, newPositionIndex: number) => {
+      setEditedAllocation((prev) => {
+        const newAllocation = JSON.parse(
+          JSON.stringify(prev),
+        ) as AllocationResult;
+        const plan = newAllocation.load_plans.find(
+          (p) => p.aircraft_id === aircraftId,
+        );
+        if (plan) {
+          const palletPlacement = plan.pallets.find(
+            (p) => p.pallet.id === palletId,
+          );
+          if (palletPlacement) {
+            palletPlacement.position_index = newPositionIndex;
+            palletPlacement.is_ramp =
+              newPositionIndex >=
+              plan.aircraft_spec.pallet_positions -
+                plan.aircraft_spec.ramp_positions.length;
+          }
         }
-      }
-      return newAllocation;
-    });
-    setHasUnsavedChanges(true);
-  }, []);
+        return newAllocation;
+      });
+      setHasUnsavedChanges(true);
+    },
+    [],
+  );
 
-  const interceptNavigation = useCallback((action: () => void) => {
-    if (hasUnsavedChanges) {
-      setPendingNavigation(() => action);
-      setShowUnsavedModal(true);
-    } else {
-      action();
-    }
-  }, [hasUnsavedChanges]);
+  const interceptNavigation = useCallback(
+    (action: () => void) => {
+      if (hasUnsavedChanges) {
+        setPendingNavigation(() => action);
+        setShowUnsavedModal(true);
+      } else {
+        action();
+      }
+    },
+    [hasUnsavedChanges],
+  );
 
   const handleNavigateAnyway = () => {
     setShowUnsavedModal(false);
@@ -328,14 +384,28 @@ export default function LoadPlanViewer({
   };
 
   const wrappedOnBack = () => interceptNavigation(onBack);
-  const wrappedOnDashboard = onDashboard ? () => interceptNavigation(onDashboard) : undefined;
-  const wrappedOnRoutePlanning = onRoutePlanning ? () => interceptNavigation(onRoutePlanning) : undefined;
-  const wrappedOnMissionWorkspace = onMissionWorkspace ? () => interceptNavigation(onMissionWorkspace) : undefined;
+  const wrappedOnDashboard = onDashboard
+    ? () => interceptNavigation(onDashboard)
+    : undefined;
+  const wrappedOnRoutePlanning = onRoutePlanning
+    ? () => interceptNavigation(onRoutePlanning)
+    : undefined;
+  const wrappedOnMissionWorkspace = onMissionWorkspace
+    ? () => interceptNavigation(onMissionWorkspace)
+    : undefined;
   const wrappedOnHome = onHome ? () => interceptNavigation(onHome) : undefined;
-  const wrappedOnLogout = onLogout ? () => interceptNavigation(onLogout) : undefined;
+  const wrappedOnLogout = onLogout
+    ? () => interceptNavigation(onLogout)
+    : undefined;
 
   return (
-    <div className={hideNavigation ? "flex flex-col" : "min-h-screen bg-neutral-50 gradient-mesh flex flex-col"}>
+    <div
+      className={
+        hideNavigation
+          ? "h-screen flex flex-col"
+          : "h-screen flex flex-col bg-neutral-50 gradient-mesh"
+      }
+    >
       <UnsavedChangesModal
         isOpen={showUnsavedModal}
         onNavigateAnyway={handleNavigateAnyway}
@@ -344,7 +414,9 @@ export default function LoadPlanViewer({
 
       <header className="p-3 border-b border-neutral-200/50 flex justify-between items-center bg-white/80 backdrop-blur-xl z-10 shadow-soft">
         <div className="flex items-center space-x-3">
-          <h1 className="text-neutral-900 font-bold text-sm">Load Plan Details</h1>
+          <h1 className="text-neutral-900 font-bold text-sm">
+            Load Plan Details
+          </h1>
           {isEditing && (
             <span className="badge bg-amber-100 text-amber-700 border-amber-200">
               Editing Mode
@@ -354,21 +426,21 @@ export default function LoadPlanViewer({
         <div className="flex items-center space-x-2">
           <div className="flex bg-neutral-100 rounded-xl p-1">
             <button
-              onClick={() => setViewMode('2d')}
+              onClick={() => setViewMode("2d")}
               className={`px-3 py-1.5 rounded-lg text-sm transition ${
-                viewMode === '2d' 
-                  ? 'bg-white text-neutral-900 shadow-soft font-medium' 
-                  : 'text-neutral-500 hover:text-neutral-700'
+                viewMode === "2d"
+                  ? "bg-white text-neutral-900 shadow-soft font-medium"
+                  : "text-neutral-500 hover:text-neutral-700"
               }`}
             >
               2D ICODES
             </button>
             <button
-              onClick={() => setViewMode('3d')}
+              onClick={() => setViewMode("3d")}
               className={`px-3 py-1.5 rounded-lg text-sm transition ${
-                viewMode === '3d' 
-                  ? 'bg-white text-neutral-900 shadow-soft font-medium' 
-                  : 'text-neutral-500 hover:text-neutral-700'
+                viewMode === "3d"
+                  ? "bg-white text-neutral-900 shadow-soft font-medium"
+                  : "text-neutral-500 hover:text-neutral-700"
               }`}
             >
               3D View
@@ -425,28 +497,39 @@ export default function LoadPlanViewer({
                       className="w-full text-left px-4 py-3 text-neutral-900 hover:bg-neutral-100 transition-colors border-b border-neutral-200"
                     >
                       <div className="font-medium">ICODES JSON</div>
-                      <div className="text-xs text-neutral-500">DoD/DLA compatible format</div>
+                      <div className="text-xs text-neutral-500">
+                        DoD/DLA compatible format
+                      </div>
                     </button>
                     <button
                       onClick={handleExportA2IBundle}
                       className="w-full text-left px-4 py-3 text-neutral-900 hover:bg-neutral-100 transition-colors border-b border-neutral-200"
                     >
                       <div className="font-medium">A2I/SAM Bundle</div>
-                      <div className="text-xs text-neutral-500">Full mission package</div>
+                      <div className="text-xs text-neutral-500">
+                        Full mission package
+                      </div>
                     </button>
                     <button
                       onClick={handleExportManifest}
                       className="w-full text-left px-4 py-3 text-neutral-900 hover:bg-neutral-100 transition-colors border-b border-neutral-200"
                     >
                       <div className="font-medium">Manifest CSV</div>
-                      <div className="text-xs text-neutral-500">Cargo manifest spreadsheet</div>
+                      <div className="text-xs text-neutral-500">
+                        Cargo manifest spreadsheet
+                      </div>
                     </button>
                     <button
-                      onClick={() => { handleExportPDF(); setShowExportMenu(false); }}
+                      onClick={() => {
+                        handleExportPDF();
+                        setShowExportMenu(false);
+                      }}
                       className="w-full text-left px-4 py-3 text-neutral-900 hover:bg-neutral-100 transition-colors"
                     >
                       <div className="font-medium">PDF Report</div>
-                      <div className="text-xs text-neutral-500">Printable load plans</div>
+                      <div className="text-xs text-neutral-500">
+                        Printable load plans
+                      </div>
                     </button>
                   </div>
                 )}
@@ -509,9 +592,16 @@ export default function LoadPlanViewer({
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-2">
               <span className="text-red-600">⚠️</span>
-              <span className="text-red-700 font-medium">Error: {saveError}</span>
+              <span className="text-red-700 font-medium">
+                Error: {saveError}
+              </span>
             </div>
-            <button onClick={() => setSaveError(null)} className="text-red-600 hover:text-red-900 transition">✕</button>
+            <button
+              onClick={() => setSaveError(null)}
+              className="text-red-600 hover:text-red-900 transition"
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}
@@ -521,39 +611,60 @@ export default function LoadPlanViewer({
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-2">
               <span className="text-green-600">✓</span>
-              <span className="text-green-700 font-medium">Changes saved successfully!</span>
+              <span className="text-green-700 font-medium">
+                Changes saved successfully!
+              </span>
             </div>
-            <button onClick={() => setSaveSuccess(false)} className="text-green-600 hover:text-green-900 transition">✕</button>
+            <button
+              onClick={() => setSaveSuccess(false)}
+              className="text-green-600 hover:text-green-900 transition"
+            >
+              ✕
+            </button>
           </div>
-        </div>
-      )}
-      
-      {showExplanation && (
-        <div className="mx-4 mt-4 glass-card bg-purple-50/80 border-purple-200 p-4">
-          <div className="flex justify-between items-start mb-2">
-            <h3 className="text-purple-800 font-bold">Aircraft Count Explanation</h3>
-            <button onClick={() => setShowExplanation(false)} className="text-purple-600 hover:text-purple-900 transition">✕</button>
-          </div>
-          <pre className="text-neutral-700 text-sm whitespace-pre-wrap font-mono">{explanationText}</pre>
         </div>
       )}
 
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        <aside className="w-full lg:w-72 border-b lg:border-b-0 lg:border-r border-neutral-200/50 bg-white/50 backdrop-blur-sm flex-shrink-0 overflow-y-auto max-h-[50vh] lg:max-h-[calc(100vh-64px)]">
+      {showExplanation && (
+        <div className="mx-4 mt-4 glass-card bg-purple-50/80 border-purple-200 p-4">
+          <div className="flex justify-between items-start mb-2">
+            <h3 className="text-purple-800 font-bold">
+              Aircraft Count Explanation
+            </h3>
+            <button
+              onClick={() => setShowExplanation(false)}
+              className="text-purple-600 hover:text-purple-900 transition"
+            >
+              ✕
+            </button>
+          </div>
+          <pre className="text-neutral-700 text-sm whitespace-pre-wrap font-mono">
+            {explanationText}
+          </pre>
+        </div>
+      )}
+
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+        <aside className="w-full lg:w-72 flex-shrink-0 border-b lg:border-b-0 lg:border-r border-neutral-200/50 bg-white/50 backdrop-blur-sm flex-shrink-0 overflow-auto min-h-[200px] lg:min-h-0">
           <div className="p-4 border-b border-neutral-200/50">
             <div className="flex space-x-1 bg-neutral-100 rounded-xl p-1">
               {[
-                { id: 'all', label: 'All', count: (isEditing ? editedAllocation : allocationResult).load_plans.length },
-                { id: 'advon', label: 'ADVON', count: advonPlans.length },
-                { id: 'main', label: 'MAIN', count: mainPlans.length }
-              ].map(tab => (
+                {
+                  id: "all",
+                  label: "All",
+                  count: (isEditing ? editedAllocation : allocationResult)
+                    .load_plans.length,
+                },
+                { id: "advon", label: "ADVON", count: advonPlans.length },
+                { id: "main", label: "MAIN", count: mainPlans.length },
+              ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as typeof activeTab)}
                   className={`flex-1 py-1.5 px-2 rounded-lg text-sm transition ${
                     activeTab === tab.id
-                      ? 'bg-white text-neutral-900 shadow-soft font-medium'
-                      : 'text-neutral-500 hover:text-neutral-700'
+                      ? "bg-white text-neutral-900 shadow-soft font-medium"
+                      : "text-neutral-500 hover:text-neutral-700"
                   }`}
                 >
                   {tab.label} ({tab.count})
@@ -562,22 +673,26 @@ export default function LoadPlanViewer({
             </div>
           </div>
 
-          <div className="p-2">
-            {displayedPlans.map(plan => (
+          <div className="p-2 overflow-y-auto max-h-[calc(100vh-200px)] pr-1">
+            {displayedPlans.map((plan) => (
               <button
                 key={plan.aircraft_id}
                 onClick={() => setSelectedPlan(plan)}
                 className={`w-full text-left p-3 rounded-xl mb-2 transition ${
                   selectedPlan?.aircraft_id === plan.aircraft_id
-                    ? 'glass-card ring-2 ring-primary ring-offset-2'
-                    : 'bg-white/60 border border-neutral-200/50 hover:border-neutral-300'
+                    ? "glass-card ring-2 ring-primary ring-offset-2"
+                    : "bg-white/60 border border-neutral-200/50 hover:border-neutral-300"
                 }`}
               >
                 <div className="flex justify-between items-start mb-1">
-                  <span className="text-neutral-900 font-medium">{plan.aircraft_id}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    plan.phase === 'ADVON' ? 'badge-primary' : 'badge-success'
-                  }`}>
+                  <span className="text-neutral-900 font-medium">
+                    {plan.aircraft_id}
+                  </span>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full ${
+                      plan.phase === "ADVON" ? "badge-primary" : "badge-success"
+                    }`}
+                  >
                     {plan.phase}
                   </span>
                 </div>
@@ -600,45 +715,59 @@ export default function LoadPlanViewer({
           </div>
         </aside>
 
-        <main className="flex-1 flex flex-col min-h-0">
+        <main className="flex-1 flex flex-col min-h-0 overflow-auto p-4">
           {currentSelectedPlan ? (
             <motion.div
               key={`${currentSelectedPlan.aircraft_id}-${viewMode}`}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="flex-1 overflow-y-auto container max-w-7xl"
+              className="flex-col overflow-y-visible container max-w-7xl p-4 space-y-4"
             >
-              {viewMode === '2d' ? (
-                <ICODESViewer loadPlan={currentSelectedPlan} />
+              {viewMode === "2d" ? (
+                <div className="overflow-auto max-h-[calc(100vh-280px)] rounded-xl">
+                  <ICODESViewer loadPlan={currentSelectedPlan} />
+                </div>
               ) : (
-                <Suspense fallback={
-                  <div className="glass-card h-[500px] flex items-center justify-center">
-                    <div className="text-neutral-500">Loading 3D View...</div>
+                <Suspense
+                  fallback={
+                    <div className="glass-card h-[500px] flex items-center justify-center">
+                      <div className="text-neutral-500">Loading 3D View...</div>
+                    </div>
+                  }
+                >
+                  <div className="overflow-auto max-h-[calc(100vh-280px)] rounded-xl">
+                    <LoadPlan3DViewer loadPlan={currentSelectedPlan} />
                   </div>
-                }>
-                  <LoadPlan3DViewer loadPlan={currentSelectedPlan} />
                 </Suspense>
               )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                <div className="glass-card p-4 w-full max-w-full">
+                <div className="glass-card p-4 w-full max-w-full overflow-auto max-h-[calc(100vh-350px)]">
                   <h3 className="text-neutral-900 font-bold mb-4">
                     Pallet Manifest
-                    {isEditing && <span className="ml-2 text-sm font-normal text-amber-600">(Click to edit)</span>}
+                    {isEditing && (
+                      <span className="ml-2 text-sm font-normal text-amber-600">
+                        (Click to edit)
+                      </span>
+                    )}
                   </h3>
-                  <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto scrollbar-thin">
-                    {currentSelectedPlan.pallets.map(p => {
+                  <div className="space-y-2 overflow-auto max-h-[calc(100vh-400px)] scrollbar-thin pr-2">
+                    {currentSelectedPlan.pallets.map((p) => {
                       const itemCount = p.pallet.items?.length || 0;
-                      const primaryDesc = itemCount > 0 ? p.pallet.items[0].description : p.pallet.id;
-                      const displayDesc = itemCount > 1 
-                        ? `${primaryDesc} (+ ${itemCount - 1} more)`
-                        : primaryDesc;
-                      
+                      const primaryDesc =
+                        itemCount > 0
+                          ? p.pallet.items[0].description
+                          : p.pallet.id;
+                      const displayDesc =
+                        itemCount > 1
+                          ? `${primaryDesc} (+ ${itemCount - 1} more)`
+                          : primaryDesc;
+
                       return (
                         <div
                           key={p.pallet.id}
                           className={`bg-neutral-50 rounded-xl p-3 border border-neutral-200/50 ${
-                            isEditing ? 'hover:border-amber-300' : ''
+                            isEditing ? "hover:border-amber-300" : ""
                           }`}
                         >
                           <div className="flex justify-between items-start">
@@ -647,16 +776,21 @@ export default function LoadPlanViewer({
                                 <input
                                   type="text"
                                   value={primaryDesc}
-                                  onChange={(e) => updatePalletField(
-                                    currentSelectedPlan.aircraft_id,
-                                    p.pallet.id,
-                                    'description',
-                                    e.target.value
-                                  )}
+                                  onChange={(e) =>
+                                    updatePalletField(
+                                      currentSelectedPlan.aircraft_id,
+                                      p.pallet.id,
+                                      "description",
+                                      e.target.value,
+                                    )
+                                  }
                                   className="w-full bg-white border border-neutral-300 rounded-lg px-2 py-1 text-neutral-900 font-medium focus:ring-2 focus:ring-primary focus:border-transparent"
                                 />
                               ) : (
-                                <div className="text-neutral-900 font-medium truncate" title={displayDesc}>
+                                <div
+                                  className="text-neutral-900 font-medium truncate"
+                                  title={displayDesc}
+                                >
                                   {displayDesc}
                                 </div>
                               )}
@@ -665,23 +799,39 @@ export default function LoadPlanViewer({
                                 {isEditing ? (
                                   <select
                                     value={p.position_index}
-                                    onChange={(e) => updatePalletPosition(
-                                      currentSelectedPlan.aircraft_id,
-                                      p.pallet.id,
-                                      parseInt(e.target.value)
-                                    )}
+                                    onChange={(e) =>
+                                      updatePalletPosition(
+                                        currentSelectedPlan.aircraft_id,
+                                        p.pallet.id,
+                                        parseInt(e.target.value),
+                                      )
+                                    }
                                     className="ml-2 bg-white border border-neutral-300 rounded px-2 py-0.5 text-sm focus:ring-2 focus:ring-primary"
                                   >
-                                    {Array.from({ length: currentSelectedPlan.aircraft_spec.pallet_positions }, (_, i) => (
-                                      <option key={i} value={i}>
-                                        Position {i + 1}{i >= currentSelectedPlan.aircraft_spec.pallet_positions - currentSelectedPlan.aircraft_spec.ramp_positions.length ? ' (RAMP)' : ''}
-                                      </option>
-                                    ))}
+                                    {Array.from(
+                                      {
+                                        length:
+                                          currentSelectedPlan.aircraft_spec
+                                            .pallet_positions,
+                                      },
+                                      (_, i) => (
+                                        <option key={i} value={i}>
+                                          Position {i + 1}
+                                          {i >=
+                                          currentSelectedPlan.aircraft_spec
+                                            .pallet_positions -
+                                            currentSelectedPlan.aircraft_spec
+                                              .ramp_positions.length
+                                            ? " (RAMP)"
+                                            : ""}
+                                        </option>
+                                      ),
+                                    )}
                                   </select>
                                 ) : (
                                   <span className="ml-2">
                                     Position {p.position_index + 1}
-                                    {p.is_ramp && ' (RAMP)'}
+                                    {p.is_ramp && " (RAMP)"}
                                   </span>
                                 )}
                               </div>
@@ -692,15 +842,19 @@ export default function LoadPlanViewer({
                                   <input
                                     type="number"
                                     value={p.pallet.gross_weight}
-                                    onChange={(e) => updatePalletField(
-                                      currentSelectedPlan.aircraft_id,
-                                      p.pallet.id,
-                                      'weight',
-                                      e.target.value
-                                    )}
+                                    onChange={(e) =>
+                                      updatePalletField(
+                                        currentSelectedPlan.aircraft_id,
+                                        p.pallet.id,
+                                        "weight",
+                                        e.target.value,
+                                      )
+                                    }
                                     className="w-24 bg-white border border-neutral-300 rounded-lg px-2 py-1 text-neutral-900 font-medium text-right focus:ring-2 focus:ring-primary focus:border-transparent"
                                   />
-                                  <span className="text-neutral-500 text-sm">lbs</span>
+                                  <span className="text-neutral-500 text-sm">
+                                    lbs
+                                  </span>
                                 </div>
                               ) : (
                                 <span className="text-neutral-900 font-medium">
@@ -708,7 +862,9 @@ export default function LoadPlanViewer({
                                 </span>
                               )}
                               {p.pallet.hazmat_flag && (
-                                <span className="ml-2 badge-warning">HAZMAT</span>
+                                <span className="ml-2 badge-warning">
+                                  HAZMAT
+                                </span>
                               )}
                             </div>
                           </div>
@@ -716,22 +872,28 @@ export default function LoadPlanViewer({
                       );
                     })}
                     {currentSelectedPlan.pallets.length === 0 && (
-                      <p className="text-neutral-400 text-center py-4">No pallets loaded</p>
+                      <p className="text-neutral-400 text-center py-4">
+                        No pallets loaded
+                      </p>
                     )}
                   </div>
                 </div>
 
-                <div className="glass-card p-4 w-full max-w-full">
+                <div className="glass-card p-4 w-full max-w-full overflow-auto max-h-[calc(100vh-350px)]">
                   <h3 className="text-neutral-900 font-bold mb-4">
                     Rolling Stock
-                    {isEditing && <span className="ml-2 text-sm font-normal text-amber-600">(Click to edit)</span>}
+                    {isEditing && (
+                      <span className="ml-2 text-sm font-normal text-amber-600">
+                        (Click to edit)
+                      </span>
+                    )}
                   </h3>
-                  <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto scrollbar-thin">
-                    {currentSelectedPlan.rolling_stock.map(v => (
+                  <div className="space-y-2 overflow-auto max-h-[calc(100vh-400px)] scrollbar-thin pr-2">
+                    {currentSelectedPlan.rolling_stock.map((v) => (
                       <div
                         key={String(v.item_id)}
                         className={`bg-neutral-50 rounded-xl p-3 border border-neutral-200/50 ${
-                          isEditing ? 'hover:border-amber-300' : ''
+                          isEditing ? "hover:border-amber-300" : ""
                         }`}
                       >
                         <div className="flex justify-between items-start">
@@ -740,16 +902,20 @@ export default function LoadPlanViewer({
                               <input
                                 type="text"
                                 value={v.item.description}
-                                onChange={(e) => updateVehicleField(
-                                  currentSelectedPlan.aircraft_id,
-                                  v.item_id,
-                                  'description',
-                                  e.target.value
-                                )}
+                                onChange={(e) =>
+                                  updateVehicleField(
+                                    currentSelectedPlan.aircraft_id,
+                                    v.item_id,
+                                    "description",
+                                    e.target.value,
+                                  )
+                                }
                                 className="w-full bg-white border border-neutral-300 rounded-lg px-2 py-1 text-neutral-900 font-medium focus:ring-2 focus:ring-primary focus:border-transparent"
                               />
                             ) : (
-                              <span className="text-neutral-900 font-medium">{v.item.description}</span>
+                              <span className="text-neutral-900 font-medium">
+                                {v.item.description}
+                              </span>
                             )}
                             <span className="text-neutral-500 text-sm ml-2 block mt-1">
                               {v.length}"L × {v.width}"W × {v.height}"H
@@ -761,15 +927,19 @@ export default function LoadPlanViewer({
                                 <input
                                   type="number"
                                   value={v.weight}
-                                  onChange={(e) => updateVehicleField(
-                                    currentSelectedPlan.aircraft_id,
-                                    v.item_id,
-                                    'weight',
-                                    e.target.value
-                                  )}
+                                  onChange={(e) =>
+                                    updateVehicleField(
+                                      currentSelectedPlan.aircraft_id,
+                                      v.item_id,
+                                      "weight",
+                                      e.target.value,
+                                    )
+                                  }
                                   className="w-24 bg-white border border-neutral-300 rounded-lg px-2 py-1 text-neutral-900 font-medium text-right focus:ring-2 focus:ring-primary focus:border-transparent"
                                 />
-                                <span className="text-neutral-500 text-sm">lbs</span>
+                                <span className="text-neutral-500 text-sm">
+                                  lbs
+                                </span>
                               </div>
                             ) : (
                               <span className="text-neutral-900 font-medium">
@@ -781,14 +951,18 @@ export default function LoadPlanViewer({
                       </div>
                     ))}
                     {currentSelectedPlan.rolling_stock.length === 0 && (
-                      <p className="text-neutral-400 text-center py-4">No rolling stock</p>
+                      <p className="text-neutral-400 text-center py-4">
+                        No rolling stock
+                      </p>
                     )}
                   </div>
                 </div>
               </div>
 
               <div className="glass-card p-4 w-full max-w-full">
-                <h3 className="text-neutral-900 font-bold mb-4">Load Summary</h3>
+                <h3 className="text-neutral-900 font-bold mb-4">
+                  Load Summary
+                </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                   <div className="stat-card">
                     <p className="stat-label">Total Weight</p>
@@ -804,7 +978,9 @@ export default function LoadPlanViewer({
                   </div>
                   <div className="stat-card">
                     <p className="stat-label">Center of Balance</p>
-                    <p className={`stat-value text-xl ${currentSelectedPlan.cob_in_envelope ? 'text-green-600' : 'text-red-600'}`}>
+                    <p
+                      className={`stat-value text-xl ${currentSelectedPlan.cob_in_envelope ? "text-green-600" : "text-red-600"}`}
+                    >
                       {currentSelectedPlan.cob_percent.toFixed(1)}%
                     </p>
                   </div>
@@ -819,33 +995,37 @@ export default function LoadPlanViewer({
             </motion.div>
           ) : (
             <div className="flex items-center justify-center h-full">
-              <p className="text-neutral-400">Select an aircraft to view details</p>
+              <p className="text-neutral-400">
+                Select an aircraft to view details
+              </p>
             </div>
           )}
         </main>
 
-        <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-neutral-200/50 bg-white/50 backdrop-blur-sm p-4 overflow-y-auto max-h-[50vh] lg:max-h-[calc(100vh-64px)] shrink-0">
+        <aside className="w-full lg:w-80 flex-shrink-0 border-t lg:border-t-0 lg:border-l border-neutral-200/50 bg-white/50 backdrop-blur-sm p-4 overflow-auto min-h-[200px] lg:min-h-0">
           <h2 className="text-neutral-900 font-bold mb-4">AI Insights</h2>
-          
+
           <div className="space-y-3">
-            {insights.insights.map(insight => (
+            {insights.insights.map((insight) => (
               <div
                 key={insight.id}
                 className={`p-3 rounded-xl border ${
-                  insight.severity === 'critical'
-                    ? 'bg-red-50 border-red-200'
-                    : insight.severity === 'warning'
-                      ? 'bg-amber-50 border-amber-200'
-                      : 'bg-neutral-50 border-neutral-200'
+                  insight.severity === "critical"
+                    ? "bg-red-50 border-red-200"
+                    : insight.severity === "warning"
+                      ? "bg-amber-50 border-amber-200"
+                      : "bg-neutral-50 border-neutral-200"
                 }`}
               >
-                <h4 className={`font-medium text-sm ${
-                  insight.severity === 'critical'
-                    ? 'text-red-700'
-                    : insight.severity === 'warning'
-                      ? 'text-amber-700'
-                      : 'text-primary'
-                }`}>
+                <h4
+                  className={`font-medium text-sm ${
+                    insight.severity === "critical"
+                      ? "text-red-700"
+                      : insight.severity === "warning"
+                        ? "text-amber-700"
+                        : "text-primary"
+                  }`}
+                >
                   {insight.title}
                 </h4>
                 <p className="text-neutral-600 text-sm mt-1">
@@ -862,10 +1042,15 @@ export default function LoadPlanViewer({
 
           {insights.optimization_opportunities.length > 0 && (
             <div className="mt-6">
-              <h3 className="text-neutral-900 font-bold mb-3">Optimization Opportunities</h3>
+              <h3 className="text-neutral-900 font-bold mb-3">
+                Optimization Opportunities
+              </h3>
               <ul className="space-y-2">
                 {insights.optimization_opportunities.map((opp, idx) => (
-                  <li key={idx} className="text-neutral-600 text-sm flex items-start space-x-2">
+                  <li
+                    key={idx}
+                    className="text-neutral-600 text-sm flex items-start space-x-2"
+                  >
                     <span className="text-green-600">→</span>
                     <span>{opp}</span>
                   </li>
