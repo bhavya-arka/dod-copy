@@ -624,11 +624,19 @@ function findSolverPosition(
  * This ensures heavy items are placed near the target CG, and the final load
  * is balanced within the CoB envelope.
  */
+interface OccupiedZone {
+  x_start: number;
+  x_end: number;
+  y_left: number;
+  y_right: number;
+}
+
 function placeRollingStock(
   items: MovementItem[],
   aircraftSpec: AircraftSpec,
   startX: number = 0,
-  aircraftId: string = 'AC-1'
+  aircraftId: string = 'AC-1',
+  occupiedZones: OccupiedZone[] = []
 ): { 
   placements: VehiclePlacement[]; 
   nextX: number; 
@@ -637,7 +645,7 @@ function placeRollingStock(
   runningWeight: number;
   runningMoment: number;
 } {
-  console.log('[PlaceRollingStock] V3-PARTITION algorithm called with', items.length, 'items');
+  console.log(`[PlaceRollingStock] V3-PARTITION algorithm called with ${items.length} items, ${occupiedZones.length} pallet zones to avoid`);
   
   const placements: VehiclePlacement[] = [];
   const unplaced: MovementItem[] = [];
@@ -671,14 +679,27 @@ function placeRollingStock(
     return b.weight_each_lb - a.weight_each_lb;
   });
 
-  // Helper: Check if a position collides with existing placements
+  // Helper: Check if a position collides with existing placements OR occupied pallet zones
   function checkCollision(xStart: number, xEnd: number, yCenter: number, halfWidth: number): boolean {
+    const yLeft = yCenter - halfWidth;
+    const yRight = yCenter + halfWidth;
+    
+    // Check collision with pallet-occupied zones FIRST (these are reserved for pallets)
+    for (const zone of occupiedZones) {
+      // Check X overlap
+      if (xStart < zone.x_end && xEnd > zone.x_start) {
+        // Check Y overlap
+        if (yLeft < zone.y_right && yRight > zone.y_left) {
+          return true; // Collision with pallet zone
+        }
+      }
+    }
+    
+    // Check collision with existing rolling stock placements
     for (const existing of existingPlacements) {
       // Check X overlap
       if (xStart < existing.x_end_in && xEnd > existing.x_start_in) {
         // Check Y overlap
-        const yLeft = yCenter - halfWidth;
-        const yRight = yCenter + halfWidth;
         if (yLeft < existing.y_right_in && yRight > existing.y_left_in) {
           return true; // Collision
         }
@@ -692,29 +713,39 @@ function placeRollingStock(
     const halfWidth = itemWidth / 2;
     const candidates: number[] = [];
     
-    // Get items that overlap in X range
+    // Get pallet zones that overlap in X range
+    const palletZonesAtX = occupiedZones.filter(z =>
+      z.x_start < xEnd && z.x_end > xStart
+    );
+    
+    // Get rolling stock items that overlap in X range
     const itemsAtX = existingPlacements.filter(p => 
       p.x_start_in < xEnd && p.x_end_in > xStart
     );
     
-    if (itemsAtX.length === 0) {
+    // Combine all occupied ranges (pallets + rolling stock)
+    const allOccupiedRanges: { left: number; right: number }[] = [
+      ...palletZonesAtX.map(z => ({ left: z.y_left, right: z.y_right })),
+      ...itemsAtX.map(p => ({ left: p.y_left_in, right: p.y_right_in }))
+    ];
+    
+    if (allOccupiedRanges.length === 0) {
       // No items at this X, try center first, then sides
       candidates.push(0);
       candidates.push(-halfAircraftWidth + halfWidth + LATERAL_SPACING);
       candidates.push(halfAircraftWidth - halfWidth - LATERAL_SPACING);
     } else {
-      // Find gaps between existing items
-      const occupiedRanges = itemsAtX.map(p => ({ left: p.y_left_in, right: p.y_right_in }));
-      occupiedRanges.sort((a, b) => a.left - b.left);
+      // Find gaps between occupied areas
+      allOccupiedRanges.sort((a, b) => a.left - b.left);
       
       let leftEdge = -halfAircraftWidth + LATERAL_SPACING;
-      for (const range of occupiedRanges) {
+      for (const range of allOccupiedRanges) {
         const gapWidth = range.left - LATERAL_SPACING - leftEdge;
         if (gapWidth >= itemWidth) {
           const gapCenter = (leftEdge + range.left - LATERAL_SPACING) / 2;
           candidates.push(gapCenter);
         }
-        leftEdge = range.right + LATERAL_SPACING;
+        leftEdge = Math.max(leftEdge, range.right + LATERAL_SPACING);
       }
       
       // Check gap after last item
@@ -1269,25 +1300,43 @@ function loadSingleAircraftFromQueue(
   const spec = AIRCRAFT_SPECS[aircraftType];
   const aircraftId = `${aircraftType}-${queue.phase}-${sequence}`;
   
-  // Place rolling stock with CoB-optimizing algorithm
-  const rsResult = placeRollingStock(queue.rolling_stock, spec, 0, aircraftId);
+  // CRITICAL FIX: Place pallets FIRST, then rolling stock in remaining space
+  // Per DOD cargo loading standards, pallets occupy discrete station positions
+  // and rolling stock CANNOT overlap with pallet positions.
   
-  // IMPORTANT: Pallets start from position 0, not after rolling stock
-  // The pallet placement algorithm uses discrete station positions that
-  // are separate from rolling stock floor space. Rolling stock uses floor
-  // rails while pallets lock into pallet positions on the 463L rail system.
-  // This prevents the issue of pallets being pushed to aft end when
-  // rolling stock occupies forward positions.
-  const palletStartX = 0;
-  
-  // Pass running weight and moment from rolling stock to pallet placement
-  // This allows pallets to balance the load by choosing optimal positions
+  // Step 1: Place pallets first (they occupy discrete 463L rail positions)
   const palletResult = placePallets(
     queue.pallets, 
     spec, 
-    palletStartX,
-    rsResult.runningWeight,
-    rsResult.runningMoment
+    0,  // Start from position 0
+    0,  // No prior weight
+    0   // No prior moment
+  );
+  
+  // Step 2: Extract occupied zones from pallet placements
+  // These zones are now RESERVED and cannot be used by rolling stock
+  const isC130 = spec.type === 'C-130';
+  const PALLET_LONG = isC130 ? PALLET_463L.width : PALLET_463L.length;
+  const PALLET_LAT = isC130 ? PALLET_463L.length : PALLET_463L.width;
+  const PALLET_HALF_LAT = PALLET_LAT / 2;
+  
+  const palletOccupiedZones: OccupiedZone[] = palletResult.placements.map(p => ({
+    x_start: p.x_start_in ?? 0,
+    x_end: (p.x_start_in ?? 0) + PALLET_LONG,
+    y_left: (p.y_center_in ?? 0) - PALLET_HALF_LAT,
+    y_right: (p.y_center_in ?? 0) + PALLET_HALF_LAT
+  }));
+  
+  console.log(`[LoadAircraft] ${aircraftId}: ${palletResult.placements.length} pallets placed, ${palletOccupiedZones.length} zones reserved`);
+  
+  // Step 3: Place rolling stock, excluding pallet-occupied zones
+  // Pass pallet weight/moment for CoB calculations
+  const rsResult = placeRollingStock(
+    queue.rolling_stock, 
+    spec, 
+    0, 
+    aircraftId,
+    palletOccupiedZones  // Pass occupied zones to prevent overlap
   );
   
   const finalPalletWeight = palletResult.placements.reduce((sum, p) => sum + p.pallet.gross_weight, 0);
