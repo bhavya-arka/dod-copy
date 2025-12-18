@@ -314,6 +314,97 @@ export const insertDagFlightPlanSchema = createInsertSchema(dagFlightPlans).omit
 export type InsertDagFlightPlan = z.infer<typeof insertDagFlightPlanSchema>;
 export type DagFlightPlan = typeof dagFlightPlans.$inferSelect;
 
+// ============================================================================
+// AIRCRAFT FLEET MANAGEMENT TABLES
+// ============================================================================
+
+// Mixed fleet policy enum
+export const mixedFleetModeEnum = ['PREFERRED_FIRST', 'OPTIMIZE_COST', 'MIN_AIRCRAFT', 'USER_LOCKED'] as const;
+export type MixedFleetMode = typeof mixedFleetModeEnum[number];
+
+// Plan solution status enum
+export const planSolutionStatusEnum = ['FEASIBLE', 'PARTIAL', 'INFEASIBLE'] as const;
+export type PlanSolutionStatus = typeof planSolutionStatusEnum[number];
+
+// Aircraft Types - registry of supported aircraft
+export const aircraftTypes = pgTable("aircraft_types", {
+  id: text("id").primaryKey(), // e.g., "C17", "C130"
+  display_name: text("display_name").notNull(),
+  active: boolean("active").notNull().default(true),
+  capacity_model_version: text("capacity_model_version").notNull().default("v1"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAircraftTypeSchema = createInsertSchema(aircraftTypes);
+export type InsertAircraftType = z.infer<typeof insertAircraftTypeSchema>;
+export type AircraftType = typeof aircraftTypes.$inferSelect;
+
+// Aircraft Capacity Profiles - versioned capacity specs per aircraft type
+export const aircraftCapacityProfiles = pgTable("aircraft_capacity_profiles", {
+  id: serial("id").primaryKey(),
+  aircraft_type_id: text("aircraft_type_id").notNull(),
+  version: text("version").notNull().default("v1"),
+  max_payload_lb: integer("max_payload_lb").notNull(),
+  max_pallet_positions: integer("max_pallet_positions"),
+  cargo_bay_dims: jsonb("cargo_bay_dims").notNull(), // {length, width, height}
+  notes: text("notes"),
+  default_cost_params: jsonb("default_cost_params").notNull(), // {cost_per_sortie, cost_per_hour, etc.}
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAircraftCapacityProfileSchema = createInsertSchema(aircraftCapacityProfiles).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertAircraftCapacityProfile = z.infer<typeof insertAircraftCapacityProfileSchema>;
+export type AircraftCapacityProfile = typeof aircraftCapacityProfiles.$inferSelect;
+
+// Plan Aircraft Availability - per-plan availability constraints
+export const planAircraftAvailability = pgTable("plan_aircraft_availability", {
+  id: serial("id").primaryKey(),
+  plan_id: integer("plan_id").notNull(),
+  aircraft_type_id: text("aircraft_type_id").notNull(),
+  available_count: integer("available_count").notNull().default(0),
+  locked: boolean("locked").notNull().default(false),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPlanAircraftAvailabilitySchema = createInsertSchema(planAircraftAvailability).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertPlanAircraftAvailability = z.infer<typeof insertPlanAircraftAvailabilitySchema>;
+export type PlanAircraftAvailability = typeof planAircraftAvailability.$inferSelect;
+
+// Plan Solutions - stores optimization results
+export const planSolutions = pgTable("plan_solutions", {
+  id: serial("id").primaryKey(),
+  plan_id: integer("plan_id").notNull(),
+  status: text("status").notNull(), // FEASIBLE, PARTIAL, INFEASIBLE
+  aircraft_used: jsonb("aircraft_used").notNull(), // {typeId: countUsed}
+  unallocated_cargo_ids: jsonb("unallocated_cargo_ids").notNull().default([]),
+  metrics: jsonb("metrics").notNull(), // {total_cost, total_aircraft, utilization, etc.}
+  explanation: text("explanation"), // human-readable explanation
+  comparison_data: jsonb("comparison_data"), // {preferred_only_solution, chosen_solution_rationale}
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPlanSolutionSchema = createInsertSchema(planSolutions).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertPlanSolution = z.infer<typeof insertPlanSolutionSchema>;
+export type PlanSolution = typeof planSolutions.$inferSelect;
+
+// ============================================================================
+// AI INSIGHTS TABLES
+// ============================================================================
+
 // AI Insights - caches Bedrock-generated insights with hash-based invalidation
 export const aiInsightTypeEnum = [
   'allocation_summary',
@@ -345,97 +436,3 @@ export const insertAiInsightSchema = createInsertSchema(aiInsights).omit({
 
 export type InsertAiInsight = z.infer<typeof insertAiInsightSchema>;
 export type AiInsight = typeof aiInsights.$inferSelect;
-
-// ============================================================================
-// AIRCRAFT AVAILABILITY & MIXED FLEET OPTIMIZATION TABLES
-// ============================================================================
-
-// Mixed Fleet Policy enum
-export const mixedFleetModeEnum = ['PREFERRED_FIRST', 'OPTIMIZE_COST', 'MIN_AIRCRAFT', 'USER_LOCKED'] as const;
-export type MixedFleetMode = typeof mixedFleetModeEnum[number];
-
-// Plan Solution Status enum
-export const planSolutionStatusEnum = ['FEASIBLE', 'PARTIAL', 'INFEASIBLE'] as const;
-export type PlanSolutionStatus = typeof planSolutionStatusEnum[number];
-
-// Aircraft Types - canonical registry of supported aircraft
-export const aircraftTypes = pgTable("aircraft_types", {
-  id: text("id").primaryKey(), // e.g., "C17", "C130"
-  display_name: text("display_name").notNull(), // "C-17 Globemaster III"
-  active: boolean("active").notNull().default(true),
-  capacity_model_version: text("capacity_model_version").notNull().default("v1"),
-  created_at: timestamp("created_at").defaultNow().notNull(),
-  updated_at: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertAircraftTypeSchema = createInsertSchema(aircraftTypes).omit({
-  created_at: true,
-  updated_at: true,
-});
-
-export type InsertAircraftType = z.infer<typeof insertAircraftTypeSchema>;
-export type AircraftType = typeof aircraftTypes.$inferSelect;
-
-// Aircraft Capacity Profiles - versioned capacity specifications
-export const aircraftCapacityProfiles = pgTable("aircraft_capacity_profiles", {
-  id: serial("id").primaryKey(),
-  aircraft_type_id: text("aircraft_type_id").notNull(), // FK to aircraftTypes
-  version: text("version").notNull().default("v1"),
-  max_payload_lb: integer("max_payload_lb").notNull(),
-  max_pallet_positions: integer("max_pallet_positions"),
-  cargo_bay_dims: jsonb("cargo_bay_dims").notNull(), // {length_in, width_in, height_in}
-  notes: text("notes"),
-  default_cost_params: jsonb("default_cost_params").notNull(), // {cost_per_flight, cost_per_hour, estimated_hours_per_leg}
-  created_at: timestamp("created_at").defaultNow().notNull(),
-  updated_at: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertAircraftCapacityProfileSchema = createInsertSchema(aircraftCapacityProfiles).omit({
-  id: true,
-  created_at: true,
-  updated_at: true,
-});
-
-export type InsertAircraftCapacityProfile = z.infer<typeof insertAircraftCapacityProfileSchema>;
-export type AircraftCapacityProfile = typeof aircraftCapacityProfiles.$inferSelect;
-
-// Plan Aircraft Availability - availability per plan
-export const planAircraftAvailability = pgTable("plan_aircraft_availability", {
-  id: serial("id").primaryKey(),
-  plan_id: integer("plan_id").notNull(), // FK to flightPlans
-  aircraft_type_id: text("aircraft_type_id").notNull(), // FK to aircraftTypes
-  available_count: integer("available_count").notNull().default(0),
-  locked: boolean("locked").notNull().default(false),
-  created_at: timestamp("created_at").defaultNow().notNull(),
-  updated_at: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertPlanAircraftAvailabilitySchema = createInsertSchema(planAircraftAvailability).omit({
-  id: true,
-  created_at: true,
-  updated_at: true,
-});
-
-export type InsertPlanAircraftAvailability = z.infer<typeof insertPlanAircraftAvailabilitySchema>;
-export type PlanAircraftAvailability = typeof planAircraftAvailability.$inferSelect;
-
-// Plan Solutions - stored optimization results
-export const planSolutions = pgTable("plan_solutions", {
-  id: serial("id").primaryKey(),
-  plan_id: integer("plan_id").notNull(), // FK to flightPlans
-  status: text("status").notNull(), // FEASIBLE, PARTIAL, INFEASIBLE
-  aircraft_used: jsonb("aircraft_used").notNull(), // {typeId: countUsed}
-  unallocated_cargo_ids: jsonb("unallocated_cargo_ids").notNull().default([]),
-  metrics: jsonb("metrics").notNull(), // {total_cost, total_aircraft, utilization, etc.}
-  explanation: text("explanation"),
-  comparison_data: jsonb("comparison_data"), // {preferred_only_solution, chosen_solution_rationale}
-  created_at: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const insertPlanSolutionSchema = createInsertSchema(planSolutions).omit({
-  id: true,
-  created_at: true,
-});
-
-export type InsertPlanSolution = z.infer<typeof insertPlanSolutionSchema>;
-export type PlanSolution = typeof planSolutions.$inferSelect;
