@@ -126,6 +126,9 @@ The parent container controls all spacing. Child components should expose full-w
 - Adding padding to child components causes double-spacing and uneven appearance
 - Components get "squished" when loaded into dashboard containers
 
+### Full-Screen Views (cargo_split, flights tabs)
+These tabs bypass the container wrapper entirely and render `w-full h-full` to fill the viewport edge-to-edge. Other tabs (manifest, schedules, weather, analytics) use the standard container with padding.
+
 # AI Insights Configuration
 
 ## AWS Bedrock Setup

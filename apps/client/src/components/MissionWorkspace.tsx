@@ -623,21 +623,38 @@ export default function MissionWorkspace({
         onPlanStatusChange={onPlanStatusChange}
       />
 
-      <main className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-7xl">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={mission.currentTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className="w-full"
-            >
-              {renderTabContent()}
-            </motion.div>
-          </AnimatePresence>
-        </div>
+      <main className="flex-1 overflow-hidden">
+        {mission.currentTab === "cargo_split" || mission.currentTab === "flights" ? (
+          <div className="w-full h-full">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={mission.currentTab}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="w-full h-full"
+              >
+                {renderTabContent()}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        ) : (
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-7xl overflow-y-auto h-full">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={mission.currentTab}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="w-full"
+              >
+                {renderTabContent()}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        )}
       </main>
     </div>
   );
