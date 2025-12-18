@@ -8,6 +8,20 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MissionTab, useMission } from '../context/MissionContext';
 import { useAuth } from '../hooks/useAuth';
+import { 
+  Plane, 
+  ClipboardList, 
+  HardHat, 
+  Calendar, 
+  Sun, 
+  BarChart3,
+  Save,
+  ChevronDown,
+  ArrowLeft,
+  Check,
+  FileText,
+  CheckCircle
+} from 'lucide-react';
 
 interface LoadedPlanInfo {
   id: number;
@@ -22,13 +36,13 @@ interface MissionNavbarProps {
   onPlanStatusChange?: (newStatus: 'draft' | 'complete' | 'archived') => void;
 }
 
-const TABS: Array<{ id: MissionTab; label: string; icon: string }> = [
-  { id: 'flights', label: 'Flights', icon: '✈️' },
-  { id: 'manifest', label: 'Manifest', icon: '📋' },
-  { id: 'cargo_split', label: 'Flight Manager', icon: '📦' },
-  { id: 'schedules', label: 'Schedules', icon: '📅' },
-  { id: 'weather', label: 'Weather', icon: '🌤️' },
-  { id: 'analytics', label: 'Analytics', icon: '📊' }
+const TABS: Array<{ id: MissionTab; label: string; icon: React.ReactNode }> = [
+  { id: 'flights', label: 'Flights', icon: <Plane className="w-4 h-4" /> },
+  { id: 'manifest', label: 'Manifest', icon: <ClipboardList className="w-4 h-4" /> },
+  { id: 'cargo_split', label: 'Flight Manager', icon: <HardHat className="w-4 h-4" /> },
+  { id: 'schedules', label: 'Schedules', icon: <Calendar className="w-4 h-4" /> },
+  { id: 'weather', label: 'Weather', icon: <Sun className="w-4 h-4" /> },
+  { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="w-4 h-4" /> }
 ];
 
 export default function MissionNavbar({ onDashboard, showTabs = true, loadedPlan, onPlanStatusChange }: MissionNavbarProps) {
@@ -75,7 +89,7 @@ export default function MissionNavbar({ onDashboard, showTabs = true, loadedPlan
             onClick={onDashboard}
             className="flex items-center gap-1 sm:gap-2 text-neutral-600 hover:text-neutral-900 transition group shrink-0"
           >
-            <span className="text-lg group-hover:-translate-x-0.5 transition-transform">←</span>
+            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
             <span className="font-bold text-primary hidden sm:inline">ARKA</span>
           </button>
 
@@ -84,8 +98,8 @@ export default function MissionNavbar({ onDashboard, showTabs = true, loadedPlan
           {loadedPlan && (
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <div className="flex items-center gap-1 sm:gap-2 min-w-0">
-                <span className="text-base sm:text-lg shrink-0">
-                  {loadedPlan.status === 'complete' ? '✅' : '📝'}
+                <span className="shrink-0">
+                  {loadedPlan.status === 'complete' ? <CheckCircle className="w-5 h-5 text-green-600" /> : <FileText className="w-5 h-5 text-amber-600" />}
                 </span>
                 <span className="text-neutral-900 font-medium text-sm sm:text-base truncate max-w-[80px] sm:max-w-none">{loadedPlan.name}</span>
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 hidden sm:inline ${
@@ -104,7 +118,7 @@ export default function MissionNavbar({ onDashboard, showTabs = true, loadedPlan
                   disabled={isUpdatingStatus}
                   className="hidden lg:flex items-center space-x-1.5 bg-green-50 hover:bg-green-100 text-green-600 px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
                 >
-                  <span>✓</span>
+                  <Check className="w-4 h-4" />
                   <span>{isUpdatingStatus ? 'Updating...' : 'Mark Complete'}</span>
                 </button>
               )}
@@ -138,14 +152,14 @@ export default function MissionNavbar({ onDashboard, showTabs = true, loadedPlan
                 onClick={() => setShowAircraftDropdown(!showAircraftDropdown)}
                 className="flex items-center gap-1 sm:gap-2 bg-neutral-100 hover:bg-neutral-200 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm transition-colors"
               >
-                <span>✈️</span>
+                <Plane className="w-4 h-4 text-neutral-600" />
                 <span className="text-neutral-900 font-medium hidden sm:inline">
                   {currentAircraft?.aircraft_id || `Aircraft ${mission.selectedAircraftIndex + 1}`}
                 </span>
                 <span className="text-neutral-500 text-xs">
                   ({mission.selectedAircraftIndex + 1}/{aircraftList.length})
                 </span>
-                <span className="text-neutral-400 text-xs">▼</span>
+                <ChevronDown className="w-3 h-3 text-neutral-400" />
               </button>
 
               <AnimatePresence>
@@ -219,7 +233,7 @@ export default function MissionNavbar({ onDashboard, showTabs = true, loadedPlan
               }}
               className="flex items-center gap-1 sm:gap-2 bg-primary text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm hover:bg-primary-dark transition-colors shadow-soft"
             >
-              <span>💾</span>
+              <Save className="w-4 h-4" />
               <span className="hidden sm:inline">Save</span>
             </button>
           )}
