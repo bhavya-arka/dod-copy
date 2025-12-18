@@ -615,7 +615,7 @@ export default function MissionWorkspace({
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 gradient-mesh flex flex-col">
+    <div className="h-full bg-neutral-50 gradient-mesh flex flex-col">
       <MissionNavbar
         onDashboard={handleNavigateAway}
         showTabs={true}
@@ -623,8 +623,9 @@ export default function MissionWorkspace({
         onPlanStatusChange={onPlanStatusChange}
       />
 
-      <main className="flex-1 overflow-hidden">
-        {mission.currentTab === "cargo_split" || mission.currentTab === "flights" ? (
+      <main className="flex-col flex overflow-x-hidden">
+        {mission.currentTab === "cargo_split" ||
+        mission.currentTab === "flights" ? (
           <div className="w-full h-full">
             <AnimatePresence mode="wait">
               <motion.div
@@ -640,7 +641,7 @@ export default function MissionWorkspace({
             </AnimatePresence>
           </div>
         ) : (
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-7xl overflow-y-auto h-full">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-7xl h-full">
             <AnimatePresence mode="wait">
               <motion.div
                 key={mission.currentTab}

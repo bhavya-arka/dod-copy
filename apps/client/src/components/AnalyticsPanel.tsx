@@ -218,7 +218,7 @@ export default function AnalyticsPanel({
   }, [mission.allocationResult]);
 
   return (
-    <div className="flex flex-col gap-6 h-[100%]">
+    <div className="flex flex-col gap-6 h-screen">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h2 className="section-title">Mission Analytics</h2>
         <div className="flex items-center space-x-3">
