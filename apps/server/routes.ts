@@ -1579,7 +1579,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing required fields: type, inputData" });
       }
 
-      const validTypes = ['allocation_summary', 'cob_analysis', 'pallet_review', 'route_planning', 'compliance', 'mission_briefing'];
+      const validTypes = ['allocation_summary', 'cob_analysis', 'pallet_review', 'route_planning', 'compliance', 'mission_briefing', 'mission_analytics', 'flight_allocation_analysis'];
       if (!validTypes.includes(type)) {
         return res.status(400).json({ error: `Invalid insight type. Must be one of: ${validTypes.join(', ')}` });
       }

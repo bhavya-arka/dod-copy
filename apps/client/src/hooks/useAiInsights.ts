@@ -8,7 +8,8 @@ export type InsightType =
   | 'route_planning'
   | 'compliance'
   | 'mission_briefing'
-  | 'mission_analytics';
+  | 'mission_analytics'
+  | 'flight_allocation_analysis';
 
 export interface TokenUsage {
   inputTokens: number;
@@ -199,6 +200,7 @@ export const INSIGHT_TYPE_LABELS: Record<InsightType, string> = {
   compliance: 'Compliance',
   mission_briefing: 'Mission Briefing',
   mission_analytics: 'Mission Analytics',
+  flight_allocation_analysis: 'Flight Allocation Analysis',
 };
 
 export const INSIGHT_TYPE_DESCRIPTIONS: Record<InsightType, string> = {
@@ -209,4 +211,5 @@ export const INSIGHT_TYPE_DESCRIPTIONS: Record<InsightType, string> = {
   compliance: 'Regulatory compliance and safety checks',
   mission_briefing: 'Executive summary for mission commanders',
   mission_analytics: 'Comprehensive analytics with performance metrics and actionable advice',
+  flight_allocation_analysis: 'Comprehensive flight allocation analysis with fleet status, issues, and recommendations',
 };

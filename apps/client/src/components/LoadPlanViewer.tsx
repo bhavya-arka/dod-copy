@@ -29,6 +29,7 @@ import {
   downloadManifestCSV,
 } from "../lib/icodesExport";
 import { generateWhyThisManyAircraft } from "../lib/explanationEngine";
+import FlightInsightsPanel from "./FlightInsightsPanel";
 
 interface LoadPlanViewerProps {
   allocationResult: AllocationResult;
@@ -1002,63 +1003,11 @@ export default function LoadPlanViewer({
           )}
         </main>
 
-        <aside className="w-full lg:w-80 flex-shrink-0 border-t lg:border-t-0 lg:border-l border-neutral-200/50 bg-white/50 backdrop-blur-sm p-4 overflow-auto min-h-[200px] lg:min-h-0">
-          <h2 className="text-neutral-900 font-bold mb-4">AI Insights</h2>
-
-          <div className="space-y-3">
-            {insights.insights.map((insight) => (
-              <div
-                key={insight.id}
-                className={`p-3 rounded-xl border ${
-                  insight.severity === "critical"
-                    ? "bg-red-50 border-red-200"
-                    : insight.severity === "warning"
-                      ? "bg-amber-50 border-amber-200"
-                      : "bg-neutral-50 border-neutral-200"
-                }`}
-              >
-                <h4
-                  className={`font-medium text-sm ${
-                    insight.severity === "critical"
-                      ? "text-red-700"
-                      : insight.severity === "warning"
-                        ? "text-amber-700"
-                        : "text-primary"
-                  }`}
-                >
-                  {insight.title}
-                </h4>
-                <p className="text-neutral-600 text-sm mt-1">
-                  {insight.description}
-                </p>
-                {insight.recommendation && (
-                  <p className="text-neutral-500 text-xs mt-2 italic">
-                    💡 {insight.recommendation}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {insights.optimization_opportunities.length > 0 && (
-            <div className="mt-6">
-              <h3 className="text-neutral-900 font-bold mb-3">
-                Optimization Opportunities
-              </h3>
-              <ul className="space-y-2">
-                {insights.optimization_opportunities.map((opp, idx) => (
-                  <li
-                    key={idx}
-                    className="text-neutral-600 text-sm flex items-start space-x-2"
-                  >
-                    <span className="text-green-600">→</span>
-                    <span>{opp}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </aside>
+        <FlightInsightsPanel
+          flightPlanId={flightPlanId || 0}
+          allocationResult={isEditing ? editedAllocation : allocationResult}
+          className="w-full lg:w-80 flex-shrink-0 border-t lg:border-t-0 lg:border-l border-neutral-200/50 min-h-[200px] lg:min-h-0"
+        />
       </div>
     </div>
   );

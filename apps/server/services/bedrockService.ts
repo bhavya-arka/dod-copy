@@ -298,6 +298,49 @@ Guidelines for generating analytics:
 - Risk factors should identify specific concerns with cargo, routes, or timing
 - Mitigation notes should provide concrete steps to address each risk
 
+Do not include any text outside the JSON object.`,
+
+  flight_allocation_analysis: `You are a PACAF military airlift mission planner providing a comprehensive flight allocation analysis.
+Analyze the full allocation data including aircraft utilization, center of balance status, unloaded items, and fleet constraints.
+${GUARDRAIL_INSTRUCTIONS}
+CRITICAL: You must respond with ONLY valid JSON in this exact format:
+{
+  "executive_summary": "2-3 sentences summarizing the overall allocation status and key findings",
+  "fleet_status": {
+    "aircraft_used": <number>,
+    "total_pallets_loaded": <number>,
+    "total_rolling_stock_loaded": <number>,
+    "total_pax": <number>,
+    "total_cargo_weight_lb": <number>,
+    "average_utilization_percent": <number>
+  },
+  "allocation_issues": [
+    {"severity": "critical|warning|info", "title": "short title", "description": "detailed explanation", "recommendation": "actionable suggestion"}
+  ],
+  "cob_summary": {
+    "aircraft_in_envelope": <number>,
+    "aircraft_out_of_envelope": <number>,
+    "worst_offender": "aircraft_id or null if all good",
+    "corrective_action": "action to take if any aircraft out of envelope"
+  },
+  "fleet_shortage_analysis": {
+    "has_unloaded_cargo": <boolean>,
+    "unloaded_item_count": <number>,
+    "unloaded_weight_lb": <number>,
+    "recommended_additional_aircraft": [
+      {"type": "C-17|C-130", "count": <number>, "rationale": "why this type"}
+    ]
+  },
+  "optimization_notes": ["note1", "note2"]
+}
+
+Special Instructions:
+- If unloaded_items array is not empty, this is a CRITICAL issue requiring fleet expansion recommendations
+- Calculate what additional aircraft would be needed to accommodate unloaded cargo
+- Consider aircraft payload capacity: C-17 max 170,900 lb, C-130 max 42,000 lb
+- Provide specific recommendations based on unloaded cargo weight and dimensions
+- Center of Balance issues should always be flagged as critical if out of envelope
+
 Do not include any text outside the JSON object.`
 };
 
