@@ -519,3 +519,72 @@ export function groupByDestinationStop(sequence: LoadingSequenceItem[]): Map<num
   
   return groups;
 }
+
+/**
+ * Calculate the unloading sequence from a loading sequence.
+ * 
+ * Unloading follows LIFO (Last In, First Out) principle:
+ * - Last item loaded = first item unloaded (most accessible at rear)
+ * - First item loaded = last item unloaded (deepest in aircraft)
+ * 
+ * The unloading sequence reverses the loading order and recalculates
+ * animation delays for smooth unloading visualization.
+ */
+export function calculateUnloadingSequence(loadingSequence: LoadingSequenceItem[]): LoadingSequenceItem[] {
+  if (loadingSequence.length === 0) return [];
+  
+  const reversedSequence = [...loadingSequence].reverse();
+  
+  const unloadingSequence: LoadingSequenceItem[] = reversedSequence.map((item, index) => {
+    let delay = ANIMATION_DELAY_BASE + (index * ANIMATION_DELAY_INCREMENT);
+    
+    if (item.weight >= WEIGHT_THRESHOLDS.heavy) {
+      delay += 0.5;
+    }
+    
+    if (item.hazmat) {
+      delay += 0.3;
+    }
+    
+    return {
+      ...item,
+      sequenceNumber: index + 1,
+      animationDelay: Math.round(delay * 10) / 10,
+      loadingNotes: [
+        ...item.loadingNotes.filter(note => !note.startsWith('Sequence #')),
+        `Unload Sequence #${index + 1}: ${getUnloadSequenceReasoning(item, index, reversedSequence)}`,
+      ],
+    };
+  });
+  
+  return unloadingSequence;
+}
+
+/**
+ * Generate human-readable reasoning for unloading sequence position.
+ */
+function getUnloadSequenceReasoning(
+  item: LoadingSequenceItem,
+  index: number,
+  allItems: LoadingSequenceItem[]
+): string {
+  const reasons: string[] = [];
+  
+  if (index === 0) {
+    reasons.push('First to unload (most accessible at rear)');
+  }
+  
+  if (item.destinationStopIndex === undefined) {
+    reasons.push('final destination');
+  } else if (item.destinationStopIndex === 0) {
+    reasons.push('first stop cargo');
+  } else {
+    reasons.push(`stop ${item.destinationStopIndex + 1}`);
+  }
+  
+  if (item.hazmat) {
+    reasons.push('hazmat');
+  }
+  
+  return reasons.length > 0 ? reasons.join(', ') : 'standard LIFO order';
+}

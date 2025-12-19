@@ -19,6 +19,8 @@ const PALLET_DIMS = {
   height: 2.25,
 };
 
+export type AnimationMode = 'loading' | 'unloading';
+
 export interface CargoLoadingAnimationProps {
   loadPlan: AircraftLoadPlan;
   sequence: LoadingSequenceItem[];
@@ -26,6 +28,7 @@ export interface CargoLoadingAnimationProps {
   speed: number;
   currentTime: number;
   highlightedItemId: string | null;
+  mode: AnimationMode;
 }
 
 interface AnimatedCargoProps {
@@ -37,6 +40,7 @@ interface AnimatedCargoProps {
   currentTime: number;
   isHighlighted: boolean;
   staggerOffset: number;
+  mode: AnimationMode;
 }
 
 function easeOutCubic(t: number): number {
@@ -60,25 +64,29 @@ function AnimatedCargo({
   currentTime,
   isHighlighted,
   staggerOffset,
+  mode,
 }: AnimatedCargoProps) {
   const groupRef = useRef<THREE.Group>(null);
   const meshRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
   
-  const startZ = (cargoLength * scale) + 2 + (staggerOffset * 0.5);
+  const rampZ = (cargoLength * scale) + 2 + (staggerOffset * 0.5);
   const animationDuration = 1.5;
   
-  const targetPosition = useMemo(() => new THREE.Vector3(
+  const aircraftPosition = useMemo(() => new THREE.Vector3(
     item.targetPosition.x,
     item.targetPosition.y,
     item.targetPosition.z
   ), [item.targetPosition]);
   
-  const startPosition = useMemo(() => new THREE.Vector3(
+  const rampPosition = useMemo(() => new THREE.Vector3(
     item.targetPosition.x,
     item.targetPosition.y + 0.1,
-    startZ
-  ), [item.targetPosition.x, item.targetPosition.y, startZ]);
+    rampZ
+  ), [item.targetPosition.x, item.targetPosition.y, rampZ]);
+  
+  const startPosition = mode === 'loading' ? rampPosition : aircraftPosition;
+  const targetPosition = mode === 'loading' ? aircraftPosition : rampPosition;
   
   const dimensions = useMemo(() => ({
     length: item.dimensions.length * scale,
@@ -300,40 +308,45 @@ function StagingArea({
   cargoLength, 
   width, 
   scale,
-  itemCount 
+  itemCount,
+  mode
 }: { 
   cargoLength: number; 
   width: number; 
   scale: number;
   itemCount: number;
+  mode: AnimationMode;
 }) {
   const stagingZ = (cargoLength * scale) + 1.5;
   const stagingWidth = width * scale;
   const stagingLength = 2 + (itemCount * 0.3);
+  
+  const areaColor = mode === 'loading' ? '#fbbf24' : '#22c55e';
+  const areaLabel = mode === 'loading' ? 'STAGING AREA' : 'UNLOAD AREA';
   
   return (
     <group position={[0, 0.01, stagingZ + stagingLength / 2]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[stagingWidth, stagingLength]} />
         <meshStandardMaterial 
-          color="#fbbf24" 
+          color={areaColor} 
           transparent 
           opacity={0.15}
         />
       </mesh>
       <lineSegments rotation={[-Math.PI / 2, 0, 0]}>
         <edgesGeometry args={[new THREE.PlaneGeometry(stagingWidth, stagingLength)]} />
-        <lineBasicMaterial color="#fbbf24" opacity={0.6} transparent />
+        <lineBasicMaterial color={areaColor} opacity={0.6} transparent />
       </lineSegments>
       <Text
         position={[0, 0.1, stagingLength / 2 + 0.3]}
         rotation={[-Math.PI / 2, 0, 0]}
         fontSize={0.2}
-        color="#fbbf24"
+        color={areaColor}
         anchorX="center"
         anchorY="middle"
       >
-        STAGING AREA
+        {areaLabel}
       </Text>
     </group>
   );
@@ -341,28 +354,39 @@ function StagingArea({
 
 function LoadingPath({ 
   cargoLength, 
-  scale 
+  scale,
+  mode
 }: { 
   cargoLength: number; 
   scale: number;
+  mode: AnimationMode;
 }) {
   const pathLength = (cargoLength * scale) + 3;
+  const pathColor = mode === 'loading' ? '#22c55e' : '#ef4444';
   
   const arrowGeometry = useMemo(() => {
     const shape = new THREE.Shape();
-    shape.moveTo(0, 0);
-    shape.lineTo(-0.1, -0.2);
-    shape.lineTo(0, -0.15);
-    shape.lineTo(0.1, -0.2);
-    shape.lineTo(0, 0);
+    if (mode === 'loading') {
+      shape.moveTo(0, 0);
+      shape.lineTo(-0.1, -0.2);
+      shape.lineTo(0, -0.15);
+      shape.lineTo(0.1, -0.2);
+      shape.lineTo(0, 0);
+    } else {
+      shape.moveTo(0, 0);
+      shape.lineTo(-0.1, 0.2);
+      shape.lineTo(0, 0.15);
+      shape.lineTo(0.1, 0.2);
+      shape.lineTo(0, 0);
+    }
     return new THREE.ShapeGeometry(shape);
-  }, []);
+  }, [mode]);
   
   return (
     <group>
       <mesh position={[0, 0.015, pathLength / 2]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[0.1, pathLength]} />
-        <meshBasicMaterial color="#22c55e" transparent opacity={0.3} />
+        <meshBasicMaterial color={pathColor} transparent opacity={0.3} />
       </mesh>
       {Array.from({ length: Math.floor(pathLength / 0.8) }).map((_, i) => (
         <mesh 
@@ -371,7 +395,7 @@ function LoadingPath({
           rotation={[-Math.PI / 2, 0, 0]}
           geometry={arrowGeometry}
         >
-          <meshBasicMaterial color="#22c55e" transparent opacity={0.4} />
+          <meshBasicMaterial color={pathColor} transparent opacity={0.4} />
         </mesh>
       ))}
     </group>
@@ -385,8 +409,8 @@ export function CargoLoadingAnimation({
   speed,
   currentTime,
   highlightedItemId,
+  mode,
 }: CargoLoadingAnimationProps) {
-  // Use same scale as LoadPlan3DViewer for consistent sizing (0.01 converts inches to scene units)
   const scale = 0.01;
   const spec = loadPlan.aircraft_spec;
   
@@ -404,10 +428,12 @@ export function CargoLoadingAnimation({
             width={spec.cargo_width}
             scale={scale}
             itemCount={sequence.length}
+            mode={mode}
           />
           <LoadingPath 
             cargoLength={spec.cargo_length}
             scale={scale}
+            mode={mode}
           />
         </>
       )}
@@ -423,6 +449,7 @@ export function CargoLoadingAnimation({
           currentTime={currentTime}
           isHighlighted={highlightedItemId === item.id}
           staggerOffset={index}
+          mode={mode}
         />
       ))}
     </group>

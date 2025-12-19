@@ -26,8 +26,9 @@ import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Maximize2, X, Minimize2, Play, Pause, SkipBack, SkipForward, RotateCcw, Box } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { calculateLoadingSequence, LoadingSequenceItem, estimateTotalLoadingTime } from '../lib/cargoLoadingSequence';
-import CargoLoadingAnimation from './CargoLoadingAnimation';
+import { calculateLoadingSequence, calculateUnloadingSequence, LoadingSequenceItem, estimateTotalLoadingTime } from '../lib/cargoLoadingSequence';
+import CargoLoadingAnimation, { AnimationMode } from './CargoLoadingAnimation';
+import { ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 
 interface LoadPlan3DViewerProps {
   loadPlan: AircraftLoadPlan;
@@ -1460,18 +1461,21 @@ function AnimationControlPanel({
   animationTime,
   totalDuration,
   animationSpeed,
+  animationModeType,
   onPlayPause,
   onRewind,
   onSkipForward,
   onSkipBackward,
   onSpeedChange,
   onClose,
-  onTimeChange
+  onTimeChange,
+  onModeToggle
 }: {
   isPlaying: boolean;
   animationTime: number;
   totalDuration: number;
   animationSpeed: number;
+  animationModeType: AnimationMode;
   onPlayPause: () => void;
   onRewind: () => void;
   onSkipForward: () => void;
@@ -1479,8 +1483,10 @@ function AnimationControlPanel({
   onSpeedChange: (speed: number) => void;
   onClose: () => void;
   onTimeChange: (time: number) => void;
+  onModeToggle: () => void;
 }) {
   const progressPercent = totalDuration > 0 ? (animationTime / totalDuration) * 100 : 0;
+  const isLoading = animationModeType === 'loading';
   
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -1560,6 +1566,30 @@ function AnimationControlPanel({
           </select>
         </div>
         
+        <div className="flex items-center gap-2 border-l border-slate-600 pl-4">
+          <button
+            onClick={onModeToggle}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+              isLoading 
+                ? 'bg-green-600 hover:bg-green-500' 
+                : 'bg-orange-600 hover:bg-orange-500'
+            } text-white`}
+            title={isLoading ? 'Switch to Unload Mode' : 'Switch to Load Mode'}
+          >
+            {isLoading ? (
+              <>
+                <ArrowDownToLine className="w-4 h-4" />
+                <span className="text-xs font-medium">LOAD</span>
+              </>
+            ) : (
+              <>
+                <ArrowUpFromLine className="w-4 h-4" />
+                <span className="text-xs font-medium">UNLOAD</span>
+              </>
+            )}
+          </button>
+        </div>
+        
         <button
           onClick={onClose}
           className="p-2 rounded-lg bg-red-600/80 hover:bg-red-500 text-white transition-colors"
@@ -1570,7 +1600,7 @@ function AnimationControlPanel({
       </div>
       
       <div className="mt-2 text-center text-xs text-slate-400">
-        Cargo Loading Simulation • {Math.round(progressPercent)}% complete
+        Cargo {isLoading ? 'Loading' : 'Unloading'} Simulation • {Math.round(progressPercent)}% complete
       </div>
     </div>
   );
@@ -1651,6 +1681,7 @@ function Scene({
   onMeasureHover,
   onMeasureReset,
   animationMode,
+  animationModeType,
   isPlaying,
   animationTime,
   animationSpeed,
@@ -1666,6 +1697,7 @@ function Scene({
   onHeatmapToggle: () => void;
   onMeasureClick: (point: THREE.Vector3, snapType: 'vertex' | 'edge' | 'surface') => void;
   onMeasureHover: (point: THREE.Vector3 | null, snapType: 'vertex' | 'edge' | 'surface' | null) => void;
+  animationModeType: AnimationMode;
   onMeasureReset: () => void;
   animationMode: boolean;
   isPlaying: boolean;
@@ -1730,6 +1762,7 @@ function Scene({
           speed={animationSpeed}
           currentTime={animationTime}
           highlightedItemId={highlightedItemId}
+          mode={animationModeType}
         />
       ) : (
         <>
@@ -1837,13 +1870,16 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   
   const [animationMode, setAnimationMode] = useState(false);
+  const [animationModeType, setAnimationModeType] = useState<AnimationMode>('loading');
   const [isPlaying, setIsPlaying] = useState(false);
   const [animationTime, setAnimationTime] = useState(0);
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
   
   const loadingSequence = useMemo(() => calculateLoadingSequence(loadPlan), [loadPlan]);
-  const totalDuration = useMemo(() => estimateTotalLoadingTime(loadingSequence), [loadingSequence]);
+  const unloadingSequence = useMemo(() => calculateUnloadingSequence(loadingSequence), [loadingSequence]);
+  const activeSequence = animationModeType === 'loading' ? loadingSequence : unloadingSequence;
+  const totalDuration = useMemo(() => estimateTotalLoadingTime(activeSequence), [activeSequence]);
   
   useEffect(() => {
     if (!isPlaying || !animationMode) return;
@@ -2007,6 +2043,13 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
     setAnimationMode(false);
     setIsPlaying(false);
     setAnimationTime(0);
+    setAnimationModeType('loading');
+  }, []);
+  
+  const handleAnimationModeTypeToggle = useCallback(() => {
+    setAnimationModeType(prev => prev === 'loading' ? 'unloading' : 'loading');
+    setAnimationTime(0);
+    setIsPlaying(false);
   }, []);
   
   const handleTimeChange = useCallback((time: number) => {
@@ -2060,9 +2103,10 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
               isPlaying={isPlaying}
               animationTime={animationTime}
               animationSpeed={animationSpeed}
-              loadingSequence={loadingSequence}
+              loadingSequence={activeSequence}
               highlightedItemId={highlightedItemId}
               onAnimationToggle={handleAnimationToggle}
+              animationModeType={animationModeType}
             />
           </Canvas>
         </KeyboardControls>
@@ -2103,6 +2147,7 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
             animationTime={animationTime}
             totalDuration={totalDuration}
             animationSpeed={animationSpeed}
+            animationModeType={animationModeType}
             onPlayPause={handlePlayPause}
             onRewind={handleRewind}
             onSkipForward={handleSkipForward}
@@ -2110,6 +2155,7 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
             onSpeedChange={handleSpeedChange}
             onClose={handleAnimationClose}
             onTimeChange={handleTimeChange}
+            onModeToggle={handleAnimationModeTypeToggle}
           />
         )}
       </div>
