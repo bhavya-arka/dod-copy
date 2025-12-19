@@ -2,7 +2,13 @@
  * Cargo Loading Sequence Calculation Engine
  * 
  * Calculates optimal loading sequences for 3D viewport animation.
- * Prioritizes weight distribution, position indices, and hazmat handling.
+ * Implements FILO (First In, Last Out) logic for multi-stop flights.
+ * 
+ * FILO Loading Logic:
+ * - Cargo for LAST stop loads FIRST (goes deepest in aircraft)
+ * - Cargo for FIRST stop loads LAST (positioned at rear for easy offload)
+ * - Within same stop: aft positions load first (end up deeper)
+ * - Hazmat loads last within same stop/position group
  */
 
 import type {
@@ -24,6 +30,30 @@ export interface LoadingSequenceItem {
   animationDelay: number;
   hazmat: boolean;
   loadingNotes: string[];
+  
+  /**
+   * Destination stop index for multi-stop flight operations.
+   * Indicates at which stop this cargo item should be offloaded.
+   * 
+   * Stop Indexing:
+   * - 0 = first stop after origin (first intermediate stop)
+   * - 1 = second stop after origin
+   * - Higher numbers = later stops in the route
+   * - Max value = final destination
+   * - undefined = destination not specified (defaults to final)
+   */
+  destinationStopIndex?: number;
+  
+  /**
+   * Indicates if cargo continues past the current stop.
+   * - true = cargo stays on aircraft and continues to a later stop
+   * - false = cargo is offloaded at this stop
+   * - undefined = not applicable or destination not specified
+   * 
+   * Used for load planning to determine which items remain
+   * after each intermediate stop for CG recalculation.
+   */
+  staysOnAircraft?: boolean;
 }
 
 export interface LoadingConstraints {
@@ -46,6 +76,7 @@ interface SortableCargoItem {
   hazmat: boolean;
   isRamp: boolean;
   loadingNotes: string[];
+  destinationStopIndex: number;
 }
 
 const ANIMATION_DELAY_BASE = 2.0;
@@ -56,16 +87,21 @@ const WEIGHT_THRESHOLDS = {
   medium: 4000,
 };
 
+const DEFAULT_DESTINATION_STOP_INDEX = 999;
+
 /**
  * Calculate the loading sequence for an aircraft load plan.
  * Returns an ordered array of cargo items with their loading sequence.
  * 
- * Loading order logic (priority):
- * 1. Heavy items (>7000 lbs) load first for center of balance stability
- * 2. Medium weight items (4000-7000 lbs) load next
- * 3. Within same weight category: forward positions before aft
- * 4. Within same position: non-hazmat before hazmat
- * 5. Pallets before vehicles at same position/weight
+ * FILO Loading Order (First In, Last Out for multi-stop flights):
+ * 1. Primary: destinationStopIndex DESCENDING - Cargo for LAST stop loads FIRST (goes deepest)
+ * 2. Secondary: positionIndex DESCENDING - Within same stop, aft positions load first (end up deeper)
+ * 3. Tertiary: Non-hazmat before hazmat within same stop/position
+ * 
+ * Result:
+ * - Final destination cargo loads first → positioned deepest (front of aircraft)
+ * - First stop cargo loads last → positioned at rear (easy to offload first)
+ * - At each stop, unloading proceeds forward-to-ramp
  */
 export function calculateLoadingSequence(loadPlan: AircraftLoadPlan): LoadingSequenceItem[] {
   const cargoItems: SortableCargoItem[] = [];
@@ -79,6 +115,8 @@ export function calculateLoadingSequence(loadPlan: AircraftLoadPlan): LoadingSeq
       : 0;
     const targetY = inchesToMeters(pallet.height / 2);
     const targetZ = inchesToMeters(palletPlacement.position_coord);
+
+    const destinationStopIndex = pallet.destinationStop ?? DEFAULT_DESTINATION_STOP_INDEX;
 
     cargoItems.push({
       id: pallet.id,
@@ -96,11 +134,13 @@ export function calculateLoadingSequence(loadPlan: AircraftLoadPlan): LoadingSeq
       hazmat: pallet.hazmat_flag,
       isRamp: palletPlacement.is_ramp,
       loadingNotes: generatePalletLoadingNotes(pallet, palletPlacement),
+      destinationStopIndex,
     });
   }
 
   for (const vehicle of loadPlan.rolling_stock) {
     const positionIndex = estimateVehiclePositionIndex(vehicle, loadPlan);
+    const destinationStopIndex = vehicle.item.destinationStop ?? DEFAULT_DESTINATION_STOP_INDEX;
     
     cargoItems.push({
       id: String(vehicle.item_id),
@@ -122,6 +162,7 @@ export function calculateLoadingSequence(loadPlan: AircraftLoadPlan): LoadingSeq
       hazmat: vehicle.item.hazmat_flag,
       isRamp: vehicle.deck === 'RAMP',
       loadingNotes: generateVehicleLoadingNotes(vehicle),
+      destinationStopIndex,
     });
   }
 
@@ -142,6 +183,9 @@ export function calculateLoadingSequence(loadPlan: AircraftLoadPlan): LoadingSeq
       ...item.loadingNotes,
       `Sequence #${index + 1}: ${getSequenceReasoning(item, index, sortedItems)}`,
     ],
+    destinationStopIndex: item.destinationStopIndex === DEFAULT_DESTINATION_STOP_INDEX 
+      ? undefined 
+      : item.destinationStopIndex,
   }));
 
   return sequencedItems;
@@ -196,26 +240,33 @@ export function getLoadingConstraints(
   };
 }
 
+/**
+ * Sort cargo items for loading using FILO (First In, Last Out) logic.
+ * 
+ * Sort order (all DESCENDING for FILO):
+ * 1. destinationStopIndex DESCENDING - Higher stop index loads first (goes deepest)
+ * 2. positionIndex DESCENDING - Aft positions load first within same stop
+ * 3. hazmat flag - Non-hazmat (0) before hazmat (1) within same group
+ * 
+ * This ensures:
+ * - Final destination cargo is loaded first and ends up deepest in aircraft
+ * - First stop cargo is loaded last and is positioned nearest to ramp
+ * - Unloading at each stop proceeds logically from rear to front
+ */
 function sortCargoForLoading(items: SortableCargoItem[]): SortableCargoItem[] {
   return [...items].sort((a, b) => {
-    const aWeightScore = getWeightPriorityScore(a.weight);
-    const bWeightScore = getWeightPriorityScore(b.weight);
-    if (aWeightScore !== bWeightScore) {
-      return bWeightScore - aWeightScore;
+    if (a.destinationStopIndex !== b.destinationStopIndex) {
+      return b.destinationStopIndex - a.destinationStopIndex;
     }
 
     if (a.positionIndex !== b.positionIndex) {
-      return a.positionIndex - b.positionIndex;
+      return b.positionIndex - a.positionIndex;
     }
 
     const aIsHazmat = a.hazmat ? 1 : 0;
     const bIsHazmat = b.hazmat ? 1 : 0;
     if (aIsHazmat !== bIsHazmat) {
       return aIsHazmat - bIsHazmat;
-    }
-
-    if (a.type !== b.type) {
-      return a.type === 'pallet' ? -1 : 1;
     }
 
     return 0;
@@ -281,8 +332,14 @@ function generatePalletLoadingNotes(
   notes.push(`Position ${placement.position_index}`);
   notes.push(`Gross weight: ${pallet.gross_weight.toLocaleString()} lbs`);
   
+  if (pallet.destinationStop !== undefined) {
+    notes.push(`Destination: Stop ${pallet.destinationStop + 1}`);
+  } else {
+    notes.push('Destination: Final');
+  }
+  
   if (pallet.hazmat_flag) {
-    notes.push('HAZMAT: Load last in position group');
+    notes.push('HAZMAT: Load last in stop/position group');
   }
   
   if (placement.is_ramp) {
@@ -294,7 +351,7 @@ function generatePalletLoadingNotes(
   }
   
   if (pallet.gross_weight >= WEIGHT_THRESHOLDS.heavy) {
-    notes.push('Heavy pallet: Load early for CG stability');
+    notes.push('Heavy pallet: Verify floor loading');
   }
   
   return notes;
@@ -305,6 +362,12 @@ function generateVehicleLoadingNotes(vehicle: VehiclePlacement): string[] {
   
   notes.push(`Vehicle: ${vehicle.item.description}`);
   notes.push(`Weight: ${vehicle.weight.toLocaleString()} lbs`);
+  
+  if (vehicle.item.destinationStop !== undefined) {
+    notes.push(`Destination: Stop ${vehicle.item.destinationStop + 1}`);
+  } else {
+    notes.push('Destination: Final');
+  }
   
   if (vehicle.item.hazmat_flag) {
     notes.push('HAZMAT: Requires special handling');
@@ -320,7 +383,7 @@ function generateVehicleLoadingNotes(vehicle: VehiclePlacement): string[] {
   }
   
   if (vehicle.weight >= WEIGHT_THRESHOLDS.heavy) {
-    notes.push('Heavy vehicle: Priority loading for balance');
+    notes.push('Heavy vehicle: Verify floor loading');
   }
   
   return notes;
@@ -348,6 +411,10 @@ function estimateVehiclePositionIndex(
   return estimatedPosition;
 }
 
+/**
+ * Generate human-readable reasoning for why an item is at its sequence position.
+ * Explains the FILO loading logic applied.
+ */
 function getSequenceReasoning(
   item: SortableCargoItem,
   index: number,
@@ -356,28 +423,35 @@ function getSequenceReasoning(
   const reasons: string[] = [];
   
   if (index === 0) {
-    reasons.push('First to load');
+    reasons.push('First to load (goes deepest)');
   }
   
-  if (item.positionIndex <= 3) {
+  if (item.destinationStopIndex === DEFAULT_DESTINATION_STOP_INDEX) {
+    reasons.push('final destination');
+  } else if (item.destinationStopIndex === 0) {
+    reasons.push('first stop (loads last for easy offload)');
+  } else {
+    reasons.push(`stop ${item.destinationStopIndex + 1}`);
+  }
+  
+  const maxPosition = Math.max(...allItems.map(i => i.positionIndex));
+  const minPosition = Math.min(...allItems.map(i => i.positionIndex));
+  
+  if (item.positionIndex >= maxPosition - 2 && maxPosition > 3) {
+    reasons.push('aft position (loads early)');
+  } else if (item.positionIndex <= minPosition + 2) {
     reasons.push('forward position');
-  } else if (item.positionIndex >= allItems[allItems.length - 1]?.positionIndex - 2) {
-    reasons.push('aft position');
-  }
-  
-  if (item.weight >= WEIGHT_THRESHOLDS.heavy) {
-    reasons.push('heavy cargo prioritized');
   }
   
   if (item.hazmat) {
-    reasons.push('hazmat loaded last in group');
+    reasons.push('hazmat (loads last in group)');
   }
   
   if (item.isRamp) {
     reasons.push('ramp position');
   }
   
-  return reasons.length > 0 ? reasons.join(', ') : 'standard loading order';
+  return reasons.length > 0 ? reasons.join(', ') : 'standard FILO order';
 }
 
 const ITEM_ANIMATION_DURATION = 2.0;
@@ -427,4 +501,21 @@ export function groupByLoadingPhase(sequence: LoadingSequenceItem[]): {
     midPhase: sequence.filter((_, i) => i >= earlyThreshold && i < midThreshold),
     latePhase: sequence.filter((_, i) => i >= midThreshold),
   };
+}
+
+/**
+ * Group cargo items by their destination stop for multi-stop flight planning.
+ * Useful for visualizing what cargo gets offloaded at each stop.
+ */
+export function groupByDestinationStop(sequence: LoadingSequenceItem[]): Map<number | 'final', LoadingSequenceItem[]> {
+  const groups = new Map<number | 'final', LoadingSequenceItem[]>();
+  
+  for (const item of sequence) {
+    const key = item.destinationStopIndex ?? 'final';
+    const existing = groups.get(key) || [];
+    existing.push(item);
+    groups.set(key, existing);
+  }
+  
+  return groups;
 }

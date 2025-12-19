@@ -386,7 +386,8 @@ export function CargoLoadingAnimation({
   currentTime,
   highlightedItemId,
 }: CargoLoadingAnimationProps) {
-  const scale = 0.0254;
+  // Use same scale as LoadPlan3DViewer for consistent sizing (0.01 converts inches to scene units)
+  const scale = 0.01;
   const spec = loadPlan.aircraft_spec;
   
   const sortedSequence = useMemo(() => 

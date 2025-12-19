@@ -82,6 +82,38 @@ export interface ParsedCargoResult {
   pallet_ids: { pallet_id: string; lead_tcn: string | null }[];
 }
 
+// ============================================================================
+// MULTI-STOP FLIGHT ROUTE TYPES
+// ============================================================================
+
+/**
+ * Represents a flight route with multiple stops for multi-leg operations.
+ * Used to track cargo destinations across intermediate stops.
+ * 
+ * Stop Indexing System:
+ * - Origin is not counted as a stop (it's the departure point)
+ * - 0 = first stop after origin (first intermediate stop)
+ * - 1 = second stop after origin
+ * - N-1 = final destination (where N is total number of stops including final)
+ * - null/undefined = cargo continues to final destination
+ * 
+ * Example: Flight from KADW -> RJTY -> RKSO -> VHHH
+ * - origin: "KADW" (origin airport)
+ * - intermediateStops: ["RJTY", "RKSO"] (stops before final destination)
+ * - destination: "VHHH" (final destination)
+ * - Stop index 0 = RJTY (first intermediate stop)
+ * - Stop index 1 = RKSO (second intermediate stop)
+ * - Stop index 2 (or null) = VHHH (final destination)
+ */
+export interface FlightRoute {
+  /** Origin airport/base ICAO code (departure point) */
+  origin: string;
+  /** Final destination airport/base ICAO code */
+  destination: string;
+  /** Intermediate stops between origin and destination (ordered) */
+  intermediateStops: string[];
+}
+
 // Legacy MovementItem - kept for backward compatibility with existing components
 export interface MovementItem {
   item_id: string | number;
@@ -103,6 +135,15 @@ export interface MovementItem {
   
   // NEW: Link to ParsedCargoItem for enhanced data
   parsed_item?: ParsedCargoItem;
+  
+  /**
+   * Destination stop index for multi-stop flights.
+   * - 0 = first stop after origin
+   * - 1 = second stop after origin
+   * - N = Nth stop (where final destination is the last indexed stop)
+   * - undefined/null = cargo continues to final destination
+   */
+  destinationStop?: number;
 }
 
 export interface RawMovementInput {
@@ -288,6 +329,16 @@ export interface Pallet463L {
     length: number;
     width: number;
   };
+  
+  /**
+   * Destination stop index for multi-stop flights.
+   * Indicates at which stop this pallet should be offloaded.
+   * - 0 = first stop after origin
+   * - 1 = second stop after origin
+   * - N = Nth stop (where final destination is the last indexed stop)
+   * - undefined/null = pallet continues to final destination
+   */
+  destinationStop?: number;
 }
 
 // ============================================================================
@@ -758,6 +809,13 @@ export interface AircraftLoadPlan {
   center_of_balance: number;
   cob_percent: number;
   cob_in_envelope: boolean;
+  
+  /**
+   * Flight route information for multi-stop operations.
+   * Defines origin, intermediate stops, and final destination.
+   * Used to determine cargo offload points at each stop.
+   */
+  flightRoute?: FlightRoute;
   
   // Utilization metrics
   positions_used: number;
