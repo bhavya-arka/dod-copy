@@ -46,11 +46,38 @@ AI insights utilize AWS Bedrock with the Nova Lite model, configurable via envir
 ## Lateral Pallet Placement & Seat Visualization
 The system incorporates 2D grid-based pallet placement considering lateral lanes (e.g., C-17 has two, C-130 has one) and tracks lateral moments for balanced CoB. Passenger seat zones are defined per aircraft, visualized in both 2D ICODES (overlays) and 3D (individual seat meshes) showing occupancy.
 
-## Cargo Loading Simulation
-The 3D viewer includes an interactive cargo loading animation system (`cargoLoadingSequence.ts`, `CargoLoadingAnimation.tsx`):
-- **Loading Sequence Algorithm**: Prioritizes weight-first (heavy >7000 lbs first for CG stability), then forward-to-aft position, then non-hazmat before hazmat within same weight/position
-- **Animation Controls**: Play/pause, rewind, speed control (0.5x/1x/2x), progress scrubber, and keyboard shortcuts (L key to toggle)
-- **Loading Order PDF Export**: Generates 2D aircraft layout with sequence numbers and detailed manifest table via "Loading Order PDF" button in export menu
+## Flight Route Configuration
+The upload screen includes a collapsible "Flight Route" section allowing users to configure multi-stop flight operations:
+- **Origin/Destination**: Define departure and final destination bases (ICAO codes)
+- **Intermediate Stops**: Add, remove, and reorder intermediate stops
+- **Visual Route Preview**: Shows complete route chain (Origin → Stop 1 → Stop 2 → Destination)
+- **RouteConfig Interface**: Exported from UploadScreen for integration with other components
+
+## Cargo Loading/Unloading Simulation
+The 3D viewer includes an interactive cargo loading/unloading animation system (`cargoLoadingSequence.ts`, `CargoLoadingAnimation.tsx`):
+
+**Loading Sequence Algorithm (FILO - First In, Last Out)**:
+- Primary: Cargo for LAST stop loads FIRST (positioned deepest in aircraft)
+- Secondary: Within same stop, aft positions load before forward (aft-to-forward)
+- Tertiary: Non-hazmat before hazmat within same stop/position group
+- Result: Easy offloading at each stop - cargo needed first is most accessible
+
+**Unloading Sequence (LIFO - Last In, First Out)**:
+- Reverses loading order - last items loaded are first to unload
+- Supports per-stop offloading visualization
+
+**Animation Controls**:
+- Mode toggle: Switch between LOAD (green) and UNLOAD (orange) modes
+- Play/pause, rewind, speed control (0.5x/1x/2x), progress scrubber
+- Keyboard shortcuts (L key to toggle animation)
+- Visual indicators: Green arrows/staging for loading, red arrows/unload area for unloading
+
+**Data Model Support**:
+- `FlightRoute` interface for route configuration
+- `destinationStop` field on MovementItem and Pallet463L for stop-aware allocation
+- `destinationStopIndex` and `staysOnAircraft` fields for sequence items
+
+**Loading Order PDF Export**: Generates 2D aircraft layout with sequence numbers and detailed manifest table via "Loading Order PDF" button in export menu
 
 # External Dependencies
 
