@@ -2,13 +2,16 @@
  * Cargo Loading Sequence Calculation Engine
  * 
  * Calculates optimal loading sequences for 3D viewport animation.
- * Implements FILO (First In, Last Out) logic for multi-stop flights.
+ * Implements Forward-to-Aft loading for multi-stop flights.
  * 
- * FILO Loading Logic:
+ * Loading Logic:
  * - Cargo for LAST stop loads FIRST (goes deepest in aircraft)
- * - Cargo for FIRST stop loads LAST (positioned at rear for easy offload)
- * - Within same stop: aft positions load first (end up deeper)
+ * - Within same stop: forward positions load first, aft positions load last
  * - Hazmat loads last within same stop/position group
+ * 
+ * Unloading Logic (reverse of loading):
+ * - Aft positions unload first (most accessible at ramp)
+ * - Forward positions unload last
  */
 
 import type {
@@ -94,15 +97,15 @@ const DEFAULT_DESTINATION_STOP_INDEX = 999;
  * Calculate the loading sequence for an aircraft load plan.
  * Returns an ordered array of cargo items with their loading sequence.
  * 
- * FILO Loading Order (First In, Last Out for multi-stop flights):
+ * Loading Order (Forward to Aft):
  * 1. Primary: destinationStopIndex DESCENDING - Cargo for LAST stop loads FIRST (goes deepest)
- * 2. Secondary: stationCoord DESCENDING - Within same stop, aft positions (higher z-coord) load first
+ * 2. Secondary: stationCoord ASCENDING - Forward positions (lower z-coord) load first within same stop
  * 3. Tertiary: Non-hazmat before hazmat within same stop/position
  * 
  * Result:
- * - Final destination cargo loads first → positioned deepest (front of aircraft)
- * - First stop cargo loads last → positioned at rear (easy to offload first)
- * - At each stop, unloading proceeds forward-to-ramp
+ * - Forward cargo loads first → ends up deeper in aircraft
+ * - Aft cargo loads last → most accessible at ramp for unloading
+ * - Unloading proceeds aft to forward (reverse of loading order)
  */
 export function calculateLoadingSequence(loadPlan: AircraftLoadPlan): LoadingSequenceItem[] {
   const cargoItems: SortableCargoItem[] = [];
@@ -245,17 +248,17 @@ export function getLoadingConstraints(
 }
 
 /**
- * Sort cargo items for loading using FILO (First In, Last Out) logic.
+ * Sort cargo items for loading (Forward to Aft order).
  * 
- * Sort order (all DESCENDING for FILO):
+ * Sort order:
  * 1. destinationStopIndex DESCENDING - Higher stop index loads first (goes deepest)
- * 2. stationCoord DESCENDING - Aft positions (higher z-coord) load first within same stop
+ * 2. stationCoord ASCENDING - Forward positions (lower z-coord) load first within same stop
  * 3. hazmat flag - Non-hazmat (0) before hazmat (1) within same group
  * 
  * This ensures:
- * - Final destination cargo is loaded first and ends up deepest in aircraft
- * - First stop cargo is loaded last and is positioned nearest to ramp
- * - Unloading at each stop proceeds logically from rear to front
+ * - Forward cargo loads first → ends up deeper in aircraft
+ * - Aft cargo loads last → most accessible at ramp
+ * - Unloading proceeds aft to forward (reverse order)
  */
 function sortCargoForLoading(items: SortableCargoItem[]): SortableCargoItem[] {
   return [...items].sort((a, b) => {
@@ -264,7 +267,7 @@ function sortCargoForLoading(items: SortableCargoItem[]): SortableCargoItem[] {
     }
 
     if (a.stationCoord !== b.stationCoord) {
-      return b.stationCoord - a.stationCoord;
+      return a.stationCoord - b.stationCoord;
     }
 
     const aIsHazmat = a.hazmat ? 1 : 0;

@@ -56,14 +56,15 @@ The upload screen includes a collapsible "Flight Route" section allowing users t
 ## Cargo Loading/Unloading Simulation
 The 3D viewer includes an interactive cargo loading/unloading animation system (`cargoLoadingSequence.ts`, `CargoLoadingAnimation.tsx`):
 
-**Loading Sequence Algorithm (FILO - First In, Last Out)**:
+**Loading Sequence Algorithm (Forward to Aft)**:
 - Primary: Cargo for LAST stop loads FIRST (positioned deepest in aircraft)
-- Secondary: Within same stop, aft positions load before forward (aft-to-forward)
+- Secondary: Within same stop, forward positions load first, aft positions load last
 - Tertiary: Non-hazmat before hazmat within same stop/position group
-- Result: Easy offloading at each stop - cargo needed first is most accessible
+- Result: Aft cargo is most accessible at ramp for easy offloading
 
-**Unloading Sequence (LIFO - Last In, First Out)**:
-- Reverses loading order - last items loaded are first to unload
+**Unloading Sequence (Aft to Forward)**:
+- Reverses loading order - aft items (loaded last) unload first
+- Forward items (loaded first) unload last
 - Supports per-stop offloading visualization
 
 **Animation Controls**:
