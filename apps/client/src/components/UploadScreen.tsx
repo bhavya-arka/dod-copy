@@ -19,13 +19,20 @@ import {
 } from "../lib/pacafTypes";
 import * as XLSX from "xlsx";
 import ManualCargoEntry, { CargoItem, escapeCSV } from "./ManualCargoEntry";
-import { Minus, Plus, Lock, Unlock, ChevronDown, Info, CheckCircle } from "lucide-react";
+import { Minus, Plus, Lock, Unlock, ChevronDown, ChevronUp, Info, CheckCircle, MapPin, Plane, X, ArrowUp, ArrowDown, PlusCircle } from "lucide-react";
+
+export interface RouteConfig {
+  origin: string;
+  destination: string;
+  intermediateStops: string[];
+}
 
 interface UploadScreenProps {
   onFileUpload: (content: string, filename: string) => void;
   isProcessing: boolean;
   error: string | null;
   onFleetAvailabilityChange?: (availability: FleetAvailability) => void;
+  onRouteConfigChange?: (routeConfig: RouteConfig) => void;
 }
 
 const MIXED_FLEET_POLICIES: { value: MixedFleetMode; label: string }[] = [
@@ -40,12 +47,19 @@ export default function UploadScreen({
   isProcessing,
   error,
   onFleetAvailabilityChange,
+  onRouteConfigChange,
 }: UploadScreenProps) {
   const [dragActive, setDragActive] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [stagedFileContent, setStagedFileContent] = useState<string | null>(null);
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [xlsxError, setXlsxError] = useState<string | null>(null);
+
+  const [origin, setOrigin] = useState("");
+  const [destination, setDestination] = useState("");
+  const [intermediateStops, setIntermediateStops] = useState<string[]>([]);
+  const [newStopInput, setNewStopInput] = useState("");
+  const [routeSectionExpanded, setRouteSectionExpanded] = useState(true);
 
   const [aircraftTypes, setAircraftTypes] = useState<AircraftTypeWithProfile[]>(
     [],
@@ -195,6 +209,42 @@ export default function UploadScreen({
   const hasAvailableAircraft = fleetAvailability.some(
     (a) => a.count > 0 && !a.locked,
   );
+
+  useEffect(() => {
+    if (onRouteConfigChange) {
+      onRouteConfigChange({
+        origin,
+        destination,
+        intermediateStops,
+      });
+    }
+  }, [origin, destination, intermediateStops, onRouteConfigChange]);
+
+  const addIntermediateStop = () => {
+    const trimmed = newStopInput.trim().toUpperCase();
+    if (trimmed && !intermediateStops.includes(trimmed)) {
+      setIntermediateStops([...intermediateStops, trimmed]);
+      setNewStopInput("");
+    }
+  };
+
+  const removeIntermediateStop = (index: number) => {
+    setIntermediateStops(intermediateStops.filter((_, i) => i !== index));
+  };
+
+  const moveStopUp = (index: number) => {
+    if (index <= 0) return;
+    const newStops = [...intermediateStops];
+    [newStops[index - 1], newStops[index]] = [newStops[index], newStops[index - 1]];
+    setIntermediateStops(newStops);
+  };
+
+  const moveStopDown = (index: number) => {
+    if (index >= intermediateStops.length - 1) return;
+    const newStops = [...intermediateStops];
+    [newStops[index], newStops[index + 1]] = [newStops[index + 1], newStops[index]];
+    setIntermediateStops(newStops);
+  };
 
   const updateAvailability = (
     typeId: string,
@@ -684,6 +734,173 @@ export default function UploadScreen({
                   </div>
                 </div>
               </div>
+            </motion.div>
+
+            <motion.div
+              className="space-y-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+            >
+              <button
+                type="button"
+                onClick={() => setRouteSectionExpanded(!routeSectionExpanded)}
+                className="flex items-center justify-between w-full text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  <label className="text-neutral-700 text-sm font-medium cursor-pointer">
+                    Flight Route (Optional)
+                  </label>
+                </div>
+                {routeSectionExpanded ? (
+                  <ChevronUp className="w-4 h-4 text-neutral-500" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-neutral-500" />
+                )}
+              </button>
+
+              <AnimatePresence>
+                {routeSectionExpanded && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="glass-card p-4 sm:p-6 space-y-4">
+                      <div className="flex items-start gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+                        <Plane className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                        <p className="text-xs text-blue-700">
+                          Define the flight route for cargo loading/unloading sequence optimization.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-medium text-neutral-600">
+                            Origin Base
+                          </label>
+                          <input
+                            type="text"
+                            value={origin}
+                            onChange={(e) => setOrigin(e.target.value.toUpperCase())}
+                            placeholder="Origin Base (e.g., KADW)"
+                            className="w-full h-10 px-3 border border-neutral-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary focus:border-transparent placeholder:text-neutral-400"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-xs font-medium text-neutral-600">
+                            Destination Base
+                          </label>
+                          <input
+                            type="text"
+                            value={destination}
+                            onChange={(e) => setDestination(e.target.value.toUpperCase())}
+                            placeholder="Destination Base (e.g., RJTY)"
+                            className="w-full h-10 px-3 border border-neutral-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary focus:border-transparent placeholder:text-neutral-400"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-neutral-200 space-y-3">
+                        <label className="text-xs font-medium text-neutral-600">
+                          Intermediate Stops
+                        </label>
+                        
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newStopInput}
+                            onChange={(e) => setNewStopInput(e.target.value.toUpperCase())}
+                            placeholder="Add stop (e.g., PHNL)"
+                            onKeyDown={(e) => e.key === "Enter" && addIntermediateStop()}
+                            className="flex-1 h-10 px-3 border border-neutral-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary focus:border-transparent placeholder:text-neutral-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={addIntermediateStop}
+                            disabled={!newStopInput.trim()}
+                            className="h-10 px-4 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                          >
+                            <PlusCircle className="w-4 h-4" />
+                            Add Stop
+                          </button>
+                        </div>
+
+                        {intermediateStops.length > 0 && (
+                          <div className="space-y-2">
+                            {intermediateStops.map((stop, index) => (
+                              <div
+                                key={`${stop}-${index}`}
+                                className="flex items-center gap-2 p-3 bg-white border border-neutral-200 rounded-lg"
+                              >
+                                <span className="w-6 h-6 flex items-center justify-center bg-neutral-100 rounded-full text-xs font-medium text-neutral-600">
+                                  {index + 1}
+                                </span>
+                                <span className="flex-1 font-medium text-sm text-neutral-900">
+                                  {stop}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => moveStopUp(index)}
+                                    disabled={index === 0}
+                                    className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                  >
+                                    <ArrowUp className="w-4 h-4 text-neutral-600" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => moveStopDown(index)}
+                                    disabled={index === intermediateStops.length - 1}
+                                    className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                  >
+                                    <ArrowDown className="w-4 h-4 text-neutral-600" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeIntermediateStop(index)}
+                                    className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-50 text-red-500 transition-colors"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {(origin || destination || intermediateStops.length > 0) && (
+                        <div className="pt-4 border-t border-neutral-200">
+                          <label className="text-xs font-medium text-neutral-600 mb-2 block">
+                            Route Preview
+                          </label>
+                          <div className="flex items-center flex-wrap gap-2 p-3 bg-neutral-50 rounded-lg">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${origin ? "bg-green-100 text-green-700" : "bg-neutral-200 text-neutral-500"}`}>
+                              {origin || "Origin"}
+                            </span>
+                            {intermediateStops.map((stop, index) => (
+                              <React.Fragment key={`preview-${stop}-${index}`}>
+                                <span className="text-neutral-400">→</span>
+                                <span className="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                                  {stop}
+                                </span>
+                              </React.Fragment>
+                            ))}
+                            <span className="text-neutral-400">→</span>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${destination ? "bg-amber-100 text-amber-700" : "bg-neutral-200 text-neutral-500"}`}>
+                              {destination || "Destination"}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
 
             <motion.div
