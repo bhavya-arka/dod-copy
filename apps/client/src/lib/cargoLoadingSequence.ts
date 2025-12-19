@@ -250,9 +250,13 @@ export function getLoadingConstraints(
 /**
  * Sort cargo items for loading (Forward to Aft order).
  * 
+ * Note: Solver coordinate system is ramp-origin (x=0 at ramp, increases toward nose)
+ * - Lower stationCoord = AFT (near ramp)
+ * - Higher stationCoord = FORWARD (near nose)
+ * 
  * Sort order:
  * 1. destinationStopIndex DESCENDING - Higher stop index loads first (goes deepest)
- * 2. stationCoord ASCENDING - Forward positions (lower z-coord) load first within same stop
+ * 2. stationCoord DESCENDING - Forward positions (higher coord) load first within same stop
  * 3. hazmat flag - Non-hazmat (0) before hazmat (1) within same group
  * 
  * This ensures:
@@ -267,7 +271,7 @@ function sortCargoForLoading(items: SortableCargoItem[]): SortableCargoItem[] {
     }
 
     if (a.stationCoord !== b.stationCoord) {
-      return a.stationCoord - b.stationCoord;
+      return b.stationCoord - a.stationCoord;
     }
 
     const aIsHazmat = a.hazmat ? 1 : 0;

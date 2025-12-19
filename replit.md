@@ -56,9 +56,11 @@ The upload screen includes a collapsible "Flight Route" section allowing users t
 ## Cargo Loading/Unloading Simulation
 The 3D viewer includes an interactive cargo loading/unloading animation system (`cargoLoadingSequence.ts`, `CargoLoadingAnimation.tsx`):
 
+**Coordinate System Note**: The solver uses ramp-origin coordinates (x=0 at ramp/aft, increasing toward nose/forward). Lower position_coord = AFT, higher = FORWARD.
+
 **Loading Sequence Algorithm (Forward to Aft)**:
 - Primary: Cargo for LAST stop loads FIRST (positioned deepest in aircraft)
-- Secondary: Within same stop, forward positions load first, aft positions load last
+- Secondary: Within same stop, forward positions (higher position_coord) load first, aft positions load last
 - Tertiary: Non-hazmat before hazmat within same stop/position group
 - Result: Aft cargo is most accessible at ramp for easy offloading
 
@@ -66,6 +68,8 @@ The 3D viewer includes an interactive cargo loading/unloading animation system (
 - Reverses loading order - aft items (loaded last) unload first
 - Forward items (loaded first) unload last
 - Supports per-stop offloading visualization
+
+**PDF Export**: The loading order PDF uses actual position_coord values for layout positioning and displays station coordinates in inches in the manifest table.
 
 **Animation Controls**:
 - Mode toggle: Switch between LOAD (green) and UNLOAD (orange) modes

@@ -163,78 +163,76 @@ function drawAircraftLayout(
   const sequenceMap = new Map<string, LoadingSequenceItem>();
   sequence.forEach(item => sequenceMap.set(item.id, item));
 
+  // Draw station position labels and empty position backgrounds
   for (let idx = 0; idx < spec.pallet_positions; idx++) {
     const station = spec.stations[idx];
     const rdlDist = station?.rdl_distance || (idx * 120 + 60);
     const posX = x + rdlDist * scale - palletLength / 2;
     const posY = y + (cargoWidth - palletWidth) / 2;
     const isRamp = spec.ramp_positions.includes(idx + 1);
-    const placement = loadPlan.pallets.find(p => p.position_index === idx);
 
+    // Draw position number labels
     doc.setFontSize(5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(55, 65, 81);
     doc.text(`${idx + 1}${isRamp ? 'R' : ''}`, posX + palletLength / 2, posY - 2, { align: 'center' });
-
-    if (placement) {
-      const pallet = placement.pallet;
-      const seqItem = sequenceMap.get(pallet.id);
-      
-      let colors: ColorScheme;
-      if (pallet.hazmat_flag) {
-        colors = COLORS.hazmat;
-      } else {
-        colors = COLORS.pallet;
-      }
-
-      const [fr, fg, fb] = hexToRgb(colors.fill);
-      const [sr, sg, sb] = hexToRgb(colors.stroke);
-      
-      doc.setFillColor(fr, fg, fb);
-      doc.setDrawColor(sr, sg, sb);
-      doc.setLineWidth(0.5);
-      doc.setLineDashPattern([], 0);
-      doc.roundedRect(posX, posY, palletLength, palletWidth, 1, 1, 'FD');
-
-      if (seqItem) {
-        doc.setFillColor(37, 99, 235);
-        doc.circle(posX + 4, posY + 4, 3, 'F');
-        doc.setFontSize(5);
-        doc.setTextColor(255, 255, 255);
-        doc.setFont('helvetica', 'bold');
-        doc.text(String(seqItem.sequenceNumber), posX + 4, posY + 5.5, { align: 'center' });
-      }
-
-      doc.setFontSize(4);
-      doc.setTextColor(31, 41, 55);
-      doc.setFont('helvetica', 'bold');
-      const palletId = pallet.id.length > 12 ? pallet.id.substring(0, 12) + '...' : pallet.id;
-      doc.text(palletId, posX + palletLength / 2, posY + palletWidth / 2 - 2, { align: 'center' });
-      
-      doc.setFont('helvetica', 'normal');
-      doc.text(`${Math.round(pallet.gross_weight).toLocaleString()} lb`, posX + palletLength / 2, posY + palletWidth / 2 + 2, { align: 'center' });
-
-      if (pallet.hazmat_flag) {
-        doc.setFontSize(6);
-        doc.setTextColor(220, 38, 38);
-        doc.text('⚠', posX + 2, posY + palletWidth - 2);
-      }
-    } else {
-      const [fr, fg, fb] = hexToRgb(COLORS.empty.fill);
-      const [sr, sg, sb] = hexToRgb(COLORS.empty.stroke);
-      
-      doc.setFillColor(fr, fg, fb);
-      doc.setDrawColor(sr, sg, sb);
-      doc.setLineWidth(0.3);
-      doc.setLineDashPattern([2, 1], 0);
-      doc.roundedRect(posX, posY, palletLength, palletWidth, 1, 1, 'FD');
-      doc.setLineDashPattern([], 0);
-
-      doc.setFontSize(5);
-      doc.setTextColor(156, 163, 175);
-      doc.text('EMPTY', posX + palletLength / 2, posY + palletWidth / 2 + 1.5, { align: 'center' });
-    }
   }
+
+  // Draw actual pallets at their real position_coord locations
+  // Sort by position_coord descending to match loading sequence order (forward first)
+  const sortedPlacements = [...loadPlan.pallets].sort((a, b) => b.position_coord - a.position_coord);
+  
+  sortedPlacements.forEach((placement) => {
+    const pallet = placement.pallet;
+    const seqItem = sequenceMap.get(pallet.id);
+    
+    // Use actual position_coord for X position (ramp-origin: 0=ramp, increasing toward nose)
+    const posX = x + placement.position_coord * scale - palletLength / 2;
+    
+    // Calculate Y position based on lateral placement (for dual-lane aircraft)
+    const lateralOffset = placement.lateral_placement?.y_center_in ?? 0;
+    const posY = y + (cargoWidth / 2) + (lateralOffset * scale) - palletWidth / 2;
+    
+    let colors: ColorScheme;
+    if (pallet.hazmat_flag) {
+      colors = COLORS.hazmat;
+    } else {
+      colors = COLORS.pallet;
+    }
+
+    const [fr, fg, fb] = hexToRgb(colors.fill);
+    const [sr, sg, sb] = hexToRgb(colors.stroke);
+    
+    doc.setFillColor(fr, fg, fb);
+    doc.setDrawColor(sr, sg, sb);
+    doc.setLineWidth(0.5);
+    doc.setLineDashPattern([], 0);
+    doc.roundedRect(posX, posY, palletLength, palletWidth, 1, 1, 'FD');
+
+    if (seqItem) {
+      doc.setFillColor(37, 99, 235);
+      doc.circle(posX + 4, posY + 4, 3, 'F');
+      doc.setFontSize(5);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.text(String(seqItem.sequenceNumber), posX + 4, posY + 5.5, { align: 'center' });
+    }
+
+    doc.setFontSize(4);
+    doc.setTextColor(31, 41, 55);
+    doc.setFont('helvetica', 'bold');
+    const palletId = pallet.id.length > 12 ? pallet.id.substring(0, 12) + '...' : pallet.id;
+    doc.text(palletId, posX + palletLength / 2, posY + palletWidth / 2 - 2, { align: 'center' });
+    
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${Math.round(pallet.gross_weight).toLocaleString()} lb`, posX + palletLength / 2, posY + palletWidth / 2 + 2, { align: 'center' });
+
+    if (pallet.hazmat_flag) {
+      doc.setFontSize(6);
+      doc.setTextColor(220, 38, 38);
+      doc.text('⚠', posX + 2, posY + palletWidth - 2);
+    }
+  });
 
   loadPlan.rolling_stock.forEach((vehicle) => {
     const seqItem = sequenceMap.get(String(vehicle.item_id));
@@ -445,6 +443,9 @@ export function generateLoadingOrderPDF(
       ? item.loadingNotes.slice(0, 2).join('; ')
       : '';
     
+    // Convert scene units back to inches (scale = 0.01)
+    const positionInches = Math.round(item.targetPosition.z * 100);
+    
     return [
       item.sequenceNumber.toString(),
       item.type === 'pallet' ? 'Pallet' : 'Vehicle',
@@ -452,7 +453,7 @@ export function generateLoadingOrderPDF(
       item.name.length > 25 ? item.name.substring(0, 25) + '...' : item.name,
       item.weight.toLocaleString(),
       formatDimensions(item.dimensions.length, item.dimensions.width, item.dimensions.height),
-      `Pos ${Math.ceil(item.targetPosition.z * 39.37 / 120)}`,
+      `${positionInches}"`,
       item.hazmat ? 'YES' : 'No',
       notes.length > 40 ? notes.substring(0, 40) + '...' : notes,
     ];
@@ -465,7 +466,7 @@ export function generateLoadingOrderPDF(
     { header: 'Description', dataKey: 'desc' },
     { header: 'Weight (lbs)', dataKey: 'weight' },
     { header: 'Dimensions', dataKey: 'dims' },
-    { header: 'Position', dataKey: 'pos' },
+    { header: 'Station', dataKey: 'pos' },
     { header: 'HAZMAT', dataKey: 'hazmat' },
   ];
 
