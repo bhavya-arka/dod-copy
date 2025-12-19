@@ -24,8 +24,10 @@ import {
 } from '../lib/pacafTypes';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { Maximize2, X, Minimize2 } from 'lucide-react';
+import { Maximize2, X, Minimize2, Play, Pause, SkipBack, SkipForward, RotateCcw, Box } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { calculateLoadingSequence, LoadingSequenceItem, estimateTotalLoadingTime } from '../lib/cargoLoadingSequence';
+import CargoLoadingAnimation from './CargoLoadingAnimation';
 
 interface LoadPlan3DViewerProps {
   loadPlan: AircraftLoadPlan;
@@ -69,6 +71,7 @@ enum Controls {
   measure = 'measure',
   heatmap = 'heatmap',
   escape = 'escape',
+  animation = 'animation',
 }
 
 const keyMap = [
@@ -80,6 +83,7 @@ const keyMap = [
   { name: Controls.measure, keys: ['KeyM'] },
   { name: Controls.heatmap, keys: ['KeyH'] },
   { name: Controls.escape, keys: ['Escape'] },
+  { name: Controls.animation, keys: ['KeyL'] },
 ];
 
 function CameraController({ 
@@ -89,6 +93,7 @@ function CameraController({
   onMeasureToggle,
   onHeatmapToggle,
   onMeasureReset,
+  onAnimationToggle,
   showMeasure
 }: { 
   centerZ: number; 
@@ -97,6 +102,7 @@ function CameraController({
   onMeasureToggle: () => void;
   onHeatmapToggle: () => void;
   onMeasureReset: () => void;
+  onAnimationToggle: () => void;
   showMeasure: boolean;
 }) {
   const { camera } = useThree();
@@ -146,6 +152,15 @@ function CameraController({
       }
     );
   }, [subscribe, onMeasureReset, showMeasure]);
+
+  useEffect(() => {
+    return subscribe(
+      (state) => state.animation,
+      (pressed) => {
+        if (pressed) onAnimationToggle();
+      }
+    );
+  }, [subscribe, onAnimationToggle]);
 
   useFrame((_, delta) => {
     const state = getState();
@@ -237,16 +252,20 @@ function ViewerSidebar({
   viewMode, 
   showMinimap,
   showMeasure,
+  animationMode,
   onViewModeChange, 
   onMinimapToggle,
-  onMeasureToggle
+  onMeasureToggle,
+  onAnimationToggle
 }: { 
   viewMode: ViewMode;
   showMinimap: boolean;
   showMeasure: boolean;
+  animationMode: boolean;
   onViewModeChange: (mode: ViewMode) => void;
   onMinimapToggle: () => void;
   onMeasureToggle: () => void;
+  onAnimationToggle: () => void;
 }) {
   return (
     <div className="absolute left-4 top-20 flex flex-col gap-2 z-10">
@@ -337,12 +356,27 @@ function ViewerSidebar({
             </TooltipTrigger>
             <TooltipContent side="right">Toggle measurement mode</TooltipContent>
           </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={animationMode ? 'default' : 'ghost'}
+                size="sm"
+                onClick={onAnimationToggle}
+                className="w-full justify-start text-white"
+              >
+                <Box className="w-4 h-4 mr-1" /> Simulate (L)
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Simulate cargo loading sequence</TooltipContent>
+          </Tooltip>
         </div>
         
         <div className="bg-slate-800/80 rounded-lg p-2 text-xs text-slate-400">
           <p className="font-medium text-slate-300 mb-1">Controls</p>
           <p>WASD - Move camera</p>
           <p>R - Reset view</p>
+          <p>L - Load simulation</p>
           <p>Click - Select cargo</p>
         </div>
       </TooltipProvider>
@@ -1421,6 +1455,127 @@ function MeasureHUD({
   return null;
 }
 
+function AnimationControlPanel({
+  isPlaying,
+  animationTime,
+  totalDuration,
+  animationSpeed,
+  onPlayPause,
+  onRewind,
+  onSkipForward,
+  onSkipBackward,
+  onSpeedChange,
+  onClose,
+  onTimeChange
+}: {
+  isPlaying: boolean;
+  animationTime: number;
+  totalDuration: number;
+  animationSpeed: number;
+  onPlayPause: () => void;
+  onRewind: () => void;
+  onSkipForward: () => void;
+  onSkipBackward: () => void;
+  onSpeedChange: (speed: number) => void;
+  onClose: () => void;
+  onTimeChange: (time: number) => void;
+}) {
+  const progressPercent = totalDuration > 0 ? (animationTime / totalDuration) * 100 : 0;
+  
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+  
+  return (
+    <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-slate-900/95 rounded-lg px-6 py-4 shadow-xl border border-slate-700 z-20">
+      <div className="flex items-center gap-6">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onRewind}
+            className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+            title="Rewind to start"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+          
+          <button
+            onClick={onSkipBackward}
+            className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+            title="Skip back 5 seconds"
+          >
+            <SkipBack className="w-4 h-4" />
+          </button>
+          
+          <button
+            onClick={onPlayPause}
+            className={`p-3 rounded-lg ${isPlaying ? 'bg-amber-600 hover:bg-amber-500' : 'bg-green-600 hover:bg-green-500'} text-white transition-colors`}
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+          </button>
+          
+          <button
+            onClick={onSkipForward}
+            className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+            title="Skip forward 5 seconds"
+          >
+            <SkipForward className="w-4 h-4" />
+          </button>
+        </div>
+        
+        <div className="flex flex-col gap-1 min-w-[200px]">
+          <div className="flex justify-between text-xs text-slate-400">
+            <span>{formatTime(animationTime)}</span>
+            <span>{formatTime(totalDuration)}</span>
+          </div>
+          <div className="relative h-2 bg-slate-700 rounded-full overflow-hidden">
+            <div 
+              className="absolute inset-y-0 left-0 bg-blue-500 rounded-full transition-all"
+              style={{ width: `${progressPercent}%` }}
+            />
+            <input
+              type="range"
+              min={0}
+              max={totalDuration}
+              step={0.1}
+              value={animationTime}
+              onChange={(e) => onTimeChange(parseFloat(e.target.value))}
+              className="absolute inset-0 w-full opacity-0 cursor-pointer"
+            />
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <span className="text-slate-400 text-xs">Speed:</span>
+          <select
+            value={animationSpeed}
+            onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
+            className="bg-slate-700 text-white text-sm px-2 py-1 rounded border-none outline-none"
+          >
+            <option value={0.5}>0.5x</option>
+            <option value={1}>1x</option>
+            <option value={2}>2x</option>
+          </select>
+        </div>
+        
+        <button
+          onClick={onClose}
+          className="p-2 rounded-lg bg-red-600/80 hover:bg-red-500 text-white transition-colors"
+          title="Exit animation mode"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      
+      <div className="mt-2 text-center text-xs text-slate-400">
+        Cargo Loading Simulation • {Math.round(progressPercent)}% complete
+      </div>
+    </div>
+  );
+}
+
 function CenterOfBalance({ loadPlan, scale, viewMode }: { loadPlan: AircraftLoadPlan; scale: number; viewMode: ViewMode }) {
   // FIX: Show ACTUAL CG position in cargo bay, not clamped to envelope
   // The CoB percentage is relative to the MAC (Mean Aerodynamic Chord)
@@ -1494,7 +1649,14 @@ function Scene({
   onHeatmapToggle,
   onMeasureClick,
   onMeasureHover,
-  onMeasureReset
+  onMeasureReset,
+  animationMode,
+  isPlaying,
+  animationTime,
+  animationSpeed,
+  loadingSequence,
+  highlightedItemId,
+  onAnimationToggle
 }: { 
   loadPlan: AircraftLoadPlan;
   viewerState: ViewerState;
@@ -1505,6 +1667,13 @@ function Scene({
   onMeasureClick: (point: THREE.Vector3, snapType: 'vertex' | 'edge' | 'surface') => void;
   onMeasureHover: (point: THREE.Vector3 | null, snapType: 'vertex' | 'edge' | 'surface' | null) => void;
   onMeasureReset: () => void;
+  animationMode: boolean;
+  isPlaying: boolean;
+  animationTime: number;
+  animationSpeed: number;
+  loadingSequence: LoadingSequenceItem[];
+  highlightedItemId: string | null;
+  onAnimationToggle: () => void;
 }) {
   const scale = 0.01;
   const spec = loadPlan.aircraft_spec;
@@ -1553,27 +1722,40 @@ function Scene({
         <HeatmapFloor loadPlan={loadPlan} scale={scale} />
       )}
       
-      {loadPlan.pallets.map((placement) => (
-        <Pallet3D 
-          key={placement.pallet.id} 
-          placement={placement} 
-          scale={scale}
-          viewMode={viewerState.viewMode}
-          isSelected={viewerState.selectedCargo?.id === placement.pallet.id}
-          onSelect={onSelectCargo}
+      {animationMode ? (
+        <CargoLoadingAnimation
+          loadPlan={loadPlan}
+          sequence={loadingSequence}
+          isPlaying={isPlaying}
+          speed={animationSpeed}
+          currentTime={animationTime}
+          highlightedItemId={highlightedItemId}
         />
-      ))}
-      
-      {validRollingStock.map((vehicle) => (
-        <Vehicle3D 
-          key={String(vehicle.item_id)} 
-          vehicle={vehicle} 
-          scale={scale}
-          viewMode={viewerState.viewMode}
-          isSelected={viewerState.selectedCargo?.id === String(vehicle.item_id)}
-          onSelect={onSelectCargo}
-        />
-      ))}
+      ) : (
+        <>
+          {loadPlan.pallets.map((placement) => (
+            <Pallet3D 
+              key={placement.pallet.id} 
+              placement={placement} 
+              scale={scale}
+              viewMode={viewerState.viewMode}
+              isSelected={viewerState.selectedCargo?.id === placement.pallet.id}
+              onSelect={onSelectCargo}
+            />
+          ))}
+          
+          {validRollingStock.map((vehicle) => (
+            <Vehicle3D 
+              key={String(vehicle.item_id)} 
+              vehicle={vehicle} 
+              scale={scale}
+              viewMode={viewerState.viewMode}
+              isSelected={viewerState.selectedCargo?.id === String(vehicle.item_id)}
+              onSelect={onSelectCargo}
+            />
+          ))}
+        </>
+      )}
       
       {spec.seat_zones?.map((seatZone, zoneIndex) => {
         let startIndex = 0;
@@ -1629,6 +1811,7 @@ function Scene({
         onMeasureToggle={onMeasureToggle}
         onHeatmapToggle={onHeatmapToggle}
         onMeasureReset={onMeasureReset}
+        onAnimationToggle={onAnimationToggle}
         showMeasure={viewerState.showMeasure}
       />
     </>
@@ -1652,6 +1835,46 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
     measureState: initialMeasureState
   });
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  const [animationMode, setAnimationMode] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [animationTime, setAnimationTime] = useState(0);
+  const [animationSpeed, setAnimationSpeed] = useState(1);
+  const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
+  
+  const loadingSequence = useMemo(() => calculateLoadingSequence(loadPlan), [loadPlan]);
+  const totalDuration = useMemo(() => estimateTotalLoadingTime(loadingSequence), [loadingSequence]);
+  
+  useEffect(() => {
+    if (!isPlaying || !animationMode) return;
+    
+    let animationFrameId: number;
+    let lastTime = performance.now();
+    
+    const animate = (currentTime: number) => {
+      const deltaTime = (currentTime - lastTime) / 1000;
+      lastTime = currentTime;
+      
+      setAnimationTime(prev => {
+        const newTime = prev + deltaTime * animationSpeed;
+        if (newTime >= totalDuration) {
+          setIsPlaying(false);
+          return totalDuration;
+        }
+        return newTime;
+      });
+      
+      animationFrameId = requestAnimationFrame(animate);
+    };
+    
+    animationFrameId = requestAnimationFrame(animate);
+    
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [isPlaying, animationMode, animationSpeed, totalDuration]);
   
   const scale = 0.01;
   
@@ -1748,6 +1971,48 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
     }));
   }, []);
   
+  const handleAnimationToggle = useCallback(() => {
+    setAnimationMode(prev => {
+      if (!prev) {
+        setAnimationTime(0);
+        setIsPlaying(true);
+      } else {
+        setIsPlaying(false);
+      }
+      return !prev;
+    });
+  }, []);
+  
+  const handlePlayPause = useCallback(() => {
+    setIsPlaying(prev => !prev);
+  }, []);
+  
+  const handleRewind = useCallback(() => {
+    setAnimationTime(0);
+  }, []);
+  
+  const handleSkipForward = useCallback(() => {
+    setAnimationTime(prev => Math.min(prev + 5, totalDuration));
+  }, [totalDuration]);
+  
+  const handleSkipBackward = useCallback(() => {
+    setAnimationTime(prev => Math.max(prev - 5, 0));
+  }, []);
+  
+  const handleSpeedChange = useCallback((speed: number) => {
+    setAnimationSpeed(speed);
+  }, []);
+  
+  const handleAnimationClose = useCallback(() => {
+    setAnimationMode(false);
+    setIsPlaying(false);
+    setAnimationTime(0);
+  }, []);
+  
+  const handleTimeChange = useCallback((time: number) => {
+    setAnimationTime(time);
+  }, []);
+  
   const viewerContent = (
     <>
       <div className="flex justify-between items-center p-4 border-b border-neutral-200 bg-white z-20">
@@ -1791,6 +2056,13 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
               onMeasureClick={handleMeasureClick}
               onMeasureHover={handleMeasureHover}
               onMeasureReset={handleMeasureReset}
+              animationMode={animationMode}
+              isPlaying={isPlaying}
+              animationTime={animationTime}
+              animationSpeed={animationSpeed}
+              loadingSequence={loadingSequence}
+              highlightedItemId={highlightedItemId}
+              onAnimationToggle={handleAnimationToggle}
             />
           </Canvas>
         </KeyboardControls>
@@ -1799,9 +2071,11 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
           viewMode={viewerState.viewMode}
           showMinimap={viewerState.showMinimap}
           showMeasure={viewerState.showMeasure}
+          animationMode={animationMode}
           onViewModeChange={handleViewModeChange}
           onMinimapToggle={handleMinimapToggle}
           onMeasureToggle={handleMeasureToggle}
+          onAnimationToggle={handleAnimationToggle}
         />
         
         {viewerState.selectedCargo && (
@@ -1820,6 +2094,22 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
             measureState={viewerState.measureState} 
             scale={scale}
             onReset={handleMeasureReset}
+          />
+        )}
+        
+        {animationMode && (
+          <AnimationControlPanel
+            isPlaying={isPlaying}
+            animationTime={animationTime}
+            totalDuration={totalDuration}
+            animationSpeed={animationSpeed}
+            onPlayPause={handlePlayPause}
+            onRewind={handleRewind}
+            onSkipForward={handleSkipForward}
+            onSkipBackward={handleSkipBackward}
+            onSpeedChange={handleSpeedChange}
+            onClose={handleAnimationClose}
+            onTimeChange={handleTimeChange}
           />
         )}
       </div>
@@ -1849,7 +2139,7 @@ export default function LoadPlan3DViewer({ loadPlan }: LoadPlan3DViewerProps) {
             <span>PAX Weight: <strong>{((loadPlan.pax_weight || loadPlan.pax_count * PAX_WEIGHT_LB) / 1000).toFixed(1)}k lbs</strong></span>
             <span>Seat Util: <strong className={`${(loadPlan.seat_utilization_percent || 0) > 80 ? 'text-amber-600' : ''}`}>{(loadPlan.seat_utilization_percent || 0).toFixed(1)}%</strong></span>
           </div>
-          <span className="text-neutral-400 text-xs">WASD to move • R reset • M measure • ESC cancel</span>
+          <span className="text-neutral-400 text-xs">WASD to move • R reset • M measure • L simulate • ESC cancel</span>
         </div>
       </div>
     </>

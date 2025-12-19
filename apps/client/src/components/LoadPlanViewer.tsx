@@ -22,6 +22,7 @@ import {
   exportLoadPlansToPDF,
   exportSingleLoadPlanToPDF,
 } from "../lib/pdfExport";
+import { generateLoadingOrderPDF } from "../lib/loadingOrderPdfExport";
 import {
   downloadAllICODESPlans,
   downloadA2IBundle,
@@ -190,6 +191,17 @@ export default function LoadPlanViewer({
   const handleExportManifest = () => {
     const bundle = generateA2IBundle(allocationResult);
     downloadManifestCSV(bundle);
+    setShowExportMenu(false);
+  };
+
+  const handleExportLoadingOrder = () => {
+    if (selectedPlan) {
+      generateLoadingOrderPDF(selectedPlan, {
+        title: `Loading Order - ${selectedPlan.aircraft_id}`,
+        includeNotes: true,
+        missionId: (selectedPlan as any).mission_id || undefined,
+      });
+    }
     setShowExportMenu(false);
   };
 
@@ -518,6 +530,16 @@ export default function LoadPlanViewer({
                       <div className="font-medium">Manifest CSV</div>
                       <div className="text-xs text-neutral-500">
                         Cargo manifest spreadsheet
+                      </div>
+                    </button>
+                    <button
+                      onClick={handleExportLoadingOrder}
+                      disabled={!selectedPlan}
+                      className="w-full text-left px-4 py-3 text-neutral-900 hover:bg-neutral-100 transition-colors border-b border-neutral-200 disabled:opacity-50"
+                    >
+                      <div className="font-medium">Loading Order PDF</div>
+                      <div className="text-xs text-neutral-500">
+                        Step-by-step cargo loading sequence
                       </div>
                     </button>
                     <button
