@@ -73,6 +73,7 @@ interface SortableCargoItem {
   dimensions: { length: number; width: number; height: number };
   targetPosition: { x: number; y: number; z: number };
   positionIndex: number;
+  stationCoord: number;
   hazmat: boolean;
   isRamp: boolean;
   loadingNotes: string[];
@@ -95,7 +96,7 @@ const DEFAULT_DESTINATION_STOP_INDEX = 999;
  * 
  * FILO Loading Order (First In, Last Out for multi-stop flights):
  * 1. Primary: destinationStopIndex DESCENDING - Cargo for LAST stop loads FIRST (goes deepest)
- * 2. Secondary: positionIndex DESCENDING - Within same stop, aft positions load first (end up deeper)
+ * 2. Secondary: stationCoord DESCENDING - Within same stop, aft positions (higher z-coord) load first
  * 3. Tertiary: Non-hazmat before hazmat within same stop/position
  * 
  * Result:
@@ -111,10 +112,10 @@ export function calculateLoadingSequence(loadPlan: AircraftLoadPlan): LoadingSeq
     const tcn = pallet.items.length > 0 ? pallet.items[0].tcn || pallet.items[0].lead_tcn : undefined;
     
     const targetX = palletPlacement.lateral_placement?.y_center_in 
-      ? inchesToMeters(palletPlacement.lateral_placement.y_center_in)
+      ? inchesToSceneUnits(palletPlacement.lateral_placement.y_center_in)
       : 0;
-    const targetY = inchesToMeters(pallet.height / 2);
-    const targetZ = inchesToMeters(palletPlacement.position_coord);
+    const targetY = 0.05;  // Floor offset, mesh handles height centering
+    const targetZ = inchesToSceneUnits(palletPlacement.position_coord);
 
     const destinationStopIndex = pallet.destinationStop ?? DEFAULT_DESTINATION_STOP_INDEX;
 
@@ -131,6 +132,7 @@ export function calculateLoadingSequence(loadPlan: AircraftLoadPlan): LoadingSeq
       },
       targetPosition: { x: targetX, y: targetY, z: targetZ },
       positionIndex: palletPlacement.position_index,
+      stationCoord: palletPlacement.position_coord,
       hazmat: pallet.hazmat_flag,
       isRamp: palletPlacement.is_ramp,
       loadingNotes: generatePalletLoadingNotes(pallet, palletPlacement),
@@ -141,6 +143,7 @@ export function calculateLoadingSequence(loadPlan: AircraftLoadPlan): LoadingSeq
   for (const vehicle of loadPlan.rolling_stock) {
     const positionIndex = estimateVehiclePositionIndex(vehicle, loadPlan);
     const destinationStopIndex = vehicle.item.destinationStop ?? DEFAULT_DESTINATION_STOP_INDEX;
+    const vehicleZCoord = vehicle.position?.z ?? 0;
     
     cargoItems.push({
       id: String(vehicle.item_id),
@@ -154,11 +157,12 @@ export function calculateLoadingSequence(loadPlan: AircraftLoadPlan): LoadingSeq
         height: vehicle.height,
       },
       targetPosition: {
-        x: inchesToMeters(vehicle.position.x),
-        y: inchesToMeters(vehicle.position.y + vehicle.height / 2),
-        z: inchesToMeters(vehicle.position.z),
+        x: inchesToSceneUnits(vehicle.position.x),
+        y: 0.05,  // Floor offset, mesh handles height centering
+        z: inchesToSceneUnits(vehicleZCoord),
       },
       positionIndex,
+      stationCoord: vehicleZCoord,
       hazmat: vehicle.item.hazmat_flag,
       isRamp: vehicle.deck === 'RAMP',
       loadingNotes: generateVehicleLoadingNotes(vehicle),
@@ -245,7 +249,7 @@ export function getLoadingConstraints(
  * 
  * Sort order (all DESCENDING for FILO):
  * 1. destinationStopIndex DESCENDING - Higher stop index loads first (goes deepest)
- * 2. positionIndex DESCENDING - Aft positions load first within same stop
+ * 2. stationCoord DESCENDING - Aft positions (higher z-coord) load first within same stop
  * 3. hazmat flag - Non-hazmat (0) before hazmat (1) within same group
  * 
  * This ensures:
@@ -259,8 +263,8 @@ function sortCargoForLoading(items: SortableCargoItem[]): SortableCargoItem[] {
       return b.destinationStopIndex - a.destinationStopIndex;
     }
 
-    if (a.positionIndex !== b.positionIndex) {
-      return b.positionIndex - a.positionIndex;
+    if (a.stationCoord !== b.stationCoord) {
+      return b.stationCoord - a.stationCoord;
     }
 
     const aIsHazmat = a.hazmat ? 1 : 0;
@@ -305,8 +309,8 @@ function calculateAnimationDelay(index: number, item: SortableCargoItem): number
   return Math.round(delay * 10) / 10;
 }
 
-function inchesToMeters(inches: number): number {
-  return inches * 0.0254;
+function inchesToSceneUnits(inches: number): number {
+  return inches * 0.01;
 }
 
 function getPalletName(
@@ -434,13 +438,17 @@ function getSequenceReasoning(
     reasons.push(`stop ${item.destinationStopIndex + 1}`);
   }
   
-  const maxPosition = Math.max(...allItems.map(i => i.positionIndex));
-  const minPosition = Math.min(...allItems.map(i => i.positionIndex));
+  const maxStationCoord = Math.max(...allItems.map(i => i.stationCoord));
+  const minStationCoord = Math.min(...allItems.map(i => i.stationCoord));
+  const stationRange = maxStationCoord - minStationCoord;
   
-  if (item.positionIndex >= maxPosition - 2 && maxPosition > 3) {
-    reasons.push('aft position (loads early)');
-  } else if (item.positionIndex <= minPosition + 2) {
-    reasons.push('forward position');
+  if (stationRange > 0) {
+    const relativePosition = (item.stationCoord - minStationCoord) / stationRange;
+    if (relativePosition > 0.7) {
+      reasons.push('aft station (loads early)');
+    } else if (relativePosition < 0.3) {
+      reasons.push('forward station');
+    }
   }
   
   if (item.hazmat) {
