@@ -1,0 +1,121 @@
+1️⃣ 3D Viewport Animation Button – Cargo Loading Simulation
+
+Purpose:
+A button in the 3D viewport that triggers a fully dynamic cargo loading simulation, showing the exact order in which items are loaded into a plane or vehicle.
+
+Feature List:
+
+Dynamic Animation Trigger
+
+Button appears contextually in the 3D viewport when cargo objects are present.
+
+On click, dynamically calculates loading sequence based on cargo size, weight, and flight constraints.
+
+No hardcoded sequences; sequence adapts to changes in cargo or plane configuration in real-time.
+
+3D Cargo Simulation
+
+Smooth, physics-based animation of cargo moving into position.
+
+Visualizes realistic stacking, balancing, and pallet constraints.
+
+Supports mixed cargo types: pallets, loose items, hazmat, special equipment.
+
+Interactive Controls
+
+Pause, rewind, fast-forward animation.
+
+Option to highlight next item in sequence with a glow or outline effect.
+
+Ability to rotate and zoom viewport during animation.
+
+Performance & Responsiveness
+
+Efficient WebGL / Three.js integration for high-performance rendering.
+
+Lazy loading of 3D assets to prevent UI lag.
+
+Responsive design: adapts to different screen sizes while maintaining button accessibility.
+
+Real-time Data Integration
+
+Reads cargo manifest dynamically from app state or API.
+
+Updates animation sequence immediately when cargo list changes.
+
+No static hardcoding of cargo or sequence.
+
+Tailwind & UI Practices
+
+Button uses Tailwind utility classes for responsive sizing, hover/active states, and transitions.
+
+Tooltip support explaining button function.
+
+Accessible focus states and keyboard navigation.
+
+2️⃣ Flight Information Window – Loading Order PDF Export
+
+Purpose:
+On any flight info window, provide a dynamic PDF export showing exact loading order with a 2D visual layout of cargo placement.
+
+Feature List:
+
+Dynamic PDF Generation
+
+Generates PDF on-demand when user clicks “Export Loading Order.”
+
+Reads the current cargo list, sequence, and position dynamically—no hardcoded content.
+
+Supports multi-page PDFs for large cargo manifests.
+
+High-Resolution 2D Visuals
+
+2D schematic of plane/vehicle cargo layout with clear visual markers.
+
+Color-coded or icon-based representation for different cargo types (hazmat, pallets, equipment).
+
+Adaptive layout scaling for different page sizes (A4, Letter, etc.) while preserving clarity.
+
+Detailed Item Information
+
+For each cargo item: name, dimensions, weight, pallet number, destination location within plane.
+
+Sequence number indicating loading order.
+
+Optional metadata: hazardous item flag, special handling instructions.
+
+Optimized Engine
+
+Utilizes dynamic layout algorithms to minimize empty space while respecting stacking and placement rules.
+
+Caching of intermediate layout calculations for faster repeated exports.
+
+Uses vector graphics (SVG or canvas-based) to ensure sharp visuals at any resolution.
+
+Responsive Integration
+
+Works on every flight info window without extra configuration.
+
+PDF generation adapts dynamically to changes in cargo manifest or user edits.
+
+Export button styled with Tailwind: responsive sizing, hover/active states, clear labeling.
+
+Deep Dynamic Coding Practices
+
+No hardcoded sequences, positions, or visuals—entire layout computed at runtime.
+
+Modular, reusable functions for layout, graphics rendering, and PDF composition.
+
+Fully testable and debuggable: can preview layout before export.
+
+Easily extendable for additional metadata or export formats.
+
+✅ Notes for Implementation
+
+Use Three.js or equivalent for 3D viewport animations.
+
+Use jsPDF + SVG/Canvas or PDFKit for high-quality dynamic PDF generation.
+
+Tailwind utilities for all buttons, modals, and layouts to maintain visual responsiveness.
+
+Ensure modular architecture: cargo logic, PDF layout engine, and animation engine should all be loosely coupled and reusable.
