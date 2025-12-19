@@ -46,6 +46,12 @@ AI insights utilize AWS Bedrock with the Nova Lite model, configurable via envir
 ## Lateral Pallet Placement & Seat Visualization
 The system incorporates 2D grid-based pallet placement considering lateral lanes (e.g., C-17 has two, C-130 has one) and tracks lateral moments for balanced CoB. Passenger seat zones are defined per aircraft, visualized in both 2D ICODES (overlays) and 3D (individual seat meshes) showing occupancy.
 
+## Cargo Loading Simulation
+The 3D viewer includes an interactive cargo loading animation system (`cargoLoadingSequence.ts`, `CargoLoadingAnimation.tsx`):
+- **Loading Sequence Algorithm**: Prioritizes weight-first (heavy >7000 lbs first for CG stability), then forward-to-aft position, then non-hazmat before hazmat within same weight/position
+- **Animation Controls**: Play/pause, rewind, speed control (0.5x/1x/2x), progress scrubber, and keyboard shortcuts (L key to toggle)
+- **Loading Order PDF Export**: Generates 2D aircraft layout with sequence numbers and detailed manifest table via "Loading Order PDF" button in export menu
+
 # External Dependencies
 
 **Database Services**:
