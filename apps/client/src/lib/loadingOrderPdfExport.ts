@@ -239,7 +239,9 @@ function drawAircraftLayout(
     const vLength = vehicle.length * scale;
     const vWidth = vehicle.width * scale;
     const posX = x + vehicle.position.z * scale - vLength / 2;
-    const posY = y + (cargoWidth - vWidth) / 2;
+    // Use lateral placement if available for proper lane positioning
+    const lateralOffset = vehicle.lateral_placement?.y_center_in ?? vehicle.position?.x ?? 0;
+    const posY = y + (cargoWidth / 2) + (lateralOffset * scale) - vWidth / 2;
 
     let colors: ColorScheme;
     if (vehicle.item.hazmat_flag) {
