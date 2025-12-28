@@ -703,3 +703,29 @@ export const insertSeaContainerSchema = createInsertSchema(seaContainers).omit({
 });
 export type InsertSeaContainer = z.infer<typeof insertSeaContainerSchema>;
 export type SeaContainer = typeof seaContainers.$inferSelect;
+
+// ============================================================================
+// WAREHOUSE TRANSFERS TABLE
+// ============================================================================
+
+export const warehouseTransfers = pgTable("warehouse_transfers", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  source_site_id: integer("source_site_id").notNull(),
+  destination_site_id: integer("destination_site_id").notNull(),
+  status: text("status").notNull().default("pending"),
+  transfer_items: jsonb("transfer_items").notNull().default([]),
+  notes: text("notes"),
+  scheduled_date: timestamp("scheduled_date"),
+  completed_date: timestamp("completed_date"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseTransferSchema = createInsertSchema(warehouseTransfers).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertWarehouseTransfer = z.infer<typeof insertWarehouseTransferSchema>;
+export type WarehouseTransfer = typeof warehouseTransfers.$inferSelect;

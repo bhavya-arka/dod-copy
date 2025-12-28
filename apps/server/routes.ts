@@ -1,7 +1,15 @@
 import type { Express, Request, Response as ExpressResponse, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { loginSchema, insertUserSchema } from "@shared/schema";
+import { db } from "./db";
+import { 
+  loginSchema, 
+  insertUserSchema,
+  warehouseSites,
+  warehouseInventoryItems,
+  warehouseTransfers
+} from "@shared/schema";
+import { eq, and } from "drizzle-orm";
 import {
   dagNodeService,
   dagEdgeService,
@@ -1896,6 +1904,343 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: "Optimization failed", 
         details: error instanceof Error ? error.message : "Unknown error" 
       });
+    }
+  });
+
+  // ============================================================================
+  // WAREHOUSE MANAGEMENT API (PROTECTED)
+  // ============================================================================
+
+  // GET /api/warehouse/sites - Get all warehouse sites for the current user
+  app.get("/api/warehouse/sites", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const sites = await db.select()
+        .from(warehouseSites)
+        .where(eq(warehouseSites.user_id, req.user!.id));
+      res.json(sites);
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch sites:", error);
+      res.status(500).json({ error: "Failed to fetch warehouse sites" });
+    }
+  });
+
+  // POST /api/warehouse/sites - Create a new warehouse site
+  app.post("/api/warehouse/sites", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { code, name, address, city, country, timezone, latitude, longitude, active } = req.body;
+      
+      if (!code || !name) {
+        return res.status(400).json({ error: "Code and name are required" });
+      }
+
+      const [site] = await db.insert(warehouseSites).values({
+        user_id: req.user!.id,
+        code,
+        name,
+        address: address || null,
+        city: city || null,
+        country: country || null,
+        timezone: timezone || "UTC",
+        latitude: latitude || null,
+        longitude: longitude || null,
+        active: active !== undefined ? active : true,
+      }).returning();
+
+      res.status(201).json(site);
+    } catch (error) {
+      console.error("[Warehouse] Failed to create site:", error);
+      res.status(500).json({ error: "Failed to create warehouse site" });
+    }
+  });
+
+  // GET /api/warehouse/sites/:siteId/inventory - Get inventory items for a site
+  app.get("/api/warehouse/sites/:siteId/inventory", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const items = await db.select()
+        .from(warehouseInventoryItems)
+        .where(eq(warehouseInventoryItems.site_id, siteId));
+
+      res.json(items);
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch inventory:", error);
+      res.status(500).json({ error: "Failed to fetch inventory items" });
+    }
+  });
+
+  // POST /api/warehouse/sites/:siteId/inventory/upload - Upload and parse CSV inventory data
+  app.post("/api/warehouse/sites/:siteId/inventory/upload", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const { csvContent } = req.body;
+      if (!csvContent || typeof csvContent !== 'string') {
+        return res.status(400).json({ error: "csvContent field is required and must be a string" });
+      }
+
+      // Parse CSV
+      const lines = csvContent.trim().split('\n');
+      if (lines.length < 2) {
+        return res.status(400).json({ error: "CSV must have a header row and at least one data row" });
+      }
+
+      const headerLine = lines[0].trim();
+      const headers = headerLine.split(',').map(h => h.trim().toLowerCase());
+
+      // Map expected columns: o, l, h, w, p, q
+      const colIndices = {
+        o: headers.indexOf('o'),
+        l: headers.indexOf('l'),
+        h: headers.indexOf('h'),
+        w: headers.indexOf('w'),
+        p: headers.indexOf('p'),
+        q: headers.indexOf('q'),
+      };
+
+      if (colIndices.o === -1) {
+        return res.status(400).json({ error: "CSV must contain 'o' column (item_id/requisition_no)" });
+      }
+
+      const parsedItems: Array<{
+        site_id: number;
+        requisition_no: string;
+        description: string;
+        quantity: number;
+        unit_price: string | null;
+        raw_row: Record<string, any>;
+      }> = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const values = line.split(',').map(v => v.trim());
+
+        const o = colIndices.o !== -1 ? values[colIndices.o] : '';
+        const l = colIndices.l !== -1 ? parseFloat(values[colIndices.l]) || 0 : 0;
+        const h = colIndices.h !== -1 ? parseFloat(values[colIndices.h]) || 0 : 0;
+        const w = colIndices.w !== -1 ? parseFloat(values[colIndices.w]) || 0 : 0;
+        const p = colIndices.p !== -1 ? parseFloat(values[colIndices.p]) || 0 : 0;
+        const q = colIndices.q !== -1 ? parseInt(values[colIndices.q]) || 0 : 0;
+
+        if (!o) continue;
+
+        parsedItems.push({
+          site_id: siteId,
+          requisition_no: o,
+          description: `Item ${o}`,
+          quantity: q,
+          unit_price: p.toString(),
+          raw_row: {
+            original_id: o,
+            length: l,
+            height: h,
+            width: w,
+            price_weight: p,
+            quantity: q,
+            dimensions: { l, w, h }
+          }
+        });
+      }
+
+      if (parsedItems.length === 0) {
+        return res.status(400).json({ error: "No valid items found in CSV" });
+      }
+
+      // Insert items
+      const insertedItems = await db.insert(warehouseInventoryItems)
+        .values(parsedItems)
+        .returning();
+
+      res.status(201).json({
+        message: `Successfully imported ${insertedItems.length} items`,
+        count: insertedItems.length,
+        items: insertedItems
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to upload inventory:", error);
+      res.status(500).json({ error: "Failed to upload inventory data" });
+    }
+  });
+
+  // GET /api/warehouse/sites/:siteId/optimization - Run optimization analysis
+  app.get("/api/warehouse/sites/:siteId/optimization", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      // Fetch inventory items for analysis
+      const items = await db.select()
+        .from(warehouseInventoryItems)
+        .where(eq(warehouseInventoryItems.site_id, siteId));
+
+      // Compute basic optimization metrics
+      let totalQuantity = 0;
+      let totalValue = 0;
+      let itemCount = items.length;
+      let volumeByItem: Array<{ requisition_no: string; volume: number; quantity: number }> = [];
+
+      for (const item of items) {
+        const qty = item.quantity || 0;
+        const price = parseFloat(item.unit_price?.toString() || "0");
+        totalQuantity += qty;
+        totalValue += qty * price;
+
+        const rawRow = item.raw_row as Record<string, any>;
+        const dims = rawRow?.dimensions || { l: 0, w: 0, h: 0 };
+        const volume = (dims.l || 0) * (dims.w || 0) * (dims.h || 0);
+
+        volumeByItem.push({
+          requisition_no: item.requisition_no || '',
+          volume,
+          quantity: qty
+        });
+      }
+
+      // Sort by volume (descending) for bin-packing recommendation
+      volumeByItem.sort((a, b) => b.volume - a.volume);
+
+      const optimization = {
+        site_id: siteId,
+        site_code: site.code,
+        site_name: site.name,
+        summary: {
+          total_items: itemCount,
+          total_quantity: totalQuantity,
+          total_value: totalValue,
+          average_value_per_item: itemCount > 0 ? totalValue / itemCount : 0
+        },
+        recommendations: [
+          {
+            type: "high_volume_items",
+            description: "Items with largest volume should be placed at ground level for easier access",
+            items: volumeByItem.slice(0, 10)
+          },
+          {
+            type: "value_density",
+            description: "Consider consolidating high-value items in secure zones",
+            metric: totalValue > 0 ? (totalValue / totalQuantity).toFixed(2) : "0"
+          }
+        ],
+        bin_packing_order: volumeByItem.slice(0, 20).map(v => v.requisition_no)
+      };
+
+      res.json(optimization);
+    } catch (error) {
+      console.error("[Warehouse] Optimization analysis failed:", error);
+      res.status(500).json({ error: "Failed to run optimization analysis" });
+    }
+  });
+
+  // POST /api/warehouse/transfers - Create inter-warehouse transfer
+  app.post("/api/warehouse/transfers", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { source_site_id, destination_site_id, transfer_items, notes, scheduled_date } = req.body;
+
+      if (!source_site_id || !destination_site_id) {
+        return res.status(400).json({ error: "source_site_id and destination_site_id are required" });
+      }
+
+      if (source_site_id === destination_site_id) {
+        return res.status(400).json({ error: "Source and destination sites must be different" });
+      }
+
+      // Verify user owns both sites
+      const [sourceSite] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, source_site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      const [destSite] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, destination_site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!sourceSite) {
+        return res.status(404).json({ error: "Source warehouse site not found" });
+      }
+
+      if (!destSite) {
+        return res.status(404).json({ error: "Destination warehouse site not found" });
+      }
+
+      const [transfer] = await db.insert(warehouseTransfers).values({
+        user_id: req.user!.id,
+        source_site_id,
+        destination_site_id,
+        status: "pending",
+        transfer_items: transfer_items || [],
+        notes: notes || null,
+        scheduled_date: scheduled_date ? new Date(scheduled_date) : null,
+      }).returning();
+
+      res.status(201).json(transfer);
+    } catch (error) {
+      console.error("[Warehouse] Failed to create transfer:", error);
+      res.status(500).json({ error: "Failed to create warehouse transfer" });
+    }
+  });
+
+  // GET /api/warehouse/transfers - Get all transfers for user
+  app.get("/api/warehouse/transfers", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const transfers = await db.select()
+        .from(warehouseTransfers)
+        .where(eq(warehouseTransfers.user_id, req.user!.id));
+
+      res.json(transfers);
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch transfers:", error);
+      res.status(500).json({ error: "Failed to fetch warehouse transfers" });
     }
   });
 
