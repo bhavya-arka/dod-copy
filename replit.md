@@ -118,8 +118,36 @@ Transfers between warehouse sites can be linked to transport modes:
 - **land_convoys**: Vehicle convoy groupings with cargo manifests
 
 ## Sea Freight Schema
-- **sea_voyages**: Maritime shipping routes with port calls
+- **sea_voyages**: Maritime shipping routes with port calls, includes vessel hull designations (T-AO, T-AKR, T-EPF)
 - **sea_containers**: Container tracking with manifest data
+
+## Government Compliance & Federal Standards
+
+### National Stock Numbers (NSN)
+The system supports NSN format per federal logistics standards:
+- **Format**: XXXX-XX-XXX-XXXX (13 digits total)
+- **Example**: 8415-01-530-2157
+- **Components**:
+  - **FSC (4 digits)**: Federal Supply Classification - identifies the type of item
+  - **NIIN (9 digits)**: National Item Identification Number - unique item identifier
+
+### Federal Supply Classification (FSC)
+- First 2 digits = Federal Supply Group (FSG) - broad category (e.g., 84 = Clothing)
+- Next 2 digits = specific classification (e.g., 8415 = Special Purpose Clothing)
+
+### CAGE Codes
+Commercial and Government Entity (CAGE) codes are supported for tracking manufacturers and vendors per federal requirements.
+
+### Military Sealift Command (MSC) Vessels
+Sea freight module supports MSC vessel designations:
+- **T-AO**: Fleet Replenishment Oilers (e.g., T-AO 205 USNS John Lewis)
+- **T-AKR**: Large Medium-Speed Roll-on/Roll-off (LMSR) ships
+- **T-EPF**: Expeditionary Fast Transport
+- **T-AH**: Hospital Ships
+- **T-ARS**: Rescue and Salvage Ships
+
+### WebFLIS Integration
+The system's data structures align with Federal Logistics Information System (FLIS) standards for compatibility with government logistics systems.
 
 ## UI/UX Design
 - Responsive design with mobile-first approach
