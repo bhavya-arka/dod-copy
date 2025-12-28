@@ -90,14 +90,28 @@ The 3D viewer includes an interactive cargo loading/unloading animation system:
 - **warehouse_zones**: Logical areas within buildings (racks, staging, floor)
 - **warehouse_locations**: Individual pallet positions with 3D coordinates
 - **warehouse_inventory_items**: Items stored with full tracking data and aging
+- **warehouse_transfers**: Inter-warehouse transfers with transport mode linkage
 
 ### Features
 - Multi-site inventory tracking
 - Pallet-level location management
 - Aging alerts (3-5 years, 5-7 years, 7+ years)
 - Weight constraints (≤2000 lbs for rack positions)
-- CSV import for bulk inventory upload
-- Placement optimization with AI recommendations
+- CSV import for bulk inventory upload (columns: o, l, h, w, p, q)
+- Placement optimization with algorithm-based recommendations
+
+### Warehouse Optimization Algorithms
+Based on box assortment and cartonization algorithms from external notebooks:
+- **CardStack Algorithm**: Identifies items with similar base dimensions that can be stacked together
+- **Size Standardization**: Groups items by dimension for batch handling optimization
+- **Value Density Analysis**: Ranks items by value-per-volume for priority placement
+- **Bin-Packing Order**: Sorts items by volume for optimal warehouse placement
+
+### Inter-Warehouse Transfers
+Transfers between warehouse sites can be linked to transport modes:
+- **Air**: Via PACAF airlift system for urgent/priority cargo
+- **Land**: Ground convoy for overland transfers
+- **Sea**: Maritime container for port-to-port transfers
 
 ## Land Logistics Schema
 - **land_routes**: Ground transport routes with waypoints
