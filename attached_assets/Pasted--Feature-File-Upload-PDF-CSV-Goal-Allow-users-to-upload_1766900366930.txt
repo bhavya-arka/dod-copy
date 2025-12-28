@@ -1,0 +1,181 @@
+📦 Feature: File Upload (PDF / CSV)
+Goal
+
+Allow users to upload cargo manifests, shipment lists, or related data files in PDF or CSV format. The system should extract and normalize data reliably while handling edge cases gracefully.
+
+1. 🎯 Core User Flow
+
+User selects file
+
+Accepted file types: .pdf, .csv
+
+Maximum size: 10 MB
+
+File upload through drag-and-drop or file picker.
+
+System validates the file
+
+Checks MIME type and extension match.
+
+Checks for corruption or unsupported encoding.
+
+If invalid → shows a user-facing error message.
+
+File upload preview (optional)
+
+Shows filename, size, detected type.
+
+Option to remove or replace file.
+
+Processing state
+
+UI displays spinner or progress bar.
+
+Backend performs parsing and validation.
+
+Result display
+
+Displays parsed data in a structured table preview.
+
+Lists warnings or errors inline (highlighted rows or missing columns).
+
+User confirmation
+
+If all looks good → click “Confirm Import.”
+
+If errors/warnings → show “Fix in sheet” or “Re-upload corrected file.”
+
+2. 🧩 Internal Processing Flow
+2.1. File Type Detection
+if mimetype == 'text/csv':
+    route → CSVParser
+elif mimetype in ['application/pdf', 'application/x-pdf']:
+    route → PDFParser
+else:
+    return error("Unsupported file format")
+
+2.2. CSV Parsing Logic
+✅ Steps
+
+Read first few lines → auto-detect delimiter (',', ';', '\t').
+
+Normalize headers (trim, lowercase, snake_case).
+
+Check mandatory columns (e.g. item_name, quantity, destination, etc.).
+
+Validate row count and data types.
+
+⚠️ Error Handling Cases
+Case	Handling	User Feedback
+Missing columns	Identify missing names → show message: “Columns missing: quantity, destination.”	“Please include all required headers or re-map columns manually.”
+Extra columns	Ignore or store in “extras” field	“Extra columns detected and stored in metadata.”
+Empty cells	Warn but allow upload	“Empty values found in 3 rows. These were set to ‘N/A’.”
+Invalid data types (e.g., text in numeric field)	Highlight row, skip import	“Invalid entry at row 12 (‘abc’ in Quantity).”
+Encoding errors	Attempt UTF-8 re-encoding	“File encoding corrected automatically.”
+✅ Backend outcome
+
+Returns structured JSON:
+
+{
+  "headers": ["item_name", "quantity", "destination"],
+  "data": [...],
+  "warnings": [],
+  "errors": []
+}
+
+2.3. PDF Parsing Logic
+✅ Steps
+
+Use a library (e.g. pdfplumber, PyMuPDF, or AWS Textract if OCR needed).
+
+Extract tables → convert to raw text matrix.
+
+Run header detection (regex and NLP-based).
+
+Normalize structure → same schema as CSV.
+
+Validate columns & data types (same validation module).
+
+⚠️ Error Handling Cases
+Case	Handling	User Feedback
+Unreadable text (image PDF)	OCR fallback	“This PDF is scanned. Running OCR extraction…”
+Multiple tables	Prompt user to pick one	“Detected multiple tables — please select which one to import.”
+Merged cells / header mismatch	Attempt heuristic correction	“Table formatting issue — some data may be misaligned.”
+No table detected	Return structured failure	“No tabular data detected. Please upload a CSV version.”
+✅ Backend outcome
+
+Same JSON schema as CSV parser output.
+
+3. 🧠 Conversion & Normalization
+
+Unified schema model ensures both PDF and CSV data follow same structure:
+
+{
+  "record_id": "uuid",
+  "source": "pdf/csv",
+  "columns": [...],
+  "records": [...],
+  "metadata": {
+    "original_filename": "manifest123.pdf",
+    "upload_time": "2025-12-28T02:00Z",
+    "warnings": []
+  }
+}
+
+
+Normalization handles:
+
+Units (e.g. kg → unified to kg)
+
+Date formats (MM/DD/YYYY → ISO 8601)
+
+Upper/lowercase consistency
+
+4. 🧑‍💻 Frontend UX / UI Behavior
+States
+State	Description
+Idle	“Upload file or drag here.”
+Uploading	Spinner / progress bar
+Parsing	“Analyzing file contents…”
+Error	Red toast or inline banner with retry
+Preview	Interactive table preview with validation feedback
+Confirmed	“Upload successful” + next-step button (e.g., “Assign cargo to flight”)
+User Actions
+
+Re-upload file at any stage.
+
+Download “error report” CSV if parsing fails.
+
+Manual column mapping if headers mismatched.
+
+5. 🚨 Error Handling Hierarchy
+Level	Example	Behavior
+File-level	Corrupt file, wrong type	Immediate error banner
+Column-level	Missing header	Show mapping UI
+Row-level	Invalid data	Highlight rows, allow “skip errors”
+System-level	Backend timeout	“System error — try again later.”
+6. 🧾 Logging & Monitoring
+
+Log each upload (file metadata, validation results, user ID).
+
+Track error frequency (to improve parsers).
+
+Save failed uploads (for admin debugging).
+
+Include upload attempt ID for tracing.
+
+7. 🧰 Implementation Stack
+Layer	Suggested Tools
+Frontend	React + Tailwind + shadcn/ui (DragDropZone, TablePreview)
+Backend	Node.js + Express / Fastify
+Parsing	papaparse (CSV), pdfplumber or pdf2json (PDF), tesseract.js (OCR)
+Storage	S3 or local /uploads
+Database	PostgreSQL + Drizzle ORM
+Validation	Zod schemas for consistency
+Error Reporting	Sentry or custom logger
+8. 🔄 Recovery / Retry Flows
+Scenario	Automatic Behavior	User Option
+Partial success	Import valid rows	Download skipped rows
+Server timeout	Retry once automatically	Retry manually
+Network failure	Cache file in localStorage	“Reconnect and retry upload”
+Schema mismatch	Store mapping for next upload	“Remember my column mapping” toggle
