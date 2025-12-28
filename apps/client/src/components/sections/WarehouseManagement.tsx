@@ -681,6 +681,14 @@ function InventoryTab({
     onOpenAddItem();
   };
 
+  const handleImport = () => {
+    if (!selectedSiteId) {
+      onShowToast("Please select a warehouse site first", "warning");
+      return;
+    }
+    onOpenCsvUpload();
+  };
+
   return (
     <>
       <motion.div
@@ -695,10 +703,8 @@ function InventoryTab({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={onOpenCsvUpload}
-              disabled={!selectedSiteId}
-              className="btn-secondary text-sm px-3 py-2 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              title={!selectedSiteId ? "Select a site first" : "Import CSV"}
+              onClick={handleImport}
+              className="btn-secondary text-sm px-3 py-2 flex items-center gap-2"
             >
               <Upload className="w-4 h-4" />
               Import
@@ -842,14 +848,14 @@ function InventoryTab({
             </p>
             <div className="flex gap-2">
               <button
-                onClick={onOpenCsvUpload}
+                onClick={handleImport}
                 className="btn-secondary text-sm px-4 py-2 flex items-center gap-2"
               >
                 <Upload className="w-4 h-4" />
                 Import CSV
               </button>
               <button
-                onClick={onOpenAddItem}
+                onClick={handleAddItem}
                 className="btn-primary text-sm px-4 py-2 flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
