@@ -58,16 +58,16 @@ function AppContent() {
 
   if (appMode === "loading") {
     return (
-      <div className="h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-black flex items-center justify-center">
+      <div className="h-screen bg-background flex items-center justify-center">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="text-center"
         >
-          <div className="text-4xl font-bold text-white mb-4">
+          <div className="text-4xl font-bold text-foreground mb-4">
             Arka Cargo Operations
           </div>
-          <div className="text-slate-400">Loading...</div>
+          <div className="text-muted-foreground">Loading...</div>
         </motion.div>
       </div>
     );

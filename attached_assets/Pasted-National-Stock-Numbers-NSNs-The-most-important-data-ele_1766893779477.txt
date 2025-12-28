@@ -1,0 +1,27 @@
+National Stock Numbers (NSNs)
+The most important data element used when turning in an item is the National Stock Number or NSN. Federal agencies, including the DOD, use NSNs to buy and manage billions of dollars' worth of supplies each year. There are over 8 million active items managed by the North Atlantic Treaty Organization (NATO) and the international community. It is the key to achieving interoperability and supportability of current and future DOD weapons systems.   
+
+Sample NSN 
+8415-01-530-2157 
+ 
+
+The NSN is composed of a 13-digit stock number. It consists of the four-digit Federal Supply Classification (FSC) and the nine-digit National Item Identification Number (NIIN). The NIIN consists of a two-digit National Codification Bureau (NCB) number followed by a seven-digit item number.
+
+FSC 
+(Sample 8415)
+The FSC can be broken down into two parts. The first two digits identify the broad scope of property, and is called the Federal Supply Group. There are 80 FSGs in total, and cover nearly every conceivable type of property. In this example, the FSG 84 is for clothing.  The third and fourth digits of an FSC further define the type of property. For this example, 8415 is the category of special purpose clothing. 
+
+For a list of FSCs, FSGs and the ability to research them, please visit the H2 Federal Supply Classification search tool.
+
+NIIN
+(Sample 01-530-2157)
+The first two digits of the NIIN signify the country that assigned the NSN. For example, 00 and 01 are both used in the NSN to identify the United States. The remaining seven digits are sequentially assigned to make each NSN unique.  
+
+Additional Resources
+WebFLIS
+WebFLIS provides essential information about supply items including the National Stock Number (NSN), Item Name, Reference/Part Numbers, Commercial and Government Entity (CAGE) codes and other federal logistics data. FLIS is an EPC Standard Service.
+H2 FSC
+H2 FSC - Federal Supply Classification Search and Directory finds FSG and FSCs, cross references them, and publishes to CD-ROM.
+
+H6 Item Name Directory
+For NSN assignment, H6 Item Name Directory defines names and cross references the Item Name Code (INC) and FSC.

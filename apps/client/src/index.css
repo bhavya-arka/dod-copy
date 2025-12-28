@@ -6,37 +6,47 @@
   :root {
     --background: 0 0% 100%;
     --foreground: 0 0% 9%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 220 90% 56%;
+    --radius: 0.75rem;
+    
+    --accent: 220 90% 56%;
+    --accent-soft: 220 90% 96%;
+    --accent-hover: 220 90% 50%;
+    --accent-foreground: 0 0% 100%;
+    
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 9%;
+    --card-foreground: 0 0% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 9%;
-    --primary: 221 83% 53%;
+    --popover-foreground: 0 0% 15%;
+    
+    --primary: 220 90% 56%;
     --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 96%;
     --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
-    --accent: 0 0% 96%;
-    --accent-foreground: 0 0% 9%;
+    
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 221 83% 53%;
-    --radius: 0.75rem;
-    --chart-1: 221 83% 53%;
-    --chart-2: 142 76% 36%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 145 60% 45%;
+    --success-foreground: 0 0% 100%;
+    
+    --chart-1: 220 90% 56%;
+    --chart-2: 145 60% 45%;
     --chart-3: 38 92% 50%;
     --chart-4: 280 87% 65%;
     --chart-5: 346 77% 50%;
+    
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 0 0% 9%;
-    --sidebar-primary: 221 83% 53%;
+    --sidebar-primary: 220 90% 56%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 0 0% 96%;
     --sidebar-accent-foreground: 0 0% 9%;
     --sidebar-border: 0 0% 90%;
-    --sidebar-ring: 221 83% 53%;
+    --sidebar-ring: 220 90% 56%;
   }
 
   * {
@@ -70,84 +80,82 @@ canvas {
 
 @layer components {
   .glass-panel {
-    @apply bg-white/70 backdrop-blur-xl border border-white/20 rounded-2xl;
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    @apply bg-white/70 backdrop-blur-xl border border-border rounded-2xl;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   }
 
   .glass-panel-subtle {
-    @apply bg-white/50 backdrop-blur-lg border border-white/15 rounded-xl;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    @apply bg-white/50 backdrop-blur-lg border border-border rounded-xl;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
   }
 
   .glass-card {
-    @apply bg-white/80 backdrop-blur-xl border border-neutral-200/50 rounded-2xl shadow-glass;
+    @apply bg-card border border-border rounded-2xl shadow-soft;
   }
 
   .glass-button {
-    @apply bg-white/60 backdrop-blur-sm border border-white/30 rounded-xl px-4 py-2;
-    @apply hover:bg-white/80 hover:shadow-soft-lg transition-all duration-200;
+    @apply bg-white border border-border rounded-xl px-4 py-2;
+    @apply hover:bg-accent-soft hover:shadow-soft transition-all duration-200;
   }
 
   .glass-input {
-    @apply bg-white/60 backdrop-blur-sm border border-neutral-200/50 rounded-xl px-4 py-3;
-    @apply focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all;
+    @apply bg-white border border-border rounded-xl px-4 py-3;
+    @apply focus:border-accent focus:ring-1 focus:ring-accent/40 transition-all;
   }
 
   .btn-primary {
-    @apply bg-primary text-white font-medium rounded-xl px-6 py-3;
-    @apply hover:bg-primary/90 active:scale-[0.98] transition-all duration-200;
-    @apply shadow-soft hover:shadow-elevation;
+    @apply bg-accent text-white font-medium rounded-2xl px-6 py-3;
+    @apply hover:bg-accent-hover active:scale-[0.98] transition-all duration-200;
+    @apply shadow-subtle hover:shadow-soft;
   }
 
   .btn-secondary {
-    @apply bg-neutral-100 text-neutral-800 font-medium rounded-xl px-6 py-3;
-    @apply hover:bg-neutral-200 active:scale-[0.98] transition-all duration-200;
+    @apply bg-white text-foreground font-medium rounded-2xl px-6 py-3 border border-border;
+    @apply hover:bg-accent-soft active:scale-[0.98] transition-all duration-200;
   }
 
   .btn-ghost {
-    @apply bg-transparent text-neutral-600 font-medium rounded-xl px-4 py-2;
-    @apply hover:bg-neutral-100 active:scale-[0.98] transition-all duration-200;
+    @apply bg-transparent text-foreground/70 font-medium rounded-xl px-4 py-2;
+    @apply hover:bg-muted active:scale-[0.98] transition-all duration-200;
   }
 
   .nav-item {
-    @apply px-4 py-2 rounded-lg text-neutral-600 font-medium;
-    @apply hover:bg-neutral-100 hover:text-neutral-900 transition-colors;
+    @apply px-4 py-2 rounded-lg text-foreground/70 font-medium;
+    @apply hover:bg-muted hover:text-foreground transition-colors;
   }
 
   .nav-item-active {
-    @apply px-4 py-2 rounded-lg bg-primary text-white font-medium;
+    @apply px-4 py-2 rounded-lg bg-accent text-white font-medium;
   }
 
   .card-hover {
     @apply transition-all duration-300;
-    @apply hover:shadow-glass-lg hover:-translate-y-1;
+    @apply hover:shadow-soft hover:-translate-y-1;
   }
 
   .text-gradient {
-    @apply bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-accent to-blue-400 bg-clip-text text-transparent;
   }
 
   .section-title {
-    @apply text-2xl font-bold text-neutral-900 tracking-tight;
+    @apply text-2xl font-bold text-foreground tracking-tight;
   }
 
   .section-subtitle {
-    @apply text-neutral-500 text-lg;
+    @apply text-muted-foreground text-lg;
   }
 
   .divider {
-    @apply h-px bg-gradient-to-r from-transparent via-neutral-200 to-transparent;
+    @apply h-px bg-border;
   }
 
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
-    @apply bg-neutral-100 text-neutral-700;
+    @apply bg-muted text-foreground/70;
   }
 
   .badge-primary {
-    @apply bg-primary/10 text-primary;
+    @apply bg-accent-soft text-accent;
   }
 
   .badge-success {
@@ -167,22 +175,22 @@ canvas {
   }
 
   .stat-value {
-    @apply text-3xl font-bold text-neutral-900;
+    @apply text-3xl font-bold text-foreground;
   }
 
   .stat-label {
-    @apply text-sm text-neutral-500;
+    @apply text-sm text-muted-foreground;
   }
 
   .tab-list {
-    @apply flex gap-1 p-1 bg-neutral-100 rounded-xl;
+    @apply flex gap-1 p-1 bg-muted rounded-xl;
   }
 
   .tab-trigger {
-    @apply px-4 py-2 rounded-lg text-sm font-medium text-neutral-600;
-    @apply hover:text-neutral-900 transition-colors;
-    @apply data-[state=active]:bg-white data-[state=active]:text-neutral-900;
-    @apply data-[state=active]:shadow-soft;
+    @apply px-4 py-2 rounded-lg text-sm font-medium text-foreground/70;
+    @apply hover:text-foreground transition-colors;
+    @apply data-[state=active]:bg-white data-[state=active]:text-foreground;
+    @apply data-[state=active]:shadow-subtle;
   }
 }
 
@@ -230,25 +238,12 @@ canvas {
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }
-
-  .gradient-mesh {
-    background:
-      radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.08) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.05) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, rgba(34, 197, 94, 0.05) 0px, transparent 50%);
-  }
-
-  .gradient-subtle {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(249, 250, 251, 0.9) 100%);
-  }
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
   }
-
   to {
     opacity: 1;
   }
@@ -259,7 +254,6 @@ canvas {
     opacity: 0;
     transform: translateY(10px);
   }
-
   to {
     opacity: 1;
     transform: translateY(0);
@@ -271,7 +265,6 @@ canvas {
     opacity: 0;
     transform: translateX(-10px);
   }
-
   to {
     opacity: 1;
     transform: translateX(0);
@@ -282,7 +275,6 @@ canvas {
   from {
     transform: rotate(0deg);
   }
-
   to {
     transform: rotate(360deg);
   }

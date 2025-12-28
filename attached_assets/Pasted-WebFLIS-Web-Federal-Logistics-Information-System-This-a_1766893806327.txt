@@ -1,0 +1,26 @@
+WebFLIS® - Web Federal Logistics Information System
+
+This application is only accessible by controlled access such as Common Access Card (CAC), External Certificate Authority (ECA), or Federal Bridge authentication.
+
+WebFLIS® Information
+
+WebFLIS® provides essential information about supply items including the National Stock Number (NSN), Item Name, Reference/Part Numbers, Commercial and Government Entity (CAGE) codes and other federal logistics data. FLIS is an EPC Standard Service.
+
+This information will be primarily used by DLA, military services, and United States (U.S.) government-sponsored contractors doing business with the U.S. government.
+
+Users can register/obtain roles through the Access Management and Provisioning System (AMPS).
+
+Before You Start: Getting an Account
+Accounts are handled via the DLA Account Management and Provisioning System (AMPS). Other methods of applications will no longer be accepted. Follow these steps to obtain access. For more information about AMPS, FAQs and assistance, visit the AMPS information page.
+
+Open the AMPS application  . A Personal Identity Verification certificate is required for access.
+
+Read the "AMPS User Guide" document and apply for an AMPS account. This document in the User Guides and Job Aids will guide you through the process in obtaining an AMPS account. If you already have an AMPS account, please proceed to step 3. For AMPS-related questions or assistance, please visit the AMPS information page for FAQs, troubleshooting guides and contact information.
+
+Read the "Complete and Submit a Role Request" document and apply for a role. This document will guide you through the process in requesting a role. For Step 10 of the AMPS User Role Request, enter the application name and select Search.
+
+Selecting the Correct Account. Users can request either the WebFLIS® Prod – Basic User FPDW-WF002 or WebFLIS® Prod Standard FPDW-WF001 role in AMPS for access to WebFLIS®.  For more information on the roles and the AMPS request process please consult the AMPS WebFLIS® Access Registration Guide (PDF). If you select a role that you are not authorized your request will be denied.
+
+Per DLA policy, all inactive accounts over 30 days old are automatically disabled. All inactive accounts over 45 days old are automatically deleted. All users with an approved and provisioned account are strongly encouraged to login to their account before the 30 days expires in order to keep their account from being disabled.  If a user’s account is deleted, they will need to repeat the above process.
+
+Note: User registrations and user role requests need to be approved by your supervisor and security officer. At any time, you may open AMPS to view your WebFLIS® registration status.  At every approval stage you will be sent an email notification. Please keep in mind that each stage has up to 20 days to approve the request. If not approved within 20 days requests are automatically dropped from the system and the user must start the process over. You can accelerate your request by communicating with your supervisor and security officer in advance. You will receive an email once your account has been provisioned and is ready to use.
