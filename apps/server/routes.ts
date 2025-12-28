@@ -1,5 +1,6 @@
 import type { Express, Request, Response as ExpressResponse, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import multer from "multer";
 import { storage } from "./storage";
 import { db } from "./db";
 import { 
@@ -18,6 +19,7 @@ import {
   aircraftService
 } from "./services";
 import { runOptimization, OptimizationInput, AvailabilityConstraint, CargoRequirement, MixedFleetMode } from "./services/fleetOptimizer";
+import { parseFile, getUploadSession, deleteUploadSession, getSessionStats } from "./services/fileIngestionService";
 
 // Weather API cache with 10-minute TTL
 interface WeatherCacheEntry {
@@ -2159,6 +2161,232 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("[Warehouse] Failed to upload inventory:", error);
       res.status(500).json({ error: "Failed to upload inventory data" });
     }
+  });
+
+  // Configure multer for file uploads (10MB max)
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB
+    },
+    fileFilter: (req, file, cb) => {
+      const allowedMimes = ['text/csv', 'application/pdf', 'text/plain', 'application/vnd.ms-excel'];
+      const allowedExts = ['.csv', '.pdf'];
+      const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
+      
+      if (allowedMimes.includes(file.mimetype) || allowedExts.includes(ext)) {
+        cb(null, true);
+      } else {
+        cb(new Error(`Unsupported file type: ${file.mimetype}. Only CSV and PDF files are allowed.`));
+      }
+    },
+  });
+
+  // POST /api/warehouse/sites/:siteId/inventory/import - Upload and parse CSV/PDF file
+  app.post("/api/warehouse/sites/:siteId/inventory/import", authMiddleware, upload.single('file'), async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ 
+          error: "No file uploaded",
+          errors: [{
+            level: 'error',
+            scope: 'file',
+            target: 'upload',
+            message: 'No file was uploaded. Please select a CSV or PDF file.'
+          }]
+        });
+      }
+
+      console.log(`[Warehouse Import] Processing file: ${req.file.originalname}, size: ${req.file.size}, mimetype: ${req.file.mimetype}`);
+
+      const result = await parseFile(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+        siteId,
+        req.user!.id
+      );
+
+      console.log(`[Warehouse Import] Parse result: uploadId=${result.uploadId}, rows=${result.totalRows}, errors=${result.errors.length}, warnings=${result.warnings.length}, canCommit=${result.canCommit}`);
+
+      res.json(result);
+    } catch (error) {
+      console.error("[Warehouse] Import failed:", error);
+      
+      if (error instanceof multer.MulterError) {
+        if (error.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ 
+            error: "File too large. Maximum size is 10MB.",
+            errors: [{
+              level: 'error',
+              scope: 'file',
+              target: 'size',
+              message: 'File exceeds the 10MB size limit.'
+            }]
+          });
+        }
+        return res.status(400).json({ 
+          error: error.message,
+          errors: [{
+            level: 'error',
+            scope: 'file',
+            target: 'upload',
+            message: error.message
+          }]
+        });
+      }
+      
+      res.status(500).json({ 
+        error: "Failed to import inventory file",
+        errors: [{
+          level: 'error',
+          scope: 'file',
+          target: 'processing',
+          message: error instanceof Error ? error.message : 'Unknown error occurred'
+        }]
+      });
+    }
+  });
+
+  // POST /api/warehouse/sites/:siteId/inventory/import/commit - Commit validated data to database
+  app.post("/api/warehouse/sites/:siteId/inventory/import/commit", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const { uploadId } = req.body;
+      if (!uploadId || typeof uploadId !== 'string') {
+        return res.status(400).json({ error: "uploadId is required" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      // Get the upload session
+      const session = getUploadSession(uploadId);
+      if (!session) {
+        return res.status(404).json({ 
+          error: "Upload session not found or expired",
+          message: "Please upload the file again."
+        });
+      }
+
+      // Verify session belongs to this user and site
+      if (session.userId !== req.user!.id || session.siteId !== siteId) {
+        return res.status(403).json({ error: "Session does not belong to this user or site" });
+      }
+
+      // Check if data can be committed
+      if (!session.canCommit) {
+        return res.status(400).json({ 
+          error: "Cannot commit data with errors",
+          errors: session.errors.filter(e => e.scope === 'file' || e.scope === 'column'),
+          message: "Please fix the file-level and column-level errors before committing."
+        });
+      }
+
+      // Filter out rows with errors
+      const rowsWithErrors = new Set(
+        session.errors.filter(e => e.scope === 'row' && e.level === 'error').map(e => e.rowIndex)
+      );
+      
+      const validRows = session.parsedRows.filter((_, index) => !rowsWithErrors.has(index));
+
+      if (validRows.length === 0) {
+        return res.status(400).json({ 
+          error: "No valid rows to commit",
+          message: "All rows have errors. Please fix the data and try again."
+        });
+      }
+
+      console.log(`[Warehouse Import] Committing ${validRows.length} rows from session ${uploadId}`);
+
+      // Prepare items for insertion
+      const itemsToInsert = validRows.map(row => ({
+        site_id: siteId,
+        requisition_no: row.requisition_no || `ITEM-${Date.now()}`,
+        description: row.description || `Item ${row.requisition_no || 'Unknown'}`,
+        quantity: row.quantity || 0,
+        unit_price: row.unit_price?.toString() || null,
+        nsn: row.nsn || null,
+        fsc: row.fsc || null,
+        niin: row.niin || null,
+        weight_lbs: row.weight_lb?.toString() || null,
+        raw_row: {
+          ...row._rawRow,
+          dimensions: {
+            l: row.length_in,
+            w: row.width_in,
+            h: row.height_in,
+          },
+          weight: row.weight_lb,
+          imported_at: new Date().toISOString(),
+          source_file: session.filename,
+        },
+      }));
+
+      // Insert items in batches
+      const BATCH_SIZE = 100;
+      const insertedItems = [];
+      
+      for (let i = 0; i < itemsToInsert.length; i += BATCH_SIZE) {
+        const batch = itemsToInsert.slice(i, i + BATCH_SIZE);
+        const inserted = await db.insert(warehouseInventoryItems)
+          .values(batch)
+          .returning();
+        insertedItems.push(...inserted);
+      }
+
+      // Clean up session after successful commit
+      deleteUploadSession(uploadId);
+
+      console.log(`[Warehouse Import] Successfully committed ${insertedItems.length} items from session ${uploadId}`);
+
+      res.status(201).json({
+        message: `Successfully imported ${insertedItems.length} items`,
+        count: insertedItems.length,
+        skippedRows: session.parsedRows.length - validRows.length,
+        totalRows: session.parsedRows.length,
+        items: insertedItems.slice(0, 10), // Return first 10 for preview
+      });
+    } catch (error) {
+      console.error("[Warehouse] Commit failed:", error);
+      res.status(500).json({ error: "Failed to commit inventory data" });
+    }
+  });
+
+  // GET /api/warehouse/import/status - Get import session stats (for debugging)
+  app.get("/api/warehouse/import/status", authMiddleware, async (req: AuthRequest, res) => {
+    const stats = getSessionStats();
+    res.json(stats);
   });
 
   // GET /api/warehouse/sites/:siteId/optimization - Run optimization analysis
