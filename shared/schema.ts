@@ -558,6 +558,9 @@ export type InsertWarehouseLocation = z.infer<typeof insertWarehouseLocationSche
 export type WarehouseLocation = typeof warehouseLocations.$inferSelect;
 
 // Warehouse Inventory Items
+// NSN Format: XXXX-XX-XXX-XXXX (e.g., 8415-01-530-2157)
+// - FSC (4 digits): Federal Supply Classification
+// - NIIN (9 digits): National Item Identification Number (XX-XXX-XXXX)
 export const warehouseInventoryItems = pgTable("warehouse_inventory_items", {
   id: serial("id").primaryKey(),
   site_id: integer("site_id").notNull(),
@@ -567,8 +570,12 @@ export const warehouseInventoryItems = pgTable("warehouse_inventory_items", {
   ship_class: text("ship_class"),
   program_code: text("program_code"),
   requisition_no: text("requisition_no"),
+  // National Stock Number fields for government compliance
+  nsn: text("nsn"), // Full NSN: XXXX-XX-XXX-XXXX (13 digits)
+  fsc: text("fsc"), // Federal Supply Classification (first 4 digits)
+  niin: text("niin"), // National Item Identification Number (last 9 digits)
   description: text("description").notNull(),
-  cage: text("cage"),
+  cage: text("cage"), // Commercial and Government Entity code
   manufacturer: text("manufacturer"),
   contract_no: text("contract_no"),
   unit: text("unit"),
@@ -655,12 +662,17 @@ export type LandConvoy = typeof landConvoys.$inferSelect;
 // ============================================================================
 
 // Sea Voyages
+// Supports Military Sealift Command (MSC) vessel designations
+// Hull numbers: T-AO (Oiler), T-AKR (Cargo), T-EPF (Fast Transport), etc.
 export const seaVoyages = pgTable("sea_voyages", {
   id: serial("id").primaryKey(),
   user_id: integer("user_id").notNull(),
   name: text("name").notNull(),
   vessel_name: text("vessel_name"),
   vessel_imo: text("vessel_imo"),
+  // MSC vessel hull designation (e.g., T-AO 205, T-AKR 313, T-EPF 5)
+  vessel_hull_number: text("vessel_hull_number"),
+  vessel_class: text("vessel_class"), // e.g., "Fleet Replenishment Oiler", "LMSR"
   origin_port: text("origin_port").notNull(),
   destination_port: text("destination_port").notNull(),
   port_calls: jsonb("port_calls").notNull().default([]),
