@@ -1,0 +1,150 @@
+🧭 MSC Warehouse Optimization Platform — Final UI / UX Specification
+(Based on MSC responses, mission workflows, and operational context)
+
+🔷 Core User Persona
+Primary User: MSC Cargo / Logistics Officer
+Goals:
+
+Real‑time visibility of warehouse & fleet storage utilization
+
+Manage inbound/outbound material and surge capacity
+
+Track inventory aging and readiness
+
+Simulate and optimize warehouse placement & load balancing
+
+Quickly validate feasibility and generate mission‑ready reports
+
+🔶 1. Top‑Level Navigation (Information Architecture)
+Section	Purpose
+🗺 Dashboard	Mission overview — site status, alerts, readiness
+📦 Inventory	Item drill‑down by site, rack, NSN, or age
+🧭 Operations	Transfer orders, shipment prep, load planning
+⚙️ Sites & Storage	Manage warehouse zones, racks, pallets, and bulk storage
+📊 Analytics / Readiness	Trendlines, capacity utilization, surge modeling
+🧠 AI Insights	Space optimization, predictive aging, load balancing
+🔒 Admin / Config	Imports, system syncs (CMLS), and user roles
+🔶 2. Dashboard (Mission Snapshot)
+Layout
+Top Metrics Row (6 cards)
+
+Total Sites
+
+Active Shipments
+
+Items in Transit
+
+Total Capacity Used (%)
+
+Aging / Expired Items
+
+Critical Alerts
+
+Operational Map Widget
+
+Each site icon = color‑coded (🟢 OK | 🟡 > 90% | 🔴 Critical)
+
+Clicking reveals current inventory %, next inbound, aging count
+
+Alerts Drawer
+
+Expiring Materials (> 5 yrs)
+
+Load Imbalance (> 98%)
+
+Overdue Validation / Inspection
+
+Pending Transfer Approval
+
+Quick Actions Toolbar
+
+Action	Description
+📤 Import Manifest	Upload CSV / MILSTRIP
+⚙️ Run Optimization	Generate AI placement plan
+🧾 Generate Load Plan (PDF)	Auto layout of pallets/shipments
+🧠 Sync with Fleet Ops	Pull CMLS snapshot
+📈 Export Readiness Report	PDF / Excel
+🔶 3. Inventory Management Screen
+Field	Example
+NSN / P N  	4320‑01‑123‑4567
+Description	Valve Assembly Mk IV
+Site / Rack / Container	SDG‑B871‑Aisle 3‑Rack 12
+Quantity	24 pcs
+Weight	1,200 lbs (pallet)
+Condition / Age	Stored 8 yrs
+Assigned Mission	S‑23‑054
+Last Moved / Next Move	2022‑07‑14 / 2025‑02‑03
+Filters: Site · Mission ID · Condition · Age Group · Storage Type
+Table Actions: Move / Reassign / Mark for Disposal / Export CSV
+
+🔶 4. Operations & Load Planning
+Transfer Orders Page: create & track inter‑site transfers
+
+Shipment Prep: assign material → pallet → container → vehicle/ship
+
+Load Simulation: 2D/3D visual of pallet arrangement + center‑of‑gravity overlay
+
+Output: printable Load Plan PDF (with NSN list + CG metrics)
+
+🔶 5. Sites & Storage Management
+Hierarchical structure:
+
+San Diego Depot
+ ├─ B‑870 (Sprung) 90×81×17 ft
+ ├─ B‑872 (Legacy) 90×80×20 ft
+ ├─ B‑873 (New Legacy) 80×60×20 ft
+ └─ B‑871 (GFM) 98×28×30 ft
+Each node shows:
+- Current capacity (used / free pallet positions)
+- Rack weight limit (≤ 2,000 lbs)
+- Alerts for aging or restricted zones
+- Quick buttons: Move, Optimize, Reserve Space (90‑day)
+
+🔶 6. AI‑Assisted Features
+Feature	Description
+Placement Optimization	Suggests best pallet location (uses weight, proximity, open space).
+Predictive Load Balancing	Forecasts capacity in 90 days from incoming orders.
+Aging Alerts	Highlights items > 5 yrs; suggests review for disposal.
+Mission Readiness Score	Combines stock health + load balance into single metric.
+🔶 7. Visual Design & Interaction Guidelines
+Theme: Military minimalism (clarity > flash)
+
+Palette: #F9FAFB bg, navy blue #004E89 primary, alert colors #16A34A / #F59E0B / #DC2626
+
+Typography: Inter / Roboto Mono
+
+Cards: rounded 2xl, shadow‑sm, neutral edges
+
+Motion: subtle fade & slide transitions < 200 ms
+
+Offline Mode: Manifest entry cached and synced on reconnect
+
+🔶 8. Analytics & Reports
+- Capacity trendline by site / month
+- Aging curve > 5 yrs
+- Optimization gain (“space reclaimed”)
+- Readiness score heatmap
+- PDF / CSV export options
+
+🔶 9. Key Workflows (End‑to‑End)
+Upload Manifest → Optimization → Placement → Readiness Report
+
+1️⃣ Officer uploads CSV manifest
+2️⃣ Backend validates fields (NSN, weight, qty, last received)
+3️⃣ AI module runs placement optimization (4×4×4 pallets ≤ 2,000 lbs)
+4️⃣ System updates capacity map + aging alerts
+5️⃣ User reviews and exports Load Plan / Optimization Report
+
+🔶 10. Integration Logic (Aligned with MSC Constraints)
+- System Sync: CMLS mock integration (via CSV import)
+- Update Cycle: every 12 h to reflect real CMLS behavior
+- Weight / Size Rules: from BATS inventory (≤ 2,000 lbs, 4×4×4 ft units)
+- Predictive Space Reservation: uses “program ordered sets (13 ships × 15 pallets)” as 90‑day hold
+
+🔶 11. Success Criteria (Reinforced)
+✅ Show material placement and capacity in real time
+✅ Visualize over‑capacity and space recovery potential
+✅ Enable aging visibility (“last received date”)
+✅ Demonstrate 90‑day reserved capacity concept
+✅ Prove feasibility of integration with MSC process (CMLS mock feed)
+

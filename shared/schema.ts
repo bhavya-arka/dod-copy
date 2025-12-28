@@ -714,6 +714,7 @@ export const warehouseTransfers = pgTable("warehouse_transfers", {
   source_site_id: integer("source_site_id").notNull(),
   destination_site_id: integer("destination_site_id").notNull(),
   status: text("status").notNull().default("pending"),
+  transport_mode: text("transport_mode").notNull().default("land"),
   transfer_items: jsonb("transfer_items").notNull().default([]),
   notes: text("notes"),
   scheduled_date: timestamp("scheduled_date"),

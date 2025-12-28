@@ -1977,7 +1977,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(warehouseInventoryItems)
         .where(eq(warehouseInventoryItems.site_id, siteId));
 
-      res.json(items);
+      // Transform items to include dimensions from raw_row
+      const transformedItems = items.map(item => {
+        const rawRow = item.raw_row as Record<string, any> | null;
+        const dims = rawRow?.dimensions || {};
+        return {
+          ...item,
+          length_in: dims.l?.toString() || rawRow?.length?.toString() || null,
+          width_in: dims.w?.toString() || rawRow?.width?.toString() || null,
+          height_in: dims.h?.toString() || rawRow?.height?.toString() || null,
+          weight_lb: rawRow?.price_weight?.toString() || null,
+        };
+      });
+
+      res.json(transformedItems);
     } catch (error) {
       console.error("[Warehouse] Failed to fetch inventory:", error);
       res.status(500).json({ error: "Failed to fetch inventory items" });
@@ -2119,11 +2132,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(warehouseInventoryItems)
         .where(eq(warehouseInventoryItems.site_id, siteId));
 
-      // Compute basic optimization metrics
+      // Compute optimization metrics using algorithms from notebooks
       let totalQuantity = 0;
       let totalValue = 0;
       let itemCount = items.length;
-      let volumeByItem: Array<{ requisition_no: string; volume: number; quantity: number }> = [];
+      let totalVolume = 0;
+      let itemsWithDimensions: Array<{ 
+        requisition_no: string; 
+        l: number; w: number; h: number;
+        volume: number; 
+        quantity: number;
+        value: number;
+      }> = [];
 
       for (const item of items) {
         const qty = item.quantity || 0;
@@ -2133,17 +2153,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const rawRow = item.raw_row as Record<string, any>;
         const dims = rawRow?.dimensions || { l: 0, w: 0, h: 0 };
-        const volume = (dims.l || 0) * (dims.w || 0) * (dims.h || 0);
+        const l = dims.l || rawRow?.length || 0;
+        const w = dims.w || rawRow?.width || 0;
+        const h = dims.h || rawRow?.height || 0;
+        const volume = l * w * h;
+        totalVolume += volume * qty;
 
-        volumeByItem.push({
+        itemsWithDimensions.push({
           requisition_no: item.requisition_no || '',
+          l, w, h,
           volume,
-          quantity: qty
+          quantity: qty,
+          value: qty * price
         });
       }
 
+      // CardStack algorithm: items that can be stacked (similar base dimensions)
+      const stackableGroups: Map<string, typeof itemsWithDimensions> = new Map();
+      for (const item of itemsWithDimensions) {
+        const baseKey = `${Math.round(item.l)}_${Math.round(item.w)}`;
+        if (!stackableGroups.has(baseKey)) {
+          stackableGroups.set(baseKey, []);
+        }
+        stackableGroups.get(baseKey)!.push(item);
+      }
+
+      const stackingOpportunities = Array.from(stackableGroups.entries())
+        .filter(([_, items]) => items.length > 1)
+        .map(([key, groupItems]) => ({
+          base_dimensions: key.replace('_', ' x '),
+          item_count: groupItems.length,
+          total_height: groupItems.reduce((sum, i) => sum + i.h * i.quantity, 0),
+          items: groupItems.map(i => i.requisition_no).slice(0, 5)
+        }))
+        .sort((a, b) => b.item_count - a.item_count)
+        .slice(0, 5);
+
       // Sort by volume (descending) for bin-packing recommendation
-      volumeByItem.sort((a, b) => b.volume - a.volume);
+      itemsWithDimensions.sort((a, b) => b.volume - a.volume);
+
+      // Size grouping: identify items of same dimensions for batch handling
+      const sizeGroups: Map<string, number> = new Map();
+      for (const item of itemsWithDimensions) {
+        const sizeKey = `${item.l}x${item.w}x${item.h}`;
+        sizeGroups.set(sizeKey, (sizeGroups.get(sizeKey) || 0) + item.quantity);
+      }
+      
+      const topSizes = Array.from(sizeGroups.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([size, count]) => ({ size, count }));
+
+      // Value-per-volume analysis for prioritization
+      const valuePerVolume = itemsWithDimensions
+        .filter(i => i.volume > 0)
+        .map(i => ({
+          requisition_no: i.requisition_no,
+          value_density: i.value / (i.volume * i.quantity),
+          value: i.value,
+          volume: i.volume
+        }))
+        .sort((a, b) => b.value_density - a.value_density)
+        .slice(0, 10);
+
+      const recommendations = [
+        {
+          type: "cartonization",
+          priority: "high",
+          title: "Box Consolidation Opportunities",
+          description: `Found ${stackingOpportunities.length} groups of items with similar base dimensions that can be stacked together`,
+          details: stackingOpportunities
+        },
+        {
+          type: "size_standardization",
+          priority: "medium",
+          title: "Size Standardization",
+          description: `${topSizes.length} distinct item sizes identified. Consider standardizing packaging for top sizes.`,
+          details: topSizes
+        },
+        {
+          type: "high_volume_items",
+          priority: "high",
+          title: "Large Item Placement",
+          description: "Items with largest volume should be placed at ground level for easier access and forklift handling",
+          details: itemsWithDimensions.slice(0, 10).map(i => ({
+            requisition_no: i.requisition_no,
+            volume: i.volume.toFixed(2),
+            quantity: i.quantity
+          }))
+        },
+        {
+          type: "value_density",
+          priority: "medium",
+          title: "High-Value Item Security",
+          description: "Items with highest value per volume should be in secure/priority zones",
+          details: valuePerVolume
+        }
+      ];
+
+      // Add aging recommendations if items have receipt dates
+      const agingAlerts = items.filter(item => {
+        const rawRow = item.raw_row as Record<string, any>;
+        if (rawRow?.receipt_date) {
+          const receiptDate = new Date(rawRow.receipt_date);
+          const yearsOld = (Date.now() - receiptDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+          return yearsOld >= 3;
+        }
+        return false;
+      }).length;
+
+      if (agingAlerts > 0) {
+        recommendations.push({
+          type: "aging",
+          priority: "high",
+          title: "Aging Inventory Alert",
+          description: `${agingAlerts} items are 3+ years old. Review for disposal or rotation.`,
+          details: []
+        });
+      }
 
       const optimization = {
         site_id: siteId,
@@ -2152,22 +2279,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         summary: {
           total_items: itemCount,
           total_quantity: totalQuantity,
-          total_value: totalValue,
-          average_value_per_item: itemCount > 0 ? totalValue / itemCount : 0
+          total_value: parseFloat(totalValue.toFixed(2)),
+          total_volume: parseFloat(totalVolume.toFixed(2)),
+          average_value_per_item: itemCount > 0 ? parseFloat((totalValue / itemCount).toFixed(2)) : 0,
+          unique_sizes: sizeGroups.size,
+          stacking_groups: stackingOpportunities.length
         },
-        recommendations: [
-          {
-            type: "high_volume_items",
-            description: "Items with largest volume should be placed at ground level for easier access",
-            items: volumeByItem.slice(0, 10)
-          },
-          {
-            type: "value_density",
-            description: "Consider consolidating high-value items in secure zones",
-            metric: totalValue > 0 ? (totalValue / totalQuantity).toFixed(2) : "0"
-          }
-        ],
-        bin_packing_order: volumeByItem.slice(0, 20).map(v => v.requisition_no)
+        recommendations,
+        bin_packing_order: itemsWithDimensions.slice(0, 20).map(v => v.requisition_no)
       };
 
       res.json(optimization);
@@ -2180,11 +2299,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/warehouse/transfers - Create inter-warehouse transfer
   app.post("/api/warehouse/transfers", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const { source_site_id, destination_site_id, transfer_items, notes, scheduled_date } = req.body;
+      const { source_site_id, destination_site_id, transport_mode, transfer_items, notes, scheduled_date } = req.body;
 
       if (!source_site_id || !destination_site_id) {
         return res.status(400).json({ error: "source_site_id and destination_site_id are required" });
       }
+
+      const validModes = ["air", "land", "sea"];
+      const mode = validModes.includes(transport_mode) ? transport_mode : "land";
 
       if (source_site_id === destination_site_id) {
         return res.status(400).json({ error: "Source and destination sites must be different" });
@@ -2218,6 +2340,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         source_site_id,
         destination_site_id,
         status: "pending",
+        transport_mode: mode,
         transfer_items: transfer_items || [],
         notes: notes || null,
         scheduled_date: scheduled_date ? new Date(scheduled_date) : null,
