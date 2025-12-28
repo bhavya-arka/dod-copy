@@ -82,26 +82,88 @@ The 3D viewer includes an interactive cargo loading/unloading animation system:
 
 **PDF Export**: Uses actual position_coord values for layout positioning and displays station coordinates in inches.
 
-## Warehouse Management System
+## Warehouse Management System (MSC Warehouse Optimization Platform)
+
+### Component Architecture
+The WMS has been refactored into a modular architecture:
+
+```
+apps/client/src/components/warehouse/
+├── index.ts                    # Barrel exports
+├── types.ts                    # TypeScript interfaces (WarehouseSite, InventoryItem, etc.)
+├── utils.ts                    # Utility functions (parseNSN, formatNSN, getAgingColor)
+├── constants.ts                # Constants (WMS_COLORS, AGING_THRESHOLDS, MOCK_BUILDINGS)
+├── Toast.tsx                   # Toast notification component
+├── WMSDashboard.tsx            # Dashboard tab (6 metric cards, quick actions)
+├── WMSInventory.tsx            # Inventory tab (enhanced table with filters)
+├── WMSOperations.tsx           # Operations tab (transfers, shipment prep)
+├── WMSSitesStorage.tsx         # Sites & Storage hierarchical view
+├── WMSAnalytics.tsx            # Analytics tab (readiness scores, charts)
+├── WMSAiInsights.tsx           # AI Insights tab (optimization features)
+├── WMSAdmin.tsx                # Admin tab (imports, config)
+└── modals/
+    ├── AddSiteModal.tsx        # Create warehouse site
+    ├── AddItemModal.tsx        # Add inventory item with NSN validation
+    ├── CsvUploadModal.tsx      # CSV bulk import
+    └── TransferModal.tsx       # Create inter-site transfer
+```
+
+### Services Layer
+```
+apps/client/src/services/warehouseService.ts
+- fetchSites(): Promise<WarehouseSite[]>
+- createSite(data): Promise<WarehouseSite>
+- fetchInventory(siteId): Promise<InventoryItem[]>
+- addInventoryItem(siteId, data): Promise<InventoryItem>
+- uploadInventoryCsv(siteId, file): Promise<void>
+- fetchTransfers(): Promise<Transfer[]>
+- createTransfer(data): Promise<Transfer>
+- runOptimization(siteId): Promise<OptimizationResult[]>
+
+apps/client/src/hooks/useWarehouse.ts
+- useWarehouseSites(): { sites, loading, refetch }
+- useWarehouseInventory(siteId): { items, loading, refetch }
+- useWarehouseTransfers(): { transfers, loading, refetch }
+- useToast(): { toasts, showToast, dismissToast }
+```
+
+### 7-Section Navigation (MSC Specification)
+1. **Dashboard**: Mission metrics (6 cards), quick actions toolbar, alerts
+2. **Inventory**: Enhanced table with NSN/PN, Location, Weight, Condition, Mission
+3. **Operations**: Transfer orders, shipment prep, load planning
+4. **Sites & Storage**: Hierarchical tree view (Site → Building → Zone)
+5. **Analytics**: Capacity trendlines, aging curves, readiness scores
+6. **AI Insights**: Placement optimization, load balancing, aging alerts
+7. **Admin**: Data imports, system configuration, exports
 
 ### Database Schema
 - **warehouse_sites**: Top-level warehouse locations with geolocation
 - **warehouse_buildings**: Physical buildings within sites (B-870, B-871, etc.)
 - **warehouse_zones**: Logical areas within buildings (racks, staging, floor)
 - **warehouse_locations**: Individual pallet positions with 3D coordinates
-- **warehouse_inventory_items**: Items stored with full tracking data and aging
+- **warehouse_inventory_items**: Items stored with NSN, FSC, NIIN, aging tracking
 - **warehouse_transfers**: Inter-warehouse transfers with transport mode linkage
 
 ### Features
 - Multi-site inventory tracking
 - Pallet-level location management
+- NSN validation and auto-parsing (FSC/NIIN extraction)
 - Aging alerts (3-5 years, 5-7 years, 7+ years)
 - Weight constraints (≤2000 lbs for rack positions)
-- CSV import for bulk inventory upload (columns: o, l, h, w, p, q)
+- CSV import for bulk inventory upload
 - Placement optimization with algorithm-based recommendations
+- 90-day space reservation for program ordered sets
+
+### Visual Design (Military Minimalism)
+- **Background**: #F9FAFB
+- **Primary**: #004E89 (Navy Blue)
+- **Success**: #16A34A
+- **Warning**: #F59E0B
+- **Error**: #DC2626
+- **Cards**: rounded-2xl, shadow-sm
 
 ### Warehouse Optimization Algorithms
-Based on box assortment and cartonization algorithms from external notebooks:
+Based on box assortment and cartonization algorithms:
 - **CardStack Algorithm**: Identifies items with similar base dimensions that can be stacked together
 - **Size Standardization**: Groups items by dimension for batch handling optimization
 - **Value Density Analysis**: Ranks items by value-per-volume for priority placement
@@ -112,6 +174,49 @@ Transfers between warehouse sites can be linked to transport modes:
 - **Air**: Via PACAF airlift system for urgent/priority cargo
 - **Land**: Ground convoy for overland transfers
 - **Sea**: Maritime container for port-to-port transfers
+
+## Testing Architecture
+
+### Test Structure (764+ test cases)
+```
+tests/
+├── fixtures/                   # Test data fixtures
+├── integration/                # End-to-end workflow tests
+│   ├── authFlow.test.ts        # Authentication flow tests
+│   ├── warehouseFlow.test.ts   # WMS workflow tests
+│   └── flightPlanFlow.test.ts  # Flight planning tests
+├── schema.test.ts              # Database schema validation
+├── nsnValidation.test.ts       # NSN format validation
+├── warehouseAlgorithms.test.ts # Optimization algorithms
+└── [domain].test.ts            # Domain-specific tests
+
+apps/server/__tests__/
+├── testApp.ts                  # Test app factory
+├── auth.test.ts                # Authentication API tests
+├── warehouse.test.ts           # Warehouse API tests
+├── flights.test.ts             # Flight plans API tests
+└── weather.test.ts             # Weather API tests
+
+apps/client/src/__tests__/
+├── setup.ts                    # Jest setup with mocks
+├── warehouse/                  # WMS component tests
+│   ├── utils.test.ts           # Utility function tests
+│   ├── warehouseService.test.ts# Service layer tests
+│   ├── useWarehouse.test.ts    # Hook tests
+│   └── components.test.tsx     # Component tests
+└── components/                 # Core component tests
+    ├── AuthScreen.test.tsx
+    ├── OperationsHub.test.tsx
+    └── ui/*.test.tsx           # UI component tests
+```
+
+### Running Tests
+```bash
+npm test                    # Run all tests
+npm run test:client         # Run client tests only
+npm run test:server         # Run server tests only
+npm run test:legacy         # Run legacy domain tests
+```
 
 ## Land Logistics Schema
 - **land_routes**: Ground transport routes with waypoints
