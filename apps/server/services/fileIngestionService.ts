@@ -285,7 +285,27 @@ export async function parsePDF(
         level: 'error',
         scope: 'file',
         target: 'structure',
-        message: 'Could not detect table structure in PDF. Consider using CSV format instead.',
+        message: 'Could not detect table structure in PDF. No tabular data with recognizable headers was found. Consider using CSV format instead.',
+      });
+      
+      return {
+        uploadId,
+        preview: [],
+        columns: [],
+        errors,
+        warnings,
+        canCommit: false,
+        totalRows: 0,
+        filename,
+      };
+    }
+    
+    if (rows.length === 0) {
+      errors.push({
+        level: 'error',
+        scope: 'file',
+        target: 'data',
+        message: 'PDF contains headers but no data rows were detected. Please verify the PDF contains tabular inventory data.',
       });
       
       return {

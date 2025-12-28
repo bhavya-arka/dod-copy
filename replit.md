@@ -1,13 +1,13 @@
 # Overview
 
-Arka Cargo Operations is a comprehensive multi-modal logistics platform spanning Air, Land, Sea, and Warehouse operations. The system provides intuitive navigation between cargo operation subsections with responsive design throughout.
+Arka Cargo Operations is a comprehensive multi-modal logistics platform designed for Air, Land, Sea, and Warehouse operations. Its primary purpose is to streamline complex cargo movements and warehouse management, offering intuitive navigation and responsive design. The platform aims to provide a unified system for military and commercial logistics, enhancing efficiency, optimization, and real-time tracking across diverse operational domains.
 
-## Key Modules
+## Key Capabilities
 
-1. **Air Operations (PACAF Airlift)**: C-17/C-130 load planning, 463L palletization, route optimization, 3D cargo visualization
-2. **Land Logistics**: Ground transport convoy planning, truck routing, overland cargo manifests
-3. **Sea Freight**: Maritime container planning, vessel manifests, port logistics
-4. **Warehouse Management (WMS)**: Multi-site inventory tracking, pallet positioning, aging alerts, capacity optimization
+- **Air Operations (PACAF Airlift)**: C-17/C-130 load planning, 463L palletization, route optimization, and 3D cargo visualization.
+- **Land Logistics**: Ground transport convoy planning, truck routing, and overland cargo manifests.
+- **Sea Freight**: Maritime container planning, vessel manifests, and port logistics.
+- **Warehouse Management (WMS)**: Multi-site inventory tracking, pallet positioning, aging alerts, and capacity optimization.
 
 # User Preferences
 
@@ -16,255 +16,47 @@ Preferred communication style: Simple, everyday language.
 # System Architecture
 
 ## Multi-Modal Operations Hub
-After authentication, users see an Operations Hub with large navigation tiles for each module. Each section has its own workflow:
-- **Air**: Upload → Parse → Classify → Palletize → Allocate → Visualize → Route Plan
-- **Land**: Route → Convoy → Manifest → Track → Complete
-- **Sea**: Voyage → Container → Port Calls → Track → Complete
-- **Warehouse**: Sites → Buildings → Zones → Locations → Inventory → Optimize
+The system provides an Operations Hub with distinct modules for Air, Land, Sea, and Warehouse operations, each with a tailored workflow.
 
 ## Full-Stack Architecture
-The project is built as a Turborepo monorepo with the following structure:
-- **`apps/client/`**: React 18+ frontend with TypeScript and Vite
-- **`apps/server/`**: Express.js backend providing RESTful API endpoints
-- **`packages/shared/`**: Contains shared schemas and types across the monorepo
-- **`packages/config/`**: Stores shared configurations
-- **`shared/`**: Drizzle schema (database schema source of truth)
-
-## Navigation Structure
-```
-Auth Screen
-    ↓
-Operations Hub (main navigation)
-    ├── Air Operations (existing PACAF system)
-    │   ├── Flight Plans Dashboard
-    │   └── PACAPApp (planning workflow)
-    ├── Land Logistics
-    │   ├── Routes Dashboard
-    │   └── Convoy Planning
-    ├── Sea Freight
-    │   ├── Voyages Dashboard
-    │   └── Container Management
-    └── Warehouse Management
-        ├── Overview
-        ├── Inventory
-        ├── Locations
-        └── Analytics
-```
+The project is structured as a Turborepo monorepo:
+- **`apps/client/`**: React 18+ frontend with TypeScript and Vite.
+- **`apps/server/`**: Express.js backend providing RESTful API endpoints.
+- **`packages/shared/`**: Shared schemas and types.
+- **`packages/config/`**: Shared configurations.
+- **`shared/`**: Drizzle schema for database definitions.
 
 ## PACAF Air Operations Pipeline
-The air module processes data through a multi-stage pipeline:
-1. **Input Layer**: Handles CSV/JSON movement list uploads
-2. **Parser & Validator**: Parses and validates incoming data
-3. **Classification**: Categorizes items by phase (ADVON/MAIN) and cargo type
-4. **Palletization Engine**: Implements a 463L pallet system using a bin-packing algorithm
-5. **Aircraft Allocation Solver**: Allocates cargo based on weight, position constraints, and Center of Balance (CoB) calculations
-6. **ICODES Visualization**: Generates 2D aircraft diagrams with lateral pallet placement
-7. **AI Insights**: Provides AI-driven summarization, optimization recommendations
+The Air module features a multi-stage pipeline:
+1.  **Input Layer**: CSV/JSON movement list uploads.
+2.  **Parser & Validator**: Data parsing and validation.
+3.  **Classification**: Categorization by phase and cargo type.
+4.  **Palletization Engine**: 463L pallet system using a bin-packing algorithm.
+5.  **Aircraft Allocation Solver**: Cargo allocation based on weight, position, and Center of Balance (CoB).
+6.  **ICODES Visualization**: 2D aircraft diagrams with lateral pallet placement.
+7.  **AI Insights**: Summarization and optimization recommendations.
 
-## Aircraft Specifications
-The system supports C-17 Globemaster III and C-130H/J Hercules, each with specific pallet positions, maximum payloads, dimensions, per-position weight limits, CoB envelope requirements, and seat zone configurations.
+The system supports C-17 Globemaster III and C-130H/J Hercules aircraft, adhering to standardized 463L pallet specifications. Cargo loading/unloading is simulated with a forward-to-aft sequence based on destination and cargo type.
 
-## 463L Pallet System
-Supports standardized 463L pallets (108" × 88", 104" × 84" usable area) with defined tare weight, max payload limits, and tiedown rings.
+## Warehouse Management System (WMS)
+The WMS is modular, featuring a 7-section navigation (Dashboard, Inventory, Operations, Sites & Storage, Analytics, AI Insights, Admin). Key features include:
+- Multi-site inventory tracking and pallet-level location management.
+- NSN validation, aging alerts, and weight constraints.
+- PDF/CSV file import with comprehensive validation.
+- Placement optimization using algorithms like CardStack, Size Standardization, Value Density Analysis, and Bin-Packing Order.
+- Inter-warehouse transfers linked to Air, Land, or Sea transport modes.
 
 ## Data Models
-Key data models include `MovementItem`, `Pallet463L`, `AircraftLoadPlan`, and `AllocationResult`. Flight plans are persisted and loaded via `/api/flight-plans`.
-
-## Cargo Loading/Unloading Simulation
-The 3D viewer includes an interactive cargo loading/unloading animation system:
-
-**Coordinate System**: The solver uses ramp-origin coordinates (x=0 at ramp/aft, increasing toward nose/forward). Lower position_coord = AFT, higher = FORWARD.
-
-**Loading Sequence (Forward to Aft)**:
-- Primary: Cargo for LAST stop loads FIRST (positioned deepest in aircraft)
-- Secondary: Within same stop, forward positions (higher position_coord) load first
-- Tertiary: Non-hazmat before hazmat within same stop/position group
-
-**PDF Export**: Uses actual position_coord values for layout positioning and displays station coordinates in inches.
-
-## Warehouse Management System (MSC Warehouse Optimization Platform)
-
-### Component Architecture
-The WMS has been refactored into a modular architecture:
-
-```
-apps/client/src/components/warehouse/
-├── index.ts                    # Barrel exports
-├── types.ts                    # TypeScript interfaces (WarehouseSite, InventoryItem, etc.)
-├── utils.ts                    # Utility functions (parseNSN, formatNSN, getAgingColor)
-├── constants.ts                # Constants (WMS_COLORS, AGING_THRESHOLDS, MOCK_BUILDINGS)
-├── Toast.tsx                   # Toast notification component
-├── WMSDashboard.tsx            # Dashboard tab (6 metric cards, quick actions)
-├── WMSInventory.tsx            # Inventory tab (enhanced table with filters)
-├── WMSOperations.tsx           # Operations tab (transfers, shipment prep)
-├── WMSSitesStorage.tsx         # Sites & Storage hierarchical view
-├── WMSAnalytics.tsx            # Analytics tab (readiness scores, charts)
-├── WMSAiInsights.tsx           # AI Insights tab (optimization features)
-├── WMSAdmin.tsx                # Admin tab (imports, config)
-└── modals/
-    ├── AddSiteModal.tsx        # Create warehouse site
-    ├── AddItemModal.tsx        # Add inventory item with NSN validation
-    ├── CsvUploadModal.tsx      # CSV bulk import
-    └── TransferModal.tsx       # Create inter-site transfer
-```
-
-### Services Layer
-```
-apps/client/src/services/warehouseService.ts
-- fetchSites(): Promise<WarehouseSite[]>
-- createSite(data): Promise<WarehouseSite>
-- fetchInventory(siteId): Promise<InventoryItem[]>
-- addInventoryItem(siteId, data): Promise<InventoryItem>
-- uploadInventoryCsv(siteId, file): Promise<void>
-- fetchTransfers(): Promise<Transfer[]>
-- createTransfer(data): Promise<Transfer>
-- runOptimization(siteId): Promise<OptimizationResult[]>
-
-apps/client/src/hooks/useWarehouse.ts
-- useWarehouseSites(): { sites, loading, refetch }
-- useWarehouseInventory(siteId): { items, loading, refetch }
-- useWarehouseTransfers(): { transfers, loading, refetch }
-- useToast(): { toasts, showToast, dismissToast }
-```
-
-### 7-Section Navigation (MSC Specification)
-1. **Dashboard**: Mission metrics (6 cards), quick actions toolbar, alerts
-2. **Inventory**: Enhanced table with NSN/PN, Location, Weight, Condition, Mission
-3. **Operations**: Transfer orders, shipment prep, load planning
-4. **Sites & Storage**: Hierarchical tree view (Site → Building → Zone)
-5. **Analytics**: Capacity trendlines, aging curves, readiness scores
-6. **AI Insights**: Placement optimization, load balancing, aging alerts
-7. **Admin**: Data imports, system configuration, exports
-
-### Database Schema
-- **warehouse_sites**: Top-level warehouse locations with geolocation
-- **warehouse_buildings**: Physical buildings within sites (B-870, B-871, etc.)
-- **warehouse_zones**: Logical areas within buildings (racks, staging, floor)
-- **warehouse_locations**: Individual pallet positions with 3D coordinates
-- **warehouse_inventory_items**: Items stored with NSN, FSC, NIIN, aging tracking
-- **warehouse_transfers**: Inter-warehouse transfers with transport mode linkage
-
-### Features
-- Multi-site inventory tracking
-- Pallet-level location management
-- NSN validation and auto-parsing (FSC/NIIN extraction)
-- Aging alerts (3-5 years, 5-7 years, 7+ years)
-- Weight constraints (≤2000 lbs for rack positions)
-- CSV import for bulk inventory upload
-- Placement optimization with algorithm-based recommendations
-- 90-day space reservation for program ordered sets
-
-### Visual Design (Military Minimalism)
-- **Background**: #F9FAFB
-- **Primary**: #004E89 (Navy Blue)
-- **Success**: #16A34A
-- **Warning**: #F59E0B
-- **Error**: #DC2626
-- **Cards**: rounded-2xl, shadow-sm
-
-### Warehouse Optimization Algorithms
-Based on box assortment and cartonization algorithms:
-- **CardStack Algorithm**: Identifies items with similar base dimensions that can be stacked together
-- **Size Standardization**: Groups items by dimension for batch handling optimization
-- **Value Density Analysis**: Ranks items by value-per-volume for priority placement
-- **Bin-Packing Order**: Sorts items by volume for optimal warehouse placement
-
-### Inter-Warehouse Transfers
-Transfers between warehouse sites can be linked to transport modes:
-- **Air**: Via PACAF airlift system for urgent/priority cargo
-- **Land**: Ground convoy for overland transfers
-- **Sea**: Maritime container for port-to-port transfers
-
-## Testing Architecture
-
-### Test Structure (764+ test cases)
-```
-tests/
-├── fixtures/                   # Test data fixtures
-├── integration/                # End-to-end workflow tests
-│   ├── authFlow.test.ts        # Authentication flow tests
-│   ├── warehouseFlow.test.ts   # WMS workflow tests
-│   └── flightPlanFlow.test.ts  # Flight planning tests
-├── schema.test.ts              # Database schema validation
-├── nsnValidation.test.ts       # NSN format validation
-├── warehouseAlgorithms.test.ts # Optimization algorithms
-└── [domain].test.ts            # Domain-specific tests
-
-apps/server/__tests__/
-├── testApp.ts                  # Test app factory
-├── auth.test.ts                # Authentication API tests
-├── warehouse.test.ts           # Warehouse API tests
-├── flights.test.ts             # Flight plans API tests
-└── weather.test.ts             # Weather API tests
-
-apps/client/src/__tests__/
-├── setup.ts                    # Jest setup with mocks
-├── warehouse/                  # WMS component tests
-│   ├── utils.test.ts           # Utility function tests
-│   ├── warehouseService.test.ts# Service layer tests
-│   ├── useWarehouse.test.ts    # Hook tests
-│   └── components.test.tsx     # Component tests
-└── components/                 # Core component tests
-    ├── AuthScreen.test.tsx
-    ├── OperationsHub.test.tsx
-    └── ui/*.test.tsx           # UI component tests
-```
-
-### Running Tests
-```bash
-npm test                    # Run all tests
-npm run test:client         # Run client tests only
-npm run test:server         # Run server tests only
-npm run test:legacy         # Run legacy domain tests
-```
-
-## Land Logistics Schema
-- **land_routes**: Ground transport routes with waypoints
-- **land_convoys**: Vehicle convoy groupings with cargo manifests
-
-## Sea Freight Schema
-- **sea_voyages**: Maritime shipping routes with port calls, includes vessel hull designations (T-AO, T-AKR, T-EPF)
-- **sea_containers**: Container tracking with manifest data
+Key data models include `MovementItem`, `Pallet463L`, `AircraftLoadPlan`, `AllocationResult` for air operations, and `warehouse_sites`, `warehouse_buildings`, `warehouse_zones`, `warehouse_locations`, `warehouse_inventory_items`, `warehouse_transfers` for WMS. Land and Sea modules have `land_routes`, `land_convoys`, `sea_voyages`, and `sea_containers`.
 
 ## Government Compliance & Federal Standards
-
-### National Stock Numbers (NSN)
-The system supports NSN format per federal logistics standards:
-- **Format**: XXXX-XX-XXX-XXXX (13 digits total)
-- **Example**: 8415-01-530-2157
-- **Components**:
-  - **FSC (4 digits)**: Federal Supply Classification - identifies the type of item
-  - **NIIN (9 digits)**: National Item Identification Number - unique item identifier
-
-### Federal Supply Classification (FSC)
-- First 2 digits = Federal Supply Group (FSG) - broad category (e.g., 84 = Clothing)
-- Next 2 digits = specific classification (e.g., 8415 = Special Purpose Clothing)
-
-### CAGE Codes
-Commercial and Government Entity (CAGE) codes are supported for tracking manufacturers and vendors per federal requirements.
-
-### Military Sealift Command (MSC) Vessels
-Sea freight module supports MSC vessel designations:
-- **T-AO**: Fleet Replenishment Oilers (e.g., T-AO 205 USNS John Lewis)
-- **T-AKR**: Large Medium-Speed Roll-on/Roll-off (LMSR) ships
-- **T-EPF**: Expeditionary Fast Transport
-- **T-AH**: Hospital Ships
-- **T-ARS**: Rescue and Salvage Ships
-
-### WebFLIS Integration
-The system's data structures align with Federal Logistics Information System (FLIS) standards for compatibility with government logistics systems.
+The system supports National Stock Numbers (NSN) format (FSC and NIIN components), Commercial and Government Entity (CAGE) codes, and integrates with Military Sealift Command (MSC) vessel designations (T-AO, T-AKR, T-EPF, T-AH, T-ARS). Data structures align with Federal Logistics Information System (FLIS) standards.
 
 ## UI/UX Design
-- Responsive design with mobile-first approach
-- Consistent navigation with "Back to Hub" on all section pages
-- Dark theme with gradient accents per section:
-  - Air: Blue/Cyan gradient
-  - Land: Amber/Orange gradient
-  - Sea: Teal/Emerald gradient
-  - Warehouse: Purple/Pink gradient
+The platform uses a responsive, mobile-first design with a consistent navigation. A dark theme with gradient accents is applied per section: Air (Blue/Cyan), Land (Amber/Orange), Sea (Teal/Emerald), and Warehouse (Purple/Pink).
 
 ## AI Insights Configuration
-AI insights utilize AWS Bedrock with the Nova Lite model, configurable via environment variables.
+AI insights are powered by AWS Bedrock with the Nova Lite model.
 
 # External Dependencies
 

@@ -27,9 +27,9 @@ export interface ParsedInventoryRow {
 
 export interface ColumnSpec {
   originalName: string;
-  mappedName: string;
-  detected: boolean;
-  required: boolean;
+  mappedTo: string | null;
+  isRequired: boolean;
+  isRecognized: boolean;
 }
 
 export interface ValidationResult {
@@ -80,16 +80,16 @@ export function detectColumns(headers: string[]): ColumnSpec[] {
       mappedColumns.add(mapped);
       specs.push({
         originalName: header,
-        mappedName: mapped,
-        detected: true,
-        required: REQUIRED_FIELDS.includes(mapped),
+        mappedTo: mapped,
+        isRecognized: true,
+        isRequired: REQUIRED_FIELDS.includes(mapped),
       });
     } else {
       specs.push({
         originalName: header,
-        mappedName: header,
-        detected: false,
-        required: false,
+        mappedTo: null,
+        isRecognized: false,
+        isRequired: false,
       });
     }
   }
@@ -313,9 +313,9 @@ export function validateColumns(headers: string[]): {
   
   const foundMappedColumns = new Set<string>();
   for (const col of columns) {
-    if (col.detected) {
-      columnMap.set(col.originalName, col.mappedName);
-      foundMappedColumns.add(col.mappedName);
+    if (col.isRecognized && col.mappedTo) {
+      columnMap.set(col.originalName, col.mappedTo);
+      foundMappedColumns.add(col.mappedTo);
     }
   }
   
@@ -341,7 +341,7 @@ export function validateColumns(headers: string[]): {
     }
   }
   
-  const unmappedColumns = columns.filter(c => !c.detected);
+  const unmappedColumns = columns.filter(c => !c.isRecognized);
   for (const col of unmappedColumns) {
     warnings.push({
       level: 'warning',

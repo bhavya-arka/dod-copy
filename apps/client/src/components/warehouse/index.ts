@@ -16,6 +16,7 @@ export { default as AddSiteModal } from "./modals/AddSiteModal";
 export { default as AddItemModal } from "./modals/AddItemModal";
 export { default as CsvUploadModal } from "./modals/CsvUploadModal";
 export { default as TransferModal } from "./modals/TransferModal";
+export { default as InventoryFileImportModal } from "./modals/InventoryFileImportModal";
 
 export * from "./types";
 export * from "./utils";
