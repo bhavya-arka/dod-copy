@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   Warehouse,
@@ -25,6 +25,7 @@ import {
   Ship,
   CheckCircle,
   XCircle,
+  Info,
 } from "lucide-react";
 import { User } from "../../hooks/useAuth";
 
@@ -84,6 +85,36 @@ interface OptimizationResult {
   };
 }
 
+interface ToastMessage {
+  id: string;
+  message: string;
+  type: "info" | "success" | "warning" | "error";
+}
+
+function Toast({ message, type, onDismiss }: { message: string; type: string; onDismiss: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onDismiss, 4000);
+    return () => clearTimeout(timer);
+  }, [onDismiss]);
+
+  const bgColor = type === "success" ? "bg-green-600" : type === "error" ? "bg-red-600" : type === "warning" ? "bg-amber-600" : "bg-blue-600";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 50, scale: 0.9 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 50, scale: 0.9 }}
+      className={`${bgColor} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 min-w-[300px]`}
+    >
+      <Info className="w-5 h-5 flex-shrink-0" />
+      <span className="text-sm flex-1">{message}</span>
+      <button onClick={onDismiss} className="hover:opacity-80">
+        <X className="w-4 h-4" />
+      </button>
+    </motion.div>
+  );
+}
+
 export default function WarehouseManagement({
   user,
   onBack,
@@ -100,7 +131,18 @@ export default function WarehouseManagement({
   const [addSiteOpen, setAddSiteOpen] = useState(false);
   const [csvUploadOpen, setCsvUploadOpen] = useState(false);
   const [transferFormOpen, setTransferFormOpen] = useState(false);
+  const [addItemOpen, setAddItemOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const showToast = useCallback((message: string, type: ToastMessage["type"] = "info") => {
+    const id = Date.now().toString();
+    setToasts((prev) => [...prev, { id, message, type }]);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   const fetchSites = useCallback(async () => {
     setLoading(true);
@@ -180,6 +222,10 @@ export default function WarehouseManagement({
 
   const totalItems = sites.reduce((acc, site) => acc + (site.item_count || 0), 0);
 
+  const handleTabChange = useCallback((tab: WMSTab) => {
+    setActiveTab(tab);
+  }, []);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-border shadow-subtle">
@@ -251,6 +297,8 @@ export default function WarehouseManagement({
             totalItems={totalItems}
             onAddSite={() => setAddSiteOpen(true)}
             onRefresh={fetchSites}
+            onTabChange={handleTabChange}
+            onShowToast={showToast}
           />
         )}
         {activeTab === "inventory" && (
@@ -261,10 +309,12 @@ export default function WarehouseManagement({
             inventory={inventory}
             loading={inventoryLoading}
             onOpenCsvUpload={() => setCsvUploadOpen(true)}
+            onOpenAddItem={() => setAddItemOpen(true)}
             onRefresh={() => selectedSiteId && fetchInventory(selectedSiteId)}
+            onShowToast={showToast}
           />
         )}
-        {activeTab === "locations" && <LocationsTab />}
+        {activeTab === "locations" && <LocationsTab onShowToast={showToast} />}
         {activeTab === "transfers" && (
           <TransfersTab
             sites={sites}
@@ -289,6 +339,7 @@ export default function WarehouseManagement({
           onSuccess={() => {
             setAddSiteOpen(false);
             fetchSites();
+            showToast("Warehouse site created successfully!", "success");
           }}
         />
       )}
@@ -300,6 +351,7 @@ export default function WarehouseManagement({
           onSuccess={() => {
             setCsvUploadOpen(false);
             fetchInventory(selectedSiteId);
+            showToast("Inventory imported successfully!", "success");
           }}
         />
       )}
@@ -311,9 +363,39 @@ export default function WarehouseManagement({
           onSuccess={() => {
             setTransferFormOpen(false);
             fetchTransfers();
+            showToast("Transfer created successfully!", "success");
           }}
         />
       )}
+
+      {addItemOpen && (
+        <AddItemModal
+          siteId={selectedSiteId}
+          sites={sites}
+          onClose={() => setAddItemOpen(false)}
+          onSuccess={() => {
+            setAddItemOpen(false);
+            if (selectedSiteId) {
+              fetchInventory(selectedSiteId);
+            }
+            showToast("Inventory item added successfully!", "success");
+          }}
+          onSelectSite={setSelectedSiteId}
+        />
+      )}
+
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <Toast
+              key={toast.id}
+              message={toast.message}
+              type={toast.type}
+              onDismiss={() => dismissToast(toast.id)}
+            />
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -324,9 +406,35 @@ interface OverviewTabProps {
   totalItems: number;
   onAddSite: () => void;
   onRefresh: () => void;
+  onTabChange: (tab: WMSTab) => void;
+  onShowToast: (message: string, type?: ToastMessage["type"]) => void;
 }
 
-function OverviewTab({ sites, loading, totalItems, onAddSite, onRefresh }: OverviewTabProps) {
+function OverviewTab({ sites, loading, totalItems, onAddSite, onRefresh, onTabChange, onShowToast }: OverviewTabProps) {
+  const hasSites = sites.length > 0;
+
+  const handleQuickAction = (actionLabel: string) => {
+    if (!hasSites && (actionLabel === "Import Inventory" || actionLabel === "Optimize Placement")) {
+      onShowToast("Please add a warehouse site first", "warning");
+      return;
+    }
+
+    switch (actionLabel) {
+      case "Import Inventory":
+        onTabChange("inventory");
+        break;
+      case "Export Data":
+        onShowToast("Export Data feature is coming soon!", "info");
+        break;
+      case "Optimize Placement":
+        onTabChange("analytics");
+        break;
+      case "Configure":
+        onShowToast("Site configuration feature is coming soon!", "info");
+        break;
+    }
+  };
+
   return (
     <>
       <motion.div
@@ -390,7 +498,14 @@ function OverviewTab({ sites, loading, totalItems, onAddSite, onRefresh }: Overv
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Warehouse className="w-12 h-12 mb-4 opacity-50" />
               <p className="text-center">No warehouse sites configured</p>
-              <p className="text-sm text-muted-foreground/70">Add your first site to begin</p>
+              <p className="text-sm text-muted-foreground/70 mb-4">Add your first site to begin</p>
+              <button
+                onClick={onAddSite}
+                className="btn-primary text-sm px-4 py-2 flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add Your First Site
+              </button>
             </div>
           ) : (
             <div className="space-y-3 max-h-[300px] overflow-y-auto">
@@ -460,28 +575,43 @@ function OverviewTab({ sites, loading, totalItems, onAddSite, onRefresh }: Overv
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { icon: Upload, label: "Import Inventory", desc: "CSV upload" },
-            { icon: Download, label: "Export Data", desc: "Generate reports" },
-            { icon: Layers, label: "Optimize Placement", desc: "AI recommendations" },
-            { icon: Settings, label: "Configure", desc: "Site settings" },
-          ].map((action) => (
-            <button
-              key={action.label}
-              className="flex flex-col items-center gap-2 p-4 rounded-xl hover:bg-muted transition-colors text-center group"
-            >
-              <div className="p-3 rounded-lg bg-muted group-hover:bg-accent-soft">
-                <action.icon className="w-5 h-5 text-muted-foreground group-hover:text-accent" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">{action.label}</p>
-                <p className="text-xs text-muted-foreground">{action.desc}</p>
-              </div>
-            </button>
-          ))}
+            { icon: Upload, label: "Import Inventory", desc: "CSV upload", requiresSite: true },
+            { icon: Download, label: "Export Data", desc: "Generate reports", requiresSite: false },
+            { icon: Layers, label: "Optimize Placement", desc: "AI recommendations", requiresSite: true },
+            { icon: Settings, label: "Configure", desc: "Site settings", requiresSite: false },
+          ].map((action) => {
+            const isDisabled = action.requiresSite && !hasSites;
+            return (
+              <button
+                key={action.label}
+                onClick={() => handleQuickAction(action.label)}
+                disabled={isDisabled}
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl transition-colors text-center group relative ${
+                  isDisabled 
+                    ? "opacity-50 cursor-not-allowed" 
+                    : "hover:bg-muted"
+                }`}
+                title={isDisabled ? "Add a warehouse site first" : action.desc}
+              >
+                <div className={`p-3 rounded-lg bg-muted ${!isDisabled && "group-hover:bg-accent-soft"}`}>
+                  <action.icon className={`w-5 h-5 text-muted-foreground ${!isDisabled && "group-hover:text-accent"}`} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{action.label}</p>
+                  <p className="text-xs text-muted-foreground">{action.desc}</p>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </motion.div>
     </>
   );
+}
+
+interface InventoryFilter {
+  quantityRange: "all" | "low" | "medium" | "high";
+  hasDimensions: "all" | "yes" | "no";
 }
 
 interface InventoryTabProps {
@@ -491,7 +621,9 @@ interface InventoryTabProps {
   inventory: InventoryItem[];
   loading: boolean;
   onOpenCsvUpload: () => void;
+  onOpenAddItem: () => void;
   onRefresh: () => void;
+  onShowToast: (message: string, type?: ToastMessage["type"]) => void;
 }
 
 function InventoryTab({
@@ -501,14 +633,53 @@ function InventoryTab({
   inventory,
   loading,
   onOpenCsvUpload,
+  onOpenAddItem,
   onRefresh,
+  onShowToast,
 }: InventoryTabProps) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filter, setFilter] = useState<InventoryFilter>({
+    quantityRange: "all",
+    hasDimensions: "all",
+  });
 
-  const filteredInventory = inventory.filter((item) =>
-    item.requisition_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredInventory = inventory.filter((item) => {
+    const matchesSearch =
+      item.requisition_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.description?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    let matchesQuantity = true;
+    if (filter.quantityRange === "low") {
+      matchesQuantity = item.quantity <= 10;
+    } else if (filter.quantityRange === "medium") {
+      matchesQuantity = item.quantity > 10 && item.quantity <= 100;
+    } else if (filter.quantityRange === "high") {
+      matchesQuantity = item.quantity > 100;
+    }
+
+    let matchesDimensions = true;
+    const hasDims = !!(item.length_in && item.width_in && item.height_in);
+    if (filter.hasDimensions === "yes") {
+      matchesDimensions = hasDims;
+    } else if (filter.hasDimensions === "no") {
+      matchesDimensions = !hasDims;
+    }
+
+    return matchesSearch && matchesQuantity && matchesDimensions;
+  });
+
+  const activeFilterCount = 
+    (filter.quantityRange !== "all" ? 1 : 0) + 
+    (filter.hasDimensions !== "all" ? 1 : 0);
+
+  const handleAddItem = () => {
+    if (!selectedSiteId) {
+      onShowToast("Please select a warehouse site first", "warning");
+      return;
+    }
+    onOpenAddItem();
+  };
 
   return (
     <>
@@ -527,11 +698,15 @@ function InventoryTab({
               onClick={onOpenCsvUpload}
               disabled={!selectedSiteId}
               className="btn-secondary text-sm px-3 py-2 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={!selectedSiteId ? "Select a site first" : "Import CSV"}
             >
               <Upload className="w-4 h-4" />
               Import
             </button>
-            <button className="btn-primary text-sm px-3 py-2 flex items-center gap-2">
+            <button 
+              onClick={handleAddItem}
+              className="btn-primary text-sm px-3 py-2 flex items-center gap-2"
+            >
               <Plus className="w-4 h-4" />
               Add Item
             </button>
@@ -568,10 +743,81 @@ function InventoryTab({
               className="w-full pl-10 pr-4 py-2 rounded-xl bg-muted border border-border text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
             />
           </div>
-          <button className="btn-secondary text-sm px-3 py-2 flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            Filter
-          </button>
+          <div className="relative">
+            <button 
+              onClick={() => setFilterOpen(!filterOpen)}
+              className={`btn-secondary text-sm px-3 py-2 flex items-center gap-2 ${activeFilterCount > 0 ? "ring-2 ring-accent" : ""}`}
+            >
+              <Filter className="w-4 h-4" />
+              Filter
+              {activeFilterCount > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 bg-accent text-white text-xs rounded-full">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            
+            <AnimatePresence>
+              {filterOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute right-0 mt-2 w-64 bg-white rounded-xl border border-border shadow-lg z-20 p-4"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-medium text-foreground">Filters</h3>
+                    <button 
+                      onClick={() => setFilter({ quantityRange: "all", hasDimensions: "all" })}
+                      className="text-xs text-accent hover:underline"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-2">
+                        Quantity Range
+                      </label>
+                      <select
+                        value={filter.quantityRange}
+                        onChange={(e) => setFilter({ ...filter, quantityRange: e.target.value as InventoryFilter["quantityRange"] })}
+                        className="w-full px-3 py-1.5 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent"
+                      >
+                        <option value="all">All quantities</option>
+                        <option value="low">Low (≤10)</option>
+                        <option value="medium">Medium (11-100)</option>
+                        <option value="high">High (&gt;100)</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-2">
+                        Has Dimensions
+                      </label>
+                      <select
+                        value={filter.hasDimensions}
+                        onChange={(e) => setFilter({ ...filter, hasDimensions: e.target.value as InventoryFilter["hasDimensions"] })}
+                        className="w-full px-3 py-1.5 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent"
+                      >
+                        <option value="all">All items</option>
+                        <option value="yes">With dimensions</option>
+                        <option value="no">Without dimensions</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={() => setFilterOpen(false)}
+                    className="w-full mt-4 btn-primary text-sm py-1.5"
+                  >
+                    Apply Filters
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
         {!selectedSiteId ? (
@@ -590,10 +836,26 @@ function InventoryTab({
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Package className="w-16 h-16 mb-4 opacity-50" />
             <p className="text-lg mb-2">No inventory items</p>
-            <p className="text-sm text-muted-foreground/70 text-center max-w-md">
+            <p className="text-sm text-muted-foreground/70 text-center max-w-md mb-4">
               Import your inventory data via CSV or add items manually to start
               tracking warehouse contents.
             </p>
+            <div className="flex gap-2">
+              <button
+                onClick={onOpenCsvUpload}
+                className="btn-secondary text-sm px-4 py-2 flex items-center gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                Import CSV
+              </button>
+              <button
+                onClick={onOpenAddItem}
+                className="btn-primary text-sm px-4 py-2 flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add Item
+              </button>
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -632,7 +894,15 @@ function InventoryTab({
   );
 }
 
-function LocationsTab() {
+interface LocationsTabProps {
+  onShowToast: (message: string, type?: ToastMessage["type"]) => void;
+}
+
+function LocationsTab({ onShowToast }: LocationsTabProps) {
+  const handleAddLocation = () => {
+    onShowToast("Location management feature is coming soon!", "info");
+  };
+
   return (
     <>
       <motion.div
@@ -647,7 +917,10 @@ function LocationsTab() {
               Manage warehouse zones and pallet positions
             </p>
           </div>
-          <button className="btn-primary text-sm px-3 py-2 flex items-center gap-2">
+          <button 
+            onClick={handleAddLocation}
+            className="btn-primary text-sm px-3 py-2 flex items-center gap-2"
+          >
             <Plus className="w-4 h-4" />
             Add Location
           </button>
@@ -663,10 +936,17 @@ function LocationsTab() {
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
           <MapPin className="w-16 h-16 mb-4 opacity-50" />
           <p className="text-lg mb-2">No locations configured</p>
-          <p className="text-sm text-muted-foreground/70 text-center max-w-md">
+          <p className="text-sm text-muted-foreground/70 text-center max-w-md mb-4">
             Define warehouse buildings, zones, and pallet positions to enable
             location-based inventory tracking.
           </p>
+          <button
+            onClick={handleAddLocation}
+            className="btn-secondary text-sm px-4 py-2 flex items-center gap-2"
+          >
+            <Info className="w-4 h-4" />
+            Coming Soon
+          </button>
         </div>
       </motion.div>
     </>
@@ -751,9 +1031,16 @@ function TransfersTab({ sites, transfers, loading, onOpenTransferForm, onRefresh
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <ArrowRightLeft className="w-16 h-16 mb-4 opacity-50" />
             <p className="text-lg mb-2">No transfers</p>
-            <p className="text-sm text-muted-foreground/70 text-center max-w-md">
+            <p className="text-sm text-muted-foreground/70 text-center max-w-md mb-4">
               Create a new transfer to move inventory between warehouse sites.
             </p>
+            <button
+              onClick={onOpenTransferForm}
+              className="btn-primary text-sm px-4 py-2 flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Create First Transfer
+            </button>
           </div>
         ) : (
           <div className="space-y-4">
@@ -1211,14 +1498,257 @@ function CsvUploadModal({ siteId, onClose, onSuccess }: CsvUploadModalProps) {
             </button>
             <button
               type="submit"
-              disabled={loading || !csvContent.trim()}
-              className="flex-1 btn-primary py-2 text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loading}
+              className="flex-1 btn-primary py-2 text-sm flex items-center justify-center gap-2"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Upload
+              Import
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+interface AddItemModalProps {
+  siteId: number | null;
+  sites: WarehouseSite[];
+  onClose: () => void;
+  onSuccess: () => void;
+  onSelectSite: (id: number | null) => void;
+}
+
+function AddItemModal({ siteId, sites, onClose, onSuccess, onSelectSite }: AddItemModalProps) {
+  const [selectedSite, setSelectedSite] = useState<number | "">(siteId || "");
+  const [requisitionNo, setRequisitionNo] = useState("");
+  const [description, setDescription] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [length, setLength] = useState("");
+  const [width, setWidth] = useState("");
+  const [height, setHeight] = useState("");
+  const [unitPrice, setUnitPrice] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedSite) {
+      setError("Please select a warehouse site");
+      return;
+    }
+    
+    if (!requisitionNo.trim()) {
+      setError("Requisition number is required");
+      return;
+    }
+
+    if (!quantity || parseInt(quantity) < 1) {
+      setError("Quantity must be at least 1");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/warehouse/sites/${selectedSite}/inventory`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          requisition_no: requisitionNo.trim(),
+          description: description.trim() || null,
+          quantity: parseInt(quantity),
+          length_in: length ? parseFloat(length) : null,
+          width_in: width ? parseFloat(width) : null,
+          height_in: height ? parseFloat(height) : null,
+          unit_price: unitPrice ? parseFloat(unitPrice) : null,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to add inventory item");
+      }
+
+      if (selectedSite !== siteId) {
+        onSelectSite(Number(selectedSite));
+      }
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add inventory item");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-2xl shadow-lg w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold text-foreground">Add Inventory Item</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+            {error}
+          </div>
+        )}
+
+        {sites.length === 0 ? (
+          <div className="text-center py-8">
+            <Warehouse className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+            <p className="text-muted-foreground mb-2">No warehouse sites available</p>
+            <p className="text-sm text-muted-foreground/70">
+              Please create a warehouse site first before adding inventory items.
+            </p>
+            <button onClick={onClose} className="mt-4 btn-secondary text-sm px-4 py-2">
+              Close
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Warehouse Site *
+              </label>
+              <select
+                value={selectedSite}
+                onChange={(e) => setSelectedSite(e.target.value ? Number(e.target.value) : "")}
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
+              >
+                <option value="">Select site...</option>
+                {sites.map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.name} ({site.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Requisition No *
+              </label>
+              <input
+                type="text"
+                value={requisitionNo}
+                onChange={(e) => setRequisitionNo(e.target.value)}
+                placeholder="e.g., REQ-001"
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Description
+              </label>
+              <input
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="e.g., Military Equipment"
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Quantity *
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Length (in)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={length}
+                  onChange={(e) => setLength(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Width (in)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={width}
+                  onChange={(e) => setWidth(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Height (in)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={height}
+                  onChange={(e) => setHeight(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Unit Price ($)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={unitPrice}
+                onChange={(e) => setUnitPrice(e.target.value)}
+                placeholder="0.00"
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 btn-secondary py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 btn-primary py-2 text-sm flex items-center justify-center gap-2"
+              >
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                Add Item
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -1233,7 +1763,7 @@ interface TransferFormModalProps {
 function TransferFormModal({ sites, onClose, onSuccess }: TransferFormModalProps) {
   const [sourceSiteId, setSourceSiteId] = useState<number | "">("");
   const [destinationSiteId, setDestinationSiteId] = useState<number | "">("");
-  const [transportMode, setTransportMode] = useState<string>("land");
+  const [transportMode, setTransportMode] = useState<"ground" | "air" | "sea">("ground");
   const [items, setItems] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
@@ -1241,10 +1771,12 @@ function TransferFormModal({ sites, onClose, onSuccess }: TransferFormModalProps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!sourceSiteId || !destinationSiteId) {
       setError("Source and destination sites are required");
       return;
     }
+    
     if (sourceSiteId === destinationSiteId) {
       setError("Source and destination must be different");
       return;
@@ -1262,8 +1794,8 @@ function TransferFormModal({ sites, onClose, onSuccess }: TransferFormModalProps
           source_site_id: sourceSiteId,
           destination_site_id: destinationSiteId,
           transport_mode: transportMode,
-          items,
-          notes,
+          items: items || "General cargo",
+          notes: notes || null,
         }),
       });
 
@@ -1306,7 +1838,7 @@ function TransferFormModal({ sites, onClose, onSuccess }: TransferFormModalProps
               onChange={(e) => setSourceSiteId(e.target.value ? Number(e.target.value) : "")}
               className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
             >
-              <option value="">Select source site...</option>
+              <option value="">Select source...</option>
               {sites.map((site) => (
                 <option key={site.id} value={site.id}>
                   {site.name} ({site.code})
@@ -1314,6 +1846,7 @@ function TransferFormModal({ sites, onClose, onSuccess }: TransferFormModalProps
               ))}
             </select>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
               Destination Site *
@@ -1323,7 +1856,7 @@ function TransferFormModal({ sites, onClose, onSuccess }: TransferFormModalProps
               onChange={(e) => setDestinationSiteId(e.target.value ? Number(e.target.value) : "")}
               className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
             >
-              <option value="">Select destination site...</option>
+              <option value="">Select destination...</option>
               {sites.map((site) => (
                 <option key={site.id} value={site.id}>
                   {site.name} ({site.code})
@@ -1331,32 +1864,47 @@ function TransferFormModal({ sites, onClose, onSuccess }: TransferFormModalProps
               ))}
             </select>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
               Transport Mode
             </label>
-            <select
-              value={transportMode}
-              onChange={(e) => setTransportMode(e.target.value)}
-              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
-            >
-              <option value="land">Land (Truck)</option>
-              <option value="air">Air</option>
-              <option value="sea">Sea</option>
-            </select>
+            <div className="flex gap-2">
+              {[
+                { value: "ground", icon: Truck, label: "Ground" },
+                { value: "air", icon: Plane, label: "Air" },
+                { value: "sea", icon: Ship, label: "Sea" },
+              ].map((mode) => (
+                <button
+                  key={mode.value}
+                  type="button"
+                  onClick={() => setTransportMode(mode.value as "ground" | "air" | "sea")}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm transition-colors ${
+                    transportMode === mode.value
+                      ? "bg-accent text-white"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  <mode.icon className="w-4 h-4" />
+                  {mode.label}
+                </button>
+              ))}
+            </div>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
-              Items to Transfer
+              Items
             </label>
-            <textarea
+            <input
+              type="text"
               value={items}
               onChange={(e) => setItems(e.target.value)}
-              placeholder="List items to transfer..."
-              rows={3}
-              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 resize-none"
+              placeholder="e.g., 50 pallets of equipment"
+              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
             />
           </div>
+
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">
               Notes
@@ -1365,7 +1913,7 @@ function TransferFormModal({ sites, onClose, onSuccess }: TransferFormModalProps
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Additional notes..."
-              rows={2}
+              rows={3}
               className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 resize-none"
             />
           </div>

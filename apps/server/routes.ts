@@ -1997,6 +1997,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/warehouse/sites/:siteId/inventory - Add a single inventory item
+  app.post("/api/warehouse/sites/:siteId/inventory", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const { requisition_no, description, quantity, length_in, width_in, height_in, unit_price } = req.body;
+      
+      if (!requisition_no) {
+        return res.status(400).json({ error: "requisition_no is required" });
+      }
+
+      const [item] = await db.insert(warehouseInventoryItems).values({
+        site_id: siteId,
+        requisition_no,
+        description: description || `Item ${requisition_no}`,
+        quantity: quantity || 1,
+        unit_price: unit_price ? unit_price.toString() : null,
+        raw_row: {
+          dimensions: {
+            l: length_in || null,
+            w: width_in || null,
+            h: height_in || null,
+          },
+        },
+      }).returning();
+
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("[Warehouse] Failed to add inventory item:", error);
+      res.status(500).json({ error: "Failed to add inventory item" });
+    }
+  });
+
   // POST /api/warehouse/sites/:siteId/inventory/upload - Upload and parse CSV inventory data
   app.post("/api/warehouse/sites/:siteId/inventory/upload", authMiddleware, async (req: AuthRequest, res) => {
     try {
