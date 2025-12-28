@@ -24,7 +24,12 @@ export default {
             skipLibCheck: true,
             strict: false,
             target: 'ES2020',
-            types: ['jest', 'node', '@testing-library/jest-dom']
+            types: ['jest', 'node', '@testing-library/jest-dom'],
+            baseUrl: '.',
+            paths: {
+              '@/*': ['apps/client/src/*'],
+              '@shared/*': ['packages/shared/*']
+            }
           }
         }]
       },
