@@ -200,46 +200,46 @@ function CameraController({
 
 function InfoPanel({ cargo, onClose }: { cargo: CargoItem; onClose: () => void }) {
   return (
-    <div className="absolute right-4 top-20 w-72 bg-slate-900/95 rounded-lg shadow-xl border border-slate-700 z-10">
-      <div className="flex items-center justify-between p-3 border-b border-slate-700">
-        <h4 className="text-white font-semibold">Cargo Details</h4>
-        <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>
+    <div className="absolute right-4 top-20 w-72 bg-card rounded-lg shadow-xl border border-border z-10">
+      <div className="flex items-center justify-between p-3 border-b border-border">
+        <h4 className="text-foreground font-semibold">Cargo Details</h4>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">✕</button>
       </div>
       <div className="p-4 space-y-3 text-sm">
         <div>
-          <label className="text-slate-400 text-xs uppercase">Name</label>
-          <p className="text-white font-medium">{cargo.name}</p>
+          <label className="text-muted-foreground text-xs uppercase">Name</label>
+          <p className="text-foreground font-medium">{cargo.name}</p>
         </div>
         {cargo.tcn && (
           <div>
-            <label className="text-slate-400 text-xs uppercase">TCN</label>
-            <p className="text-blue-400 font-mono">{cargo.tcn}</p>
+            <label className="text-muted-foreground text-xs uppercase">TCN</label>
+            <p className="text-blue-600 font-mono">{cargo.tcn}</p>
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-slate-400 text-xs uppercase">Type</label>
-            <p className="text-white capitalize">{cargo.type}</p>
+            <label className="text-muted-foreground text-xs uppercase">Type</label>
+            <p className="text-foreground capitalize">{cargo.type}</p>
           </div>
           <div>
-            <label className="text-slate-400 text-xs uppercase">Weight</label>
-            <p className="text-white">{cargo.weight.toLocaleString()} lbs</p>
+            <label className="text-muted-foreground text-xs uppercase">Weight</label>
+            <p className="text-foreground">{cargo.weight.toLocaleString()} lbs</p>
           </div>
         </div>
         <div>
-          <label className="text-slate-400 text-xs uppercase">Dimensions (L×W×H)</label>
-          <p className="text-white font-mono">
+          <label className="text-muted-foreground text-xs uppercase">Dimensions (L×W×H)</label>
+          <p className="text-foreground font-mono">
             {cargo.dimensions.length}" × {cargo.dimensions.width}" × {cargo.dimensions.height}"
           </p>
         </div>
         <div>
-          <label className="text-slate-400 text-xs uppercase">Position (X, Y, Z)</label>
-          <p className="text-white font-mono">
+          <label className="text-muted-foreground text-xs uppercase">Position (X, Y, Z)</label>
+          <p className="text-foreground font-mono">
             ({cargo.position.x.toFixed(1)}, {cargo.position.y.toFixed(1)}, {cargo.position.z.toFixed(1)})
           </p>
         </div>
         {cargo.hazmat && (
-          <div className="flex items-center gap-2 text-yellow-400 bg-yellow-400/10 p-2 rounded">
+          <div className="flex items-center gap-2 text-amber-600 bg-amber-100 p-2 rounded">
             <span>⚠️</span>
             <span className="text-sm font-medium">HAZMAT Cargo</span>
           </div>
@@ -271,14 +271,14 @@ function ViewerSidebar({
   return (
     <div className="absolute left-4 top-20 flex flex-col gap-2 z-10">
       <TooltipProvider>
-        <div className="bg-slate-900/90 rounded-lg p-2 flex flex-col gap-1">
+        <div className="bg-card/95 rounded-lg p-2 flex flex-col gap-1 border border-border shadow-sm">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant={viewMode === 'normal' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => onViewModeChange('normal')}
-                className="w-full justify-start text-white"
+                className="w-full justify-start"
               >
                 🎨 Normal
               </Button>
@@ -292,7 +292,7 @@ function ViewerSidebar({
                 variant={viewMode === 'wireframe' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => onViewModeChange('wireframe')}
-                className="w-full justify-start text-white"
+                className="w-full justify-start"
               >
                 📐 Wireframe
               </Button>
@@ -306,7 +306,7 @@ function ViewerSidebar({
                 variant={viewMode === 'heatmap' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => onViewModeChange('heatmap')}
-                className="w-full justify-start text-white"
+                className="w-full justify-start"
               >
                 🌡️ Heatmap (H)
               </Button>
@@ -320,7 +320,7 @@ function ViewerSidebar({
                 variant={viewMode === 'cog' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => onViewModeChange('cog')}
-                className="w-full justify-start text-white"
+                className="w-full justify-start"
               >
                 ⚖️ CoG Mode
               </Button>
@@ -329,14 +329,14 @@ function ViewerSidebar({
           </Tooltip>
         </div>
         
-        <div className="bg-slate-900/90 rounded-lg p-2 flex flex-col gap-1">
+        <div className="bg-card/95 rounded-lg p-2 flex flex-col gap-1 border border-border shadow-sm">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant={showMinimap ? 'default' : 'ghost'}
                 size="sm"
                 onClick={onMinimapToggle}
-                className="w-full justify-start text-white"
+                className="w-full justify-start"
               >
                 🗺️ Mini-Map
               </Button>
@@ -350,7 +350,7 @@ function ViewerSidebar({
                 variant={showMeasure ? 'default' : 'ghost'}
                 size="sm"
                 onClick={onMeasureToggle}
-                className="w-full justify-start text-white"
+                className="w-full justify-start"
               >
                 📏 Measure (M)
               </Button>
@@ -364,7 +364,7 @@ function ViewerSidebar({
                 variant={animationMode ? 'default' : 'ghost'}
                 size="sm"
                 onClick={onAnimationToggle}
-                className="w-full justify-start text-white"
+                className="w-full justify-start"
               >
                 <Box className="w-4 h-4 mr-1" /> Simulate (L)
               </Button>
@@ -373,8 +373,8 @@ function ViewerSidebar({
           </Tooltip>
         </div>
         
-        <div className="bg-slate-800/80 rounded-lg p-2 text-xs text-slate-400">
-          <p className="font-medium text-slate-300 mb-1">Controls</p>
+        <div className="bg-muted rounded-lg p-2 text-xs text-muted-foreground border border-border">
+          <p className="font-medium text-foreground mb-1">Controls</p>
           <p>WASD - Move camera</p>
           <p>R - Reset view</p>
           <p>L - Load simulation</p>
@@ -399,10 +399,10 @@ function MiniMap({
   
   return (
     <div 
-      className="absolute bottom-20 right-4 bg-slate-900/95 rounded-lg border border-slate-600 overflow-hidden z-10"
+      className="absolute bottom-20 right-4 bg-card rounded-lg border border-border overflow-hidden z-10 shadow-sm"
       style={{ width: Math.max(120, width * 100), height: Math.max(80, length * 100) }}
     >
-      <div className="text-xs text-slate-400 px-2 py-1 border-b border-slate-700">Top View</div>
+      <div className="text-xs text-muted-foreground px-2 py-1 border-b border-border">Top View</div>
       <svg 
         viewBox={`0 0 ${spec.cargo_width} ${spec.cargo_length}`} 
         className="w-full h-full p-1"
@@ -574,7 +574,7 @@ function HeatmapFloor({
                 <meshBasicMaterial color={color} transparent opacity={0.4} />
               </mesh>
               <Html position={[0, 0.5, 0]} center style={{ pointerEvents: 'none' }}>
-                <div className="bg-slate-900/80 px-1.5 py-0.5 rounded text-xs text-white whitespace-nowrap">
+                <div className="bg-card/95 px-1.5 py-0.5 rounded text-xs text-foreground whitespace-nowrap border border-border shadow-sm">
                   {Math.round(weight).toLocaleString()} lbs
                 </div>
               </Html>
@@ -868,13 +868,13 @@ function Pallet3D({
         center
         style={{ pointerEvents: 'none' }}
       >
-        <div className={`px-2 py-1 rounded text-xs whitespace-nowrap ${isSelected ? 'bg-blue-600' : 'bg-slate-900/90'}`}>
-          <span className="text-white font-bold">{placement.pallet.id}</span>
-          <span className="text-slate-300 ml-2">
+        <div className={`px-2 py-1 rounded text-xs whitespace-nowrap border shadow-sm ${isSelected ? 'bg-blue-600 text-white border-blue-500' : 'bg-card text-foreground border-border'}`}>
+          <span className="font-bold">{placement.pallet.id}</span>
+          <span className={`ml-2 ${isSelected ? 'text-blue-100' : 'text-muted-foreground'}`}>
             {Math.round(placement.pallet.gross_weight).toLocaleString()} lbs
           </span>
           {placement.pallet.hazmat_flag && (
-            <span className="text-yellow-400 ml-1">⚠️</span>
+            <span className="text-amber-600 ml-1">⚠️</span>
           )}
         </div>
       </Html>
@@ -965,9 +965,9 @@ function Vehicle3D({
         center
         style={{ pointerEvents: 'none' }}
       >
-        <div className={`px-2 py-1 rounded text-xs whitespace-nowrap ${isSelected ? 'bg-green-600' : 'bg-slate-900/90'}`}>
-          <span className="text-green-300 font-bold">{vehicle.item?.description || 'Vehicle'}</span>
-          <span className="text-slate-300 ml-2">
+        <div className={`px-2 py-1 rounded text-xs whitespace-nowrap border shadow-sm ${isSelected ? 'bg-green-600 text-white border-green-500' : 'bg-card text-foreground border-border'}`}>
+          <span className={`font-bold ${isSelected ? 'text-white' : 'text-green-700'}`}>{vehicle.item?.description || 'Vehicle'}</span>
+          <span className={`ml-2 ${isSelected ? 'text-green-100' : 'text-muted-foreground'}`}>
             {vehicle.weight?.toLocaleString() || 0} lbs
           </span>
         </div>
@@ -1066,7 +1066,7 @@ function SeatZone3D({
           center
           style={{ pointerEvents: 'none' }}
         >
-          <div className="px-1.5 py-0.5 rounded text-[10px] bg-slate-700/80 text-slate-200 whitespace-nowrap">
+          <div className="px-1.5 py-0.5 rounded text-[10px] bg-card/95 text-foreground whitespace-nowrap border border-border shadow-sm">
             {seatZone.name}
           </div>
         </Html>
@@ -1268,11 +1268,11 @@ function MeasurementLine({
       <SnapMarker position={point2} snapType="vertex" />
       
       <Html position={midpoint} center style={{ pointerEvents: 'none' }}>
-        <div className="bg-black/90 text-white px-3 py-2 rounded-lg shadow-lg text-sm font-mono">
-          <div className="text-yellow-400 font-bold text-center mb-1">
+        <div className="bg-card text-foreground px-3 py-2 rounded-lg shadow-lg text-sm font-mono border border-border">
+          <div className="text-amber-600 font-bold text-center mb-1">
             {distanceInches.toFixed(1)}"
           </div>
-          <div className="text-xs text-slate-300 space-y-0.5">
+          <div className="text-xs text-muted-foreground space-y-0.5">
             <div>ΔX: {deltaX.toFixed(1)}"</div>
             <div>ΔY: {deltaY.toFixed(1)}"</div>
             <div>ΔZ: {deltaZ.toFixed(1)}"</div>
@@ -1408,16 +1408,16 @@ function MeasureHUD({
 }) {
   if (!measureState.firstPoint && !measureState.secondPoint) {
     return (
-      <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-slate-900/95 px-4 py-2 rounded-lg text-white text-sm z-10">
-        <span className="text-yellow-400">📏 Measure Mode:</span> Click on surfaces to measure distances
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-card px-4 py-2 rounded-lg text-foreground text-sm z-10 border border-border shadow-sm">
+        <span className="text-amber-600">📏 Measure Mode:</span> Click on surfaces to measure distances
       </div>
     );
   }
   
   if (measureState.firstPoint && !measureState.secondPoint) {
     return (
-      <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-slate-900/95 px-4 py-2 rounded-lg text-white text-sm z-10">
-        <span className="text-green-400">✓ First point set.</span> Click to set second point. <span className="text-slate-400">(ESC to cancel)</span>
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-card px-4 py-2 rounded-lg text-foreground text-sm z-10 border border-border shadow-sm">
+        <span className="text-green-600">✓ First point set.</span> Click to set second point. <span className="text-muted-foreground">(ESC to cancel)</span>
       </div>
     );
   }
@@ -1430,25 +1430,25 @@ function MeasureHUD({
     const deltaZ = Math.abs((measureState.secondPoint.z - measureState.firstPoint.z) / scale);
     
     return (
-      <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-slate-900/95 px-4 py-3 rounded-lg text-white z-10 shadow-xl">
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-card px-4 py-3 rounded-lg text-foreground z-10 shadow-xl border border-border">
         <div className="flex items-center gap-4">
           <div className="text-center">
-            <div className="text-yellow-400 font-bold text-xl">{distanceInches.toFixed(1)}"</div>
-            <div className="text-slate-400 text-xs">({(distanceInches / 12).toFixed(2)} ft)</div>
+            <div className="text-amber-600 font-bold text-xl">{distanceInches.toFixed(1)}"</div>
+            <div className="text-muted-foreground text-xs">({(distanceInches / 12).toFixed(2)} ft)</div>
           </div>
-          <div className="border-l border-slate-600 pl-4 text-xs text-slate-300 font-mono">
+          <div className="border-l border-border pl-4 text-xs text-foreground font-mono">
             <div>ΔX: {deltaX.toFixed(1)}"</div>
             <div>ΔY: {deltaY.toFixed(1)}"</div>
             <div>ΔZ: {deltaZ.toFixed(1)}"</div>
           </div>
           <button 
             onClick={onReset}
-            className="ml-2 px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm"
+            className="ml-2 px-3 py-1 bg-muted hover:bg-muted/80 rounded text-sm"
           >
             Reset
           </button>
         </div>
-        <div className="text-slate-400 text-xs mt-2 text-center">Click again or press ESC to start new measurement</div>
+        <div className="text-muted-foreground text-xs mt-2 text-center">Click again or press ESC to start new measurement</div>
       </div>
     );
   }
@@ -1495,12 +1495,12 @@ function AnimationControlPanel({
   };
   
   return (
-    <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-slate-900/95 rounded-lg px-6 py-4 shadow-xl border border-slate-700 z-20">
+    <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-card rounded-lg px-6 py-4 shadow-xl border border-border z-20">
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2">
           <button
             onClick={onRewind}
-            className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+            className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-foreground transition-colors"
             title="Rewind to start"
           >
             <RotateCcw className="w-4 h-4" />
@@ -1508,7 +1508,7 @@ function AnimationControlPanel({
           
           <button
             onClick={onSkipBackward}
-            className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+            className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-foreground transition-colors"
             title="Skip back 5 seconds"
           >
             <SkipBack className="w-4 h-4" />
@@ -1516,7 +1516,7 @@ function AnimationControlPanel({
           
           <button
             onClick={onPlayPause}
-            className={`p-3 rounded-lg ${isPlaying ? 'bg-amber-600 hover:bg-amber-500' : 'bg-green-600 hover:bg-green-500'} text-white transition-colors`}
+            className={`p-3 rounded-lg ${isPlaying ? 'bg-amber-500 hover:bg-amber-400' : 'bg-green-600 hover:bg-green-500'} text-white transition-colors`}
             title={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
@@ -1524,7 +1524,7 @@ function AnimationControlPanel({
           
           <button
             onClick={onSkipForward}
-            className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+            className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-foreground transition-colors"
             title="Skip forward 5 seconds"
           >
             <SkipForward className="w-4 h-4" />
@@ -1532,11 +1532,11 @@ function AnimationControlPanel({
         </div>
         
         <div className="flex flex-col gap-1 min-w-[200px]">
-          <div className="flex justify-between text-xs text-slate-400">
+          <div className="flex justify-between text-xs text-muted-foreground">
             <span>{formatTime(animationTime)}</span>
             <span>{formatTime(totalDuration)}</span>
           </div>
-          <div className="relative h-2 bg-slate-700 rounded-full overflow-hidden">
+          <div className="relative h-2 bg-muted rounded-full overflow-hidden">
             <div 
               className="absolute inset-y-0 left-0 bg-blue-500 rounded-full transition-all"
               style={{ width: `${progressPercent}%` }}
@@ -1554,11 +1554,11 @@ function AnimationControlPanel({
         </div>
         
         <div className="flex items-center gap-2">
-          <span className="text-slate-400 text-xs">Speed:</span>
+          <span className="text-muted-foreground text-xs">Speed:</span>
           <select
             value={animationSpeed}
             onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
-            className="bg-slate-700 text-white text-sm px-2 py-1 rounded border-none outline-none"
+            className="bg-muted text-foreground text-sm px-2 py-1 rounded border border-border outline-none"
           >
             <option value={0.5}>0.5x</option>
             <option value={1}>1x</option>
@@ -1566,13 +1566,13 @@ function AnimationControlPanel({
           </select>
         </div>
         
-        <div className="flex items-center gap-2 border-l border-slate-600 pl-4">
+        <div className="flex items-center gap-2 border-l border-border pl-4">
           <button
             onClick={onModeToggle}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
               isLoading 
                 ? 'bg-green-600 hover:bg-green-500' 
-                : 'bg-orange-600 hover:bg-orange-500'
+                : 'bg-orange-500 hover:bg-orange-400'
             } text-white`}
             title={isLoading ? 'Switch to Unload Mode' : 'Switch to Load Mode'}
           >
@@ -1592,14 +1592,14 @@ function AnimationControlPanel({
         
         <button
           onClick={onClose}
-          className="p-2 rounded-lg bg-red-600/80 hover:bg-red-500 text-white transition-colors"
+          className="p-2 rounded-lg bg-red-500 hover:bg-red-400 text-white transition-colors"
           title="Exit animation mode"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
       
-      <div className="mt-2 text-center text-xs text-slate-400">
+      <div className="mt-2 text-center text-xs text-muted-foreground">
         Cargo {isLoading ? 'Loading' : 'Unloading'} Simulation • {Math.round(progressPercent)}% complete
       </div>
     </div>

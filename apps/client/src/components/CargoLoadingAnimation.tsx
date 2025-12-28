@@ -291,12 +291,12 @@ function SequenceLabel({
           {sequenceNumber}
         </div>
         {isHighlighted && (
-          <div className="bg-slate-900/95 px-2 py-1 rounded text-xs whitespace-nowrap">
-            <span className="text-white font-medium">{name}</span>
-            <span className="text-slate-400 ml-2">
+          <div className="bg-card px-2 py-1 rounded text-xs whitespace-nowrap border border-border shadow-sm">
+            <span className="text-foreground font-medium">{name}</span>
+            <span className="text-muted-foreground ml-2">
               {weight.toLocaleString()} lbs
             </span>
-            {hazmat && <span className="text-yellow-400 ml-1">⚠️</span>}
+            {hazmat && <span className="text-amber-600 ml-1">⚠️</span>}
           </div>
         )}
       </div>
