@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Upload, Download, Settings, Calendar, Shield } from "lucide-react";
+import { Upload, Download, Settings, Calendar, Shield, FileText } from "lucide-react";
 import type { WarehouseSite, ToastMessage } from "./types";
+import InventoryFileImportModal from "./modals/InventoryFileImportModal";
 
 interface WMSAdminProps {
   sites: WarehouseSite[];
@@ -9,6 +10,7 @@ interface WMSAdminProps {
   onSelectSite: (id: number | null) => void;
   onOpenCsvUpload: () => void;
   onShowToast: (message: string, type?: ToastMessage["type"]) => void;
+  onRefreshInventory?: () => void;
 }
 
 /**
@@ -20,7 +22,10 @@ export default function WMSAdmin({
   onSelectSite,
   onOpenCsvUpload,
   onShowToast,
+  onRefreshInventory,
 }: WMSAdminProps) {
+  const [showFileImportModal, setShowFileImportModal] = useState(false);
+
   const handleImport = () => {
     if (!selectedSiteId) {
       onShowToast("Please select a warehouse site first", "warning");
@@ -28,6 +33,21 @@ export default function WMSAdmin({
     }
     onOpenCsvUpload();
   };
+
+  const handleFileImport = () => {
+    if (!selectedSiteId) {
+      onShowToast("Please select a warehouse site first", "warning");
+      return;
+    }
+    setShowFileImportModal(true);
+  };
+
+  const handleFileImportSuccess = () => {
+    onShowToast("Inventory imported successfully!", "success");
+    onRefreshInventory?.();
+  };
+
+  const selectedSite = sites.find(s => s.id === selectedSiteId);
 
   return (
     <>
@@ -77,6 +97,25 @@ export default function WMSAdmin({
                 className="w-full text-sm py-2.5 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Upload CSV
+              </button>
+            </div>
+
+            <div className="p-4 rounded-xl bg-muted/50 border border-dashed border-border">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 rounded-lg bg-white border border-border">
+                  <FileText className="w-5 h-5 text-[#004E89]" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">Import Inventory (PDF/CSV)</p>
+                  <p className="text-xs text-muted-foreground">Upload with validation preview</p>
+                </div>
+              </div>
+              <button
+                onClick={handleFileImport}
+                disabled={!selectedSiteId}
+                className="w-full text-sm py-2.5 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Import PDF/CSV
               </button>
             </div>
 
@@ -158,6 +197,15 @@ export default function WMSAdmin({
           </div>
         </motion.div>
       </div>
+
+      {showFileImportModal && selectedSiteId && selectedSite && (
+        <InventoryFileImportModal
+          siteId={selectedSiteId}
+          siteName={selectedSite.name}
+          onClose={() => setShowFileImportModal(false)}
+          onSuccess={handleFileImportSuccess}
+        />
+      )}
     </>
   );
 }

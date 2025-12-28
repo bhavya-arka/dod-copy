@@ -3,7 +3,7 @@
  * Handles all API calls for warehouse endpoints
  */
 
-import type { WarehouseSite, InventoryItem, Transfer, OptimizationResult } from "../components/warehouse/types";
+import type { WarehouseSite, InventoryItem, Transfer, OptimizationResult, FileUploadResult, FileCommitResult } from "../components/warehouse/types";
 
 const API_BASE = "/api/warehouse";
 
@@ -156,5 +156,49 @@ export async function runOptimization(siteId: number): Promise<OptimizationResul
     credentials: "include",
   });
   if (!response.ok) throw new Error("Failed to run optimization");
+  return response.json();
+}
+
+/**
+ * Upload and parse inventory file (CSV or PDF)
+ * @param siteId - Site ID
+ * @param file - File to upload
+ * @returns Parsed preview with validation
+ */
+export async function uploadInventoryFile(siteId: number, file: File): Promise<FileUploadResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await fetch(`${API_BASE}/sites/${siteId}/inventory/import`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to parse file");
+  }
+  return response.json();
+}
+
+/**
+ * Commit validated upload to database
+ * @param siteId - Site ID
+ * @param uploadId - Upload session ID
+ * @returns Commit result
+ */
+export async function commitInventoryUpload(siteId: number, uploadId: string): Promise<FileCommitResult> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/inventory/import/commit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ uploadId }),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to commit upload");
+  }
   return response.json();
 }

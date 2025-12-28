@@ -87,3 +87,40 @@ export interface ParsedNSN {
   fsc: string;
   niin: string;
 }
+
+/** Validation message from file parsing */
+export interface ValidationMessage {
+  level: 'error' | 'warning';
+  scope: 'file' | 'column' | 'row';
+  target: string;
+  message: string;
+  rowIndex?: number;
+}
+
+/** Column specification from parser */
+export interface ColumnSpec {
+  originalName: string;
+  mappedTo: string | null;
+  isRequired: boolean;
+  isRecognized: boolean;
+}
+
+/** File upload preview result */
+export interface FileUploadResult {
+  uploadId: string;
+  preview: Record<string, any>[];
+  columns: ColumnSpec[];
+  warnings: ValidationMessage[];
+  errors: ValidationMessage[];
+  canCommit: boolean;
+  totalRows: number;
+  filename: string;
+}
+
+/** File upload commit result */
+export interface FileCommitResult {
+  message: string;
+  count: number;
+  skippedRows: number;
+  totalRows: number;
+}
