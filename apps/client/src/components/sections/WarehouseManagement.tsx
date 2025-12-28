@@ -58,6 +58,24 @@ interface InventoryItem {
   width_in?: string;
   height_in?: string;
   weight_lb?: string;
+  nsn?: string;
+  fsc?: string;
+  niin?: string;
+}
+
+function parseNSN(nsn: string): { fsc: string; niin: string } | null {
+  const cleaned = nsn.replace(/[-\s]/g, '');
+  if (!/^\d{13}$/.test(cleaned)) return null;
+  return {
+    fsc: cleaned.substring(0, 4),
+    niin: cleaned.substring(4)
+  };
+}
+
+function formatNSN(nsn: string): string {
+  const cleaned = nsn.replace(/[-\s]/g, '');
+  if (cleaned.length !== 13) return nsn;
+  return `${cleaned.slice(0,4)}-${cleaned.slice(4,6)}-${cleaned.slice(6,9)}-${cleaned.slice(9,13)}`;
 }
 
 interface Transfer {
@@ -869,6 +887,7 @@ function InventoryTab({
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground">Requisition No</th>
+                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">NSN</th>
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground">Description</th>
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground">Dimensions (L×W×H)</th>
                   <th className="text-right py-3 px-4 font-medium text-muted-foreground">Qty</th>
@@ -879,6 +898,9 @@ function InventoryTab({
                 {filteredInventory.map((item) => (
                   <tr key={item.id} className="border-b border-border/50 hover:bg-muted/50">
                     <td className="py-3 px-4 font-medium text-foreground">{item.requisition_no}</td>
+                    <td className="py-3 px-4 text-muted-foreground font-mono text-xs">
+                      {item.nsn ? formatNSN(item.nsn) : "-"}
+                    </td>
                     <td className="py-3 px-4 text-muted-foreground">{item.description || "-"}</td>
                     <td className="py-3 px-4 text-muted-foreground">
                       {item.length_in && item.width_in && item.height_in
@@ -1534,8 +1556,21 @@ function AddItemModal({ siteId, sites, onClose, onSuccess, onSelectSite }: AddIt
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
+  const [nsn, setNsn] = useState("");
+  const [nsnError, setNsnError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleNsnChange = (value: string) => {
+    setNsn(value);
+    setNsnError(null);
+    if (value.trim()) {
+      const parsed = parseNSN(value);
+      if (!parsed) {
+        setNsnError("Invalid NSN format. Use XXXX-XX-XXX-XXXX (13 digits)");
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1555,6 +1590,17 @@ function AddItemModal({ siteId, sites, onClose, onSuccess, onSelectSite }: AddIt
       return;
     }
 
+    let nsnData: { nsn: string; fsc: string; niin: string } | null = null;
+    if (nsn.trim()) {
+      const parsed = parseNSN(nsn);
+      if (!parsed) {
+        setError("Invalid NSN format. Use XXXX-XX-XXX-XXXX (13 digits)");
+        return;
+      }
+      const cleanedNsn = nsn.replace(/[-\s]/g, '');
+      nsnData = { nsn: cleanedNsn, fsc: parsed.fsc, niin: parsed.niin };
+    }
+
     setLoading(true);
     setError(null);
 
@@ -1571,6 +1617,7 @@ function AddItemModal({ siteId, sites, onClose, onSuccess, onSelectSite }: AddIt
           width_in: width ? parseFloat(width) : null,
           height_in: height ? parseFloat(height) : null,
           unit_price: unitPrice ? parseFloat(unitPrice) : null,
+          ...(nsnData && { nsn: nsnData.nsn, fsc: nsnData.fsc, niin: nsnData.niin }),
         }),
       });
 
@@ -1648,6 +1695,29 @@ function AddItemModal({ siteId, sites, onClose, onSuccess, onSelectSite }: AddIt
                 placeholder="e.g., REQ-001"
                 className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                NSN (National Stock Number)
+              </label>
+              <input
+                type="text"
+                value={nsn}
+                onChange={(e) => handleNsnChange(e.target.value)}
+                placeholder="8415-01-530-2157"
+                className={`w-full px-4 py-2 rounded-xl bg-muted border text-foreground text-sm font-mono focus:outline-none focus:ring-1 ${
+                  nsnError 
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-500/40" 
+                    : "border-border focus:border-accent focus:ring-accent/40"
+                }`}
+              />
+              {nsnError && (
+                <p className="mt-1 text-xs text-red-500">{nsnError}</p>
+              )}
+              <p className="mt-1 text-xs text-muted-foreground">
+                Format: XXXX-XX-XXX-XXXX (13 digits total)
+              </p>
             </div>
 
             <div>

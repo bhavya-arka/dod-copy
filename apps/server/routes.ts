@@ -1987,6 +1987,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           width_in: dims.w?.toString() || rawRow?.width?.toString() || null,
           height_in: dims.h?.toString() || rawRow?.height?.toString() || null,
           weight_lb: rawRow?.price_weight?.toString() || null,
+          nsn: item.nsn || null,
+          fsc: item.fsc || null,
+          niin: item.niin || null,
         };
       });
 
@@ -2017,7 +2020,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Warehouse site not found" });
       }
 
-      const { requisition_no, description, quantity, length_in, width_in, height_in, unit_price } = req.body;
+      const { requisition_no, description, quantity, length_in, width_in, height_in, unit_price, nsn, fsc, niin } = req.body;
       
       if (!requisition_no) {
         return res.status(400).json({ error: "requisition_no is required" });
@@ -2029,6 +2032,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: description || `Item ${requisition_no}`,
         quantity: quantity || 1,
         unit_price: unit_price ? unit_price.toString() : null,
+        nsn: nsn || null,
+        fsc: fsc || null,
+        niin: niin || null,
         raw_row: {
           dimensions: {
             l: length_in || null,
