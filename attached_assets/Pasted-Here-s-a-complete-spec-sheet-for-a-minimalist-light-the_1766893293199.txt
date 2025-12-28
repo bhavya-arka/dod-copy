@@ -1,0 +1,224 @@
+Here’s a **complete spec sheet** for a **minimalist light-themed Tailwind CSS color scheme**, written in a way that an **AI builder** (or a Replit/ChatGPT code generation agent) can interpret and implement directly.
+
+This includes color palette definitions, Tailwind configuration instructions, component usage rules, and design constraints — all written as a **coding + design spec** document.
+
+---
+
+## 🧾 Spec Sheet: Minimalist Light Theme for Tailwind
+
+### 1. Overview
+
+This theme is designed for **modern, minimal web applications** with a **light, neutral aesthetic** and subtle visual hierarchy.
+It prioritizes:
+
+* Readability
+* Soft contrast
+* Reduced visual clutter
+* Layer separation through shadows, transparency, and border use
+
+### 2. Base Aesthetic
+
+* **Mood:** Clean, calm, neutral, minimal
+* **Primary UI style:** Flat surfaces with soft depth (via shadows or subtle gradients)
+* **Recommended Font Pairing:** `Inter`, `Rubik`, or `IBM Plex Sans`
+* **Border radius base:** `rounded-2xl`
+* **Shadow base:** `shadow-[0_2px_8px_rgba(0,0,0,0.05)]`
+
+---
+
+### 3. Tailwind Configuration
+
+#### `tailwind.config.js`
+
+```javascript
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  darkMode: false,
+  theme: {
+    extend: {
+      colors: {
+        // Core palette
+        background: 'hsl(0, 0%, 100%)',       // white
+        foreground: 'hsl(0, 0%, 9%)',         // near-black text
+        muted: 'hsl(0, 0%, 96%)',             // light gray sections or backgrounds
+        border: 'hsl(0, 0%, 90%)',            // subtle separators
+        accent: {
+          DEFAULT: 'hsl(220, 90%, 56%)',      // blue accent
+          soft: 'hsl(220, 90%, 96%)',         // light blue hover background
+          hover: 'hsl(220, 90%, 50%)',
+        },
+        card: {
+          DEFAULT: 'hsl(0, 0%, 100%)',
+          foreground: 'hsl(0, 0%, 10%)',
+        },
+        popover: {
+          DEFAULT: 'hsl(0, 0%, 100%)',
+          foreground: 'hsl(0, 0%, 15%)',
+        },
+        destructive: {
+          DEFAULT: 'hsl(0, 84%, 60%)',
+          foreground: 'hsl(0, 0%, 98%)',
+        },
+        success: {
+          DEFAULT: 'hsl(145, 60%, 45%)',
+          foreground: 'hsl(0, 0%, 100%)',
+        },
+      },
+      borderRadius: {
+        xl: '1rem',
+        '2xl': '1.25rem',
+        '3xl': '1.75rem',
+      },
+      boxShadow: {
+        soft: '0 4px 12px rgba(0, 0, 0, 0.05)',
+        subtle: '0 2px 6px rgba(0, 0, 0, 0.03)',
+      },
+    },
+  },
+  plugins: [],
+};
+```
+
+---
+
+### 4. CSS Variable Setup (Optional for CSS Layers)
+
+Add this inside `@layer base` in your `globals.css` or `index.css`:
+
+```css
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 9%;
+    --muted: 0 0% 96%;
+    --border: 0 0% 90%;
+    --accent: 220 90% 56%;
+    --accent-soft: 220 90% 96%;
+    --card: 0 0% 100%;
+    --popover: 0 0% 100%;
+  }
+
+  body {
+    @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))] antialiased;
+  }
+}
+```
+
+---
+
+### 5. Component Guidelines
+
+#### Buttons
+
+| Type        | Background          | Text       | Border      | Hover            | Notes                   |
+| ----------- | ------------------- | ---------- | ----------- | ---------------- | ----------------------- |
+| Primary     | accent.DEFAULT      | white      | transparent | accent.hover     | Rounded-2xl             |
+| Secondary   | white               | foreground | border      | accent.soft      | Use for neutral actions |
+| Destructive | destructive.DEFAULT | white      | none        | hsl(0, 84%, 55%) | For critical actions    |
+
+##### Example:
+
+```html
+<button class="bg-accent text-white rounded-2xl px-4 py-2 font-medium shadow-subtle hover:bg-accent-hover transition">
+  Continue
+</button>
+```
+
+---
+
+#### Cards / Panels
+
+* Background: `bg-card`
+* Border: `border border-border`
+* Shadow: `shadow-soft`
+* Padding: `p-4 md:p-6`
+* Radius: `rounded-2xl`
+
+```html
+<div class="bg-card border border-border rounded-2xl shadow-soft p-6">
+  <h2 class="text-lg font-semibold text-foreground mb-2">Card Title</h2>
+  <p class="text-sm text-foreground/70">Content inside card goes here.</p>
+</div>
+```
+
+---
+
+#### Inputs
+
+```html
+<input
+  type="text"
+  class="w-full px-3 py-2 border border-border rounded-xl bg-white focus:border-accent focus:ring-1 focus:ring-accent/40 transition"
+/>
+```
+
+Rules:
+
+* Focus states must use **blue accent outlines**
+* Background always white or muted
+* Rounded corners only — no hard edges
+
+---
+
+### 6. Background / Surface Hierarchy
+
+| Level   | Use Case        | Color           | Shadow          | Notes            |
+| ------- | --------------- | --------------- | --------------- | ---------------- |
+| Level 0 | Page background | `bg-background` | none            | Base layer       |
+| Level 1 | Card, panel     | `bg-card`       | `shadow-subtle` | Slight elevation |
+| Level 2 | Popover, modal  | `bg-popover`    | `shadow-soft`   | Top layer        |
+
+---
+
+### 7. Typography Hierarchy
+
+| Type       | Class                        | Weight | Size     | Example        |
+| ---------- | ---------------------------- | ------ | -------- | -------------- |
+| Heading XL | `text-3xl font-semibold`     | 600    | 1.875rem | Page titles    |
+| Heading L  | `text-2xl font-semibold`     | 600    | 1.5rem   | Section titles |
+| Body       | `text-base`                  | 400    | 1rem     | Regular text   |
+| Small      | `text-sm text-foreground/70` | 400    | 0.875rem | Meta text      |
+
+---
+
+### 8. Layout Rules
+
+* **Containers:** `max-w-7xl mx-auto px-4`
+* **Scroll behavior:** `overflow-y-auto` for dynamic content sections
+* **Use `flex flex-col` for full-height pages** with sticky nav
+* **Do not apply background colors on nested containers** — use border/shadow for separation
+
+---
+
+### 9. Example Full Page Layout
+
+```html
+<div class="min-h-screen flex flex-col bg-background text-foreground">
+  <nav class="sticky top-0 bg-white/80 backdrop-blur-md border-b border-border z-50 px-4 py-2 shadow-subtle">
+    <h1 class="text-lg font-semibold">Minimal UI</h1>
+  </nav>
+
+  <main class="flex-1 overflow-y-auto p-6 space-y-6">
+    <div class="bg-card border border-border rounded-2xl p-6 shadow-soft">
+      <h2 class="text-xl font-semibold mb-2">Dashboard</h2>
+      <p class="text-sm text-foreground/70">This is a sample minimalist light interface.</p>
+    </div>
+  </main>
+</div>
+```
+
+---
+
+### 10. Design System Constraints (for AI Builders)
+
+1. **No dark backgrounds.**
+   Backgrounds must remain `hsl(0, 0%, 96%)` or lighter.
+2. **One accent hue only** — blue (`hsl(220, 90%, 56%)`).
+3. **Elevation is indicated only by shadows or subtle borders.**
+4. **No gradients unless explicitly defined in the spec.**
+5. **Text colors** must have a minimum contrast ratio of 4.5:1.
+6. **All interactive elements** (buttons, links, inputs) must have `hover` and `focus-visible` states.
+
+---
+
+Would you like me to extend this with **a dark mode counterpart** (so it can toggle between minimalist light and dark themes automatically)?

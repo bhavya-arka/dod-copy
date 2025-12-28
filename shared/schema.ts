@@ -462,3 +462,244 @@ export const insertManifestSchema = createInsertSchema(manifests).omit({
 
 export type InsertManifest = z.infer<typeof insertManifestSchema>;
 export type Manifest = typeof manifests.$inferSelect;
+
+// ============================================================================
+// WAREHOUSE MANAGEMENT SYSTEM (WMS) TABLES
+// ============================================================================
+
+// Warehouse Sites - top-level warehouse locations
+export const warehouseSites = pgTable("warehouse_sites", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  address: text("address"),
+  city: text("city"),
+  country: text("country"),
+  timezone: text("timezone").default("UTC"),
+  latitude: numeric("latitude", { precision: 10, scale: 6 }),
+  longitude: numeric("longitude", { precision: 10, scale: 6 }),
+  active: boolean("active").notNull().default(true),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseSiteSchema = createInsertSchema(warehouseSites).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertWarehouseSite = z.infer<typeof insertWarehouseSiteSchema>;
+export type WarehouseSite = typeof warehouseSites.$inferSelect;
+
+// Warehouse Buildings - physical buildings within a site
+export const warehouseBuildings = pgTable("warehouse_buildings", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  length_m: numeric("length_m", { precision: 10, scale: 3 }),
+  width_m: numeric("width_m", { precision: 10, scale: 3 }),
+  height_m: numeric("height_m", { precision: 10, scale: 3 }),
+  geometry_notes: text("geometry_notes"),
+  active: boolean("active").notNull().default(true),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseBuildingSchema = createInsertSchema(warehouseBuildings).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseBuilding = z.infer<typeof insertWarehouseBuildingSchema>;
+export type WarehouseBuilding = typeof warehouseBuildings.$inferSelect;
+
+// Warehouse Zones - logical areas within buildings
+export const warehouseZones = pgTable("warehouse_zones", {
+  id: serial("id").primaryKey(),
+  building_id: integer("building_id").notNull(),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  zone_type: text("zone_type").notNull().default("rack"),
+  weight_limit_lbs: integer("weight_limit_lbs").default(2000),
+  capacity_pallets: integer("capacity_pallets"),
+  metadata: jsonb("metadata").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseZoneSchema = createInsertSchema(warehouseZones).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseZone = z.infer<typeof insertWarehouseZoneSchema>;
+export type WarehouseZone = typeof warehouseZones.$inferSelect;
+
+// Warehouse Locations - individual pallet positions
+export const warehouseLocations = pgTable("warehouse_locations", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  building_id: integer("building_id").notNull(),
+  zone_id: integer("zone_id"),
+  code: text("code").notNull(),
+  location_type: text("location_type").notNull().default("pallet_position"),
+  capacity_pallets: integer("capacity_pallets").notNull().default(1),
+  x_m: numeric("x_m", { precision: 10, scale: 3 }),
+  y_m: numeric("y_m", { precision: 10, scale: 3 }),
+  z_m: numeric("z_m", { precision: 10, scale: 3 }),
+  occupied: boolean("occupied").notNull().default(false),
+  metadata: jsonb("metadata").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseLocationSchema = createInsertSchema(warehouseLocations).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseLocation = z.infer<typeof insertWarehouseLocationSchema>;
+export type WarehouseLocation = typeof warehouseLocations.$inferSelect;
+
+// Warehouse Inventory Items
+export const warehouseInventoryItems = pgTable("warehouse_inventory_items", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  location_id: integer("location_id"),
+  storage_facility: text("storage_facility"),
+  ship: text("ship"),
+  ship_class: text("ship_class"),
+  program_code: text("program_code"),
+  requisition_no: text("requisition_no"),
+  description: text("description").notNull(),
+  cage: text("cage"),
+  manufacturer: text("manufacturer"),
+  contract_no: text("contract_no"),
+  unit: text("unit"),
+  quantity: integer("quantity").notNull().default(0),
+  unit_price: numeric("unit_price", { precision: 14, scale: 2 }),
+  receipt_price: numeric("receipt_price", { precision: 14, scale: 2 }),
+  receipt_date: timestamp("receipt_date"),
+  condition_code: text("condition_code"),
+  inventory_type: text("inventory_type"),
+  material_disposition: text("material_disposition"),
+  weight_lbs: numeric("weight_lbs", { precision: 12, scale: 2 }),
+  remarks: text("remarks"),
+  raw_row: jsonb("raw_row").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseInventoryItemSchema = createInsertSchema(warehouseInventoryItems).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertWarehouseInventoryItem = z.infer<typeof insertWarehouseInventoryItemSchema>;
+export type WarehouseInventoryItem = typeof warehouseInventoryItems.$inferSelect;
+
+// ============================================================================
+// LAND LOGISTICS TABLES
+// ============================================================================
+
+// Land Routes
+export const landRoutes = pgTable("land_routes", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  name: text("name").notNull(),
+  origin_name: text("origin_name").notNull(),
+  origin_lat: numeric("origin_lat", { precision: 10, scale: 6 }),
+  origin_lng: numeric("origin_lng", { precision: 10, scale: 6 }),
+  destination_name: text("destination_name").notNull(),
+  destination_lat: numeric("destination_lat", { precision: 10, scale: 6 }),
+  destination_lng: numeric("destination_lng", { precision: 10, scale: 6 }),
+  waypoints: jsonb("waypoints").notNull().default([]),
+  distance_km: numeric("distance_km", { precision: 12, scale: 2 }),
+  estimated_duration_hrs: numeric("estimated_duration_hrs", { precision: 8, scale: 2 }),
+  status: text("status").notNull().default("planned"),
+  metadata: jsonb("metadata").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertLandRouteSchema = createInsertSchema(landRoutes).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertLandRoute = z.infer<typeof insertLandRouteSchema>;
+export type LandRoute = typeof landRoutes.$inferSelect;
+
+// Land Convoys
+export const landConvoys = pgTable("land_convoys", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  route_id: integer("route_id"),
+  name: text("name").notNull(),
+  vehicle_count: integer("vehicle_count").notNull().default(0),
+  total_cargo_weight_lbs: integer("total_cargo_weight_lbs").default(0),
+  departure_time: timestamp("departure_time"),
+  arrival_time: timestamp("arrival_time"),
+  status: text("status").notNull().default("planning"),
+  cargo_manifest: jsonb("cargo_manifest").notNull().default([]),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertLandConvoySchema = createInsertSchema(landConvoys).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertLandConvoy = z.infer<typeof insertLandConvoySchema>;
+export type LandConvoy = typeof landConvoys.$inferSelect;
+
+// ============================================================================
+// SEA FREIGHT TABLES
+// ============================================================================
+
+// Sea Voyages
+export const seaVoyages = pgTable("sea_voyages", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  name: text("name").notNull(),
+  vessel_name: text("vessel_name"),
+  vessel_imo: text("vessel_imo"),
+  origin_port: text("origin_port").notNull(),
+  destination_port: text("destination_port").notNull(),
+  port_calls: jsonb("port_calls").notNull().default([]),
+  departure_time: timestamp("departure_time"),
+  arrival_time: timestamp("arrival_time"),
+  status: text("status").notNull().default("planned"),
+  metadata: jsonb("metadata").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSeaVoyageSchema = createInsertSchema(seaVoyages).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertSeaVoyage = z.infer<typeof insertSeaVoyageSchema>;
+export type SeaVoyage = typeof seaVoyages.$inferSelect;
+
+// Sea Containers
+export const seaContainers = pgTable("sea_containers", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  voyage_id: integer("voyage_id"),
+  container_number: text("container_number").notNull(),
+  container_type: text("container_type").notNull(),
+  seal_number: text("seal_number"),
+  weight_lbs: integer("weight_lbs"),
+  tare_weight_lbs: integer("tare_weight_lbs"),
+  status: text("status").notNull().default("empty"),
+  cargo_manifest: jsonb("cargo_manifest").notNull().default([]),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSeaContainerSchema = createInsertSchema(seaContainers).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertSeaContainer = z.infer<typeof insertSeaContainerSchema>;
+export type SeaContainer = typeof seaContainers.$inferSelect;

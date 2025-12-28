@@ -1,18 +1,22 @@
 /**
  * Arka Cargo Operations Application
  *
- * Full-featured load planning system with user authentication,
- * persistent storage, and comprehensive airlift planning tools.
+ * Multi-modal logistics platform with user authentication,
+ * persistent storage, and comprehensive cargo planning tools
+ * across air, land, sea, and warehouse operations.
  */
 
 import React, { useState, useEffect, useCallback } from "react";
 import "@fontsource/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import PACAPApp from "./components/PACAPApp";
 import AuthScreen from "./components/AuthScreen";
-import Dashboard from "./components/Dashboard";
+import OperationsHub, { OperationMode } from "./components/OperationsHub";
+import AirOperations from "./components/sections/AirOperations";
+import LandLogistics from "./components/sections/LandLogistics";
+import SeaFreight from "./components/sections/SeaFreight";
+import WarehouseManagement from "./components/sections/WarehouseManagement";
 import { motion } from "framer-motion";
-import { useAuthProvider, AuthContext, User } from "./hooks/useAuth";
+import { useAuthProvider, AuthContext } from "./hooks/useAuth";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,36 +27,28 @@ const queryClient = new QueryClient({
   },
 });
 
-type AppMode = "loading" | "auth" | "dashboard" | "planning";
+type AppMode = "loading" | "auth" | "hub" | "air" | "land" | "sea" | "warehouse";
 
 function AppContent() {
   const auth = useAuthProvider();
   const [appMode, setAppMode] = useState<AppMode>("loading");
-  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
 
   useEffect(() => {
     if (auth.isLoading) {
       setAppMode("loading");
     } else if (auth.isAuthenticated) {
-      setAppMode("dashboard");
+      setAppMode("hub");
     } else {
       setAppMode("auth");
     }
   }, [auth.isLoading, auth.isAuthenticated]);
 
-  const handleStartNew = useCallback(() => {
-    setSelectedPlanId(null);
-    setAppMode("planning");
+  const handleSelectMode = useCallback((mode: OperationMode) => {
+    setAppMode(mode);
   }, []);
 
-  const handleLoadPlan = useCallback((planId: number) => {
-    setSelectedPlanId(planId);
-    setAppMode("planning");
-  }, []);
-
-  const handleBackToDashboard = useCallback(() => {
-    setAppMode("dashboard");
-    setSelectedPlanId(null);
+  const handleBackToHub = useCallback(() => {
+    setAppMode("hub");
   }, []);
 
   const handleLogout = useCallback(async () => {
@@ -85,27 +81,47 @@ function AppContent() {
     );
   }
 
-  if (appMode === "dashboard" && auth.user) {
-    return (
-      <AuthContext.Provider value={auth}>
-        <Dashboard
-          user={auth.user}
-          onLogout={handleLogout}
-          onStartNew={handleStartNew}
-          onLoadPlan={handleLoadPlan}
-        />
-      </AuthContext.Provider>
-    );
+  if (!auth.user) {
+    return null;
   }
 
   return (
     <AuthContext.Provider value={auth}>
-      <PACAPApp
-        onDashboard={handleBackToDashboard}
-        onLogout={handleLogout}
-        userEmail={auth.user?.email}
-        loadPlanId={selectedPlanId}
-      />
+      {appMode === "hub" && (
+        <OperationsHub
+          user={auth.user}
+          onLogout={handleLogout}
+          onSelectMode={handleSelectMode}
+        />
+      )}
+      {appMode === "air" && (
+        <AirOperations
+          user={auth.user}
+          onBack={handleBackToHub}
+          onLogout={handleLogout}
+        />
+      )}
+      {appMode === "land" && (
+        <LandLogistics
+          user={auth.user}
+          onBack={handleBackToHub}
+          onLogout={handleLogout}
+        />
+      )}
+      {appMode === "sea" && (
+        <SeaFreight
+          user={auth.user}
+          onBack={handleBackToHub}
+          onLogout={handleLogout}
+        />
+      )}
+      {appMode === "warehouse" && (
+        <WarehouseManagement
+          user={auth.user}
+          onBack={handleBackToHub}
+          onLogout={handleLogout}
+        />
+      )}
     </AuthContext.Provider>
   );
 }

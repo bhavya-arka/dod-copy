@@ -1,0 +1,776 @@
+# Technical Specification: Warehouse + Load Planning Platform
+
+**Stack:** React + TypeScript (Vite) frontend • Node.js backend • Drizzle ORM • PostgreSQL • 3D visualization • Optimization + AI insights
+
+This spec is written so a team can implement directly: folder boundaries, API contracts, DB schema (Drizzle + SQL), processing flows, and integration patterns.
+
+---
+
+## 1) Overview and Architecture
+
+### 1.1 Product scope (from uploaded notes)
+
+**Demo / v1 focus:**
+
+* Single site initially: **San Diego** (warehouse mapped at pallet resolution). 
+* Show both **current capacity visibility** and **system-recommended placement** for inbound material. 
+* **Aging** based on “last received date,” with alerts (e.g., >3, >5, >7 years). 
+* **Pallet constraint:** racks/areas support **≤ 2,000 lbs**. 
+* Warehouse geometry available for four buildings (B-870/871/872/873). 
+* CSV import acceptable initially (no live integration required for demo). 
+
+**Network / phase 2:** load balancing across ~19 global sites is currently manual and needs a dashboard + recommendation engine. 
+
+---
+
+## 2) High-level System Architecture (textual component diagram)
+
+**Clients**
+
+* Web App (React/TS)
+* Admin Console (same app, role-gated)
+
+**Backend (Node.js)**
+
+* API Gateway (REST)
+* Auth service (JWT)
+* Warehouse domain service
+* Inventory domain service
+* Optimization domain service
+* AI Insight service
+* File/Import service
+
+**Async Processing**
+
+* Job Queue (BullMQ + Redis)
+* Worker(s) for:
+
+  * CSV parsing + validation
+  * Placement optimization runs
+  * 3D plan generation artifacts (glTF/JSON)
+  * AI insight generation (LLM + rules)
+
+**Storage**
+
+* PostgreSQL (system of record)
+* Object Storage (S3-compatible): raw uploads, generated PDFs, 3D artifacts, logs
+
+**Realtime**
+
+* SSE (or WebSocket) for optimization progress + run status updates
+
+---
+
+## 3) Frontend–Backend–Database Data Flow
+
+1. **User uploads CSV** (inventory export)
+2. Backend stores raw file in object storage, creates `file_upload` row
+3. Backend enqueues `IMPORT_INVENTORY(file_upload_id)` job
+4. Worker parses, validates, upserts inventory + locations, writes `import_result` summary
+5. Frontend polls or subscribes to SSE for completion
+6. User selects inbound items (or “simulate inbound”), triggers **OptimizationRun**
+7. Backend enqueues `RUN_PLACEMENT(optimization_run_id)`
+8. Worker computes placements → writes `placement_plan`, `placement_plan_item`, and optionally `ai_insight`
+9. Frontend renders:
+
+   * heatmap capacity
+   * placement recommendations
+   * aging dashboards
+   * 3D scene (warehouse + pallets)
+10. PDF export request generates server-side PDF and returns URL
+
+---
+
+## 4) Organization-level repo structure (modules + boundaries)
+
+### 4.1 Monorepo (recommended)
+
+```
+repo/
+  apps/
+    web/                 # React + TS
+    api/                 # Node.js REST API
+    worker/              # BullMQ workers (can be part of api, but separate is cleaner)
+  packages/
+    db/                  # Drizzle schema + migrations
+    domain/              # shared types, zod schemas, constants
+    algorithms/          # plugin interface + sandbox runner
+    ui/                  # shared UI components (optional)
+  infra/
+    docker/
+    k8s/
+  docs/
+```
+
+### 4.2 Feature boundaries (must remain strict)
+
+* `warehouse/` = sites/buildings/zones/locations/capacity math
+* `inventory/` = item master + stock entries + aging + audit
+* `optimization/` = runs + constraints + solver integration + results
+* `ai/` = insight generation + storage + retrieval
+* `files/` = upload, parse, version, lineage
+
+---
+
+# 5) Frontend (React + TypeScript)
+
+## 5.1 Routing + layouts
+
+**Routing:** TanStack Router (or React Router v6).
+**Layouts:**
+
+* `AppShell` (nav, breadcrumbs, user menu)
+* `SiteShell` (site selector, run controls)
+* `AdminShell` (imports, mapping, users)
+
+**Routes**
+
+* `/login`
+* `/sites` (list + select)
+* `/sites/:siteId/overview` (capacity, alerts)
+* `/sites/:siteId/inventory` (table + filters)
+* `/sites/:siteId/locations` (warehouse map / zone view)
+* `/sites/:siteId/optimize` (create run)
+* `/runs/:runId` (run status, results, 3D, insights)
+* `/exports/:exportId` (PDF download view)
+* `/admin/imports` (file uploads + results)
+* `/admin/users` (RBAC)
+
+## 5.2 State management strategy
+
+* **Server state:** TanStack Query (caching, invalidation, retries)
+* **Client/UI state:** Zustand (filters, selected site, 3D toggles)
+* **Form state:** React Hook Form + Zod resolver
+* **Auth state:** token stored in memory + refresh via httpOnly cookie (preferred) or local storage (acceptable for demo)
+
+## 5.3 Component hierarchy (key screens)
+
+### Site Overview
+
+* `<SiteOverviewPage>`
+
+  * `<KpiRow />` (utilization, empty pallet positions, aging counts)
+  * `<CapacityHeatmap2D />`
+  * `<AgingAlertsPanel />` (3/5/7+ years)
+  * `<InboundSimulator />` (optional v1)
+
+### Inventory
+
+* `<InventoryPage>`
+
+  * `<InventoryFilters />`
+  * `<InventoryTable />` (virtualized)
+  * `<ItemDrawer />` (history, audits, recommended moves)
+
+### Optimize
+
+* `<OptimizePage>`
+
+  * `<RunWizard />` (constraints: weight limit ≤ 2000 lbs, zones, priorities)
+  * `<RunSubmitButton />`
+  * Redirect to `/runs/:runId`
+
+### Run Results
+
+* `<RunDetailPage>`
+
+  * `<RunStatusHeader />` (SSE progress)
+  * `<PlacementSummary />`
+  * `<PlacementTable />`
+  * `<Warehouse3DViewer />`
+  * `<AIInsightsPanel />`
+  * `<ExportPdfButton />`
+
+## 5.4 Hooks + context usage
+
+**Core hooks**
+
+* `useAuth()`
+* `useSite(siteId)`
+* `useInventory(siteId, filters)`
+* `useRun(runId)` (status + results)
+* `useRunProgressSSE(runId)`
+* `useAIInsights(targetType, targetId)` (flight, site, run, plan)
+
+**AI insight display requirements**
+
+* Insights must be attachable “per flight or cargo plan” (supported by schema below).
+* For warehouse demo, attach insights to `optimization_run` and/or `placement_plan`.
+
+## 5.5 Visualization + animation handling
+
+### 3D loading / warehouse sim
+
+* Use `@react-three/fiber` + `three`
+* Scene graph:
+
+  * Building mesh (dimensions from notes) 
+  * Zones as colored volumes
+  * Pallet locations as instanced meshes (fast)
+  * Highlight recommended placements (pulse animation)
+
+### PDF exports
+
+* Prefer **server-side** PDF generation for fidelity and repeatability:
+
+  * Frontend triggers export → backend produces PDF → returns URL
+* Frontend uses a simple `<PdfPreview />` and download link.
+
+---
+
+# 6) Backend (Node.js + Drizzle ORM + PostgreSQL)
+
+## 6.1 API style
+
+**REST** (recommended for implementation speed + tooling).
+Validation: Zod.
+Framework: Express or Fastify (Fastify recommended for performance).
+
+## 6.2 Core REST endpoints (v1)
+
+### Auth
+
+* `POST /api/auth/login`
+* `POST /api/auth/refresh`
+* `POST /api/auth/logout`
+* `GET  /api/auth/me`
+
+### Sites / Warehouses
+
+* `GET  /api/sites`
+* `GET  /api/sites/:siteId`
+* `GET  /api/sites/:siteId/buildings`
+* `GET  /api/sites/:siteId/locations?zoneId=&status=`
+* `POST /api/sites/:siteId/buildings` (admin)
+* `POST /api/sites/:siteId/locations/bulk` (admin/import)
+
+### Inventory
+
+* `GET  /api/sites/:siteId/inventory?query=&condition=&ageBucket=&location=`
+* `GET  /api/inventory/:inventoryItemId`
+* `GET  /api/sites/:siteId/aging-summary`
+* `POST /api/sites/:siteId/inbound/simulate` (optional v1)
+
+### Files / Imports
+
+* `POST /api/files/upload` (multipart)
+* `POST /api/imports/inventory` (starts import job)
+* `GET  /api/imports/:importId`
+* `GET  /api/imports/:importId/errors`
+
+### Optimization
+
+* `POST /api/runs` (create OptimizationRun)
+* `GET  /api/runs/:runId`
+* `GET  /api/runs/:runId/progress` (SSE)
+* `GET  /api/runs/:runId/results` (placements + metrics)
+* `POST /api/runs/:runId/cancel`
+
+### AI Insights
+
+* `GET  /api/insights?targetType=&targetId=`
+* `POST /api/insights/generate` (admin/manual trigger)
+
+### Exports
+
+* `POST /api/exports/pdf` (body: runId/siteId, template)
+* `GET  /api/exports/:exportId`
+
+---
+
+## 6.3 Drizzle ORM schema (TypeScript)
+
+> This is an implementation-ready baseline. Add/trim fields based on your import mapping.
+
+```ts
+// packages/db/src/schema.ts
+import {
+  pgTable, uuid, text, timestamp, integer, numeric, boolean,
+  jsonb, varchar, index, uniqueIndex
+} from "drizzle-orm/pg-core";
+
+export const users = pgTable("user", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: varchar("email", { length: 255 }).notNull(),
+  passwordHash: text("password_hash").notNull(),
+  name: text("name"),
+  role: text("role").notNull().default("user"), // user | admin | ops
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => ({
+  emailUq: uniqueIndex("user_email_uq").on(t.email),
+}));
+
+export const sites = pgTable("site", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  code: varchar("code", { length: 32 }).notNull(), // e.g., "SAN_DIEGO"
+  name: text("name").notNull(),
+  timezone: text("timezone").default("UTC").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  codeUq: uniqueIndex("site_code_uq").on(t.code),
+}));
+
+export const buildings = pgTable("building", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  siteId: uuid("site_id").references(() => sites.id, { onDelete: "cascade" }).notNull(),
+  code: varchar("code", { length: 32 }).notNull(), // "B-870", etc.
+  name: text("name").notNull(),
+  // meters recommended internally; store original if needed
+  lengthM: numeric("length_m", { precision: 10, scale: 3 }).notNull(),
+  widthM: numeric("width_m", { precision: 10, scale: 3 }).notNull(),
+  heightM: numeric("height_m", { precision: 10, scale: 3 }).notNull(),
+  geometryNotes: text("geometry_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  siteCodeIdx: index("building_site_code_idx").on(t.siteId, t.code),
+}));
+
+export const zones = pgTable("zone", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  buildingId: uuid("building_id").references(() => buildings.id, { onDelete: "cascade" }).notNull(),
+  code: varchar("code", { length: 64 }).notNull(),  // "RACK_A", "STAGING", etc.
+  name: text("name").notNull(),
+  weightLimitLbs: integer("weight_limit_lbs"), // <= 2000 for racks/areas in demo :contentReference[oaicite:8]{index=8}
+  meta: jsonb("meta").default({}).notNull(),
+}, (t) => ({
+  buildingCodeIdx: index("zone_building_code_idx").on(t.buildingId, t.code),
+}));
+
+export const locations = pgTable("location", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  siteId: uuid("site_id").references(() => sites.id, { onDelete: "cascade" }).notNull(),
+  buildingId: uuid("building_id").references(() => buildings.id, { onDelete: "cascade" }).notNull(),
+  zoneId: uuid("zone_id").references(() => zones.id, { onDelete: "set null" }),
+  code: varchar("code", { length: 64 }).notNull(), // e.g., "2069-B", "3152-B" (seen in inventory export) :contentReference[oaicite:9]{index=9}
+  type: text("type").notNull().default("pallet_position"),
+  capacityPallets: integer("capacity_pallets").notNull().default(1),
+  // Optional 3D coordinates for visualization
+  xM: numeric("x_m", { precision: 10, scale: 3 }),
+  yM: numeric("y_m", { precision: 10, scale: 3 }),
+  zM: numeric("z_m", { precision: 10, scale: 3 }),
+  meta: jsonb("meta").default({}).notNull(),
+}, (t) => ({
+  siteCodeIdx: index("location_site_code_idx").on(t.siteId, t.code),
+}));
+
+export const inventoryItems = pgTable("inventory_item", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  siteId: uuid("site_id").references(() => sites.id, { onDelete: "cascade" }).notNull(),
+  // From inventory sheet columns (example fields)
+  storageFacility: text("storage_facility"),
+  ship: text("ship"),
+  shipClass: text("ship_class"),
+  programCode: text("program_code"),
+  requisitionNo: text("requisition_no"),
+  description: text("description").notNull(),
+  cage: text("cage"),
+  manufacturer: text("manufacturer"),
+  contractNo: text("contract_no"),
+  unit: text("unit"),
+  qty: integer("qty").notNull().default(0),
+  unitPrice: numeric("unit_price", { precision: 14, scale: 2 }),
+  receiptPrice: numeric("receipt_price", { precision: 14, scale: 2 }),
+  receiptDate: timestamp("receipt_date"), // aging field is acceptable :contentReference[oaicite:10]{index=10}
+  conditionCode: text("condition_code"),
+  inventoryType: text("inventory_type"),
+  materialDisposition: text("material_disposition"),
+  remarks: text("remarks"),
+  locationId: uuid("location_id").references(() => locations.id, { onDelete: "set null" }),
+  rawRow: jsonb("raw_row").default({}).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  siteReceiptIdx: index("inv_site_receipt_idx").on(t.siteId, t.receiptDate),
+  locationIdx: index("inv_location_idx").on(t.locationId),
+}));
+
+export const fileUploads = pgTable("file_upload", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  siteId: uuid("site_id").references(() => sites.id, { onDelete: "set null" }),
+  uploadedBy: uuid("uploaded_by").references(() => users.id, { onDelete: "set null" }),
+  kind: text("kind").notNull(), // "inventory_csv", "algo_zip", "layout_pdf"
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  storageKey: text("storage_key").notNull(), // S3 key
+  sha256: text("sha256"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const importRuns = pgTable("import_run", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  siteId: uuid("site_id").references(() => sites.id, { onDelete: "cascade" }).notNull(),
+  fileUploadId: uuid("file_upload_id").references(() => fileUploads.id, { onDelete: "cascade" }).notNull(),
+  status: text("status").notNull().default("queued"), // queued|running|succeeded|failed
+  summary: jsonb("summary").default({}).notNull(),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+});
+
+export const optimizationRuns = pgTable("optimization_run", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  siteId: uuid("site_id").references(() => sites.id, { onDelete: "cascade" }).notNull(),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("queued"),
+  runType: text("run_type").notNull().default("placement"), // placement|loadplan|balance
+  constraints: jsonb("constraints").default({}).notNull(),
+  metrics: jsonb("metrics").default({}).notNull(),
+  logs: text("logs"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+}, (t) => ({
+  siteStatusIdx: index("run_site_status_idx").on(t.siteId, t.status),
+}));
+
+export const placementPlans = pgTable("placement_plan", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  runId: uuid("run_id").references(() => optimizationRuns.id, { onDelete: "cascade" }).notNull(),
+  siteId: uuid("site_id").references(() => sites.id, { onDelete: "cascade" }).notNull(),
+  summary: jsonb("summary").default({}).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const placementPlanItems = pgTable("placement_plan_item", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  planId: uuid("plan_id").references(() => placementPlans.id, { onDelete: "cascade" }).notNull(),
+  inventoryItemId: uuid("inventory_item_id").references(() => inventoryItems.id, { onDelete: "cascade" }).notNull(),
+  fromLocationId: uuid("from_location_id").references(() => locations.id, { onDelete: "set null" }),
+  toLocationId: uuid("to_location_id").references(() => locations.id, { onDelete: "set null" }),
+  score: numeric("score", { precision: 10, scale: 4 }),
+  rationale: jsonb("rationale").default({}).notNull(),
+});
+
+export const aiInsights = pgTable("ai_insight", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  siteId: uuid("site_id").references(() => sites.id, { onDelete: "cascade" }),
+  targetType: text("target_type").notNull(), // "run" | "plan" | "flight"
+  targetId: uuid("target_id").notNull(),
+  title: text("title").notNull(),
+  insight: text("insight").notNull(),
+  severity: text("severity").default("info").notNull(), // info|warn|critical
+  evidence: jsonb("evidence").default({}).notNull(),
+  model: text("model"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  targetIdx: index("ai_target_idx").on(t.targetType, t.targetId),
+}));
+```
+
+### Flight / Cargo entities (required by your prompt)
+
+Add these tables if you are supporting aircraft load planning in the same platform:
+
+```ts
+export const flights = pgTable("flight", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  siteId: uuid("site_id").references(() => sites.id, { onDelete: "set null" }),
+  flightNo: text("flight_no").notNull(),
+  departureAt: timestamp("departure_at"),
+  origin: text("origin"),
+  destination: text("destination"),
+  aircraftType: text("aircraft_type"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const pallets = pgTable("pallet", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  code: text("code").notNull(),
+  type: text("type").notNull(), // "463L" | "WOOD_4X4" etc. (notes mention 4x4 wood pallet for some flows) :contentReference[oaicite:11]{index=11}
+  tareWeightLbs: integer("tare_weight_lbs"),
+  maxWeightLbs: integer("max_weight_lbs"),
+  lengthIn: numeric("length_in", { precision: 10, scale: 2 }),
+  widthIn: numeric("width_in", { precision: 10, scale: 2 }),
+  heightIn: numeric("height_in", { precision: 10, scale: 2 }),
+});
+
+export const cargoItems = pgTable("cargo_item", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  flightId: uuid("flight_id").references(() => flights.id, { onDelete: "cascade" }).notNull(),
+  description: text("description").notNull(),
+  weightLbs: numeric("weight_lbs", { precision: 12, scale: 2 }).notNull(),
+  lengthIn: numeric("length_in", { precision: 10, scale: 2 }),
+  widthIn: numeric("width_in", { precision: 10, scale: 2 }),
+  heightIn: numeric("height_in", { precision: 10, scale: 2 }),
+  hazardClass: text("hazard_class"),
+  meta: jsonb("meta").default({}).notNull(),
+});
+```
+
+---
+
+## 6.4 Example query + transaction patterns
+
+### Upsert inventory from import (transactional)
+
+```ts
+import { db } from "@repo/db";
+import { inventoryItems, locations } from "@repo/db/schema";
+import { eq } from "drizzle-orm";
+
+await db.transaction(async (tx) => {
+  // ensure location exists
+  const loc = await tx.query.locations.findFirst({
+    where: (l, { and, eq }) => and(eq(l.siteId, siteId), eq(l.code, row.Location)),
+  });
+
+  const locationId = loc?.id ?? null;
+
+  // insert inventory row (simple version)
+  await tx.insert(inventoryItems).values({
+    siteId,
+    description: row.Description,
+    qty: Number(row.Qty ?? 0),
+    receiptDate: row.ReceiptDate ? new Date(row.ReceiptDate) : null,
+    locationId,
+    rawRow: row,
+  });
+});
+```
+
+### Capacity + aging summary
+
+* Index on `(site_id, receipt_date)` and `(location_id)` (already included above).
+* Compute:
+
+  * utilized pallet positions = count(distinct location_id where items exist)
+  * aging buckets = now - receipt_date
+
+---
+
+# 7) Database Layer (PostgreSQL)
+
+## 7.1 Inventory import column mapping (from BATS inventory PDF)
+
+The exported inventory dataset includes many fields such as **Storage Facility, Ship, Ship Class, Program Code, Requisition No, Qty, Description, CAGE, Manufacturer, Receipt Date, Location, Inventory Type, Condition Code, Remarks** and more. 
+You should store:
+
+* a normalized subset (typed columns)
+* the full original row in `raw_row` (jsonb) for traceability
+
+## 7.2 Indices and performance
+
+* `inventory_item(site_id, receipt_date)` for aging dashboards
+* `inventory_item(location_id)` for occupancy queries
+* `location(site_id, code)` unique-ish (enforce if appropriate)
+* `optimization_run(site_id, status)` for dashboards
+* `ai_insight(target_type, target_id)` for fast retrieval
+
+## 7.3 Example SQL (optional reference)
+
+```sql
+-- aging bucket counts
+SELECT
+  CASE
+    WHEN receipt_date IS NULL THEN 'unknown'
+    WHEN receipt_date < NOW() - INTERVAL '7 years' THEN '7y+'
+    WHEN receipt_date < NOW() - INTERVAL '5 years' THEN '5-7y'
+    WHEN receipt_date < NOW() - INTERVAL '3 years' THEN '3-5y'
+    ELSE '<3y'
+  END AS bucket,
+  COUNT(*) AS item_rows
+FROM inventory_item
+WHERE site_id = $1
+GROUP BY 1
+ORDER BY 1;
+```
+
+## 7.4 Drizzle migrations
+
+Use Drizzle Kit:
+
+* `drizzle-kit generate`
+* `drizzle-kit migrate`
+
+Example `drizzle.config.ts`:
+
+```ts
+export default {
+  schema: "./packages/db/src/schema.ts",
+  out: "./packages/db/migrations",
+  dialect: "postgresql",
+  dbCredentials: {
+    connectionString: process.env.DATABASE_URL!,
+  },
+};
+```
+
+---
+
+# 8) AI and Optimization Logic
+
+## 8.1 How algorithmic modules plug into backend
+
+**Pattern:** “run registry” + “solver adapter”
+
+* `optimization/registry.ts` maps `runType` → handler
+* Each handler:
+
+  * loads constraints + site snapshot (locations, inventory)
+  * calls solver adapter
+  * persists plan + metrics + insights
+
+```ts
+// apps/worker/src/handlers/runPlacement.ts
+export async function runPlacement(runId: string) {
+  const run = await loadRun(runId);
+  const snapshot = await buildSiteSnapshot(run.siteId);
+  const result = await placementSolver(snapshot, run.constraints);
+
+  await persistPlacement(run, result);
+  await generateInsightsForRun(run, result);
+}
+```
+
+## 8.2 “Uploaded algorithm files” usage
+
+You can accept uploaded algorithm packages (zip) and treat them as:
+
+* **Data sources** (e.g., box catalogs, item dims)
+* **Solver plugins** (custom heuristics)
+
+Implementation:
+
+* `POST /api/files/upload` with `kind="algo_zip"`
+* Store in S3 + register in `file_upload`
+* Worker unzips into a sandbox directory and validates manifest:
+
+  * `manifest.json` (name, version, entrypoint, allowed deps)
+* Run in a locked-down Docker sandbox (no network, CPU/mem limits)
+
+## 8.3 Inference call integration flow (pseudocode)
+
+```txt
+Create OptimizationRun
+  -> enqueue RUN_PLACEMENT(runId)
+
+Worker RUN_PLACEMENT
+  -> snapshot = query DB (locations, inventory, constraints)
+  -> result = solver(snapshot)
+  -> persist result (plan tables)
+  -> insight = LLM("summarize constraints, hot spots, aging, reclaimed space")
+  -> store AIInsight(target=runId, evidence={metrics, key_items})
+```
+
+## 8.4 Storing + retrieving AI insights
+
+* Store insights in `ai_insight` keyed by `(targetType, targetId)`; retrieve via:
+
+  * `GET /api/insights?targetType=run&targetId=:runId`
+* For flights or cargo plans: `targetType="flight"` or `"plan"` (same table).
+
+---
+
+# 9) Integration and Workflow
+
+## 9.1 Event flow: upload → process → render
+
+**Upload inventory**
+
+* UI uploads CSV
+* Backend creates `import_run`
+* Worker parses and reports:
+
+  * rows processed
+  * rows rejected + reasons
+  * locations discovered (e.g., codes like `2069-B`, `3160-A`) 
+
+**Run optimization**
+
+* User confirms priorities (available space, proximity, weight limits) 
+* Backend runs placement
+* UI renders:
+
+  * capacity heat map
+  * “space reclaimed” metrics
+  * recommended moves
+  * aging heat map 
+
+## 9.2 PDF export logic
+
+* `POST /api/exports/pdf` with `{ runId, template: "run-report" }`
+* Worker uses Playwright (recommended) to render an HTML report into PDF
+* Store PDF in S3, return `exportId` + `url`
+
+---
+
+# 10) Error handling, validation, debugging
+
+## 10.1 Validation
+
+* API: Zod schemas for every endpoint
+* Import: strict column validation + per-row error capture in `import_run.summary`
+
+## 10.2 Observability
+
+* Structured logs (pino)
+* Correlation ID per request + per job
+* Store job logs (short) in `optimization_run.logs` and full logs in object storage
+
+---
+
+# 11) DevOps and Deployment
+
+## 11.1 Environment keys (`.env`)
+
+```
+DATABASE_URL=postgres://...
+JWT_SECRET=...
+JWT_ISSUER=arka-platform
+S3_ENDPOINT=...
+S3_BUCKET=...
+S3_ACCESS_KEY=...
+S3_SECRET_KEY=...
+REDIS_URL=redis://...
+PUBLIC_APP_URL=https://...
+```
+
+## 11.2 Docker (high level)
+
+* `apps/api/Dockerfile` (Node + pnpm + build)
+* `apps/worker/Dockerfile`
+* `apps/web/Dockerfile` (build static, serve via nginx)
+
+`docker-compose.yml` for dev:
+
+* postgres
+* redis
+* minio (S3)
+* api
+* worker
+* web
+
+## 11.3 CI/CD hints
+
+* Lint + typecheck + test
+* Migration step on deploy
+* Blue/green or rolling deploy for API + worker
+
+---
+
+# 12) How uploaded files / notes were incorporated
+
+1. **pasted.txt (conversation logs + requirements)**
+
+   * Demo constraints: pallet-level, **≤ 2,000 lbs**, CSV import, aging alerts, capacity visibility + recommended placement.  
+   * Warehouse geometry for buildings **B-870/871/872/873** used to define `building` table fields and 3D modeling assumptions. 
+   * Roadmap: expand to multi-site load balancing (19 sites), reflected as `runType="balance"` and `site` abstraction. 
+
+2. **BATS inv without NIIN - Google Sheets.pdf (inventory export)**
+
+   * Column-driven schema: `inventory_item` contains typed subset + `raw_row` JSON for the full export (fields like Storage Facility, Ship/Class, Requisition, Qty, Description, CAGE, Receipt Date, Location, Inventory Type, Condition Code, Remarks). 
+   * Location codes observed in the export (e.g., `2069-B`, `3160-A`) drive `location.code` and import logic. 
+
+3. **BATS info.pdf**
+
+   * Treated as authoritative layout/usage input for warehouse capacity constraints and visualization; it is referenced in the workflow as the capacity model source. 
+   * The PDF content is image-heavy in the provided extract, so the spec assumes it will be transcribed into `building/zone/location` records via admin mapping + bulk import.
+
+4. **bao.zip**
+
+   * Used as an example of “uploaded algorithm files” and justified the plugin/sandbox approach (zip upload, manifest validation, worker execution).
+   * Note: the zip’s internal notebooks are accessible in your environment, but they are not indexed in the searchable excerpts here, so I did not quote them directly as authoritative requirements.
+
+---
+
+If you want, I can also produce **a concrete OpenAPI spec (YAML)** and **a full Drizzle schema file + migrations directory layout** matching this design (still staying consistent with the constraints and inventory fields shown in the uploaded BATS export).
