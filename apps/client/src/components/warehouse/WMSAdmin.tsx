@@ -3,6 +3,9 @@ import { motion } from "framer-motion";
 import { Upload, Download, Settings, Calendar, Shield, FileText } from "lucide-react";
 import type { WarehouseSite, ToastMessage } from "./types";
 import InventoryFileImportModal from "./modals/InventoryFileImportModal";
+import SystemSettingsModal from "./modals/SystemSettingsModal";
+import AgingThresholdsModal from "./modals/AgingThresholdsModal";
+import AccessControlModal from "./modals/AccessControlModal";
 
 interface WMSAdminProps {
   sites: WarehouseSite[];
@@ -13,9 +16,6 @@ interface WMSAdminProps {
   onRefreshInventory?: () => void;
 }
 
-/**
- * Admin tab component - Data imports and system configuration
- */
 export default function WMSAdmin({
   sites,
   selectedSiteId,
@@ -25,6 +25,9 @@ export default function WMSAdmin({
   onRefreshInventory,
 }: WMSAdminProps) {
   const [showFileImportModal, setShowFileImportModal] = useState(false);
+  const [showSystemSettingsModal, setShowSystemSettingsModal] = useState(false);
+  const [showAgingThresholdsModal, setShowAgingThresholdsModal] = useState(false);
+  const [showAccessControlModal, setShowAccessControlModal] = useState(false);
 
   const handleImport = () => {
     if (!selectedSiteId) {
@@ -45,6 +48,14 @@ export default function WMSAdmin({
   const handleFileImportSuccess = () => {
     onShowToast("Inventory imported successfully!", "success");
     onRefreshInventory?.();
+  };
+
+  const handleSettingsSuccess = () => {
+    onShowToast("Settings saved successfully!", "success");
+  };
+
+  const handleThresholdsSuccess = () => {
+    onShowToast("Thresholds updated successfully!", "success");
   };
 
   const selectedSite = sites.find(s => s.id === selectedSiteId);
@@ -138,7 +149,7 @@ export default function WMSAdmin({
                 </div>
               </div>
               <button
-                onClick={() => onShowToast("Settings coming soon!", "info")}
+                onClick={() => setShowSystemSettingsModal(true)}
                 className="text-sm px-3 py-1.5 rounded-lg border border-border bg-white hover:bg-muted transition-colors"
               >
                 Configure
@@ -154,7 +165,7 @@ export default function WMSAdmin({
                 </div>
               </div>
               <button
-                onClick={() => onShowToast("Threshold config coming soon!", "info")}
+                onClick={() => setShowAgingThresholdsModal(true)}
                 className="text-sm px-3 py-1.5 rounded-lg border border-border bg-white hover:bg-muted transition-colors"
               >
                 Edit
@@ -170,7 +181,7 @@ export default function WMSAdmin({
                 </div>
               </div>
               <button
-                onClick={() => onShowToast("Access control coming soon!", "info")}
+                onClick={() => setShowAccessControlModal(true)}
                 className="text-sm px-3 py-1.5 rounded-lg border border-border bg-white hover:bg-muted transition-colors"
               >
                 Manage
@@ -186,6 +197,26 @@ export default function WMSAdmin({
           siteName={selectedSite.name}
           onClose={() => setShowFileImportModal(false)}
           onSuccess={handleFileImportSuccess}
+        />
+      )}
+
+      {showSystemSettingsModal && (
+        <SystemSettingsModal
+          onClose={() => setShowSystemSettingsModal(false)}
+          onSuccess={handleSettingsSuccess}
+        />
+      )}
+
+      {showAgingThresholdsModal && (
+        <AgingThresholdsModal
+          onClose={() => setShowAgingThresholdsModal(false)}
+          onSuccess={handleThresholdsSuccess}
+        />
+      )}
+
+      {showAccessControlModal && (
+        <AccessControlModal
+          onClose={() => setShowAccessControlModal(false)}
         />
       )}
     </>

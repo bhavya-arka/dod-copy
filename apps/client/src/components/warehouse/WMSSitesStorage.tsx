@@ -4,16 +4,9 @@ import { Plus, Building2, ChevronRight, ChevronDown, Move, Zap, Loader2, Trash2 
 import type { WarehouseSite, ToastMessage } from "./types";
 import { MOCK_BUILDINGS } from "./constants";
 import { deleteSite } from "../../services/warehouseService";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "../ui/alert-dialog";
+import ConfirmDestructiveModal from "./modals/ConfirmDestructiveModal";
+import MoveItemModal from "./modals/MoveItemModal";
+import OptimizationWizardModal from "./modals/OptimizationWizardModal";
 
 interface WMSSitesStorageProps {
   sites: WarehouseSite[];
@@ -23,9 +16,6 @@ interface WMSSitesStorageProps {
   onShowToast: (message: string, type?: ToastMessage["type"]) => void;
 }
 
-/**
- * Sites & Storage tab component - Hierarchical warehouse structure and capacity
- */
 export default function WMSSitesStorage({
   sites,
   loading,
@@ -37,6 +27,27 @@ export default function WMSSitesStorage({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [siteToDelete, setSiteToDelete] = useState<WarehouseSite | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [moveModalOpen, setMoveModalOpen] = useState(false);
+  const [moveModalSiteId, setMoveModalSiteId] = useState<number | null>(null);
+  const [optimizeModalOpen, setOptimizeModalOpen] = useState(false);
+  const [optimizeModalSite, setOptimizeModalSite] = useState<{ id: number; name: string } | null>(null);
+
+  const handleMoveClick = (e: React.MouseEvent, siteId: number) => {
+    e.stopPropagation();
+    setMoveModalSiteId(siteId);
+    setMoveModalOpen(true);
+  };
+
+  const handleMoveSuccess = () => {
+    setMoveModalOpen(false);
+    setMoveModalSiteId(null);
+    onRefresh();
+  };
+
+  const handleCloseMoveModal = () => {
+    setMoveModalOpen(false);
+    setMoveModalSiteId(null);
+  };
 
   const handleDeleteClick = (e: React.MouseEvent, site: WarehouseSite) => {
     e.stopPropagation();
@@ -61,6 +72,13 @@ export default function WMSSitesStorage({
       );
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleCloseDeleteDialog = () => {
+    if (!isDeleting) {
+      setDeleteDialogOpen(false);
+      setSiteToDelete(null);
     }
   };
 
@@ -119,9 +137,17 @@ export default function WMSSitesStorage({
           <div className="space-y-4">
             {sites.map((site) => (
               <div key={site.id} className="border border-border rounded-xl overflow-hidden">
-                <button
+                <div
                   onClick={() => toggleSite(site.id)}
-                  className="w-full flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 transition-colors"
+                  className="w-full flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleSite(site.id);
+                    }
+                  }}
                 >
                   <div className="flex items-center gap-3">
                     {expandedSites.has(site.id) ? (
@@ -148,7 +174,7 @@ export default function WMSSitesStorage({
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                </button>
+                </div>
 
                 <AnimatePresence>
                   {expandedSites.has(site.id) && (
@@ -196,14 +222,18 @@ export default function WMSSitesStorage({
                               </div>
                               <div className="flex gap-1">
                                 <button
-                                  onClick={() => onShowToast("Move functionality coming soon!", "info")}
+                                  onClick={(e) => handleMoveClick(e, site.id)}
                                   className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-                                  title="Move"
+                                  title="Move items"
                                 >
                                   <Move className="w-4 h-4 text-muted-foreground" />
                                 </button>
                                 <button
-                                  onClick={() => onShowToast("Optimize functionality coming soon!", "info")}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOptimizeModalSite({ id: site.id, name: site.name });
+                                    setOptimizeModalOpen(true);
+                                  }}
                                   className="p-1.5 rounded-lg hover:bg-muted transition-colors"
                                   title="Optimize"
                                 >
@@ -223,38 +253,51 @@ export default function WMSSitesStorage({
         )}
       </motion.div>
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Warehouse Site</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete <strong>{siteToDelete?.name}</strong>? This action cannot be undone and will permanently delete:
-              <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>All inventory items ({siteToDelete?.item_count || 0} items)</li>
-                <li>All buildings, zones, and locations</li>
-                <li>All associated data</li>
-              </ul>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                "Delete Site"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDestructiveModal
+        isOpen={deleteDialogOpen}
+        onClose={handleCloseDeleteDialog}
+        onConfirm={handleConfirmDelete}
+        title="Delete Warehouse Site"
+        description={
+          <>
+            Are you sure you want to delete <strong>{siteToDelete?.name}</strong>? This action cannot be undone and will permanently delete:
+            <ul className="list-disc list-inside mt-2 space-y-1">
+              <li>All inventory items ({siteToDelete?.item_count || 0} items)</li>
+              <li>All buildings, zones, and locations</li>
+              <li>All associated data</li>
+            </ul>
+          </>
+        }
+        confirmText="permanently delete"
+        isLoading={isDeleting}
+      />
+
+      {moveModalOpen && moveModalSiteId !== null && (
+        <MoveItemModal
+          sites={sites}
+          currentSiteId={moveModalSiteId}
+          onClose={handleCloseMoveModal}
+          onSuccess={handleMoveSuccess}
+          onShowToast={onShowToast}
+        />
+      )}
+
+      {optimizeModalOpen && optimizeModalSite !== null && (
+        <OptimizationWizardModal
+          siteId={optimizeModalSite.id}
+          siteName={optimizeModalSite.name}
+          onClose={() => {
+            setOptimizeModalOpen(false);
+            setOptimizeModalSite(null);
+          }}
+          onSuccess={() => {
+            setOptimizeModalOpen(false);
+            setOptimizeModalSite(null);
+            onRefresh();
+          }}
+          onShowToast={onShowToast}
+        />
+      )}
     </>
   );
 }

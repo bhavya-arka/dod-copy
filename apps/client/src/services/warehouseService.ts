@@ -11,7 +11,8 @@ import type {
   FileUploadResult, 
   FileCommitResult,
   PaginatedInventoryResponse,
-  InventoryQueryParams
+  InventoryQueryParams,
+  CreateTransferPayload
 } from "../components/warehouse/types";
 
 const API_BASE = "/api/warehouse";
@@ -161,17 +162,11 @@ export async function fetchTransfers(): Promise<Transfer[]> {
 }
 
 /**
- * Create a new transfer order
+ * Create a new transfer order with item selection and optional air transport metadata
  * @param data - Transfer creation data
  * @returns Created transfer
  */
-export async function createTransfer(data: {
-  source_site_id: number;
-  destination_site_id: number;
-  transport_mode: string;
-  items: string;
-  notes?: string;
-}): Promise<Transfer> {
+export async function createTransfer(data: CreateTransferPayload): Promise<Transfer> {
   const response = await fetch(`${API_BASE}/transfers`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -284,6 +279,24 @@ export async function deleteInventoryItems(siteId: number, itemIds: number[]): P
 }
 
 /**
+ * Delete all inventory items for a site
+ * @param siteId - Site ID
+ * @returns Object with count of deleted items
+ */
+export async function deleteAllInventoryItems(siteId: number): Promise<{ success: boolean; message: string; deleted: number }> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/inventory/all`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to delete all items");
+  }
+  return response.json();
+}
+
+/**
  * Delete a warehouse site and all related data
  * @param siteId - Site ID to delete
  * @returns Success response
@@ -297,6 +310,111 @@ export async function deleteSite(siteId: number): Promise<{ success: boolean; me
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.error || "Failed to delete site");
+  }
+  return response.json();
+}
+
+/**
+ * Move an inventory item to a new location or site
+ * @param siteId - Current site ID
+ * @param itemId - Item ID to move
+ * @param data - Move destination data
+ * @returns Updated inventory item
+ */
+export async function moveInventoryItem(
+  siteId: number,
+  itemId: number,
+  data: {
+    destination_site_id?: number;
+    destination_location_id?: number | null;
+    notes?: string;
+  }
+): Promise<{ success: boolean; message: string; item: InventoryItem }> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/inventory/${itemId}/move`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to move item");
+  }
+  return response.json();
+}
+
+/** Optimization action from wizard */
+export interface OptimizationAction {
+  id: string;
+  action: string;
+  item: string;
+  from: string;
+  to: string;
+  priority: 'high' | 'medium' | 'low';
+  estimatedBenefit: string;
+}
+
+/** Optimization wizard result */
+export interface OptimizationWizardResult {
+  runId: number;
+  algorithm: string;
+  site: { id: number; name: string };
+  summary: {
+    potentialSavings: string;
+    spaceImprovement: string;
+    itemsAffected: number;
+    actionsGenerated: number;
+  };
+  actions: OptimizationAction[];
+  totalActions: number;
+}
+
+/**
+ * Run optimization wizard with selected algorithm
+ * @param siteId - Site ID
+ * @param algorithm - Algorithm to use
+ * @param params - Algorithm parameters
+ * @returns Optimization result with action plan
+ */
+export async function runOptimizationWizard(
+  siteId: number,
+  algorithm: string,
+  params: Record<string, any>
+): Promise<OptimizationWizardResult> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/optimize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ algorithm, params }),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to run optimization");
+  }
+  return response.json();
+}
+
+/**
+ * Apply optimization plan
+ * @param siteId - Site ID
+ * @param runId - Optimization run ID
+ * @returns Success result
+ */
+export async function applyOptimizationPlan(
+  siteId: number,
+  runId: number
+): Promise<{ success: boolean; message: string; actionsApplied: number }> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/optimize/${runId}/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to apply optimization plan");
   }
   return response.json();
 }

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uuid, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uuid, numeric, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -733,6 +733,8 @@ export const warehouseTransfers = pgTable("warehouse_transfers", {
   status: text("status").notNull().default("pending"),
   transport_mode: text("transport_mode").notNull().default("land"),
   transfer_items: jsonb("transfer_items").notNull().default([]),
+  air_metadata: jsonb("air_metadata"),
+  pacaf_manifest: jsonb("pacaf_manifest"),
   notes: text("notes"),
   scheduled_date: timestamp("scheduled_date"),
   completed_date: timestamp("completed_date"),
@@ -747,3 +749,112 @@ export const insertWarehouseTransferSchema = createInsertSchema(warehouseTransfe
 });
 export type InsertWarehouseTransfer = z.infer<typeof insertWarehouseTransferSchema>;
 export type WarehouseTransfer = typeof warehouseTransfers.$inferSelect;
+
+// ============================================================================
+// WMS CONFIGURATION TABLES
+// ============================================================================
+
+// Warehouse Settings - user-specific configuration settings
+export const warehouseSettings = pgTable("warehouse_settings", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull().unique(),
+  timezone: text("timezone").notNull().default("UTC"),
+  date_format: text("date_format").notNull().default("MM/DD/YYYY"),
+  weight_unit: text("weight_unit").notNull().default("lbs"),
+  default_page_size: integer("default_page_size").notNull().default(25),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseSettingsSchema = createInsertSchema(warehouseSettings).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertWarehouseSettings = z.infer<typeof insertWarehouseSettingsSchema>;
+export type WarehouseSettings = typeof warehouseSettings.$inferSelect;
+
+// Warehouse Aging Thresholds - configurable aging alert thresholds
+export const warehouseAgingThresholds = pgTable("warehouse_aging_thresholds", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  name: text("name").notNull(),
+  days: integer("days").notNull(),
+  color: text("color").notNull().default("#fbbf24"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseAgingThresholdSchema = createInsertSchema(warehouseAgingThresholds).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertWarehouseAgingThreshold = z.infer<typeof insertWarehouseAgingThresholdSchema>;
+export type WarehouseAgingThreshold = typeof warehouseAgingThresholds.$inferSelect;
+
+// Warehouse Analytics Snapshots - store daily analytics data
+export const warehouseAnalyticsSnapshots = pgTable("warehouse_analytics_snapshots", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  site_id: integer("site_id"),
+  snapshot_date: date("snapshot_date").notNull(),
+  metrics: jsonb("metrics").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseAnalyticsSnapshotSchema = createInsertSchema(warehouseAnalyticsSnapshots).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseAnalyticsSnapshot = z.infer<typeof insertWarehouseAnalyticsSnapshotSchema>;
+export type WarehouseAnalyticsSnapshot = typeof warehouseAnalyticsSnapshots.$inferSelect;
+
+// Warehouse Optimization Runs - store optimization results
+export const warehouseOptimizationRunStatusEnum = ['pending', 'running', 'completed', 'failed'] as const;
+export type WarehouseOptimizationRunStatus = typeof warehouseOptimizationRunStatusEnum[number];
+
+export const warehouseOptimizationRuns = pgTable("warehouse_optimization_runs", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  site_id: integer("site_id").notNull(),
+  algorithm: text("algorithm").notNull(),
+  input_params: jsonb("input_params").notNull().default({}),
+  results: jsonb("results").notNull().default({}),
+  action_plan: jsonb("action_plan").notNull().default({}),
+  status: text("status").notNull().default('pending'),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  completed_at: timestamp("completed_at"),
+});
+
+export const insertWarehouseOptimizationRunSchema = createInsertSchema(warehouseOptimizationRuns).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseOptimizationRun = z.infer<typeof insertWarehouseOptimizationRunSchema>;
+export type WarehouseOptimizationRun = typeof warehouseOptimizationRuns.$inferSelect;
+
+// Warehouse Action Plans - store generated action plans
+export const warehouseActionPlanStatusEnum = ['draft', 'approved', 'in_progress', 'completed'] as const;
+export type WarehouseActionPlanStatus = typeof warehouseActionPlanStatusEnum[number];
+
+export const warehouseActionPlans = pgTable("warehouse_action_plans", {
+  id: serial("id").primaryKey(),
+  optimization_run_id: integer("optimization_run_id"),
+  user_id: integer("user_id").notNull(),
+  site_id: integer("site_id").notNull(),
+  plan_type: text("plan_type").notNull(),
+  actions: jsonb("actions").notNull().default([]),
+  pdf_url: text("pdf_url"),
+  status: text("status").notNull().default('draft'),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseActionPlanSchema = createInsertSchema(warehouseActionPlans).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertWarehouseActionPlan = z.infer<typeof insertWarehouseActionPlanSchema>;
+export type WarehouseActionPlan = typeof warehouseActionPlans.$inferSelect;

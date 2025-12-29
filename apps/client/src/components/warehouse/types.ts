@@ -39,6 +39,48 @@ export interface InventoryItem {
   lin_esd?: string;
 }
 
+/** Transfer item details */
+export interface TransferItemDetail {
+  id: number;
+  requisition_no: string;
+  description?: string;
+  quantity: number;
+  weight_lb?: string;
+  unit_price?: string;
+}
+
+/** Air transport metadata */
+export interface AirTransportMetadata {
+  aircraft_type: 'C-17' | 'C-130H' | 'C-130J';
+  mission_id?: string;
+  priority: 'routine' | 'priority' | 'urgent';
+}
+
+/** PACAF-compatible manifest data */
+export interface PacafManifest {
+  manifest_id: string;
+  transfer_id: number;
+  aircraft_type: string;
+  mission_id?: string;
+  priority: string;
+  origin_site: { id: number; code: string; name: string };
+  destination_site: { id: number; code: string; name: string };
+  cargo_items: {
+    id: number;
+    requisition_no: string;
+    description?: string;
+    quantity: number;
+    weight_lb: number;
+    dimensions?: { length_in: number; width_in: number; height_in: number };
+  }[];
+  totals: {
+    item_count: number;
+    total_weight_lb: number;
+    total_value: number;
+  };
+  created_at: string;
+}
+
 /** Transfer order between warehouse sites */
 export interface Transfer {
   id: number;
@@ -46,9 +88,23 @@ export interface Transfer {
   destination_site_id: number;
   status: string;
   transport_mode: string;
-  items: string;
+  transfer_items: TransferItemDetail[];
+  air_metadata?: AirTransportMetadata;
+  pacaf_manifest?: PacafManifest;
   notes?: string;
+  scheduled_date?: string;
+  completed_date?: string;
   created_at: string;
+}
+
+/** Create transfer request payload */
+export interface CreateTransferPayload {
+  source_site_id: number;
+  destination_site_id: number;
+  transport_mode: 'ground' | 'air' | 'sea';
+  item_ids: number[];
+  notes?: string;
+  air_metadata?: AirTransportMetadata;
 }
 
 /** AI optimization result for a site */

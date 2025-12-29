@@ -662,6 +662,49 @@ export type InsertWarehouseOptimizationRun = z.infer<typeof insertWarehouseOptim
 export type WarehouseOptimizationRun = typeof warehouseOptimizationRuns.$inferSelect;
 
 // ============================================================================
+// WAREHOUSE CONFIGURATION TABLES
+// ============================================================================
+
+// Warehouse Settings - user-specific configuration settings
+export const warehouseSettings = pgTable("warehouse_settings", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull().unique(),
+  timezone: text("timezone").notNull().default("UTC"),
+  date_format: text("date_format").notNull().default("MM/DD/YYYY"),
+  weight_unit: text("weight_unit").notNull().default("lbs"),
+  default_page_size: integer("default_page_size").notNull().default(25),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseSettingsSchema = createInsertSchema(warehouseSettings).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertWarehouseSettings = z.infer<typeof insertWarehouseSettingsSchema>;
+export type WarehouseSettings = typeof warehouseSettings.$inferSelect;
+
+// Warehouse Aging Thresholds - configurable aging alert thresholds
+export const warehouseAgingThresholds = pgTable("warehouse_aging_thresholds", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  name: text("name").notNull(),
+  days: integer("days").notNull(),
+  color: text("color").notNull().default("#fbbf24"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseAgingThresholdSchema = createInsertSchema(warehouseAgingThresholds).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertWarehouseAgingThreshold = z.infer<typeof insertWarehouseAgingThresholdSchema>;
+export type WarehouseAgingThreshold = typeof warehouseAgingThresholds.$inferSelect;
+
+// ============================================================================
 // LAND LOGISTICS TABLES
 // ============================================================================
 

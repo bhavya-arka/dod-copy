@@ -30,7 +30,7 @@ import type {
   PaginatedInventoryResponse
 } from "./types";
 import { formatNSN, getConditionColor } from "./utils";
-import { fetchInventoryPaginated, deleteInventoryItem, deleteInventoryItems } from "../../services/warehouseService";
+import { fetchInventoryPaginated, deleteInventoryItem, deleteInventoryItems, deleteAllInventoryItems } from "../../services/warehouseService";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +41,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
+import ConfirmDestructiveModal from "./modals/ConfirmDestructiveModal";
 
 const PREFETCH_AHEAD = 5;
 const PREFETCH_BEHIND = 2;
@@ -163,6 +164,8 @@ export default function WMSInventory({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
   const filterRef = useRef<HTMLDivElement>(null);
   const columnSettingsRef = useRef<HTMLDivElement>(null);
@@ -509,6 +512,35 @@ export default function WMSInventory({
     setDeleteDialogOpen(true);
   };
 
+  const handleDeleteAllClick = () => {
+    if (!selectedSiteId) {
+      onShowToast("Please select a warehouse site first", "warning");
+      return;
+    }
+    if (totalCount === 0) {
+      onShowToast("No items to delete", "warning");
+      return;
+    }
+    setDeleteAllDialogOpen(true);
+  };
+
+  const handleConfirmDeleteAll = async () => {
+    if (!selectedSiteId) return;
+    
+    setIsDeletingAll(true);
+    try {
+      const result = await deleteAllInventoryItems(selectedSiteId);
+      onShowToast(`Successfully deleted ${result.deleted} items`, "success");
+      setDeleteAllDialogOpen(false);
+      handleRefresh();
+    } catch (error) {
+      console.error("Failed to delete all items:", error);
+      onShowToast(error instanceof Error ? error.message : "Failed to delete all items", "error");
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!selectedSiteId) return;
     
@@ -634,6 +666,14 @@ export default function WMSInventory({
                 Delete Selected ({selectedItems.size})
               </button>
             )}
+            <button
+              onClick={handleDeleteAllClick}
+              disabled={isDeletingAll || !selectedSiteId || totalCount === 0}
+              className="text-sm px-3 py-2 rounded-lg border border-red-300 bg-white text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete All
+            </button>
             <button
               onClick={handleImport}
               className="text-sm px-3 py-2 rounded-lg border border-border bg-white hover:bg-muted transition-colors flex items-center gap-2"
@@ -1051,6 +1091,21 @@ export default function WMSInventory({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ConfirmDestructiveModal
+        isOpen={deleteAllDialogOpen}
+        onClose={() => !isDeletingAll && setDeleteAllDialogOpen(false)}
+        onConfirm={handleConfirmDeleteAll}
+        title="Delete All Inventory"
+        description={
+          <>
+            Are you sure you want to delete <strong>all {totalCount} items</strong> from this site? 
+            This action cannot be undone and will permanently delete all inventory data.
+          </>
+        }
+        confirmText="permanently delete"
+        isLoading={isDeletingAll}
+      />
     </>
   );
 }
