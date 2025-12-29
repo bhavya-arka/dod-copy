@@ -1,9 +1,5 @@
 import Papa from 'papaparse';
-import { createRequire } from 'module';
-
-// Use createRequire for pdf-parse due to ESM/CJS compatibility issues
-const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+import { PDFParse } from 'pdf-parse';
 import { 
   validateInventoryData, 
   ValidationResult, 
@@ -250,8 +246,9 @@ export async function parsePDF(
   const warnings: ValidationMessage[] = [];
   
   try {
-    const pdfData = await pdfParse(buffer);
-    const text = pdfData.text;
+    const parser = new PDFParse({ data: buffer });
+    const result = await parser.getText();
+    const text = result.text;
     
     if (!text || text.trim().length === 0) {
       errors.push({
