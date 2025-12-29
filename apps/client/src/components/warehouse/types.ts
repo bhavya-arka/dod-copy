@@ -25,6 +25,7 @@ export interface InventoryItem {
   width_in?: string;
   height_in?: string;
   weight_lb?: string;
+  weight_lbs?: string;
   nsn?: string;
   fsc?: string;
   niin?: string;
@@ -34,6 +35,8 @@ export interface InventoryItem {
   rack_location?: string;
   container_id?: string;
   receipt_date?: string;
+  serial_no?: string;
+  lin_esd?: string;
 }
 
 /** Transfer order between warehouse sites */
@@ -73,13 +76,83 @@ export interface ToastMessage {
 /** WMS navigation tabs */
 export type WMSTab = "dashboard" | "inventory" | "operations" | "sites" | "analytics" | "ai-insights" | "admin";
 
-/** Inventory filter options */
+/** Inventory filter options (legacy) */
 export interface InventoryFilter {
   site: number | "all";
   condition: string;
   ageGroup: string;
   storageType: string;
   missionId: string;
+}
+
+/** Filter operator types for advanced filtering */
+export type FilterOperator = 
+  | "contains" 
+  | "equals" 
+  | "not_equals"
+  | "greater_than" 
+  | "less_than" 
+  | "is_empty" 
+  | "is_not_empty";
+
+/** Single filter condition */
+export interface FilterCondition {
+  id: string;
+  field: string;
+  operator: FilterOperator;
+  value: string;
+}
+
+/** Filter group with logic */
+export interface FilterGroup {
+  logic: "and" | "or";
+  conditions: FilterCondition[];
+}
+
+/** Column configuration for visibility */
+export interface ColumnConfig {
+  key: string;
+  label: string;
+  visible: boolean;
+  sortable: boolean;
+  width?: string;
+  align?: "left" | "right" | "center";
+}
+
+/** Pagination state */
+export interface PaginationState {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+}
+
+/** Sort state */
+export interface SortState {
+  sortBy: string;
+  sortOrder: "asc" | "desc";
+}
+
+/** Paginated inventory response from API */
+export interface PaginatedInventoryResponse {
+  items: InventoryItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+  };
+}
+
+/** Inventory query parameters */
+export interface InventoryQueryParams {
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+  search?: string;
+  filters?: FilterCondition[];
+  filterLogic?: "and" | "or";
 }
 
 /** Parsed NSN data */

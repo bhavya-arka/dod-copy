@@ -10,7 +10,7 @@ import {
   warehouseInventoryItems,
   warehouseTransfers
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, like, ilike, sql, gt, lt, isNull, isNotNull, asc, desc, count } from "drizzle-orm";
 import {
   dagNodeService,
   dagEdgeService,
@@ -1955,7 +1955,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/warehouse/sites/:siteId/inventory - Get inventory items for a site
+  // GET /api/warehouse/sites/:siteId/inventory - Get inventory items for a site with pagination
   app.get("/api/warehouse/sites/:siteId/inventory", authMiddleware, async (req: AuthRequest, res) => {
     try {
       const siteId = parseInt(req.params.siteId);
@@ -1975,9 +1975,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Warehouse site not found" });
       }
 
+      // Parse pagination params
+      const page = Math.max(1, parseInt(req.query.page as string) || 1);
+      const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string) || 25));
+      const sortBy = (req.query.sortBy as string) || "id";
+      const sortOrder = (req.query.sortOrder as string) === "desc" ? "desc" : "asc";
+      const search = (req.query.search as string) || "";
+      const filtersJson = req.query.filters as string;
+      const filterLogic = (req.query.filterLogic as string) === "or" ? "or" : "and";
+
+      // Parse and validate filters if provided
+      const ALLOWED_FILTER_FIELDS = [
+        'requisition_no', 'nsn', 'niin', 'fsc', 'description', 'quantity',
+        'condition', 'mission_id', 'serial_no', 'lin_esd', 'unit_price', 'weight_lbs'
+      ];
+      const ALLOWED_OPERATORS = [
+        'contains', 'equals', 'not_equals', 'greater_than', 'less_than', 'is_empty', 'is_not_empty'
+      ];
+      
+      let filterConditions: Array<{field: string; operator: string; value: string}> = [];
+      if (filtersJson) {
+        try {
+          const parsed = JSON.parse(filtersJson);
+          if (Array.isArray(parsed)) {
+            filterConditions = parsed.filter(f => 
+              f && typeof f === 'object' &&
+              ALLOWED_FILTER_FIELDS.includes(f.field) &&
+              ALLOWED_OPERATORS.includes(f.operator)
+            );
+          }
+        } catch (e) {
+          console.warn("[Warehouse] Invalid filters JSON:", e);
+        }
+      }
+
+      // Build where conditions
+      const baseCondition = eq(warehouseInventoryItems.site_id, siteId);
+      const whereConditions: any[] = [baseCondition];
+
+      // Add search condition
+      if (search.trim()) {
+        const searchTerm = `%${search.trim().toLowerCase()}%`;
+        whereConditions.push(
+          or(
+            ilike(warehouseInventoryItems.requisition_no, searchTerm),
+            ilike(warehouseInventoryItems.description, searchTerm),
+            ilike(warehouseInventoryItems.nsn, searchTerm),
+            ilike(warehouseInventoryItems.niin, searchTerm),
+            ilike(warehouseInventoryItems.serial_no, searchTerm)
+          )
+        );
+      }
+
+      // Build filter conditions
+      const buildFilterCondition = (filter: {field: string; operator: string; value: string}) => {
+        const col = (warehouseInventoryItems as any)[filter.field];
+        if (!col) return null;
+
+        switch (filter.operator) {
+          case "contains":
+            return ilike(col, `%${filter.value}%`);
+          case "equals":
+            return eq(col, filter.value);
+          case "not_equals":
+            return sql`${col} != ${filter.value}`;
+          case "greater_than":
+            return gt(col, parseFloat(filter.value) || 0);
+          case "less_than":
+            return lt(col, parseFloat(filter.value) || 0);
+          case "is_empty":
+            return or(isNull(col), eq(col, ""));
+          case "is_not_empty":
+            return and(isNotNull(col), sql`${col} != ''`);
+          default:
+            return null;
+        }
+      };
+
+      if (filterConditions.length > 0) {
+        const builtFilters = filterConditions
+          .map(buildFilterCondition)
+          .filter((c): c is NonNullable<typeof c> => c !== null);
+
+        if (builtFilters.length > 0) {
+          if (filterLogic === "or") {
+            whereConditions.push(or(...builtFilters));
+          } else {
+            whereConditions.push(...builtFilters);
+          }
+        }
+      }
+
+      const finalWhere = and(...whereConditions);
+
+      // Get total count for pagination
+      const [countResult] = await db.select({ count: count() })
+        .from(warehouseInventoryItems)
+        .where(finalWhere);
+      const totalCount = countResult?.count || 0;
+      const totalPages = Math.ceil(totalCount / pageSize);
+
+      // Build sort order
+      const sortColumn = (warehouseInventoryItems as any)[sortBy] || warehouseInventoryItems.id;
+      const orderByClause = sortOrder === "desc" ? desc(sortColumn) : asc(sortColumn);
+
+      // Fetch paginated items
+      const offset = (page - 1) * pageSize;
       const items = await db.select()
         .from(warehouseInventoryItems)
-        .where(eq(warehouseInventoryItems.site_id, siteId));
+        .where(finalWhere)
+        .orderBy(orderByClause)
+        .limit(pageSize)
+        .offset(offset);
 
       // Transform items to include dimensions from raw_row
       const transformedItems = items.map(item => {
@@ -1995,7 +2104,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
 
-      res.json(transformedItems);
+      res.json({
+        items: transformedItems,
+        pagination: {
+          page,
+          pageSize,
+          totalCount,
+          totalPages,
+        }
+      });
     } catch (error) {
       console.error("[Warehouse] Failed to fetch inventory:", error);
       res.status(500).json({ error: "Failed to fetch inventory items" });
@@ -2330,15 +2447,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[Warehouse Import] Committing ${validRows.length} rows from session ${uploadId}`);
 
       // Prepare items for insertion
-      const itemsToInsert = validRows.map(row => ({
+      const itemsToInsert = validRows.map((row, idx) => ({
         site_id: siteId,
-        requisition_no: row.requisition_no || `ITEM-${Date.now()}`,
+        requisition_no: row.requisition_no || `ITEM-${Date.now()}-${idx}`,
         description: row.description || `Item ${row.requisition_no || 'Unknown'}`,
-        quantity: row.quantity || 0,
+        quantity: row.quantity || 1,
         unit_price: row.unit_price?.toString() || null,
         nsn: row.nsn || null,
         fsc: row.fsc || null,
         niin: row.niin || null,
+        condition: row.condition || null,
+        mission_id: row.mission_id || null,
+        serial_no: row.serial_no || null,
+        lin_esd: row.lin_esd || null,
+        last_moved: row.last_moved ? new Date(row.last_moved) : null,
         weight_lbs: row.weight_lb?.toString() || null,
         raw_row: {
           ...row._rawRow,

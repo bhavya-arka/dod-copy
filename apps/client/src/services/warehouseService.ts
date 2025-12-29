@@ -3,7 +3,16 @@
  * Handles all API calls for warehouse endpoints
  */
 
-import type { WarehouseSite, InventoryItem, Transfer, OptimizationResult, FileUploadResult, FileCommitResult } from "../components/warehouse/types";
+import type { 
+  WarehouseSite, 
+  InventoryItem, 
+  Transfer, 
+  OptimizationResult, 
+  FileUploadResult, 
+  FileCommitResult,
+  PaginatedInventoryResponse,
+  InventoryQueryParams
+} from "../components/warehouse/types";
 
 const API_BASE = "/api/warehouse";
 
@@ -44,16 +53,46 @@ export async function createSite(data: {
 }
 
 /**
- * Fetch inventory for a specific site
+ * Fetch paginated inventory for a specific site
  * @param siteId - Site ID
- * @returns Array of inventory items
+ * @param params - Query parameters for pagination, sorting, and filtering
+ * @returns Paginated inventory response
  */
-export async function fetchInventory(siteId: number): Promise<InventoryItem[]> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/inventory`, {
+export async function fetchInventoryPaginated(
+  siteId: number, 
+  params: InventoryQueryParams = {}
+): Promise<PaginatedInventoryResponse> {
+  const searchParams = new URLSearchParams();
+  
+  if (params.page) searchParams.set("page", params.page.toString());
+  if (params.pageSize) searchParams.set("pageSize", params.pageSize.toString());
+  if (params.sortBy) searchParams.set("sortBy", params.sortBy);
+  if (params.sortOrder) searchParams.set("sortOrder", params.sortOrder);
+  if (params.search) searchParams.set("search", params.search);
+  if (params.filters && params.filters.length > 0) {
+    searchParams.set("filters", JSON.stringify(params.filters));
+  }
+  if (params.filterLogic) searchParams.set("filterLogic", params.filterLogic);
+
+  const queryString = searchParams.toString();
+  const url = `${API_BASE}/sites/${siteId}/inventory${queryString ? `?${queryString}` : ""}`;
+
+  const response = await fetch(url, {
     credentials: "include",
   });
   if (!response.ok) throw new Error("Failed to fetch inventory");
   return response.json();
+}
+
+/**
+ * Fetch inventory for a specific site (legacy - returns all items)
+ * @param siteId - Site ID
+ * @returns Array of inventory items
+ * @deprecated Use fetchInventoryPaginated instead
+ */
+export async function fetchInventory(siteId: number): Promise<InventoryItem[]> {
+  const response = await fetchInventoryPaginated(siteId, { page: 1, pageSize: 10000 });
+  return response.items;
 }
 
 /**

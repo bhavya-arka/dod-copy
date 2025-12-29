@@ -21,6 +21,11 @@ export interface ParsedInventoryRow {
   nsn: string | null;
   fsc: string | null;
   niin: string | null;
+  condition: string | null;
+  mission_id: string | null;
+  serial_no: string | null;
+  lin_esd: string | null;
+  last_moved: string | null;
   _rawRow: Record<string, any>;
   _rowIndex: number;
 }
@@ -41,17 +46,22 @@ export interface ValidationResult {
 }
 
 const COLUMN_MAPPINGS: Record<string, string[]> = {
-  requisition_no: ['o', 'requisition_no', 'item_id', 'req_no', 'order_id', 'id'],
-  description: ['description', 'desc', 'item_name', 'name', 'item_description'],
-  quantity: ['q', 'quantity', 'qty', 'count', 'units'],
+  requisition_no: ['o', 'requisition_no', 'requisition', 'item_id', 'req_no', 'order_id', 'id', 'req', 'reqn', 'document_no', 'document_number'],
+  description: ['description', 'desc', 'item_name', 'name', 'item_description', 'nomenclature', 'item_desc', 'item'],
+  quantity: ['q', 'quantity', 'qty', 'count', 'units', 'on_hand', 'oh', 'on_hand_qty'],
   length_in: ['l', 'length_in', 'length', 'len', 'length_inches'],
   width_in: ['w', 'width_in', 'width', 'wid', 'width_inches'],
   height_in: ['h', 'height_in', 'height', 'hgt', 'height_inches'],
   weight_lb: ['p', 'weight_lb', 'weight', 'weight_lbs', 'wt', 'mass'],
-  unit_price: ['unit_price', 'price', 'cost', 'value'],
-  nsn: ['nsn', 'national_stock_number'],
-  fsc: ['fsc', 'federal_supply_class'],
-  niin: ['niin', 'national_item_identification_number'],
+  unit_price: ['unit_price', 'price', 'cost', 'value', 'unit_cost', 'extended_price', 'ext_price'],
+  nsn: ['nsn', 'national_stock_number', 'niin_nsn', 'nsn_niin', 'stock_number'],
+  fsc: ['fsc', 'federal_supply_class', 'fsc_class'],
+  niin: ['niin', 'national_item_identification_number', 'niin_no'],
+  condition: ['condition', 'cond', 'condition_code', 'cond_code', 'status'],
+  mission_id: ['mission', 'mission_id', 'mission_no', 'project', 'project_id'],
+  serial_no: ['serial_no', 'serial', 'serial_number', 'sn', 's_n', 'ser_no'],
+  lin_esd: ['lin_esd', 'lin', 'esd', 'line_item', 'line_no'],
+  last_moved: ['last_moved', 'last_move', 'move_date', 'last_activity', 'activity_date'],
 };
 
 // No fields are strictly required - we'll default quantity to 1 and generate IDs if missing
@@ -145,6 +155,11 @@ export function validateRow(row: Record<string, any>, rowIndex: number, columnMa
   const nsn = getValue('nsn');
   const fsc = getValue('fsc');
   const niin = getValue('niin');
+  const condition = getValue('condition');
+  const mission_id = getValue('mission_id');
+  const serial_no = getValue('serial_no');
+  const lin_esd = getValue('lin_esd');
+  const last_moved = getValue('last_moved');
   
   const parsed: ParsedInventoryRow = {
     requisition_no: requisition_no ? String(requisition_no).trim() : null,
@@ -158,6 +173,11 @@ export function validateRow(row: Record<string, any>, rowIndex: number, columnMa
     nsn: nsn ? String(nsn).trim() : null,
     fsc: fsc ? String(fsc).trim() : null,
     niin: niin ? String(niin).trim() : null,
+    condition: condition ? String(condition).trim() : null,
+    mission_id: mission_id ? String(mission_id).trim() : null,
+    serial_no: serial_no ? String(serial_no).trim() : null,
+    lin_esd: lin_esd ? String(lin_esd).trim() : null,
+    last_moved: last_moved ? String(last_moved).trim() : null,
     _rawRow: row,
     _rowIndex: rowIndex,
   };
