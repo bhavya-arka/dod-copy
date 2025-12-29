@@ -1,9 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Building2, ChevronRight, ChevronDown, Move, Zap, Loader2, Trash2 } from "lucide-react";
-import type { WarehouseSite, ToastMessage } from "./types";
-import { MOCK_BUILDINGS } from "./constants";
-import { deleteSite } from "../../services/warehouseService";
+import type { WarehouseSite, WarehouseBuilding, ToastMessage } from "./types";
+import { deleteSite, getSiteBuildings } from "../../services/warehouseService";
 import ConfirmDestructiveModal from "./modals/ConfirmDestructiveModal";
 import MoveItemModal from "./modals/MoveItemModal";
 import OptimizationWizardModal from "./modals/OptimizationWizardModal";
@@ -24,6 +23,8 @@ export default function WMSSitesStorage({
   onShowToast,
 }: WMSSitesStorageProps) {
   const [expandedSites, setExpandedSites] = useState<Set<number>>(new Set());
+  const [siteBuildings, setSiteBuildings] = useState<Record<number, WarehouseBuilding[]>>({});
+  const [loadingBuildings, setLoadingBuildings] = useState<Set<number>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [siteToDelete, setSiteToDelete] = useState<WarehouseSite | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -31,6 +32,35 @@ export default function WMSSitesStorage({
   const [moveModalSiteId, setMoveModalSiteId] = useState<number | null>(null);
   const [optimizeModalOpen, setOptimizeModalOpen] = useState(false);
   const [optimizeModalSite, setOptimizeModalSite] = useState<{ id: number; name: string } | null>(null);
+
+  const fetchBuildingsForSite = useCallback(async (siteId: number) => {
+    if (siteBuildings[siteId] || loadingBuildings.has(siteId)) {
+      return;
+    }
+
+    setLoadingBuildings(prev => new Set(prev).add(siteId));
+    try {
+      const buildings = await getSiteBuildings(siteId);
+      setSiteBuildings(prev => ({ ...prev, [siteId]: buildings }));
+    } catch (error) {
+      console.error("Failed to fetch buildings:", error);
+      setSiteBuildings(prev => ({ ...prev, [siteId]: [] }));
+    } finally {
+      setLoadingBuildings(prev => {
+        const next = new Set(prev);
+        next.delete(siteId);
+        return next;
+      });
+    }
+  }, [siteBuildings, loadingBuildings]);
+
+  useEffect(() => {
+    expandedSites.forEach(siteId => {
+      if (!siteBuildings[siteId] && !loadingBuildings.has(siteId)) {
+        fetchBuildingsForSite(siteId);
+      }
+    });
+  }, [expandedSites, fetchBuildingsForSite, siteBuildings, loadingBuildings]);
 
   const handleMoveClick = (e: React.MouseEvent, siteId: number) => {
     e.stopPropagation();
@@ -90,6 +120,96 @@ export default function WMSSitesStorage({
       newExpanded.add(siteId);
     }
     setExpandedSites(newExpanded);
+  };
+
+  const renderBuildings = (siteId: number) => {
+    const isLoading = loadingBuildings.has(siteId);
+    const buildings = siteBuildings[siteId] || [];
+
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-5 h-5 animate-spin text-[#004E89]" />
+          <span className="ml-2 text-sm text-muted-foreground">Loading buildings...</span>
+        </div>
+      );
+    }
+
+    if (buildings.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+          <Building2 className="w-10 h-10 mb-2 opacity-50" />
+          <p className="text-sm mb-1">No buildings configured</p>
+          <p className="text-xs text-muted-foreground/70">Add buildings to organize storage within this site</p>
+        </div>
+      );
+    }
+
+    return buildings.map((building, i) => (
+      <div
+        key={building.id}
+        className="flex items-center justify-between p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground">
+            {i === buildings.length - 1 ? "└─" : "├─"}
+          </span>
+          <div>
+            <p className="font-medium text-foreground">
+              {building.code} {building.name && building.name !== building.code && (
+                <span className="text-muted-foreground">({building.name})</span>
+              )}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {building.dimensions || "Dimensions not set"}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <div className="flex items-center gap-2">
+              <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${
+                    building.capacity_percent > 80
+                      ? "bg-[#DC2626]"
+                      : building.capacity_percent > 60
+                        ? "bg-[#F59E0B]"
+                        : "bg-[#16A34A]"
+                  }`}
+                  style={{ width: `${Math.min(building.capacity_percent, 100)}%` }}
+                />
+              </div>
+              <span className="text-xs font-medium text-foreground">{building.capacity_percent}%</span>
+            </div>
+            <p className="text-xs text-muted-foreground">{building.pallet_count} pallets • ≤2,000 lbs/rack</p>
+          </div>
+          <div className="flex gap-1">
+            <button
+              onClick={(e) => handleMoveClick(e, sites.find(s => siteBuildings[s.id]?.includes(building))?.id || 0)}
+              className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+              title="Move items"
+            >
+              <Move className="w-4 h-4 text-muted-foreground" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const site = sites.find(s => siteBuildings[s.id]?.includes(building));
+                if (site) {
+                  setOptimizeModalSite({ id: site.id, name: site.name });
+                  setOptimizeModalOpen(true);
+                }
+              }}
+              className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+              title="Optimize"
+            >
+              <Zap className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+        </div>
+      </div>
+    ));
   };
 
   return (
@@ -185,64 +305,7 @@ export default function WMSSitesStorage({
                       className="border-t border-border"
                     >
                       <div className="p-4 pl-12 space-y-3">
-                        {MOCK_BUILDINGS.map((building, i) => (
-                          <div
-                            key={building.code}
-                            className="flex items-center justify-between p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="text-muted-foreground">
-                                {i === MOCK_BUILDINGS.length - 1 ? "└─" : "├─"}
-                              </span>
-                              <div>
-                                <p className="font-medium text-foreground">
-                                  {building.code} <span className="text-muted-foreground">({building.type})</span>
-                                </p>
-                                <p className="text-xs text-muted-foreground">{building.dimensions}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-4">
-                              <div className="text-right">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
-                                    <div
-                                      className={`h-full rounded-full ${
-                                        building.capacity > 80
-                                          ? "bg-[#DC2626]"
-                                          : building.capacity > 60
-                                            ? "bg-[#F59E0B]"
-                                            : "bg-[#16A34A]"
-                                      }`}
-                                      style={{ width: `${building.capacity}%` }}
-                                    />
-                                  </div>
-                                  <span className="text-xs font-medium text-foreground">{building.capacity}%</span>
-                                </div>
-                                <p className="text-xs text-muted-foreground">{building.pallets} pallets • ≤2,000 lbs/rack</p>
-                              </div>
-                              <div className="flex gap-1">
-                                <button
-                                  onClick={(e) => handleMoveClick(e, site.id)}
-                                  className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-                                  title="Move items"
-                                >
-                                  <Move className="w-4 h-4 text-muted-foreground" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setOptimizeModalSite({ id: site.id, name: site.name });
-                                    setOptimizeModalOpen(true);
-                                  }}
-                                  className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-                                  title="Optimize"
-                                >
-                                  <Zap className="w-4 h-4 text-muted-foreground" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                        {renderBuildings(site.id)}
                       </div>
                     </motion.div>
                   )}

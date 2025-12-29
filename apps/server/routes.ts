@@ -2045,6 +2045,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/warehouse/sites/:siteId/buildings - Get buildings for a site with capacity info
+  app.get("/api/warehouse/sites/:siteId/buildings", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      // Fetch all buildings for this site
+      const buildings = await db.select()
+        .from(warehouseBuildings)
+        .where(eq(warehouseBuildings.site_id, siteId))
+        .orderBy(asc(warehouseBuildings.code));
+
+      // For each building, calculate capacity from zones
+      const buildingsWithCapacity = await Promise.all(
+        buildings.map(async (building) => {
+          // Get zones for this building
+          const zones = await db.select()
+            .from(warehouseZones)
+            .where(eq(warehouseZones.building_id, building.id));
+
+          // Calculate total pallet capacity from zones
+          const totalPalletCapacity = zones.reduce((sum, zone) => {
+            return sum + (zone.capacity_pallets || 0);
+          }, 0);
+
+          // Get count of inventory items in locations within this building
+          const [inventoryCount] = await db.select({ count: count() })
+            .from(warehouseLocations)
+            .where(and(
+              eq(warehouseLocations.building_id, building.id),
+              eq(warehouseLocations.occupied, true)
+            ));
+
+          const occupiedCount = inventoryCount?.count || 0;
+          const capacityPercent = totalPalletCapacity > 0 
+            ? Math.round((Number(occupiedCount) / totalPalletCapacity) * 100) 
+            : 0;
+
+          // Format dimensions from meters
+          const lengthM = building.length_m ? parseFloat(building.length_m as string) : null;
+          const widthM = building.width_m ? parseFloat(building.width_m as string) : null;
+          const heightM = building.height_m ? parseFloat(building.height_m as string) : null;
+
+          let dimensions = "";
+          if (lengthM && widthM && heightM) {
+            // Convert meters to feet (1m = 3.28084ft)
+            const lengthFt = Math.round(lengthM * 3.28084);
+            const widthFt = Math.round(widthM * 3.28084);
+            const heightFt = Math.round(heightM * 3.28084);
+            dimensions = `${lengthFt}×${widthFt}×${heightFt} ft`;
+          } else if (lengthM && widthM) {
+            const lengthFt = Math.round(lengthM * 3.28084);
+            const widthFt = Math.round(widthM * 3.28084);
+            dimensions = `${lengthFt}×${widthFt} ft`;
+          }
+
+          return {
+            id: building.id,
+            code: building.code,
+            name: building.name,
+            dimensions,
+            capacity_percent: capacityPercent,
+            pallet_count: totalPalletCapacity,
+            geometry_notes: building.geometry_notes,
+            active: building.active
+          };
+        })
+      );
+
+      res.json(buildingsWithCapacity);
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch buildings:", error);
+      res.status(500).json({ error: "Failed to fetch buildings" });
+    }
+  });
+
   // GET /api/warehouse/sites/:siteId/inventory - Get inventory items for a site with pagination
   app.get("/api/warehouse/sites/:siteId/inventory", authMiddleware, async (req: AuthRequest, res) => {
     try {

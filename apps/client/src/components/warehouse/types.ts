@@ -14,6 +14,18 @@ export interface WarehouseSite {
   item_count?: number;
 }
 
+/** Building within a warehouse site */
+export interface WarehouseBuilding {
+  id: number;
+  code: string;
+  name: string;
+  dimensions: string;
+  capacity_percent: number;
+  pallet_count: number;
+  geometry_notes?: string;
+  active: boolean;
+}
+
 /** Inventory item in a warehouse */
 export interface InventoryItem {
   id: number;

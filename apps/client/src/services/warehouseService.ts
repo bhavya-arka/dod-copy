@@ -5,6 +5,7 @@
 
 import type { 
   WarehouseSite, 
+  WarehouseBuilding,
   InventoryItem, 
   Transfer, 
   OptimizationResult, 
@@ -26,6 +27,19 @@ export async function fetchSites(): Promise<WarehouseSite[]> {
     credentials: "include",
   });
   if (!response.ok) throw new Error("Failed to fetch sites");
+  return response.json();
+}
+
+/**
+ * Fetch buildings for a specific site
+ * @param siteId - Site ID
+ * @returns Array of buildings with capacity info
+ */
+export async function getSiteBuildings(siteId: number): Promise<WarehouseBuilding[]> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/buildings`, {
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Failed to fetch buildings");
   return response.json();
 }
 
