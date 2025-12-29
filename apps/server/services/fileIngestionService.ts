@@ -1,7 +1,7 @@
 import Papa from 'papaparse';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+import * as pdfParseLib from 'pdf-parse';
+
+const pdfParse = (pdfParseLib as any).default || pdfParseLib;
 import { 
   validateInventoryData, 
   ValidationResult, 
