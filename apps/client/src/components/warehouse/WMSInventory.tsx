@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
 import { 
   Package, 
@@ -31,6 +31,10 @@ import type {
 } from "./types";
 import { formatNSN, getConditionColor } from "./utils";
 import { fetchInventoryPaginated } from "../../services/warehouseService";
+
+const PREFETCH_AHEAD = 5;
+const PREFETCH_BEHIND = 2;
+const MAX_CACHE_SIZE = 20;
 
 interface WMSInventoryProps {
   sites: WarehouseSite[];
@@ -106,6 +110,9 @@ export default function WMSInventory({
   
   const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
   const [columnsInitialized, setColumnsInitialized] = useState(false);
+  
+  const [draggedColumnKey, setDraggedColumnKey] = useState<string | null>(null);
+  const [dragOverColumnKey, setDragOverColumnKey] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<FilterCondition[]>([]);
   const [filterLogic, setFilterLogic] = useState<"and" | "or">("and");
@@ -145,6 +152,26 @@ export default function WMSInventory({
   const filterRef = useRef<HTMLDivElement>(null);
   const columnSettingsRef = useRef<HTMLDivElement>(null);
 
+  const pageCacheRef = useRef<Map<string, PaginatedInventoryResponse>>(new Map());
+  const prefetchingRef = useRef<Set<string>>(new Set());
+  const cacheVersionRef = useRef(0);
+  const cacheOrderRef = useRef<string[]>([]);
+  const visitedPagesRef = useRef<Set<number>>(new Set());
+
+  const getCacheKey = useCallback((pageNum: number) => {
+    return JSON.stringify({
+      siteId: selectedSiteId,
+      page: pageNum,
+      pageSize,
+      sortBy,
+      sortOrder,
+      search: debouncedSearch,
+      filters: filters.length > 0 ? filters : [],
+      filterLogic: filters.length > 1 ? filterLogic : "and",
+      version: cacheVersionRef.current,
+    });
+  }, [selectedSiteId, pageSize, sortBy, sortOrder, debouncedSearch, filters, filterLogic]);
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_COLUMNS, JSON.stringify(columns));
   }, [columns]);
@@ -162,10 +189,84 @@ export default function WMSInventory({
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, filters, filterLogic, selectedSiteId]);
+    pageCacheRef.current.clear();
+    prefetchingRef.current.clear();
+    cacheOrderRef.current = [];
+    visitedPagesRef.current.clear();
+    cacheVersionRef.current += 1;
+  }, [debouncedSearch, filters, filterLogic, selectedSiteId, sortBy, sortOrder, pageSize]);
+
+  const addToCache = useCallback((key: string, data: PaginatedInventoryResponse) => {
+    const existingIndex = cacheOrderRef.current.indexOf(key);
+    if (existingIndex > -1) {
+      cacheOrderRef.current.splice(existingIndex, 1);
+    }
+    
+    while (pageCacheRef.current.size >= MAX_CACHE_SIZE && cacheOrderRef.current.length > 0) {
+      const oldestKey = cacheOrderRef.current.shift();
+      if (oldestKey) {
+        pageCacheRef.current.delete(oldestKey);
+      }
+    }
+    
+    pageCacheRef.current.set(key, data);
+    cacheOrderRef.current.push(key);
+  }, []);
+
+  const fetchPageData = useCallback(async (pageNum: number, forPrefetch = false): Promise<PaginatedInventoryResponse | null> => {
+    if (!selectedSiteId) return null;
+    
+    const cacheKey = getCacheKey(pageNum);
+    
+    if (forPrefetch) {
+      const cached = pageCacheRef.current.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+      
+      if (prefetchingRef.current.has(cacheKey)) {
+        return null;
+      }
+      
+      prefetchingRef.current.add(cacheKey);
+    }
+    
+    try {
+      const response = await fetchInventoryPaginated(selectedSiteId, {
+        page: pageNum,
+        pageSize,
+        sortBy,
+        sortOrder,
+        search: debouncedSearch,
+        filters: filters.length > 0 ? filters : undefined,
+        filterLogic: filters.length > 1 ? filterLogic : undefined,
+      });
+      
+      addToCache(cacheKey, response);
+      return response;
+    } catch (error) {
+      console.error(`Failed to fetch page ${pageNum}:`, error);
+      return null;
+    } finally {
+      if (forPrefetch) {
+        prefetchingRef.current.delete(cacheKey);
+      }
+    }
+  }, [selectedSiteId, pageSize, sortBy, sortOrder, debouncedSearch, filters, filterLogic, getCacheKey, addToCache]);
 
   const fetchData = useCallback(async () => {
     if (!selectedSiteId) return;
+    
+    const cacheKey = getCacheKey(page);
+    const hasVisitedBefore = visitedPagesRef.current.has(page);
+    
+    if (hasVisitedBefore) {
+      const cached = pageCacheRef.current.get(cacheKey);
+      if (cached) {
+        setPaginatedData(cached);
+        return;
+      }
+    }
     
     setLoading(true);
     try {
@@ -178,18 +279,60 @@ export default function WMSInventory({
         filters: filters.length > 0 ? filters : undefined,
         filterLogic: filters.length > 1 ? filterLogic : undefined,
       });
-      setPaginatedData(response);
+      
+      if (response) {
+        addToCache(cacheKey, response);
+        visitedPagesRef.current.add(page);
+        setPaginatedData(response);
+      }
     } catch (error) {
       console.error("Failed to fetch inventory:", error);
       onShowToast("Failed to fetch inventory", "error");
     } finally {
       setLoading(false);
     }
-  }, [selectedSiteId, page, pageSize, sortBy, sortOrder, debouncedSearch, filters, filterLogic, onShowToast]);
+  }, [selectedSiteId, page, pageSize, sortBy, sortOrder, debouncedSearch, filters, filterLogic, getCacheKey, addToCache, onShowToast]);
+
+  const prefetchAdjacentPages = useCallback(async () => {
+    if (!selectedSiteId || !paginatedData) return;
+    
+    const totalPages = paginatedData.pagination.totalPages;
+    const pagesToPrefetch: number[] = [];
+    
+    for (let i = 1; i <= PREFETCH_AHEAD; i++) {
+      const nextPage = page + i;
+      if (nextPage <= totalPages) {
+        pagesToPrefetch.push(nextPage);
+      }
+    }
+    
+    for (let i = 1; i <= PREFETCH_BEHIND; i++) {
+      const prevPage = page - i;
+      if (prevPage >= 1) {
+        pagesToPrefetch.push(prevPage);
+      }
+    }
+    
+    for (const pageNum of pagesToPrefetch) {
+      const cacheKey = getCacheKey(pageNum);
+      if (!pageCacheRef.current.has(cacheKey) && !prefetchingRef.current.has(cacheKey)) {
+        fetchPageData(pageNum, true);
+      }
+    }
+  }, [selectedSiteId, page, paginatedData, getCacheKey, fetchPageData]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (paginatedData && !loading) {
+      const timer = setTimeout(() => {
+        prefetchAdjacentPages();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [paginatedData, loading, prefetchAdjacentPages]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -217,6 +360,55 @@ export default function WMSInventory({
     setColumns(columns.map(col => 
       col.key === key ? { ...col, visible: !col.visible } : col
     ));
+  };
+
+  const handleColumnDragStart = (e: React.DragEvent<HTMLTableCellElement>, columnKey: string) => {
+    setDraggedColumnKey(columnKey);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", columnKey);
+  };
+
+  const handleColumnDragOver = (e: React.DragEvent<HTMLTableCellElement>, columnKey: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (draggedColumnKey && columnKey !== draggedColumnKey) {
+      setDragOverColumnKey(columnKey);
+    }
+  };
+
+  const handleColumnDragLeave = () => {
+    setDragOverColumnKey(null);
+  };
+
+  const handleColumnDrop = (e: React.DragEvent<HTMLTableCellElement>, targetColumnKey: string) => {
+    e.preventDefault();
+    if (!draggedColumnKey || draggedColumnKey === targetColumnKey) {
+      setDraggedColumnKey(null);
+      setDragOverColumnKey(null);
+      return;
+    }
+
+    const draggedIndex = columns.findIndex(col => col.key === draggedColumnKey);
+    const targetIndex = columns.findIndex(col => col.key === targetColumnKey);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedColumnKey(null);
+      setDragOverColumnKey(null);
+      return;
+    }
+
+    const newColumns = [...columns];
+    const [draggedColumn] = newColumns.splice(draggedIndex, 1);
+    newColumns.splice(targetIndex, 0, draggedColumn);
+
+    setColumns(newColumns);
+    setDraggedColumnKey(null);
+    setDragOverColumnKey(null);
+  };
+
+  const handleColumnDragEnd = () => {
+    setDraggedColumnKey(null);
+    setDragOverColumnKey(null);
   };
 
   const addFilter = () => {
@@ -260,11 +452,16 @@ export default function WMSInventory({
   };
 
   const handleRefresh = () => {
+    pageCacheRef.current.clear();
+    prefetchingRef.current.clear();
+    cacheOrderRef.current = [];
+    visitedPagesRef.current.clear();
+    cacheVersionRef.current += 1;
     fetchData();
     onRefresh();
   };
 
-  const visibleColumns = columns.filter(col => col.visible);
+  const visibleColumns = useMemo(() => columns.filter(col => col.visible), [columns]);
   const items = paginatedData?.items || [];
   const totalCount = paginatedData?.pagination.totalCount || 0;
   const totalPages = paginatedData?.pagination.totalPages || 0;
@@ -583,8 +780,20 @@ export default function WMSInventory({
                     {visibleColumns.map((col) => (
                       <th
                         key={col.key}
-                        className={`py-3 px-2 text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/50 transition-colors ${
+                        draggable
+                        onDragStart={(e) => handleColumnDragStart(e, col.key)}
+                        onDragOver={(e) => handleColumnDragOver(e, col.key)}
+                        onDragLeave={handleColumnDragLeave}
+                        onDrop={(e) => handleColumnDrop(e, col.key)}
+                        onDragEnd={handleColumnDragEnd}
+                        className={`py-3 px-2 text-xs font-medium text-muted-foreground uppercase hover:bg-muted/50 transition-all select-none ${
                           col.align === "right" ? "text-right" : "text-left"
+                        } ${
+                          draggedColumnKey === col.key ? "opacity-50 bg-muted cursor-grabbing" : "cursor-grab"
+                        } ${
+                          dragOverColumnKey === col.key ? "bg-[#004E89]/20 border-l-2 border-[#004E89]" : ""
+                        } ${
+                          draggedColumnKey && draggedColumnKey !== col.key ? "cursor-grabbing" : ""
                         }`}
                         style={{ width: col.width }}
                         onClick={() => col.sortable && handleSort(col.key)}

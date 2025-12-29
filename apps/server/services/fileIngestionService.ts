@@ -187,10 +187,253 @@ export async function parseCSV(
   }
 }
 
+const BATS_HEADER_ROW1_PATTERNS = [
+  'storage facility', 'ship', 'ship class', 'program code', 'requisition no', 
+  'authority', 'work item', 'mati ctr', 'hmhc', 'sacc', 'item acct', 
+  'audit no', 'ship ind', 'ship avail', 'qty', 'description'
+];
+
+const BATS_HEADER_ROW2_PATTERNS = [
+  'cage', 'manufacturer', 'mfg date', 'contract no', 'ubi', 'ui', 
+  'unit price', 'russian price', 'receipt date', 'location', 'last inv', 
+  'serial no', 'inventory type', 'mgmt', 'shipment', 'condition code', 
+  'asset type', 'current value', 'lot', 'tax service'
+];
+
+const ALL_KNOWN_HEADERS = [
+  'storage_facility', 'storage facility', 'ship', 'ship_class', 'ship class',
+  'program_code', 'program code', 'requisition_no', 'requisition no', 'requisition',
+  'authority', 'work_item', 'work item', 'li', 'mati_ctr', 'mati ctr',
+  'hmhc', 'sacc', 'item_acct', 'item acct', 'audit_no', 'audit no',
+  'ship_ind', 'ship ind', 'ship_avail', 'ship avail', 'qty', 'quantity',
+  'description', 'nomenclature', 'cage', 'manufacturer', 'mfg_date', 'mfg date',
+  'contract_no', 'contract no', 'ubi', 'ui', 'unit_price', 'unit price',
+  'unit_price_(ska)', 'unit price (ska)', 'russian_price', 'russian price',
+  'receipt_date', 'receipt date', 'location', 'last_inv', 'last inv',
+  'serial_no', 'serial no', 'serial', 'inventory_type', 'inventory type',
+  'mgmt', 'shipment', 'condition_code', 'condition code', 'condition',
+  'asset_type', 'asset type', 'current_value', 'current value', 'lot',
+  'tax_service', 'tax service', 'tax_service_note', 'tax service note',
+  'nsn', 'niin', 'fsc', 'weight', 'weight_lb', 'length', 'width', 'height'
+];
+
+function isHeaderLine(line: string): boolean {
+  const lowerLine = line.toLowerCase();
+  let matchCount = 0;
+  
+  for (const pattern of BATS_HEADER_ROW1_PATTERNS) {
+    if (lowerLine.includes(pattern)) matchCount++;
+  }
+  for (const pattern of BATS_HEADER_ROW2_PATTERNS) {
+    if (lowerLine.includes(pattern)) matchCount++;
+  }
+  
+  return matchCount >= 3;
+}
+
+function extractHeadersFromMultipleRows(lines: string[]): { headers: string[]; dataStartIndex: number } {
+  console.log('[PDF Parse] Analyzing lines for multi-row headers...');
+  
+  const headerRows: string[] = [];
+  let dataStartIndex = 0;
+  
+  for (let i = 0; i < Math.min(10, lines.length); i++) {
+    if (isHeaderLine(lines[i])) {
+      headerRows.push(lines[i]);
+      dataStartIndex = i + 1;
+    } else if (headerRows.length > 0) {
+      break;
+    }
+  }
+  
+  if (headerRows.length === 0) {
+    return { headers: [], dataStartIndex: 0 };
+  }
+  
+  console.log(`[PDF Parse] Found ${headerRows.length} header row(s)`);
+  
+  const combinedHeaders = headerRows.join(' ');
+  const headers = extractHeaderTokens(combinedHeaders);
+  
+  console.log(`[PDF Parse] Extracted headers: ${headers.join(', ')}`);
+  
+  return { headers, dataStartIndex };
+}
+
+function extractHeaderTokens(headerText: string): string[] {
+  const headers: string[] = [];
+  const lowerText = headerText.toLowerCase();
+  
+  const foundPositions: { header: string; pos: number }[] = [];
+  
+  for (const knownHeader of ALL_KNOWN_HEADERS) {
+    const pos = lowerText.indexOf(knownHeader.toLowerCase());
+    if (pos !== -1) {
+      const alreadyFound = foundPositions.some(f => 
+        Math.abs(f.pos - pos) < 3 && f.header.length >= knownHeader.length
+      );
+      if (!alreadyFound) {
+        foundPositions.push({ header: knownHeader, pos });
+      }
+    }
+  }
+  
+  foundPositions.sort((a, b) => a.pos - b.pos);
+  
+  const uniqueHeaders = new Set<string>();
+  for (const { header } of foundPositions) {
+    const normalized = header.toLowerCase().replace(/[\s\-]+/g, '_').replace(/[()]/g, '');
+    if (!uniqueHeaders.has(normalized)) {
+      uniqueHeaders.add(normalized);
+      headers.push(header);
+    }
+  }
+  
+  return headers;
+}
+
+function tryParseWithKnownPatterns(text: string): { headers: string[]; rows: Record<string, any>[] } {
+  console.log('[PDF Parse] Attempting pattern-based parsing for BATS-style PDF...');
+  
+  const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  
+  console.log(`[PDF Parse] Total lines in PDF: ${lines.length}`);
+  console.log('[PDF Parse] First 5 lines:');
+  for (let i = 0; i < Math.min(5, lines.length); i++) {
+    console.log(`  Line ${i}: "${lines[i].substring(0, 100)}${lines[i].length > 100 ? '...' : ''}"`);
+  }
+  
+  const { headers, dataStartIndex } = extractHeadersFromMultipleRows(lines);
+  
+  if (headers.length === 0) {
+    console.log('[PDF Parse] No BATS headers detected, returning empty');
+    return { headers: [], rows: [] };
+  }
+  
+  const rows: Record<string, any>[] = [];
+  let currentRow: Record<string, any> = {};
+  let rawContent = '';
+  
+  for (let i = dataStartIndex; i < lines.length; i++) {
+    const line = lines[i];
+    
+    if (isHeaderLine(line)) {
+      continue;
+    }
+    
+    const looksLikeNewRecord = /^[A-Z0-9]{2,}[\s\-]/.test(line) || 
+                               /^\d{4}[\-\/]/.test(line) ||
+                               /^[A-Z]{2,}\s+\d/.test(line);
+    
+    if (looksLikeNewRecord && rawContent.length > 0) {
+      currentRow['raw_content'] = rawContent.trim();
+      currentRow['_raw_line'] = rawContent.trim();
+      
+      const extractedValues = extractValuesFromRaw(rawContent, headers);
+      for (const [key, value] of Object.entries(extractedValues)) {
+        currentRow[key] = value;
+      }
+      
+      if (Object.keys(currentRow).length > 1) {
+        rows.push(currentRow);
+      }
+      currentRow = {};
+      rawContent = line + ' ';
+    } else {
+      rawContent += line + ' ';
+    }
+  }
+  
+  if (rawContent.trim().length > 0) {
+    currentRow['raw_content'] = rawContent.trim();
+    currentRow['_raw_line'] = rawContent.trim();
+    
+    const extractedValues = extractValuesFromRaw(rawContent, headers);
+    for (const [key, value] of Object.entries(extractedValues)) {
+      currentRow[key] = value;
+    }
+    
+    if (Object.keys(currentRow).length > 1) {
+      rows.push(currentRow);
+    }
+  }
+  
+  console.log(`[PDF Parse] Extracted ${rows.length} data rows using pattern matching`);
+  
+  if (rows.length > 0) {
+    console.log(`[PDF Parse] Sample first row keys: ${Object.keys(rows[0]).join(', ')}`);
+  }
+  
+  return { headers, rows };
+}
+
+function extractValuesFromRaw(rawText: string, headers: string[]): Record<string, string> {
+  const result: Record<string, string> = {};
+  
+  const qtyMatch = rawText.match(/\bQty[:\s]*(\d+)/i) || rawText.match(/\b(\d+)\s*(EA|PC|SET|LOT|BX)\b/i);
+  if (qtyMatch) {
+    result['qty'] = qtyMatch[1];
+  }
+  
+  const priceMatch = rawText.match(/\$[\d,]+\.?\d*/);
+  if (priceMatch) {
+    result['unit_price'] = priceMatch[0].replace('$', '').replace(',', '');
+  }
+  
+  const conditionMatch = rawText.match(/\b(Condition|Cond)[:\s]*([A-Z])\b/i) || 
+                         rawText.match(/\b([ABCDEF])\s*(?:condition|cond)?\b/i);
+  if (conditionMatch) {
+    result['condition_code'] = conditionMatch[2] || conditionMatch[1];
+  }
+  
+  const serialMatch = rawText.match(/Serial[:\s#]*([A-Z0-9\-]+)/i);
+  if (serialMatch) {
+    result['serial_no'] = serialMatch[1];
+  }
+  
+  const dateMatch = rawText.match(/\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/);
+  if (dateMatch) {
+    result['receipt_date'] = dateMatch[1];
+  }
+  
+  const cageMatch = rawText.match(/\b([0-9A-Z]{5})\b/);
+  if (cageMatch && !rawText.toLowerCase().includes('niin')) {
+    result['cage'] = cageMatch[1];
+  }
+  
+  const locationMatch = rawText.match(/(?:Loc|Location)[:\s]*([A-Z0-9\-]+)/i);
+  if (locationMatch) {
+    result['location'] = locationMatch[1];
+  }
+  
+  return result;
+}
+
 function detectTableFromPDF(text: string): { headers: string[]; rows: Record<string, any>[] } {
+  console.log('[PDF Parse] Starting table detection...');
+  console.log(`[PDF Parse] Raw text length: ${text.length} characters`);
+  console.log('[PDF Parse] Raw text preview (first 500 chars):');
+  console.log(text.substring(0, 500));
+  
+  const patternResult = tryParseWithKnownPatterns(text);
+  if (patternResult.headers.length > 0 && patternResult.rows.length > 0) {
+    console.log('[PDF Parse] Pattern-based parsing succeeded');
+    return patternResult;
+  }
+  
+  console.log('[PDF Parse] Falling back to delimiter-based parsing...');
+  
   const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
   
   if (lines.length < 2) {
+    console.log('[PDF Parse] Insufficient lines for table detection');
+    
+    if (lines.length === 1) {
+      return {
+        headers: ['raw_content'],
+        rows: [{ raw_content: lines[0], _raw_line: lines[0] }]
+      };
+    }
     return { headers: [], rows: [] };
   }
   
@@ -213,12 +456,32 @@ function detectTableFromPDF(text: string): { headers: string[]; rows: Record<str
     }
   }
   
+  console.log(`[PDF Parse] Best delimiter detected, max columns: ${maxColumns}`);
+  
   const splitLine = (line: string): string[] => {
     return line.split(bestDelimiter as any).map((v: string) => v.trim());
   };
   
   const headerLine = lines[0];
-  const headers = splitLine(headerLine);
+  let headers = splitLine(headerLine);
+  
+  if (headers.length <= 1 && text.length > 0) {
+    console.log('[PDF Parse] Could not parse proper columns, storing as raw content');
+    headers = ['raw_content'];
+    const rows: Record<string, any>[] = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.length > 0) {
+        rows.push({ 
+          raw_content: line,
+          _raw_line: line
+        });
+      }
+    }
+    
+    return { headers, rows };
+  }
   
   const rows: Record<string, any>[] = [];
   for (let i = 1; i < lines.length; i++) {
@@ -229,8 +492,11 @@ function detectTableFromPDF(text: string): { headers: string[]; rows: Record<str
     for (let j = 0; j < headers.length; j++) {
       row[headers[j]] = values[j] || '';
     }
+    row['_raw_line'] = lines[i];
     rows.push(row);
   }
+  
+  console.log(`[PDF Parse] Delimiter parsing complete: ${headers.length} headers, ${rows.length} rows`);
   
   return { headers, rows };
 }
@@ -249,6 +515,15 @@ export async function parsePDF(
     const parser = new PDFParse({ data: buffer });
     const result = await parser.getText();
     const text = result.text;
+    
+    console.log(`[FileIngestion] PDF parsing started for: ${filename}`);
+    console.log(`[FileIngestion] Extracted text length: ${text?.length || 0} characters`);
+    
+    if (text && text.trim().length > 0) {
+      console.log('[FileIngestion] ========== RAW PDF EXTRACTED TEXT ==========');
+      console.log(text);
+      console.log('[FileIngestion] ========== END RAW PDF TEXT ==========');
+    }
     
     if (!text || text.trim().length === 0) {
       errors.push({
@@ -274,17 +549,76 @@ export async function parsePDF(
       level: 'warning',
       scope: 'file',
       target: 'format',
-      message: 'PDF parsing uses heuristic table detection. Please verify extracted data.',
+      message: 'PDF table extraction has limited accuracy. For best results, please export your data as CSV from the source system.',
+    });
+    
+    warnings.push({
+      level: 'warning',
+      scope: 'file',
+      target: 'format',
+      message: 'PDF parsing uses heuristic table detection. Column boundaries may not be preserved accurately.',
     });
     
     const { headers, rows } = detectTableFromPDF(text);
     
+    console.log(`[FileIngestion] Detected ${headers.length} headers: ${headers.slice(0, 10).join(', ')}${headers.length > 10 ? '...' : ''}`);
+    console.log(`[FileIngestion] Detected ${rows.length} data rows`);
+    
     if (headers.length === 0) {
+      if (text.trim().length > 0) {
+        warnings.push({
+          level: 'warning',
+          scope: 'file',
+          target: 'structure',
+          message: 'Could not detect table structure. Raw extracted text is stored for manual review.',
+        });
+        
+        const fallbackRows: Record<string, any>[] = [{
+          raw_content: text.trim(),
+          _raw_line: 'Full PDF text content',
+        }];
+        
+        const fallbackHeaders = ['raw_content'];
+        const validationResult = validateInventoryData(fallbackRows, fallbackHeaders);
+        
+        errors.push(...validationResult.errors);
+        warnings.push(...validationResult.warnings);
+        
+        const session: UploadSession = {
+          uploadId,
+          siteId,
+          userId,
+          filename,
+          fileType: 'pdf',
+          parsedRows: validationResult.rows,
+          columns: validationResult.columns,
+          errors,
+          warnings,
+          canCommit: false,
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+        };
+        
+        uploadSessions.set(uploadId, session);
+        console.log(`[FileIngestion] PDF fallback session created: ${uploadId}, storing raw text (${text.length} chars)`);
+        
+        return {
+          uploadId,
+          preview: validationResult.rows.slice(0, 100),
+          columns: validationResult.columns,
+          errors,
+          warnings,
+          canCommit: false,
+          totalRows: validationResult.rows.length,
+          filename,
+        };
+      }
+      
       errors.push({
         level: 'error',
         scope: 'file',
         target: 'structure',
-        message: 'Could not detect table structure in PDF. No tabular data with recognizable headers was found. Consider using CSV format instead.',
+        message: 'Could not detect table structure in PDF. No tabular data with recognizable headers was found. Please export your data as CSV from the source system.',
       });
       
       return {
@@ -319,10 +653,23 @@ export async function parsePDF(
       };
     }
     
+    for (const row of rows) {
+      if (!row['raw_content']) {
+        row['raw_content'] = row['_raw_line'] || '';
+      }
+    }
+    
     const validationResult = validateInventoryData(rows, headers);
     
     errors.push(...validationResult.errors);
     warnings.push(...validationResult.warnings);
+    
+    warnings.push({
+      level: 'warning',
+      scope: 'file',
+      target: 'commit',
+      message: 'PDF data cannot be committed directly due to parsing limitations. Please verify the extracted data and consider re-exporting as CSV.',
+    });
     
     const session: UploadSession = {
       uploadId,
@@ -334,13 +681,13 @@ export async function parsePDF(
       columns: validationResult.columns,
       errors,
       warnings,
-      canCommit: validationResult.canCommit && errors.filter(e => e.scope !== 'row').length === 0,
+      canCommit: false,
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + SESSION_TTL_MS),
     };
     
     uploadSessions.set(uploadId, session);
-    console.log(`[FileIngestion] Created PDF session: ${uploadId}, rows: ${validationResult.rows.length}`);
+    console.log(`[FileIngestion] Created PDF session: ${uploadId}, rows: ${validationResult.rows.length} (canCommit: false - PDF data requires manual verification)`);
     
     return {
       uploadId,
@@ -348,7 +695,7 @@ export async function parsePDF(
       columns: validationResult.columns,
       errors,
       warnings,
-      canCommit: session.canCommit,
+      canCommit: false,
       totalRows: validationResult.rows.length,
       filename,
     };

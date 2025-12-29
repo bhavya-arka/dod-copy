@@ -26,6 +26,19 @@ export interface ParsedInventoryRow {
   serial_no: string | null;
   lin_esd: string | null;
   last_moved: string | null;
+  storage_facility: string | null;
+  ship: string | null;
+  ship_class: string | null;
+  program_code: string | null;
+  authority: string | null;
+  work_item: string | null;
+  cage: string | null;
+  manufacturer: string | null;
+  mfg_date: string | null;
+  contract_no: string | null;
+  asset_type: string | null;
+  lot: string | null;
+  raw_content: string | null;
   _rawRow: Record<string, any>;
   _rowIndex: number;
 }
@@ -46,39 +59,62 @@ export interface ValidationResult {
 }
 
 const COLUMN_MAPPINGS: Record<string, string[]> = {
-  requisition_no: ['o', 'requisition_no', 'requisition', 'item_id', 'req_no', 'order_id', 'id', 'req', 'reqn', 'document_no', 'document_number'],
+  requisition_no: ['o', 'requisition_no', 'requisition', 'requisition no', 'item_id', 'req_no', 'order_id', 'id', 'req', 'reqn', 'document_no', 'document_number'],
   description: ['description', 'desc', 'item_name', 'name', 'item_description', 'nomenclature', 'item_desc', 'item'],
   quantity: ['q', 'quantity', 'qty', 'count', 'units', 'on_hand', 'oh', 'on_hand_qty'],
   length_in: ['l', 'length_in', 'length', 'len', 'length_inches'],
   width_in: ['w', 'width_in', 'width', 'wid', 'width_inches'],
   height_in: ['h', 'height_in', 'height', 'hgt', 'height_inches'],
   weight_lb: ['p', 'weight_lb', 'weight', 'weight_lbs', 'wt', 'mass'],
-  unit_price: ['unit_price', 'price', 'cost', 'value', 'unit_cost', 'extended_price', 'ext_price'],
+  unit_price: ['unit_price', 'price', 'cost', 'value', 'unit_cost', 'extended_price', 'ext_price', 'unit_price_(ska)', 'unit price (ska)', 'russian_price', 'russian price', 'current_value', 'current value'],
   nsn: ['nsn', 'national_stock_number', 'niin_nsn', 'nsn_niin', 'stock_number'],
   fsc: ['fsc', 'federal_supply_class', 'fsc_class'],
   niin: ['niin', 'national_item_identification_number', 'niin_no'],
   condition: ['condition', 'cond', 'condition_code', 'cond_code', 'status'],
   mission_id: ['mission', 'mission_id', 'mission_no', 'project', 'project_id'],
-  serial_no: ['serial_no', 'serial', 'serial_number', 'sn', 's_n', 'ser_no'],
-  lin_esd: ['lin_esd', 'lin', 'esd', 'line_item', 'line_no'],
-  last_moved: ['last_moved', 'last_move', 'move_date', 'last_activity', 'activity_date'],
+  serial_no: ['serial_no', 'serial', 'serial_number', 'sn', 's_n', 'ser_no', 'last_inv', 'last inv'],
+  lin_esd: ['lin_esd', 'lin', 'esd', 'line_item', 'line_no', 'li'],
+  last_moved: ['last_moved', 'last_move', 'move_date', 'last_activity', 'activity_date', 'receipt_date', 'receipt date'],
+  storage_facility: ['storage_facility', 'storage facility', 'facility', 'warehouse', 'site'],
+  ship: ['ship', 'vessel', 'ship_name', 'ship name'],
+  ship_class: ['ship_class', 'ship class', 'vessel_class', 'vessel class'],
+  program_code: ['program_code', 'program code', 'program', 'prog_code', 'prog code'],
+  authority: ['authority', 'auth', 'authorization'],
+  work_item: ['work_item', 'work item', 'work_order', 'work order', 'wo'],
+  cage: ['cage', 'cage_code', 'cage code', 'vendor_cage', 'vendor cage'],
+  manufacturer: ['manufacturer', 'mfr', 'mfg', 'vendor', 'supplier'],
+  mfg_date: ['mfg_date', 'mfg date', 'manufacture_date', 'manufacture date', 'mfr_date', 'manufactured'],
+  contract_no: ['contract_no', 'contract no', 'contract', 'contract_number', 'contract number'],
+  asset_type: ['asset_type', 'asset type', 'type', 'item_type', 'item type'],
+  lot: ['lot', 'lot_no', 'lot no', 'lot_number', 'lot number', 'batch'],
+  raw_content: ['raw_content', 'raw', '_raw_line', 'raw_line', 'raw_data'],
 };
 
-// No fields are strictly required - we'll default quantity to 1 and generate IDs if missing
-// Only completely empty rows are skipped
 const REQUIRED_FIELDS: string[] = [];
 const RECOMMENDED_FIELDS = ['requisition_no', 'description', 'quantity', 'weight_lb', 'length_in', 'width_in', 'height_in'];
 
 const NSN_REGEX = /^\d{4}-\d{2}-\d{3}-\d{4}$/;
 
 export function mapColumnName(originalHeader: string): string | null {
-  const normalized = originalHeader.toLowerCase().trim().replace(/[\s\-_]+/g, '_');
+  const normalized = originalHeader.toLowerCase().trim().replace(/[\s\-_]+/g, '_').replace(/[()]/g, '');
   
   for (const [mappedName, variations] of Object.entries(COLUMN_MAPPINGS)) {
-    if (variations.includes(normalized)) {
-      return mappedName;
+    for (const variation of variations) {
+      const normalizedVariation = variation.toLowerCase().replace(/[\s\-_]+/g, '_').replace(/[()]/g, '');
+      if (normalized === normalizedVariation) {
+        return mappedName;
+      }
     }
   }
+  
+  for (const [mappedName, variations] of Object.entries(COLUMN_MAPPINGS)) {
+    for (const variation of variations) {
+      if (normalized.includes(variation.toLowerCase().replace(/[\s\-_]+/g, '_'))) {
+        return mappedName;
+      }
+    }
+  }
+  
   return null;
 }
 
@@ -160,6 +196,19 @@ export function validateRow(row: Record<string, any>, rowIndex: number, columnMa
   const serial_no = getValue('serial_no');
   const lin_esd = getValue('lin_esd');
   const last_moved = getValue('last_moved');
+  const storage_facility = getValue('storage_facility');
+  const ship = getValue('ship');
+  const ship_class = getValue('ship_class');
+  const program_code = getValue('program_code');
+  const authority = getValue('authority');
+  const work_item = getValue('work_item');
+  const cage = getValue('cage');
+  const manufacturer = getValue('manufacturer');
+  const mfg_date = getValue('mfg_date');
+  const contract_no = getValue('contract_no');
+  const asset_type = getValue('asset_type');
+  const lot = getValue('lot');
+  const raw_content = getValue('raw_content') || row['raw_content'] || row['_raw_line'];
   
   const parsed: ParsedInventoryRow = {
     requisition_no: requisition_no ? String(requisition_no).trim() : null,
@@ -178,16 +227,27 @@ export function validateRow(row: Record<string, any>, rowIndex: number, columnMa
     serial_no: serial_no ? String(serial_no).trim() : null,
     lin_esd: lin_esd ? String(lin_esd).trim() : null,
     last_moved: last_moved ? String(last_moved).trim() : null,
+    storage_facility: storage_facility ? String(storage_facility).trim() : null,
+    ship: ship ? String(ship).trim() : null,
+    ship_class: ship_class ? String(ship_class).trim() : null,
+    program_code: program_code ? String(program_code).trim() : null,
+    authority: authority ? String(authority).trim() : null,
+    work_item: work_item ? String(work_item).trim() : null,
+    cage: cage ? String(cage).trim() : null,
+    manufacturer: manufacturer ? String(manufacturer).trim() : null,
+    mfg_date: mfg_date ? String(mfg_date).trim() : null,
+    contract_no: contract_no ? String(contract_no).trim() : null,
+    asset_type: asset_type ? String(asset_type).trim() : null,
+    lot: lot ? String(lot).trim() : null,
+    raw_content: raw_content ? String(raw_content).trim() : null,
     _rawRow: row,
     _rowIndex: rowIndex,
   };
   
-  // Default quantity to 1 if missing
   if (parsed.quantity === null) {
     parsed.quantity = 1;
   }
   
-  // Only validate data format - negative values are still errors
   if (parsed.quantity < 0) {
     errors.push({
       level: 'error',
@@ -198,7 +258,6 @@ export function validateRow(row: Record<string, any>, rowIndex: number, columnMa
     });
   }
   
-  // Weight validation - only error on invalid data, not missing
   if (parsed.weight_lb !== null && parsed.weight_lb < 0) {
     errors.push({
       level: 'error',
@@ -306,12 +365,21 @@ export function validateColumns(headers: string[]): {
   }
   
   const unmappedColumns = columns.filter(c => !c.isRecognized);
-  for (const col of unmappedColumns) {
+  if (unmappedColumns.length > 0 && unmappedColumns.length <= 10) {
+    for (const col of unmappedColumns) {
+      warnings.push({
+        level: 'warning',
+        scope: 'column',
+        target: col.originalName,
+        message: `Unrecognized column: "${col.originalName}" - will be stored in raw data`,
+      });
+    }
+  } else if (unmappedColumns.length > 10) {
     warnings.push({
       level: 'warning',
       scope: 'column',
-      target: col.originalName,
-      message: `Unrecognized column: "${col.originalName}" - will be ignored`,
+      target: 'columns',
+      message: `${unmappedColumns.length} columns could not be mapped to known fields - data will be stored in raw format`,
     });
   }
   
@@ -345,7 +413,6 @@ export function validateInventoryData(
     allWarnings.push(...warnings);
   }
   
-  // Count missing data for summary warnings
   const missingRequisitionCount = parsedRows.filter(r => !r.requisition_no).length;
   const missingDescriptionCount = parsedRows.filter(r => !r.description).length;
   const missingWeightCount = parsedRows.filter(r => r.weight_lb === null).length;
@@ -353,7 +420,8 @@ export function validateInventoryData(
     r.length_in === null || r.width_in === null || r.height_in === null
   ).length;
   
-  // Add file-level summary warnings (not per-row)
+  const hasRawContent = parsedRows.filter(r => r.raw_content).length;
+  
   if (missingRequisitionCount > 0) {
     allWarnings.push({
       level: 'warning',
@@ -390,11 +458,19 @@ export function validateInventoryData(
     });
   }
   
+  if (hasRawContent > 0 && hasRawContent === parsedRows.length) {
+    allWarnings.push({
+      level: 'warning',
+      scope: 'file',
+      target: 'parsing',
+      message: `All ${hasRawContent} rows contain raw unparsed content - manual column mapping may be needed`,
+    });
+  }
+  
   const hasFileErrors = allErrors.some(e => e.scope === 'file');
   const hasDataErrors = allErrors.some(e => e.scope === 'row' && e.target !== 'empty_row');
   
-  // Allow commit as long as there are valid rows and no critical errors
-  const validRowCount = parsedRows.filter(r => r.description || r.requisition_no || r.nsn).length;
+  const validRowCount = parsedRows.filter(r => r.description || r.requisition_no || r.nsn || r.raw_content).length;
   const canCommit = !hasFileErrors && validRowCount > 0;
   
   return {
