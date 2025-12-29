@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
 import { PDFParse } from 'pdf-parse';
+import * as XLSX from 'xlsx';
 import { 
   validateInventoryData, 
   ValidationResult, 
@@ -13,7 +14,7 @@ export interface UploadSession {
   siteId: number;
   userId: number;
   filename: string;
-  fileType: 'csv' | 'pdf';
+  fileType: 'csv' | 'pdf' | 'xlsx';
   parsedRows: ParsedInventoryRow[];
   columns: ColumnSpec[];
   errors: ValidationMessage[];
@@ -187,238 +188,158 @@ export async function parseCSV(
   }
 }
 
-const BATS_HEADER_ROW1_PATTERNS = [
-  'storage facility', 'ship', 'ship class', 'program code', 'requisition no', 
-  'authority', 'work item', 'mati ctr', 'hmhc', 'sacc', 'item acct', 
-  'audit no', 'ship ind', 'ship avail', 'qty', 'description'
-];
+const BATS_HEADER_ALIASES: Record<string, string[]> = {
+  'storage_facility': ['storage facility', 'storage_facility', 'facility', 'site'],
+  'ship': ['ship', 'vessel', 'ship_name'],
+  'ship_class': ['ship class', 'ship_class', 'vessel_class'],
+  'program_code': ['program code', 'program_code', 'program', 'prog_code'],
+  'requisition_no': ['requisition no', 'requisition no.', 'requisition_no', 'requisition', 'req_no', 'reqn'],
+  'authority': ['authority', 'auth'],
+  'work_item': ['work item', 'work_item', 'work_order', 'wo'],
+  'li': ['li', 'line_item', 'line item'],
+  'matl_ctrl': ['matl ctrl', 'matl_ctrl', 'matl ctr', 'material_control'],
+  'hmic': ['hmic', 'hmhc'],
+  'smcc': ['smcc', 'sacc'],
+  'item_audit': ['item audit?', 'item_audit', 'item acct', 'item_acct', 'audit'],
+  'audit_no': ['audit no', 'audit_no', 'audit_number'],
+  'ship_ind': ['ship ind', 'ship_ind', 'ship_indicator'],
+  'ship_avail': ['ship avail', 'ship_avail', 'ship avail.', 'ship_availability'],
+  'qty': ['qty', 'quantity', 'count', 'on_hand'],
+  'description': ['description', 'desc', 'nomenclature', 'item_description', 'item_name'],
+  'cage': ['cage', 'cage_code', 'vendor_cage'],
+  'manufacturer': ['manufacturer', 'mfr', 'mfg', 'vendor'],
+  'mfg_date': ['mfg. date', 'mfg_date', 'mfg date', 'manufacture_date'],
+  'contract_no': ['contract no', 'contract_no', 'contract no.', 'contract'],
+  'iuid': ['iuid', 'unique_id'],
+  'ui': ['ui', 'unit_of_issue', 'unit of issue', 'uom'],
+  'unit_price': ['unit price', 'unit_price', 'unit price (mac)', 'unit_price_(mac)', 'price', 'cost'],
+  'receipt_price': ['receipt price', 'receipt_price'],
+  'receipt_date': ['receipt date', 'receipt_date', 'received_date', 'received'],
+  'location': ['location', 'loc', 'bin', 'bin_location', 'storage_location'],
+  'lot': ['lot', 'lot no', 'lot_no', 'lot_number', 'batch'],
+  'serial_no': ['serial no', 'serial_no', 'serial', 'serial_number', 'sn'],
+  'barcode': ['barcode', 'bar_code', 'upc'],
+  'inventory_type': ['inventory type', 'inventory_type', 'inv_type', 'type'],
+  'mat_disposition': ['mat. disposition', 'mat_disposition', 'material_disposition', 'disposition'],
+  'condition_code': ['condition code', 'condition_code', 'condition', 'cond_code', 'cond'],
+  'asset_type': ['asset type', 'asset_type', 'type'],
+  'exp_date': ['exp. date', 'exp_date', 'expiration_date', 'expiry'],
+  'ext_date': ['ext. date', 'ext_date', 'extension_date'],
+  'insp_date': ['insp. date', 'insp_date', 'inspection_date'],
+  'last_audit_date': ['last audit date', 'last_audit_date'],
+  'user_id': ['user id', 'user_id', 'user'],
+  'remarks': ['remarks', 'notes', 'comments'],
+  'in_service_date': ['in service date', 'in_service_date', 'service_date'],
+  'warranty_item': ['warranty item', 'warranty_item', 'warranty'],
+  'nsn': ['nsn', 'national_stock_number', 'stock_number'],
+  'niin': ['niin', 'national_item_identification_number'],
+  'fsc': ['fsc', 'federal_supply_class'],
+};
 
-const BATS_HEADER_ROW2_PATTERNS = [
-  'cage', 'manufacturer', 'mfg date', 'contract no', 'ubi', 'ui', 
-  'unit price', 'russian price', 'receipt date', 'location', 'last inv', 
-  'serial no', 'inventory type', 'mgmt', 'shipment', 'condition code', 
-  'asset type', 'current value', 'lot', 'tax service'
-];
-
-const ALL_KNOWN_HEADERS = [
-  'storage_facility', 'storage facility', 'ship', 'ship_class', 'ship class',
-  'program_code', 'program code', 'requisition_no', 'requisition no', 'requisition',
-  'authority', 'work_item', 'work item', 'li', 'mati_ctr', 'mati ctr',
-  'hmhc', 'sacc', 'item_acct', 'item acct', 'audit_no', 'audit no',
-  'ship_ind', 'ship ind', 'ship_avail', 'ship avail', 'qty', 'quantity',
-  'description', 'nomenclature', 'cage', 'manufacturer', 'mfg_date', 'mfg date',
-  'contract_no', 'contract no', 'ubi', 'ui', 'unit_price', 'unit price',
-  'unit_price_(ska)', 'unit price (ska)', 'russian_price', 'russian price',
-  'receipt_date', 'receipt date', 'location', 'last_inv', 'last inv',
-  'serial_no', 'serial no', 'serial', 'inventory_type', 'inventory type',
-  'mgmt', 'shipment', 'condition_code', 'condition code', 'condition',
-  'asset_type', 'asset type', 'current_value', 'current value', 'lot',
-  'tax_service', 'tax service', 'tax_service_note', 'tax service note',
-  'nsn', 'niin', 'fsc', 'weight', 'weight_lb', 'length', 'width', 'height'
-];
-
-function isHeaderLine(line: string): boolean {
-  const lowerLine = line.toLowerCase();
-  let matchCount = 0;
-  
-  for (const pattern of BATS_HEADER_ROW1_PATTERNS) {
-    if (lowerLine.includes(pattern)) matchCount++;
-  }
-  for (const pattern of BATS_HEADER_ROW2_PATTERNS) {
-    if (lowerLine.includes(pattern)) matchCount++;
-  }
-  
-  return matchCount >= 3;
+function normalizeHeader(header: string): string {
+  return header.toLowerCase().trim().replace(/[\s\.\-]+/g, '_').replace(/[()]/g, '').replace(/__+/g, '_');
 }
 
-function extractHeadersFromMultipleRows(lines: string[]): { headers: string[]; dataStartIndex: number } {
-  console.log('[PDF Parse] Analyzing lines for multi-row headers...');
+function mapBATSHeader(rawHeader: string): string {
+  const normalized = normalizeHeader(rawHeader);
+  const lowerHeader = rawHeader.toLowerCase().trim();
   
-  const headerRows: string[] = [];
-  let dataStartIndex = 0;
-  
-  for (let i = 0; i < Math.min(10, lines.length); i++) {
-    if (isHeaderLine(lines[i])) {
-      headerRows.push(lines[i]);
-      dataStartIndex = i + 1;
-    } else if (headerRows.length > 0) {
-      break;
-    }
-  }
-  
-  if (headerRows.length === 0) {
-    return { headers: [], dataStartIndex: 0 };
-  }
-  
-  console.log(`[PDF Parse] Found ${headerRows.length} header row(s)`);
-  
-  const combinedHeaders = headerRows.join(' ');
-  const headers = extractHeaderTokens(combinedHeaders);
-  
-  console.log(`[PDF Parse] Extracted headers: ${headers.join(', ')}`);
-  
-  return { headers, dataStartIndex };
-}
-
-function extractHeaderTokens(headerText: string): string[] {
-  const headers: string[] = [];
-  const lowerText = headerText.toLowerCase();
-  
-  const foundPositions: { header: string; pos: number }[] = [];
-  
-  for (const knownHeader of ALL_KNOWN_HEADERS) {
-    const pos = lowerText.indexOf(knownHeader.toLowerCase());
-    if (pos !== -1) {
-      const alreadyFound = foundPositions.some(f => 
-        Math.abs(f.pos - pos) < 3 && f.header.length >= knownHeader.length
-      );
-      if (!alreadyFound) {
-        foundPositions.push({ header: knownHeader, pos });
+  for (const [mappedName, aliases] of Object.entries(BATS_HEADER_ALIASES)) {
+    for (const alias of aliases) {
+      if (lowerHeader === alias || normalized === normalizeHeader(alias)) {
+        return mappedName;
       }
     }
   }
   
-  foundPositions.sort((a, b) => a.pos - b.pos);
-  
-  const uniqueHeaders = new Set<string>();
-  for (const { header } of foundPositions) {
-    const normalized = header.toLowerCase().replace(/[\s\-]+/g, '_').replace(/[()]/g, '');
-    if (!uniqueHeaders.has(normalized)) {
-      uniqueHeaders.add(normalized);
-      headers.push(header);
+  for (const [mappedName, aliases] of Object.entries(BATS_HEADER_ALIASES)) {
+    for (const alias of aliases) {
+      if (lowerHeader.includes(alias) || normalized.includes(normalizeHeader(alias))) {
+        return mappedName;
+      }
     }
   }
   
-  return headers;
+  return normalized;
 }
 
-function tryParseWithKnownPatterns(text: string): { headers: string[]; rows: Record<string, any>[] } {
-  console.log('[PDF Parse] Attempting pattern-based parsing for BATS-style PDF...');
+function parseTabDelimitedData(text: string): { headers: string[]; rows: Record<string, any>[] } {
+  console.log('[PDF Parse] Parsing tab-delimited BATS data...');
   
-  const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  const lines = text.split('\n').filter(line => line.trim().length > 0);
   
-  console.log(`[PDF Parse] Total lines in PDF: ${lines.length}`);
-  console.log('[PDF Parse] First 5 lines:');
-  for (let i = 0; i < Math.min(5, lines.length); i++) {
-    console.log(`  Line ${i}: "${lines[i].substring(0, 100)}${lines[i].length > 100 ? '...' : ''}"`);
-  }
-  
-  const { headers, dataStartIndex } = extractHeadersFromMultipleRows(lines);
-  
-  if (headers.length === 0) {
-    console.log('[PDF Parse] No BATS headers detected, returning empty');
+  if (lines.length < 2) {
+    console.log('[PDF Parse] Insufficient lines for tab-delimited parsing');
     return { headers: [], rows: [] };
   }
   
-  const rows: Record<string, any>[] = [];
-  let currentRow: Record<string, any> = {};
-  let rawContent = '';
+  const headerLine = lines[0];
+  const rawHeaders = headerLine.split('\t').map(h => h.trim());
   
-  for (let i = dataStartIndex; i < lines.length; i++) {
+  console.log(`[PDF Parse] Found ${rawHeaders.length} raw headers`);
+  console.log(`[PDF Parse] First 10 headers: ${rawHeaders.slice(0, 10).join(', ')}`);
+  
+  const headers = rawHeaders.map(h => mapBATSHeader(h));
+  
+  console.log(`[PDF Parse] Mapped headers: ${headers.slice(0, 10).join(', ')}`);
+  
+  const rows: Record<string, any>[] = [];
+  
+  for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
     
-    if (isHeaderLine(line)) {
+    if (line.toLowerCase().includes('storage facility') && line.toLowerCase().includes('ship')) {
       continue;
     }
     
-    const looksLikeNewRecord = /^[A-Z0-9]{2,}[\s\-]/.test(line) || 
-                               /^\d{4}[\-\/]/.test(line) ||
-                               /^[A-Z]{2,}\s+\d/.test(line);
+    const values = line.split('\t').map(v => v.trim());
     
-    if (looksLikeNewRecord && rawContent.length > 0) {
-      currentRow['raw_content'] = rawContent.trim();
-      currentRow['_raw_line'] = rawContent.trim();
+    if (values.length === 0 || (values.length === 1 && values[0] === '')) {
+      continue;
+    }
+    
+    const row: Record<string, any> = {};
+    
+    for (let j = 0; j < headers.length && j < values.length; j++) {
+      const header = headers[j];
+      const value = values[j];
       
-      const extractedValues = extractValuesFromRaw(rawContent, headers);
-      for (const [key, value] of Object.entries(extractedValues)) {
-        currentRow[key] = value;
+      if (value && value !== '' && value !== 'N' && value !== 'null') {
+        row[header] = value;
+      } else if (value === 'N') {
+        row[header] = 'N';
+      } else {
+        row[header] = null;
       }
-      
-      if (Object.keys(currentRow).length > 1) {
-        rows.push(currentRow);
-      }
-      currentRow = {};
-      rawContent = line + ' ';
-    } else {
-      rawContent += line + ' ';
+    }
+    
+    row['_raw_line'] = line;
+    row['raw_content'] = line;
+    
+    if (Object.keys(row).length > 2) {
+      rows.push(row);
     }
   }
   
-  if (rawContent.trim().length > 0) {
-    currentRow['raw_content'] = rawContent.trim();
-    currentRow['_raw_line'] = rawContent.trim();
-    
-    const extractedValues = extractValuesFromRaw(rawContent, headers);
-    for (const [key, value] of Object.entries(extractedValues)) {
-      currentRow[key] = value;
-    }
-    
-    if (Object.keys(currentRow).length > 1) {
-      rows.push(currentRow);
-    }
-  }
-  
-  console.log(`[PDF Parse] Extracted ${rows.length} data rows using pattern matching`);
+  console.log(`[PDF Parse] Parsed ${rows.length} data rows from tab-delimited content`);
   
   if (rows.length > 0) {
-    console.log(`[PDF Parse] Sample first row keys: ${Object.keys(rows[0]).join(', ')}`);
+    console.log(`[PDF Parse] Sample row keys: ${Object.keys(rows[0]).slice(0, 15).join(', ')}`);
   }
   
   return { headers, rows };
 }
 
-function extractValuesFromRaw(rawText: string, headers: string[]): Record<string, string> {
-  const result: Record<string, string> = {};
-  
-  const qtyMatch = rawText.match(/\bQty[:\s]*(\d+)/i) || rawText.match(/\b(\d+)\s*(EA|PC|SET|LOT|BX)\b/i);
-  if (qtyMatch) {
-    result['qty'] = qtyMatch[1];
-  }
-  
-  const priceMatch = rawText.match(/\$[\d,]+\.?\d*/);
-  if (priceMatch) {
-    result['unit_price'] = priceMatch[0].replace('$', '').replace(',', '');
-  }
-  
-  const conditionMatch = rawText.match(/\b(Condition|Cond)[:\s]*([A-Z])\b/i) || 
-                         rawText.match(/\b([ABCDEF])\s*(?:condition|cond)?\b/i);
-  if (conditionMatch) {
-    result['condition_code'] = conditionMatch[2] || conditionMatch[1];
-  }
-  
-  const serialMatch = rawText.match(/Serial[:\s#]*([A-Z0-9\-]+)/i);
-  if (serialMatch) {
-    result['serial_no'] = serialMatch[1];
-  }
-  
-  const dateMatch = rawText.match(/\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/);
-  if (dateMatch) {
-    result['receipt_date'] = dateMatch[1];
-  }
-  
-  const cageMatch = rawText.match(/\b([0-9A-Z]{5})\b/);
-  if (cageMatch && !rawText.toLowerCase().includes('niin')) {
-    result['cage'] = cageMatch[1];
-  }
-  
-  const locationMatch = rawText.match(/(?:Loc|Location)[:\s]*([A-Z0-9\-]+)/i);
-  if (locationMatch) {
-    result['location'] = locationMatch[1];
-  }
-  
-  return result;
-}
-
 function detectTableFromPDF(text: string): { headers: string[]; rows: Record<string, any>[] } {
   console.log('[PDF Parse] Starting table detection...');
   console.log(`[PDF Parse] Raw text length: ${text.length} characters`);
-  console.log('[PDF Parse] Raw text preview (first 500 chars):');
-  console.log(text.substring(0, 500));
   
-  const patternResult = tryParseWithKnownPatterns(text);
-  if (patternResult.headers.length > 0 && patternResult.rows.length > 0) {
-    console.log('[PDF Parse] Pattern-based parsing succeeded');
-    return patternResult;
+  if (text.includes('\t')) {
+    console.log('[PDF Parse] Detected tab characters - using tab-delimited parser');
+    const result = parseTabDelimitedData(text);
+    if (result.headers.length > 0 && result.rows.length > 0) {
+      return result;
+    }
   }
   
   console.log('[PDF Parse] Falling back to delimiter-based parsing...');
@@ -427,17 +348,10 @@ function detectTableFromPDF(text: string): { headers: string[]; rows: Record<str
   
   if (lines.length < 2) {
     console.log('[PDF Parse] Insufficient lines for table detection');
-    
-    if (lines.length === 1) {
-      return {
-        headers: ['raw_content'],
-        rows: [{ raw_content: lines[0], _raw_line: lines[0] }]
-      };
-    }
     return { headers: [], rows: [] };
   }
   
-  const potentialDelimiters = ['\t', '|', '  ', ','];
+  const potentialDelimiters = ['|', '  ', ','];
   let bestDelimiter: string | RegExp = ',';
   let maxColumns = 0;
   
@@ -463,7 +377,7 @@ function detectTableFromPDF(text: string): { headers: string[]; rows: Record<str
   };
   
   const headerLine = lines[0];
-  let headers = splitLine(headerLine);
+  let headers = splitLine(headerLine).map(h => mapBATSHeader(h));
   
   if (headers.length <= 1 && text.length > 0) {
     console.log('[PDF Parse] Could not parse proper columns, storing as raw content');
@@ -519,12 +433,6 @@ export async function parsePDF(
     console.log(`[FileIngestion] PDF parsing started for: ${filename}`);
     console.log(`[FileIngestion] Extracted text length: ${text?.length || 0} characters`);
     
-    if (text && text.trim().length > 0) {
-      console.log('[FileIngestion] ========== RAW PDF EXTRACTED TEXT ==========');
-      console.log(text);
-      console.log('[FileIngestion] ========== END RAW PDF TEXT ==========');
-    }
-    
     if (!text || text.trim().length === 0) {
       errors.push({
         level: 'error',
@@ -552,73 +460,17 @@ export async function parsePDF(
       message: 'PDF table extraction has limited accuracy. For best results, please export your data as CSV from the source system.',
     });
     
-    warnings.push({
-      level: 'warning',
-      scope: 'file',
-      target: 'format',
-      message: 'PDF parsing uses heuristic table detection. Column boundaries may not be preserved accurately.',
-    });
-    
     const { headers, rows } = detectTableFromPDF(text);
     
     console.log(`[FileIngestion] Detected ${headers.length} headers: ${headers.slice(0, 10).join(', ')}${headers.length > 10 ? '...' : ''}`);
     console.log(`[FileIngestion] Detected ${rows.length} data rows`);
     
-    if (headers.length === 0) {
-      if (text.trim().length > 0) {
-        warnings.push({
-          level: 'warning',
-          scope: 'file',
-          target: 'structure',
-          message: 'Could not detect table structure. Raw extracted text is stored for manual review.',
-        });
-        
-        const fallbackRows: Record<string, any>[] = [{
-          raw_content: text.trim(),
-          _raw_line: 'Full PDF text content',
-        }];
-        
-        const fallbackHeaders = ['raw_content'];
-        const validationResult = validateInventoryData(fallbackRows, fallbackHeaders);
-        
-        errors.push(...validationResult.errors);
-        warnings.push(...validationResult.warnings);
-        
-        const session: UploadSession = {
-          uploadId,
-          siteId,
-          userId,
-          filename,
-          fileType: 'pdf',
-          parsedRows: validationResult.rows,
-          columns: validationResult.columns,
-          errors,
-          warnings,
-          canCommit: false,
-          createdAt: new Date(),
-          expiresAt: new Date(Date.now() + SESSION_TTL_MS),
-        };
-        
-        uploadSessions.set(uploadId, session);
-        console.log(`[FileIngestion] PDF fallback session created: ${uploadId}, storing raw text (${text.length} chars)`);
-        
-        return {
-          uploadId,
-          preview: validationResult.rows.slice(0, 100),
-          columns: validationResult.columns,
-          errors,
-          warnings,
-          canCommit: false,
-          totalRows: validationResult.rows.length,
-          filename,
-        };
-      }
-      
+    if (headers.length === 0 || rows.length === 0) {
       errors.push({
         level: 'error',
         scope: 'file',
         target: 'structure',
-        message: 'Could not detect table structure in PDF. No tabular data with recognizable headers was found. Please export your data as CSV from the source system.',
+        message: 'Could not detect table structure in PDF.',
       });
       
       return {
@@ -631,45 +483,12 @@ export async function parsePDF(
         totalRows: 0,
         filename,
       };
-    }
-    
-    if (rows.length === 0) {
-      errors.push({
-        level: 'error',
-        scope: 'file',
-        target: 'data',
-        message: 'PDF contains headers but no data rows were detected. Please verify the PDF contains tabular inventory data.',
-      });
-      
-      return {
-        uploadId,
-        preview: [],
-        columns: [],
-        errors,
-        warnings,
-        canCommit: false,
-        totalRows: 0,
-        filename,
-      };
-    }
-    
-    for (const row of rows) {
-      if (!row['raw_content']) {
-        row['raw_content'] = row['_raw_line'] || '';
-      }
     }
     
     const validationResult = validateInventoryData(rows, headers);
     
     errors.push(...validationResult.errors);
     warnings.push(...validationResult.warnings);
-    
-    warnings.push({
-      level: 'warning',
-      scope: 'file',
-      target: 'commit',
-      message: 'PDF data cannot be committed directly due to parsing limitations. Please verify the extracted data and consider re-exporting as CSV.',
-    });
     
     const session: UploadSession = {
       uploadId,
@@ -681,13 +500,13 @@ export async function parsePDF(
       columns: validationResult.columns,
       errors,
       warnings,
-      canCommit: false,
+      canCommit: validationResult.canCommit,
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + SESSION_TTL_MS),
     };
     
     uploadSessions.set(uploadId, session);
-    console.log(`[FileIngestion] Created PDF session: ${uploadId}, rows: ${validationResult.rows.length} (canCommit: false - PDF data requires manual verification)`);
+    console.log(`[FileIngestion] Created PDF session: ${uploadId}, rows: ${validationResult.rows.length}, canCommit: ${validationResult.canCommit}`);
     
     return {
       uploadId,
@@ -695,7 +514,7 @@ export async function parsePDF(
       columns: validationResult.columns,
       errors,
       warnings,
-      canCommit: false,
+      canCommit: validationResult.canCommit,
       totalRows: validationResult.rows.length,
       filename,
     };
@@ -721,6 +540,177 @@ export async function parsePDF(
   }
 }
 
+export async function parseXLSX(
+  buffer: Buffer,
+  filename: string,
+  siteId: number,
+  userId: number
+): Promise<ParseResult> {
+  const uploadId = generateUploadId();
+  const errors: ValidationMessage[] = [];
+  const warnings: ValidationMessage[] = [];
+  
+  try {
+    console.log(`[FileIngestion] XLSX parsing started for: ${filename}`);
+    
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      errors.push({
+        level: 'error',
+        scope: 'file',
+        target: 'content',
+        message: 'XLSX file contains no worksheets.',
+      });
+      
+      return {
+        uploadId,
+        preview: [],
+        columns: [],
+        errors,
+        warnings,
+        canCommit: false,
+        totalRows: 0,
+        filename,
+      };
+    }
+    
+    const worksheet = workbook.Sheets[sheetName];
+    
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+      header: 1,
+      defval: '',
+      blankrows: false,
+    }) as any[][];
+    
+    if (jsonData.length < 2) {
+      errors.push({
+        level: 'error',
+        scope: 'file',
+        target: 'data',
+        message: 'XLSX file contains no data rows.',
+      });
+      
+      return {
+        uploadId,
+        preview: [],
+        columns: [],
+        errors,
+        warnings,
+        canCommit: false,
+        totalRows: 0,
+        filename,
+      };
+    }
+    
+    const rawHeaders = jsonData[0].map(h => String(h || '').trim());
+    const headers = rawHeaders.map(h => mapBATSHeader(h));
+    
+    console.log(`[FileIngestion] XLSX headers: ${headers.slice(0, 10).join(', ')}...`);
+    
+    const rows: Record<string, any>[] = [];
+    
+    for (let i = 1; i < jsonData.length; i++) {
+      const rowData = jsonData[i];
+      const row: Record<string, any> = {};
+      
+      for (let j = 0; j < headers.length; j++) {
+        const header = headers[j];
+        const value = rowData[j];
+        
+        if (value !== undefined && value !== null && value !== '') {
+          row[header] = String(value).trim();
+        } else {
+          row[header] = null;
+        }
+      }
+      
+      row['_raw_line'] = rowData.join('\t');
+      row['raw_content'] = rowData.join('\t');
+      
+      if (Object.keys(row).length > 2) {
+        rows.push(row);
+      }
+    }
+    
+    console.log(`[FileIngestion] XLSX parsed ${rows.length} data rows`);
+    
+    if (rows.length === 0) {
+      errors.push({
+        level: 'error',
+        scope: 'file',
+        target: 'data',
+        message: 'No valid data rows found in XLSX file.',
+      });
+      
+      return {
+        uploadId,
+        preview: [],
+        columns: [],
+        errors,
+        warnings,
+        canCommit: false,
+        totalRows: 0,
+        filename,
+      };
+    }
+    
+    const validationResult = validateInventoryData(rows, headers);
+    
+    errors.push(...validationResult.errors);
+    warnings.push(...validationResult.warnings);
+    
+    const session: UploadSession = {
+      uploadId,
+      siteId,
+      userId,
+      filename,
+      fileType: 'xlsx',
+      parsedRows: validationResult.rows,
+      columns: validationResult.columns,
+      errors,
+      warnings,
+      canCommit: validationResult.canCommit,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+    };
+    
+    uploadSessions.set(uploadId, session);
+    console.log(`[FileIngestion] Created XLSX session: ${uploadId}, rows: ${validationResult.rows.length}, canCommit: ${validationResult.canCommit}`);
+    
+    return {
+      uploadId,
+      preview: validationResult.rows.slice(0, 100),
+      columns: validationResult.columns,
+      errors,
+      warnings,
+      canCommit: validationResult.canCommit,
+      totalRows: validationResult.rows.length,
+      filename,
+    };
+  } catch (error) {
+    console.error('[FileIngestion] XLSX parse error:', error);
+    errors.push({
+      level: 'error',
+      scope: 'file',
+      target: 'parsing',
+      message: `Failed to parse XLSX: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    });
+    
+    return {
+      uploadId,
+      preview: [],
+      columns: [],
+      errors,
+      warnings,
+      canCommit: false,
+      totalRows: 0,
+      filename,
+    };
+  }
+}
+
 export async function parseFile(
   buffer: Buffer,
   filename: string,
@@ -729,48 +719,67 @@ export async function parseFile(
   userId: number
 ): Promise<ParseResult> {
   const errors: ValidationMessage[] = [];
-  const lowerFilename = filename.toLowerCase();
   
-  if (lowerFilename.endsWith('.csv') || mimeType === 'text/csv') {
+  const lowerFilename = filename.toLowerCase();
+  const isPDF = mimeType === 'application/pdf' || lowerFilename.endsWith('.pdf');
+  const isXLSX = mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
+                 lowerFilename.endsWith('.xlsx');
+  const isXLS = mimeType === 'application/vnd.ms-excel' || lowerFilename.endsWith('.xls');
+  const isCSV = mimeType === 'text/csv' || 
+                mimeType === 'application/csv' || 
+                lowerFilename.endsWith('.csv');
+  
+  if (isPDF) {
+    return parsePDF(buffer, filename, siteId, userId);
+  } else if (isXLSX || isXLS) {
+    return parseXLSX(buffer, filename, siteId, userId);
+  } else if (isCSV || mimeType === 'text/plain' || mimeType === 'application/octet-stream') {
     const content = buffer.toString('utf-8');
     return parseCSV(content, filename, siteId, userId);
+  } else {
+    errors.push({
+      level: 'error',
+      scope: 'file',
+      target: 'format',
+      message: `Unsupported file format: ${mimeType}. Please upload a CSV, PDF, XLSX, or XLS file.`,
+    });
+    
+    return {
+      uploadId: generateUploadId(),
+      preview: [],
+      columns: [],
+      errors,
+      warnings: [],
+      canCommit: false,
+      totalRows: 0,
+      filename,
+    };
   }
-  
-  if (lowerFilename.endsWith('.pdf') || mimeType === 'application/pdf') {
-    return parsePDF(buffer, filename, siteId, userId);
-  }
-  
-  errors.push({
-    level: 'error',
-    scope: 'file',
-    target: 'type',
-    message: `Unsupported file type: ${mimeType || 'unknown'}. Only CSV and PDF files are supported.`,
-  });
-  
-  return {
-    uploadId: generateUploadId(),
-    preview: [],
-    columns: [],
-    errors,
-    warnings: [],
-    canCommit: false,
-    totalRows: 0,
-    filename,
-  };
 }
 
-export function getSessionStats(): { activeSessions: number; oldestSession: Date | null } {
-  cleanupExpiredSessions();
-  
+export function getSessionStats(): {
+  activeSessions: number;
+  totalRows: number;
+  oldestSession: Date | null;
+} {
+  const now = Date.now();
+  let totalRows = 0;
   let oldestSession: Date | null = null;
+  let activeSessions = 0;
+  
   for (const session of uploadSessions.values()) {
-    if (!oldestSession || session.createdAt < oldestSession) {
-      oldestSession = session.createdAt;
+    if (session.expiresAt.getTime() >= now) {
+      activeSessions++;
+      totalRows += session.parsedRows.length;
+      if (!oldestSession || session.createdAt < oldestSession) {
+        oldestSession = session.createdAt;
+      }
     }
   }
   
   return {
-    activeSessions: uploadSessions.size,
+    activeSessions,
+    totalRows,
     oldestSession,
   };
 }

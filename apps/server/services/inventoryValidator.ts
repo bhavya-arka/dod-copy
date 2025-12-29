@@ -39,6 +39,30 @@ export interface ParsedInventoryRow {
   asset_type: string | null;
   lot: string | null;
   raw_content: string | null;
+  ui: string | null;
+  location: string | null;
+  inventory_type: string | null;
+  audit_no: string | null;
+  receipt_price: string | null;
+  receipt_date: string | null;
+  barcode: string | null;
+  mat_disposition: string | null;
+  iuid: string | null;
+  li: string | null;
+  matl_ctrl: string | null;
+  hmic: string | null;
+  smcc: string | null;
+  item_audit: string | null;
+  ship_ind: string | null;
+  ship_avail: string | null;
+  exp_date: string | null;
+  ext_date: string | null;
+  insp_date: string | null;
+  last_audit_date: string | null;
+  user_id: string | null;
+  remarks: string | null;
+  in_service_date: string | null;
+  warranty_item: string | null;
   _rawRow: Record<string, any>;
   _rowIndex: number;
 }
@@ -59,48 +83,73 @@ export interface ValidationResult {
 }
 
 const COLUMN_MAPPINGS: Record<string, string[]> = {
-  requisition_no: ['o', 'requisition_no', 'requisition', 'requisition no', 'item_id', 'req_no', 'order_id', 'id', 'req', 'reqn', 'document_no', 'document_number'],
+  requisition_no: ['requisition_no', 'requisition', 'requisition no', 'item_id', 'req_no', 'order_id', 'id', 'req', 'reqn', 'document_no', 'document_number'],
   description: ['description', 'desc', 'item_name', 'name', 'item_description', 'nomenclature', 'item_desc', 'item'],
-  quantity: ['q', 'quantity', 'qty', 'count', 'units', 'on_hand', 'oh', 'on_hand_qty'],
-  length_in: ['l', 'length_in', 'length', 'len', 'length_inches'],
-  width_in: ['w', 'width_in', 'width', 'wid', 'width_inches'],
-  height_in: ['h', 'height_in', 'height', 'hgt', 'height_inches'],
-  weight_lb: ['p', 'weight_lb', 'weight', 'weight_lbs', 'wt', 'mass'],
-  unit_price: ['unit_price', 'price', 'cost', 'value', 'unit_cost', 'extended_price', 'ext_price', 'unit_price_(ska)', 'unit price (ska)', 'russian_price', 'russian price', 'current_value', 'current value'],
+  quantity: ['qty', 'quantity', 'count', 'units', 'on_hand', 'oh', 'on_hand_qty'],
+  length_in: ['length_in', 'length', 'len', 'length_inches'],
+  width_in: ['width_in', 'width', 'wid', 'width_inches'],
+  height_in: ['height_in', 'height', 'hgt', 'height_inches'],
+  weight_lb: ['weight_lb', 'weight', 'weight_lbs', 'wt', 'mass'],
+  unit_price: ['unit_price', 'price', 'cost', 'value', 'unit_cost', 'extended_price', 'ext_price', 'unit_price__mac_', 'unit_price_mac', 'current_value'],
   nsn: ['nsn', 'national_stock_number', 'niin_nsn', 'nsn_niin', 'stock_number'],
   fsc: ['fsc', 'federal_supply_class', 'fsc_class'],
   niin: ['niin', 'national_item_identification_number', 'niin_no'],
   condition: ['condition', 'cond', 'condition_code', 'cond_code', 'status'],
   mission_id: ['mission', 'mission_id', 'mission_no', 'project', 'project_id'],
-  serial_no: ['serial_no', 'serial', 'serial_number', 'sn', 's_n', 'ser_no', 'last_inv', 'last inv'],
+  serial_no: ['serial_no', 'serial', 'serial_number', 'sn', 's_n', 'ser_no'],
   lin_esd: ['lin_esd', 'lin', 'esd', 'line_item', 'line_no', 'li'],
-  last_moved: ['last_moved', 'last_move', 'move_date', 'last_activity', 'activity_date', 'receipt_date', 'receipt date'],
-  storage_facility: ['storage_facility', 'storage facility', 'facility', 'warehouse', 'site'],
-  ship: ['ship', 'vessel', 'ship_name', 'ship name'],
-  ship_class: ['ship_class', 'ship class', 'vessel_class', 'vessel class'],
-  program_code: ['program_code', 'program code', 'program', 'prog_code', 'prog code'],
+  last_moved: ['last_moved', 'last_move', 'move_date', 'last_activity', 'activity_date'],
+  storage_facility: ['storage_facility', 'facility', 'warehouse', 'site'],
+  ship: ['ship', 'vessel', 'ship_name'],
+  ship_class: ['ship_class', 'vessel_class'],
+  program_code: ['program_code', 'program', 'prog_code'],
   authority: ['authority', 'auth', 'authorization'],
-  work_item: ['work_item', 'work item', 'work_order', 'work order', 'wo'],
-  cage: ['cage', 'cage_code', 'cage code', 'vendor_cage', 'vendor cage'],
+  work_item: ['work_item', 'work_order', 'wo'],
+  cage: ['cage', 'cage_code', 'vendor_cage'],
   manufacturer: ['manufacturer', 'mfr', 'mfg', 'vendor', 'supplier'],
-  mfg_date: ['mfg_date', 'mfg date', 'manufacture_date', 'manufacture date', 'mfr_date', 'manufactured'],
-  contract_no: ['contract_no', 'contract no', 'contract', 'contract_number', 'contract number'],
-  asset_type: ['asset_type', 'asset type', 'type', 'item_type', 'item type'],
-  lot: ['lot', 'lot_no', 'lot no', 'lot_number', 'lot number', 'batch'],
+  mfg_date: ['mfg_date', 'manufacture_date', 'mfr_date', 'manufactured'],
+  contract_no: ['contract_no', 'contract', 'contract_number'],
+  asset_type: ['asset_type', 'type', 'item_type'],
+  lot: ['lot', 'lot_no', 'lot_number', 'batch'],
   raw_content: ['raw_content', 'raw', '_raw_line', 'raw_line', 'raw_data'],
+  
+  ui: ['ui', 'unit_of_issue', 'uom', 'unit'],
+  location: ['location', 'loc', 'bin', 'bin_location', 'storage_location'],
+  inventory_type: ['inventory_type', 'inv_type'],
+  audit_no: ['audit_no', 'audit_number'],
+  receipt_price: ['receipt_price', 'received_price'],
+  receipt_date: ['receipt_date', 'received_date', 'received', 'last_inv'],
+  barcode: ['barcode', 'bar_code', 'upc'],
+  mat_disposition: ['mat_disposition', 'material_disposition', 'disposition'],
+  iuid: ['iuid', 'unique_id'],
+  li: ['li'],
+  matl_ctrl: ['matl_ctrl', 'material_control'],
+  hmic: ['hmic', 'hmhc'],
+  smcc: ['smcc', 'sacc'],
+  item_audit: ['item_audit', 'item_acct'],
+  ship_ind: ['ship_ind', 'ship_indicator'],
+  ship_avail: ['ship_avail', 'ship_availability'],
+  exp_date: ['exp_date', 'expiration_date', 'expiry'],
+  ext_date: ['ext_date', 'extension_date'],
+  insp_date: ['insp_date', 'inspection_date'],
+  last_audit_date: ['last_audit_date'],
+  user_id: ['user_id', 'user'],
+  remarks: ['remarks', 'notes', 'comments'],
+  in_service_date: ['in_service_date', 'service_date'],
+  warranty_item: ['warranty_item', 'warranty'],
 };
 
 const REQUIRED_FIELDS: string[] = [];
-const RECOMMENDED_FIELDS = ['requisition_no', 'description', 'quantity', 'weight_lb', 'length_in', 'width_in', 'height_in'];
+const RECOMMENDED_FIELDS = ['description', 'quantity'];
 
 const NSN_REGEX = /^\d{4}-\d{2}-\d{3}-\d{4}$/;
 
 export function mapColumnName(originalHeader: string): string | null {
-  const normalized = originalHeader.toLowerCase().trim().replace(/[\s\-_]+/g, '_').replace(/[()]/g, '');
+  const normalized = originalHeader.toLowerCase().trim().replace(/[\s\-_\.]+/g, '_').replace(/[()]/g, '');
   
   for (const [mappedName, variations] of Object.entries(COLUMN_MAPPINGS)) {
     for (const variation of variations) {
-      const normalizedVariation = variation.toLowerCase().replace(/[\s\-_]+/g, '_').replace(/[()]/g, '');
+      const normalizedVariation = variation.toLowerCase().replace(/[\s\-_\.]+/g, '_').replace(/[()]/g, '');
       if (normalized === normalizedVariation) {
         return mappedName;
       }
@@ -109,7 +158,8 @@ export function mapColumnName(originalHeader: string): string | null {
   
   for (const [mappedName, variations] of Object.entries(COLUMN_MAPPINGS)) {
     for (const variation of variations) {
-      if (normalized.includes(variation.toLowerCase().replace(/[\s\-_]+/g, '_'))) {
+      const normalizedVariation = variation.toLowerCase().replace(/[\s\-_\.]+/g, '_').replace(/[()]/g, '');
+      if (normalized.includes(normalizedVariation) || normalizedVariation.includes(normalized)) {
         return mappedName;
       }
     }
@@ -177,69 +227,74 @@ export function validateRow(row: Record<string, any>, rowIndex: number, columnMa
         return row[original];
       }
     }
+    if (row[field] !== undefined) {
+      return row[field];
+    }
     return undefined;
   };
   
-  const requisition_no = getValue('requisition_no');
-  const description = getValue('description');
-  const quantity = getValue('quantity');
-  const length_in = getValue('length_in');
-  const width_in = getValue('width_in');
-  const height_in = getValue('height_in');
-  const weight_lb = getValue('weight_lb');
-  const unit_price = getValue('unit_price');
-  const nsn = getValue('nsn');
-  const fsc = getValue('fsc');
-  const niin = getValue('niin');
-  const condition = getValue('condition');
-  const mission_id = getValue('mission_id');
-  const serial_no = getValue('serial_no');
-  const lin_esd = getValue('lin_esd');
-  const last_moved = getValue('last_moved');
-  const storage_facility = getValue('storage_facility');
-  const ship = getValue('ship');
-  const ship_class = getValue('ship_class');
-  const program_code = getValue('program_code');
-  const authority = getValue('authority');
-  const work_item = getValue('work_item');
-  const cage = getValue('cage');
-  const manufacturer = getValue('manufacturer');
-  const mfg_date = getValue('mfg_date');
-  const contract_no = getValue('contract_no');
-  const asset_type = getValue('asset_type');
-  const lot = getValue('lot');
-  const raw_content = getValue('raw_content') || row['raw_content'] || row['_raw_line'];
+  const getStringValue = (field: string): string | null => {
+    const val = getValue(field);
+    if (val === null || val === undefined || val === '' || val === 'N') return null;
+    return String(val).trim();
+  };
   
   const parsed: ParsedInventoryRow = {
-    requisition_no: requisition_no ? String(requisition_no).trim() : null,
-    description: description ? String(description).trim() : null,
-    quantity: parseInteger(quantity),
-    length_in: parseNumber(length_in),
-    width_in: parseNumber(width_in),
-    height_in: parseNumber(height_in),
-    weight_lb: parseNumber(weight_lb),
-    unit_price: parseNumber(unit_price),
-    nsn: nsn ? String(nsn).trim() : null,
-    fsc: fsc ? String(fsc).trim() : null,
-    niin: niin ? String(niin).trim() : null,
-    condition: condition ? String(condition).trim() : null,
-    mission_id: mission_id ? String(mission_id).trim() : null,
-    serial_no: serial_no ? String(serial_no).trim() : null,
-    lin_esd: lin_esd ? String(lin_esd).trim() : null,
-    last_moved: last_moved ? String(last_moved).trim() : null,
-    storage_facility: storage_facility ? String(storage_facility).trim() : null,
-    ship: ship ? String(ship).trim() : null,
-    ship_class: ship_class ? String(ship_class).trim() : null,
-    program_code: program_code ? String(program_code).trim() : null,
-    authority: authority ? String(authority).trim() : null,
-    work_item: work_item ? String(work_item).trim() : null,
-    cage: cage ? String(cage).trim() : null,
-    manufacturer: manufacturer ? String(manufacturer).trim() : null,
-    mfg_date: mfg_date ? String(mfg_date).trim() : null,
-    contract_no: contract_no ? String(contract_no).trim() : null,
-    asset_type: asset_type ? String(asset_type).trim() : null,
-    lot: lot ? String(lot).trim() : null,
-    raw_content: raw_content ? String(raw_content).trim() : null,
+    requisition_no: getStringValue('requisition_no'),
+    description: getStringValue('description'),
+    quantity: parseInteger(getValue('quantity')) || parseInteger(getValue('qty')),
+    length_in: parseNumber(getValue('length_in')),
+    width_in: parseNumber(getValue('width_in')),
+    height_in: parseNumber(getValue('height_in')),
+    weight_lb: parseNumber(getValue('weight_lb')),
+    unit_price: parseNumber(getValue('unit_price')),
+    nsn: getStringValue('nsn'),
+    fsc: getStringValue('fsc'),
+    niin: getStringValue('niin'),
+    condition: getStringValue('condition') || getStringValue('condition_code'),
+    mission_id: getStringValue('mission_id'),
+    serial_no: getStringValue('serial_no'),
+    lin_esd: getStringValue('lin_esd') || getStringValue('li'),
+    last_moved: getStringValue('last_moved'),
+    storage_facility: getStringValue('storage_facility'),
+    ship: getStringValue('ship'),
+    ship_class: getStringValue('ship_class'),
+    program_code: getStringValue('program_code'),
+    authority: getStringValue('authority'),
+    work_item: getStringValue('work_item'),
+    cage: getStringValue('cage'),
+    manufacturer: getStringValue('manufacturer'),
+    mfg_date: getStringValue('mfg_date'),
+    contract_no: getStringValue('contract_no'),
+    asset_type: getStringValue('asset_type'),
+    lot: getStringValue('lot'),
+    raw_content: getStringValue('raw_content') || row['raw_content'] || row['_raw_line'],
+    
+    ui: getStringValue('ui'),
+    location: getStringValue('location'),
+    inventory_type: getStringValue('inventory_type'),
+    audit_no: getStringValue('audit_no'),
+    receipt_price: getStringValue('receipt_price'),
+    receipt_date: getStringValue('receipt_date'),
+    barcode: getStringValue('barcode'),
+    mat_disposition: getStringValue('mat_disposition'),
+    iuid: getStringValue('iuid'),
+    li: getStringValue('li'),
+    matl_ctrl: getStringValue('matl_ctrl'),
+    hmic: getStringValue('hmic'),
+    smcc: getStringValue('smcc'),
+    item_audit: getStringValue('item_audit'),
+    ship_ind: getStringValue('ship_ind'),
+    ship_avail: getStringValue('ship_avail'),
+    exp_date: getStringValue('exp_date'),
+    ext_date: getStringValue('ext_date'),
+    insp_date: getStringValue('insp_date'),
+    last_audit_date: getStringValue('last_audit_date'),
+    user_id: getStringValue('user_id'),
+    remarks: getStringValue('remarks'),
+    in_service_date: getStringValue('in_service_date'),
+    warranty_item: getStringValue('warranty_item'),
+    
     _rawRow: row,
     _rowIndex: rowIndex,
   };
@@ -264,36 +319,6 @@ export function validateRow(row: Record<string, any>, rowIndex: number, columnMa
       scope: 'row',
       target: 'weight_lb',
       message: `Invalid weight: ${parsed.weight_lb}. Must be non-negative.`,
-      rowIndex,
-    });
-  }
-  
-  if (parsed.length_in !== null && parsed.length_in < 0) {
-    errors.push({
-      level: 'error',
-      scope: 'row',
-      target: 'length_in',
-      message: `Invalid length: ${parsed.length_in}. Must be non-negative.`,
-      rowIndex,
-    });
-  }
-  
-  if (parsed.width_in !== null && parsed.width_in < 0) {
-    errors.push({
-      level: 'error',
-      scope: 'row',
-      target: 'width_in',
-      message: `Invalid width: ${parsed.width_in}. Must be non-negative.`,
-      rowIndex,
-    });
-  }
-  
-  if (parsed.height_in !== null && parsed.height_in < 0) {
-    errors.push({
-      level: 'error',
-      scope: 'row',
-      target: 'height_in',
-      message: `Invalid height: ${parsed.height_in}. Must be non-negative.`,
       rowIndex,
     });
   }
@@ -365,7 +390,7 @@ export function validateColumns(headers: string[]): {
   }
   
   const unmappedColumns = columns.filter(c => !c.isRecognized);
-  if (unmappedColumns.length > 0 && unmappedColumns.length <= 10) {
+  if (unmappedColumns.length > 0 && unmappedColumns.length <= 5) {
     for (const col of unmappedColumns) {
       warnings.push({
         level: 'warning',
@@ -374,12 +399,12 @@ export function validateColumns(headers: string[]): {
         message: `Unrecognized column: "${col.originalName}" - will be stored in raw data`,
       });
     }
-  } else if (unmappedColumns.length > 10) {
+  } else if (unmappedColumns.length > 5) {
     warnings.push({
       level: 'warning',
       scope: 'column',
       target: 'columns',
-      message: `${unmappedColumns.length} columns could not be mapped to known fields - data will be stored in raw format`,
+      message: `${unmappedColumns.length} columns could not be mapped to known fields`,
     });
   }
   
@@ -413,64 +438,12 @@ export function validateInventoryData(
     allWarnings.push(...warnings);
   }
   
-  const missingRequisitionCount = parsedRows.filter(r => !r.requisition_no).length;
-  const missingDescriptionCount = parsedRows.filter(r => !r.description).length;
-  const missingWeightCount = parsedRows.filter(r => r.weight_lb === null).length;
-  const missingDimensionsCount = parsedRows.filter(r => 
-    r.length_in === null || r.width_in === null || r.height_in === null
+  const hasFileErrors = allErrors.some(e => e.scope === 'file');
+  
+  const validRowCount = parsedRows.filter(r => 
+    r.description || r.requisition_no || r.nsn || r.raw_content || r.cage || r.ship
   ).length;
   
-  const hasRawContent = parsedRows.filter(r => r.raw_content).length;
-  
-  if (missingRequisitionCount > 0) {
-    allWarnings.push({
-      level: 'warning',
-      scope: 'file',
-      target: 'requisition_no',
-      message: `${missingRequisitionCount} rows are missing requisition numbers - auto-generated IDs will be assigned`,
-    });
-  }
-  
-  if (missingDescriptionCount > 0 && missingDescriptionCount > parsedRows.length * 0.1) {
-    allWarnings.push({
-      level: 'warning',
-      scope: 'file',
-      target: 'description',
-      message: `${missingDescriptionCount} rows are missing descriptions`,
-    });
-  }
-  
-  if (missingWeightCount > 0 && missingWeightCount > parsedRows.length * 0.5) {
-    allWarnings.push({
-      level: 'warning',
-      scope: 'file',
-      target: 'weight_lb',
-      message: `${missingWeightCount} rows are missing weight data`,
-    });
-  }
-  
-  if (missingDimensionsCount > 0 && missingDimensionsCount > parsedRows.length * 0.5) {
-    allWarnings.push({
-      level: 'warning',
-      scope: 'file',
-      target: 'dimensions',
-      message: `${missingDimensionsCount} rows are missing dimension data`,
-    });
-  }
-  
-  if (hasRawContent > 0 && hasRawContent === parsedRows.length) {
-    allWarnings.push({
-      level: 'warning',
-      scope: 'file',
-      target: 'parsing',
-      message: `All ${hasRawContent} rows contain raw unparsed content - manual column mapping may be needed`,
-    });
-  }
-  
-  const hasFileErrors = allErrors.some(e => e.scope === 'file');
-  const hasDataErrors = allErrors.some(e => e.scope === 'row' && e.target !== 'empty_row');
-  
-  const validRowCount = parsedRows.filter(r => r.description || r.requisition_no || r.nsn || r.raw_content).length;
   const canCommit = !hasFileErrors && validRowCount > 0;
   
   return {

@@ -29,10 +29,10 @@ export default function InventoryFileImportModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validateFile = (file: File): string | null => {
-    const validTypes = [".pdf", ".csv"];
+    const validTypes = [".pdf", ".csv", ".xlsx", ".xls"];
     const ext = file.name.toLowerCase().slice(file.name.lastIndexOf("."));
     if (!validTypes.includes(ext)) {
-      return "Only PDF and CSV files are supported";
+      return "Only PDF, CSV, XLSX, and XLS files are supported";
     }
     if (file.size > MAX_FILE_SIZE) {
       return "File size must be less than 10MB";
@@ -184,7 +184,7 @@ export default function InventoryFileImportModal({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf,.csv"
+        accept=".pdf,.csv,.xlsx,.xls"
         onChange={handleFileInputChange}
         className="hidden"
       />
@@ -193,7 +193,7 @@ export default function InventoryFileImportModal({
         Upload file or drag here
       </p>
       <p className="text-sm text-muted-foreground mb-4">
-        Accepts PDF or CSV files (max 10MB)
+        Accepts PDF, CSV, XLSX, or XLS files (max 10MB)
       </p>
       <button
         onClick={() => fileInputRef.current?.click()}
@@ -403,7 +403,7 @@ export default function InventoryFileImportModal({
         <div className="flex items-center justify-between p-6 border-b border-border">
           <div>
             <h2 className="text-lg font-semibold text-foreground">
-              Import Inventory (PDF/CSV)
+              Import Inventory
             </h2>
             <p className="text-sm text-muted-foreground">
               Importing to: {siteName}
