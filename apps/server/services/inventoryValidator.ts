@@ -54,8 +54,10 @@ const COLUMN_MAPPINGS: Record<string, string[]> = {
   niin: ['niin', 'national_item_identification_number'],
 };
 
-const REQUIRED_FIELDS = ['requisition_no', 'quantity'];
-const RECOMMENDED_FIELDS = ['description', 'weight_lb', 'length_in', 'width_in', 'height_in'];
+// No fields are strictly required - we'll default quantity to 1 and generate IDs if missing
+// Only completely empty rows are skipped
+const REQUIRED_FIELDS: string[] = [];
+const RECOMMENDED_FIELDS = ['requisition_no', 'description', 'quantity', 'weight_lb', 'length_in', 'width_in', 'height_in'];
 
 const NSN_REGEX = /^\d{4}-\d{2}-\d{3}-\d{4}$/;
 
@@ -160,25 +162,13 @@ export function validateRow(row: Record<string, any>, rowIndex: number, columnMa
     _rowIndex: rowIndex,
   };
   
-  if (!parsed.requisition_no) {
-    errors.push({
-      level: 'error',
-      scope: 'row',
-      target: 'requisition_no',
-      message: 'Missing required field: requisition_no',
-      rowIndex,
-    });
+  // Default quantity to 1 if missing
+  if (parsed.quantity === null) {
+    parsed.quantity = 1;
   }
   
-  if (parsed.quantity === null) {
-    errors.push({
-      level: 'error',
-      scope: 'row',
-      target: 'quantity',
-      message: 'Missing required field: quantity',
-      rowIndex,
-    });
-  } else if (parsed.quantity < 0) {
+  // Only validate data format - negative values are still errors
+  if (parsed.quantity < 0) {
     errors.push({
       level: 'error',
       scope: 'row',
@@ -186,61 +176,15 @@ export function validateRow(row: Record<string, any>, rowIndex: number, columnMa
       message: `Invalid quantity: ${parsed.quantity}. Must be non-negative.`,
       rowIndex,
     });
-  } else if (parsed.quantity === 0) {
-    warnings.push({
-      level: 'warning',
-      scope: 'row',
-      target: 'quantity',
-      message: 'Quantity is zero',
-      rowIndex,
-    });
   }
   
-  if (!parsed.description) {
-    warnings.push({
-      level: 'warning',
-      scope: 'row',
-      target: 'description',
-      message: 'Missing recommended field: description',
-      rowIndex,
-    });
-  }
-  
-  if (parsed.weight_lb === null) {
-    warnings.push({
-      level: 'warning',
-      scope: 'row',
-      target: 'weight_lb',
-      message: 'Missing recommended field: weight_lb',
-      rowIndex,
-    });
-  } else if (parsed.weight_lb < 0) {
+  // Weight validation - only error on invalid data, not missing
+  if (parsed.weight_lb !== null && parsed.weight_lb < 0) {
     errors.push({
       level: 'error',
       scope: 'row',
       target: 'weight_lb',
       message: `Invalid weight: ${parsed.weight_lb}. Must be non-negative.`,
-      rowIndex,
-    });
-  }
-  
-  const hasDimensions = parsed.length_in !== null || parsed.width_in !== null || parsed.height_in !== null;
-  const hasAllDimensions = parsed.length_in !== null && parsed.width_in !== null && parsed.height_in !== null;
-  
-  if (!hasDimensions) {
-    warnings.push({
-      level: 'warning',
-      scope: 'row',
-      target: 'dimensions',
-      message: 'Missing recommended fields: dimensions (length, width, height)',
-      rowIndex,
-    });
-  } else if (!hasAllDimensions) {
-    warnings.push({
-      level: 'warning',
-      scope: 'row',
-      target: 'dimensions',
-      message: 'Incomplete dimensions: some values are missing',
       rowIndex,
     });
   }
@@ -381,15 +325,57 @@ export function validateInventoryData(
     allWarnings.push(...warnings);
   }
   
-  const hasRequiredColumns = REQUIRED_FIELDS.every(field => 
-    Array.from(columnMap.values()).includes(field)
-  );
+  // Count missing data for summary warnings
+  const missingRequisitionCount = parsedRows.filter(r => !r.requisition_no).length;
+  const missingDescriptionCount = parsedRows.filter(r => !r.description).length;
+  const missingWeightCount = parsedRows.filter(r => r.weight_lb === null).length;
+  const missingDimensionsCount = parsedRows.filter(r => 
+    r.length_in === null || r.width_in === null || r.height_in === null
+  ).length;
   
-  const hasRowErrors = allErrors.some(e => e.scope === 'row');
-  const hasColumnErrors = allErrors.some(e => e.scope === 'column');
+  // Add file-level summary warnings (not per-row)
+  if (missingRequisitionCount > 0) {
+    allWarnings.push({
+      level: 'warning',
+      scope: 'file',
+      target: 'requisition_no',
+      message: `${missingRequisitionCount} rows are missing requisition numbers - auto-generated IDs will be assigned`,
+    });
+  }
+  
+  if (missingDescriptionCount > 0 && missingDescriptionCount > parsedRows.length * 0.1) {
+    allWarnings.push({
+      level: 'warning',
+      scope: 'file',
+      target: 'description',
+      message: `${missingDescriptionCount} rows are missing descriptions`,
+    });
+  }
+  
+  if (missingWeightCount > 0 && missingWeightCount > parsedRows.length * 0.5) {
+    allWarnings.push({
+      level: 'warning',
+      scope: 'file',
+      target: 'weight_lb',
+      message: `${missingWeightCount} rows are missing weight data`,
+    });
+  }
+  
+  if (missingDimensionsCount > 0 && missingDimensionsCount > parsedRows.length * 0.5) {
+    allWarnings.push({
+      level: 'warning',
+      scope: 'file',
+      target: 'dimensions',
+      message: `${missingDimensionsCount} rows are missing dimension data`,
+    });
+  }
+  
   const hasFileErrors = allErrors.some(e => e.scope === 'file');
+  const hasDataErrors = allErrors.some(e => e.scope === 'row' && e.target !== 'empty_row');
   
-  const canCommit = hasRequiredColumns && !hasColumnErrors && !hasFileErrors;
+  // Allow commit as long as there are valid rows and no critical errors
+  const validRowCount = parsedRows.filter(r => r.description || r.requisition_no || r.nsn).length;
+  const canCommit = !hasFileErrors && validRowCount > 0;
   
   return {
     rows: parsedRows,
