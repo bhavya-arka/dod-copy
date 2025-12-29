@@ -1,8 +1,19 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Building2, ChevronRight, ChevronDown, Move, Zap, Loader2 } from "lucide-react";
+import { Plus, Building2, ChevronRight, ChevronDown, Move, Zap, Loader2, Trash2 } from "lucide-react";
 import type { WarehouseSite, ToastMessage } from "./types";
 import { MOCK_BUILDINGS } from "./constants";
+import { deleteSite } from "../../services/warehouseService";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 
 interface WMSSitesStorageProps {
   sites: WarehouseSite[];
@@ -23,6 +34,35 @@ export default function WMSSitesStorage({
   onShowToast,
 }: WMSSitesStorageProps) {
   const [expandedSites, setExpandedSites] = useState<Set<number>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [siteToDelete, setSiteToDelete] = useState<WarehouseSite | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteClick = (e: React.MouseEvent, site: WarehouseSite) => {
+    e.stopPropagation();
+    setSiteToDelete(site);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!siteToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      await deleteSite(siteToDelete.id);
+      onShowToast(`Site "${siteToDelete.name}" deleted successfully`, "success");
+      setDeleteDialogOpen(false);
+      setSiteToDelete(null);
+      onRefresh();
+    } catch (error) {
+      onShowToast(
+        error instanceof Error ? error.message : "Failed to delete site",
+        "error"
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const toggleSite = (siteId: number) => {
     const newExpanded = new Set(expandedSites);
@@ -100,6 +140,13 @@ export default function WMSSitesStorage({
                       <p className="text-sm font-medium text-foreground">{site.item_count || 0} items</p>
                       <p className="text-xs text-muted-foreground">Total inventory</p>
                     </div>
+                    <button
+                      onClick={(e) => handleDeleteClick(e, site)}
+                      className="p-2 rounded-lg hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
+                      title="Delete site"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </button>
 
@@ -175,6 +222,39 @@ export default function WMSSitesStorage({
           </div>
         )}
       </motion.div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Warehouse Site</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{siteToDelete?.name}</strong>? This action cannot be undone and will permanently delete:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>All inventory items ({siteToDelete?.item_count || 0} items)</li>
+                <li>All buildings, zones, and locations</li>
+                <li>All associated data</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Site"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

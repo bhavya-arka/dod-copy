@@ -30,7 +30,17 @@ import type {
   PaginatedInventoryResponse
 } from "./types";
 import { formatNSN, getConditionColor } from "./utils";
-import { fetchInventoryPaginated } from "../../services/warehouseService";
+import { fetchInventoryPaginated, deleteInventoryItem, deleteInventoryItems } from "../../services/warehouseService";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 
 const PREFETCH_AHEAD = 5;
 const PREFETCH_BEHIND = 2;
@@ -148,6 +158,11 @@ export default function WMSInventory({
   
   const [paginatedData, setPaginatedData] = useState<PaginatedInventoryResponse | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const filterRef = useRef<HTMLDivElement>(null);
   const columnSettingsRef = useRef<HTMLDivElement>(null);
@@ -457,8 +472,69 @@ export default function WMSInventory({
     cacheOrderRef.current = [];
     visitedPagesRef.current.clear();
     cacheVersionRef.current += 1;
+    setSelectedItems(new Set());
     fetchData();
     onRefresh();
+  };
+
+  const handleSelectItem = (itemId: number, checked: boolean) => {
+    const newSelected = new Set(selectedItems);
+    if (checked) {
+      newSelected.add(itemId);
+    } else {
+      newSelected.delete(itemId);
+    }
+    setSelectedItems(newSelected);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedItems(new Set(items.map(item => item.id)));
+    } else {
+      setSelectedItems(new Set());
+    }
+  };
+
+  const handleDeleteClick = (item: InventoryItem) => {
+    setItemToDelete(item);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleBulkDeleteClick = () => {
+    if (selectedItems.size === 0) {
+      onShowToast("No items selected", "warning");
+      return;
+    }
+    setItemToDelete(null);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedSiteId) return;
+    
+    setIsDeleting(true);
+    try {
+      if (itemToDelete) {
+        await deleteInventoryItem(selectedSiteId, itemToDelete.id);
+        onShowToast("Item deleted successfully", "success");
+      } else if (selectedItems.size > 0) {
+        const result = await deleteInventoryItems(selectedSiteId, Array.from(selectedItems));
+        if (result.failed > 0) {
+          onShowToast(`Deleted ${result.deleted} items, ${result.failed} failed`, "warning");
+        } else {
+          onShowToast(`Deleted ${result.deleted} items successfully`, "success");
+        }
+      }
+      setSelectedItems(new Set());
+      handleRefresh();
+    } catch (error) {
+      console.error("Failed to delete:", error);
+      onShowToast(error instanceof Error ? error.message : "Failed to delete item(s)", "error");
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
+    }
   };
 
   const visibleColumns = useMemo(() => columns.filter(col => col.visible), [columns]);
@@ -467,6 +543,9 @@ export default function WMSInventory({
   const totalPages = paginatedData?.pagination.totalPages || 0;
   const startItem = totalCount > 0 ? (page - 1) * pageSize + 1 : 0;
   const endItem = Math.min(page * pageSize, totalCount);
+
+  const allSelected = items.length > 0 && items.every(item => selectedItems.has(item.id));
+  const someSelected = items.some(item => selectedItems.has(item.id)) && !allSelected;
 
   const renderCellValue = (item: InventoryItem, columnKey: string) => {
     switch (columnKey) {
@@ -545,6 +624,16 @@ export default function WMSInventory({
             <p className="text-muted-foreground">Enhanced item tracking and drill-down</p>
           </div>
           <div className="flex items-center gap-2">
+            {selectedItems.size > 0 && (
+              <button
+                onClick={handleBulkDeleteClick}
+                disabled={isDeleting}
+                className="text-sm px-3 py-2 rounded-lg border border-red-300 bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Selected ({selectedItems.size})
+              </button>
+            )}
             <button
               onClick={handleImport}
               className="text-sm px-3 py-2 rounded-lg border border-border bg-white hover:bg-muted transition-colors flex items-center gap-2"
@@ -777,6 +866,17 @@ export default function WMSInventory({
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
+                    <th className="py-3 px-2 text-left w-10">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = someSelected;
+                        }}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        className="rounded border-border text-[#004E89] focus:ring-[#004E89]"
+                      />
+                    </th>
                     {visibleColumns.map((col) => (
                       <th
                         key={col.key}
@@ -814,11 +914,22 @@ export default function WMSInventory({
                         </div>
                       </th>
                     ))}
+                    <th className="py-3 px-2 text-xs font-medium text-muted-foreground uppercase text-center w-16">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item) => (
-                    <tr key={item.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                    <tr key={item.id} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${selectedItems.has(item.id) ? 'bg-[#004E89]/5' : ''}`}>
+                      <td className="py-3 px-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedItems.has(item.id)}
+                          onChange={(e) => handleSelectItem(item.id, e.target.checked)}
+                          className="rounded border-border text-[#004E89] focus:ring-[#004E89]"
+                        />
+                      </td>
                       {visibleColumns.map((col) => (
                         <td
                           key={col.key}
@@ -827,6 +938,16 @@ export default function WMSInventory({
                           {renderCellValue(item, col.key)}
                         </td>
                       ))}
+                      <td className="py-3 px-2 text-center">
+                        <button
+                          onClick={() => handleDeleteClick(item)}
+                          disabled={isDeleting}
+                          className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                          title="Delete item"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -894,6 +1015,42 @@ export default function WMSInventory({
           </>
         )}
       </motion.div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {itemToDelete 
+                ? "Delete Inventory Item" 
+                : `Delete ${selectedItems.size} Item${selectedItems.size > 1 ? 's' : ''}`
+              }
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {itemToDelete 
+                ? `Are you sure you want to delete "${itemToDelete.requisition_no || itemToDelete.description || 'this item'}"? This action cannot be undone.`
+                : `Are you sure you want to delete ${selectedItems.size} selected item${selectedItems.size > 1 ? 's' : ''}? This action cannot be undone.`
+              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

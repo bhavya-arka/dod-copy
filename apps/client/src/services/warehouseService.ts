@@ -241,3 +241,62 @@ export async function commitInventoryUpload(siteId: number, uploadId: string): P
   }
   return response.json();
 }
+
+/**
+ * Delete an inventory item
+ * @param siteId - Site ID
+ * @param itemId - Item ID to delete
+ * @returns Success response
+ */
+export async function deleteInventoryItem(siteId: number, itemId: number): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/inventory/${itemId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to delete item");
+  }
+  return response.json();
+}
+
+/**
+ * Delete multiple inventory items
+ * @param siteId - Site ID
+ * @param itemIds - Array of item IDs to delete
+ * @returns Object with count of successfully deleted items
+ */
+export async function deleteInventoryItems(siteId: number, itemIds: number[]): Promise<{ deleted: number; failed: number }> {
+  let deleted = 0;
+  let failed = 0;
+  
+  for (const itemId of itemIds) {
+    try {
+      await deleteInventoryItem(siteId, itemId);
+      deleted++;
+    } catch {
+      failed++;
+    }
+  }
+  
+  return { deleted, failed };
+}
+
+/**
+ * Delete a warehouse site and all related data
+ * @param siteId - Site ID to delete
+ * @returns Success response
+ */
+export async function deleteSite(siteId: number): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to delete site");
+  }
+  return response.json();
+}

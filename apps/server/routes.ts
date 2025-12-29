@@ -8,7 +8,10 @@ import {
   insertUserSchema,
   warehouseSites,
   warehouseInventoryItems,
-  warehouseTransfers
+  warehouseTransfers,
+  warehouseBuildings,
+  warehouseZones,
+  warehouseLocations
 } from "@shared/schema";
 import { eq, and, or, like, ilike, sql, gt, lt, isNull, isNotNull, asc, desc, count } from "drizzle-orm";
 import {
@@ -1913,12 +1916,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // WAREHOUSE MANAGEMENT API (PROTECTED)
   // ============================================================================
 
-  // GET /api/warehouse/sites - Get all warehouse sites for the current user
+  // GET /api/warehouse/sites - Get all warehouse sites for the current user with inventory counts
   app.get("/api/warehouse/sites", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const sites = await db.select()
+      const sites = await db.select({
+        id: warehouseSites.id,
+        user_id: warehouseSites.user_id,
+        code: warehouseSites.code,
+        name: warehouseSites.name,
+        address: warehouseSites.address,
+        city: warehouseSites.city,
+        country: warehouseSites.country,
+        timezone: warehouseSites.timezone,
+        latitude: warehouseSites.latitude,
+        longitude: warehouseSites.longitude,
+        active: warehouseSites.active,
+        created_at: warehouseSites.created_at,
+        updated_at: warehouseSites.updated_at,
+        item_count: sql<number>`CAST(COUNT(${warehouseInventoryItems.id}) AS INTEGER)`,
+        total_quantity: sql<number>`CAST(COALESCE(SUM(${warehouseInventoryItems.quantity}), 0) AS INTEGER)`,
+      })
         .from(warehouseSites)
-        .where(eq(warehouseSites.user_id, req.user!.id));
+        .leftJoin(warehouseInventoryItems, eq(warehouseSites.id, warehouseInventoryItems.site_id))
+        .where(eq(warehouseSites.user_id, req.user!.id))
+        .groupBy(warehouseSites.id);
       res.json(sites);
     } catch (error) {
       console.error("[Warehouse] Failed to fetch sites:", error);
@@ -1952,6 +1973,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Warehouse] Failed to create site:", error);
       res.status(500).json({ error: "Failed to create warehouse site" });
+    }
+  });
+
+  // DELETE /api/warehouse/sites/:siteId - Delete a warehouse site and all related data
+  app.delete("/api/warehouse/sites/:siteId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      // Delete in correct order due to foreign key constraints:
+      // 1. Delete related transfers first
+      await db.delete(warehouseTransfers)
+        .where(or(
+          eq(warehouseTransfers.from_site_id, siteId),
+          eq(warehouseTransfers.to_site_id, siteId)
+        ));
+
+      // 2. Delete inventory items
+      await db.delete(warehouseInventoryItems)
+        .where(eq(warehouseInventoryItems.site_id, siteId));
+
+      // 3. Delete locations
+      await db.delete(warehouseLocations)
+        .where(eq(warehouseLocations.site_id, siteId));
+
+      // 4. Get building IDs for this site to delete zones
+      const buildings = await db.select({ id: warehouseBuildings.id })
+        .from(warehouseBuildings)
+        .where(eq(warehouseBuildings.site_id, siteId));
+      
+      const buildingIds = buildings.map(b => b.id);
+      
+      // 5. Delete zones for all buildings in this site
+      if (buildingIds.length > 0) {
+        for (const buildingId of buildingIds) {
+          await db.delete(warehouseZones)
+            .where(eq(warehouseZones.building_id, buildingId));
+        }
+      }
+
+      // 6. Delete buildings
+      await db.delete(warehouseBuildings)
+        .where(eq(warehouseBuildings.site_id, siteId));
+
+      // 7. Delete the site itself
+      await db.delete(warehouseSites)
+        .where(eq(warehouseSites.id, siteId));
+
+      res.json({ success: true, message: "Site and all related data deleted successfully" });
+    } catch (error) {
+      console.error("[Warehouse] Failed to delete site:", error);
+      res.status(500).json({ error: "Failed to delete warehouse site" });
     }
   });
 
@@ -2167,6 +2254,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Warehouse] Failed to add inventory item:", error);
       res.status(500).json({ error: "Failed to add inventory item" });
+    }
+  });
+
+  // DELETE /api/warehouse/sites/:siteId/inventory/:itemId - Delete an inventory item
+  app.delete("/api/warehouse/sites/:siteId/inventory/:itemId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      const itemId = parseInt(req.params.itemId);
+      
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+      if (isNaN(itemId)) {
+        return res.status(400).json({ error: "Invalid item ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      // Verify item exists and belongs to the site
+      const [item] = await db.select()
+        .from(warehouseInventoryItems)
+        .where(and(
+          eq(warehouseInventoryItems.id, itemId),
+          eq(warehouseInventoryItems.site_id, siteId)
+        ));
+
+      if (!item) {
+        return res.status(404).json({ error: "Inventory item not found" });
+      }
+
+      // Delete the item - include both conditions for defense-in-depth
+      await db.delete(warehouseInventoryItems)
+        .where(and(
+          eq(warehouseInventoryItems.id, itemId),
+          eq(warehouseInventoryItems.site_id, siteId)
+        ));
+
+      res.json({ success: true, message: "Item deleted successfully" });
+    } catch (error) {
+      console.error("[Warehouse] Failed to delete inventory item:", error);
+      res.status(500).json({ error: "Failed to delete inventory item" });
     }
   });
 
