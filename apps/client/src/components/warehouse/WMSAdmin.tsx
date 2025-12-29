@@ -81,41 +81,23 @@ export default function WMSAdmin({
               </select>
             </div>
 
-            <div className="p-4 rounded-xl bg-muted/50 border border-dashed border-border">
+            <div className="p-4 rounded-xl bg-muted/50 border-2 border-dashed border-[#004E89]/30">
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-lg bg-white border border-border">
-                  <Upload className="w-5 h-5 text-[#004E89]" />
-                </div>
-                <div>
-                  <p className="font-medium text-foreground">Import Inventory CSV</p>
-                  <p className="text-xs text-muted-foreground">Upload warehouse manifest data</p>
-                </div>
-              </div>
-              <button
-                onClick={handleImport}
-                disabled={!selectedSiteId}
-                className="w-full text-sm py-2.5 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Upload CSV
-              </button>
-            </div>
-
-            <div className="p-4 rounded-xl bg-muted/50 border border-dashed border-border">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-lg bg-white border border-border">
+                <div className="p-2 rounded-lg bg-[#004E89]/10 border border-[#004E89]/20">
                   <FileText className="w-5 h-5 text-[#004E89]" />
                 </div>
                 <div>
-                  <p className="font-medium text-foreground">Import Inventory (PDF/CSV)</p>
-                  <p className="text-xs text-muted-foreground">Upload with validation preview</p>
+                  <p className="font-medium text-foreground">Import Inventory (PDF or CSV)</p>
+                  <p className="text-xs text-muted-foreground">Upload with validation preview - errors shown before import</p>
                 </div>
               </div>
               <button
                 onClick={handleFileImport}
                 disabled={!selectedSiteId}
-                className="w-full text-sm py-2.5 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full text-sm py-2.5 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                Import PDF/CSV
+                <Upload className="w-4 h-4" />
+                Import PDF/CSV File
               </button>
             </div>
 
