@@ -2653,14 +2653,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       fileSize: 10 * 1024 * 1024, // 10MB
     },
     fileFilter: (req, file, cb) => {
-      const allowedMimes = ['text/csv', 'application/pdf', 'text/plain', 'application/vnd.ms-excel'];
-      const allowedExts = ['.csv', '.pdf'];
+      const allowedMimes = [
+        'text/csv', 
+        'application/pdf', 
+        'text/plain', 
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/octet-stream'
+      ];
+      const allowedExts = ['.csv', '.pdf', '.xlsx', '.xls'];
       const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
       
       if (allowedMimes.includes(file.mimetype) || allowedExts.includes(ext)) {
         cb(null, true);
       } else {
-        cb(new Error(`Unsupported file type: ${file.mimetype}. Only CSV and PDF files are allowed.`));
+        cb(new Error(`Unsupported file type: ${file.mimetype}. Only CSV, PDF, XLSX, and XLS files are allowed.`));
       }
     },
   });
