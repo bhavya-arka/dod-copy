@@ -42,8 +42,14 @@ The system supports C-17 Globemaster III and C-130H/J Hercules aircraft, adherin
 The WMS is modular, featuring a 7-section navigation (Dashboard, Inventory, Operations, Sites & Storage, Analytics, AI Insights, Admin). Key features include:
 - Multi-site inventory tracking and pallet-level location management.
 - NSN validation, aging alerts, and weight constraints.
-- PDF/CSV file import with comprehensive validation.
-- Placement optimization using algorithms like CardStack, Size Standardization, Value Density Analysis, and Bin-Packing Order.
+- PDF/CSV/XLSX file import with comprehensive validation (50+ BATS columns supported).
+- **Dynamic Column System**: Inventory columns are defined in `packages/shared/inventoryColumns.ts` as a single source of truth, fetched via API, and automatically merged with saved user preferences.
+- **Optimization Wizard** with 4 algorithms:
+  - **CardStack**: Stacks similar items to reduce footprint and improve picking efficiency.
+  - **Size Standardization**: Groups items by dimensions to optimize rack utilization.
+  - **Value Density Analysis**: Organizes by value-to-volume ratio for accessibility.
+  - **Bin-Packing Order**: Calculates optimal placement for maximum container utilization.
+- **AI-Powered Analysis**: Uses AWS Bedrock (Nova Lite model) for warehouse-specific insights including placement optimization, load balancing recommendations, and aging alerts.
 - Inter-warehouse transfers linked to Air, Land, or Sea transport modes.
 
 ## Data Models
