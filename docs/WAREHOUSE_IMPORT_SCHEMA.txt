@@ -1,0 +1,340 @@
+================================================================================
+                    ARKA WAREHOUSE MANAGEMENT SYSTEM
+                    INVENTORY IMPORT DATA SCHEMA
+================================================================================
+
+Document Version: 1.0
+Last Updated: January 2026
+System: ARKA Cargo Operations - Warehouse Management Module
+
+This document describes the complete schema for warehouse inventory data import.
+Data can be imported via CSV, XLSX, XLS, or PDF files.
+
+================================================================================
+                           SUPPORTED FILE FORMATS
+================================================================================
+
+1. CSV (Comma-Separated Values)
+   - Standard CSV with header row
+   - UTF-8 encoding recommended
+   - Comma delimiter (configurable)
+
+2. XLSX/XLS (Microsoft Excel)
+   - First sheet is parsed by default
+   - First row must contain column headers
+   - Supports both .xlsx and legacy .xls formats
+
+3. PDF (Portable Document Format)
+   - Tabular data extracted from PDF tables
+   - Best results with structured, grid-based PDFs
+   - Complex layouts may require manual review
+
+================================================================================
+                         COLUMN MAPPING REFERENCE
+================================================================================
+
+The system automatically maps incoming columns to the database schema.
+Column headers are case-insensitive and support common variations.
+
+--------------------------------------------------------------------------------
+IDENTIFICATION FIELDS
+--------------------------------------------------------------------------------
+
+Field Name          | Data Type   | Required | Description
+--------------------|-------------|----------|------------------------------------
+storage_facility    | TEXT        | No       | Physical storage facility code
+ship                | TEXT        | No       | Ship name or hull number
+ship_class          | TEXT        | No       | Ship class designation (e.g., DDG, CVN)
+program_code        | TEXT        | No       | Program/project code for tracking
+requisition_no      | TEXT        | No       | Requisition or order number
+nsn                 | TEXT        | No       | National Stock Number (full 13-char)
+fsc                 | TEXT        | No       | Federal Supply Classification (4-digit)
+niin                | TEXT        | No       | National Item Identification Number (9-digit)
+description         | TEXT        | YES      | Item description (required field)
+cage                | TEXT        | No       | Commercial and Government Entity code (5-char)
+serial_no           | TEXT        | No       | Item serial number
+barcode             | TEXT        | No       | Barcode or UPC/EAN code
+iuid                | TEXT        | No       | Item Unique Identification number
+
+--------------------------------------------------------------------------------
+LOGISTICS & CONTROL FIELDS
+--------------------------------------------------------------------------------
+
+Field Name          | Data Type   | Required | Description
+--------------------|-------------|----------|------------------------------------
+authority           | TEXT        | No       | Authorizing document or reference
+work_item           | TEXT        | No       | Work item or job order number
+li                  | TEXT        | No       | Line Item number
+matl_ctrl           | TEXT        | No       | Material Control code
+hmic                | TEXT        | No       | Hazardous Material Information Code
+smcc                | TEXT        | No       | Supply Management Code Category
+quantity            | INTEGER     | YES      | Item quantity (required, defaults to 0)
+unit                | TEXT        | No       | Unit of Issue (EA, BX, KT, etc.)
+location            | TEXT        | No       | Physical rack/bin location string
+inventory_type      | TEXT        | No       | Inventory classification type
+material_disposition| TEXT        | No       | Material disposition code (RTVU, FMS, etc.)
+condition_code      | TEXT        | No       | Condition code (A, B, F, H, etc.)
+condition           | TEXT        | No       | Condition description
+asset_type          | TEXT        | No       | Asset classification type
+mission_id          | TEXT        | No       | Associated mission identifier
+lin_esd             | TEXT        | No       | Line Item Number / Estimated Ship Date
+weight_lbs          | DECIMAL     | No       | Item weight in pounds (12,2 precision)
+
+--------------------------------------------------------------------------------
+FINANCIAL FIELDS
+--------------------------------------------------------------------------------
+
+Field Name          | Data Type   | Required | Description
+--------------------|-------------|----------|------------------------------------
+unit_price          | DECIMAL     | No       | Unit price in USD (14,2 precision)
+receipt_price       | DECIMAL     | No       | Receipt price in USD (14,2 precision)
+contract_no         | TEXT        | No       | Contract number
+
+--------------------------------------------------------------------------------
+TRACKING & AUDIT FIELDS
+--------------------------------------------------------------------------------
+
+Field Name          | Data Type   | Required | Description
+--------------------|-------------|----------|------------------------------------
+item_audit          | TEXT        | No       | Item audit status
+audit_no            | TEXT        | No       | Audit number or reference
+ship_ind            | TEXT        | No       | Ship indicator code
+ship_avail          | TEXT        | No       | Ship availability status
+receipt_date        | TEXT        | No       | Date item was received (flexible format)
+lot_no              | TEXT        | No       | Lot or batch number
+exp_date            | TEXT        | No       | Expiration date
+ext_date            | TEXT        | No       | Extension date (for shelf life)
+insp_date           | TEXT        | No       | Last inspection date
+last_audit_date     | TEXT        | No       | Date of last audit
+in_service_date     | TEXT        | No       | Date item entered service
+last_moved          | TIMESTAMP   | No       | Last movement timestamp (auto-tracked)
+
+--------------------------------------------------------------------------------
+MANUFACTURER & SOURCE FIELDS
+--------------------------------------------------------------------------------
+
+Field Name          | Data Type   | Required | Description
+--------------------|-------------|----------|------------------------------------
+manufacturer        | TEXT        | No       | Manufacturer name
+mfg_date            | TEXT        | No       | Manufacturing date
+
+--------------------------------------------------------------------------------
+METADATA FIELDS
+--------------------------------------------------------------------------------
+
+Field Name          | Data Type   | Required | Description
+--------------------|-------------|----------|------------------------------------
+data_user_id        | TEXT        | No       | User ID who entered the data
+remarks             | TEXT        | No       | Free-form remarks or notes
+warranty_item       | TEXT        | No       | Warranty status or information
+
+--------------------------------------------------------------------------------
+SYSTEM-GENERATED FIELDS (Not Imported)
+--------------------------------------------------------------------------------
+
+Field Name          | Data Type   | Description
+--------------------|-------------|--------------------------------------------
+id                  | SERIAL      | Auto-generated unique identifier
+site_id             | INTEGER     | Assigned during import (warehouse site)
+location_id         | INTEGER     | Linked to warehouse_locations table
+raw_row             | JSONB       | Original import data preserved as JSON
+created_at          | TIMESTAMP   | Record creation timestamp
+updated_at          | TIMESTAMP   | Record last update timestamp
+
+================================================================================
+                         COLUMN NAME ALIASES
+================================================================================
+
+The import system recognizes common variations of column names:
+
+Standard Field      | Accepted Aliases
+--------------------|--------------------------------------------------
+requisition_no      | req_no, requisition, req_number, requisition_number
+description         | desc, item_description, item_desc, part_description
+quantity            | qty, qnty, count
+unit_price          | price, cost, unit_cost
+unit                | ui, uom, unit_of_issue
+location            | loc, rack_location, bin_location, storage_loc
+material_disposition| mat_disposition, disposition, disp, mat_disp
+condition_code      | cond_code, condition_cd, cond
+serial_no           | sn, serial, serial_number
+manufacturer        | mfg, mfr, vendor
+weight_lbs          | weight, wt, weight_lb
+
+================================================================================
+                         DATA TYPE SPECIFICATIONS
+================================================================================
+
+TEXT
+----
+- Variable-length character string
+- No maximum length enforced
+- UTF-8 encoding supported
+- Leading/trailing whitespace trimmed on import
+
+INTEGER
+-------
+- Whole numbers only
+- Range: -2,147,483,648 to 2,147,483,647
+- Non-numeric values will fail validation
+
+DECIMAL (NUMERIC)
+-----------------
+- Supports decimal precision
+- unit_price/receipt_price: 14 digits total, 2 decimal places
+- weight_lbs: 12 digits total, 2 decimal places
+- Currency symbols ($) are stripped during import
+- Commas in numbers are handled automatically
+
+TIMESTAMP
+---------
+- ISO 8601 format preferred: YYYY-MM-DDTHH:MM:SSZ
+- Also accepts: MM/DD/YYYY, DD-MMM-YYYY, YYYY-MM-DD
+- Stored in UTC timezone
+
+JSONB
+-----
+- Binary JSON format (internal use)
+- Preserves original import row data
+
+================================================================================
+                         GOVERNMENT COMPLIANCE
+================================================================================
+
+NATIONAL STOCK NUMBER (NSN) FORMAT
+----------------------------------
+Full format: XXXX-XX-XXX-XXXX (13 characters with dashes)
+
+Components:
+- FSC (Federal Supply Classification): First 4 digits
+- NIIN (National Item Identification Number): Last 9 digits
+
+Example: 5340-01-234-5678
+         ^^^^              = FSC: 5340 (Hardware and Abrasives)
+              ^^^^^^^^^    = NIIN: 012345678
+
+The system automatically:
+- Validates NSN format
+- Extracts FSC and NIIN components
+- Cross-references with Federal Catalog data (when available)
+
+CAGE CODE FORMAT
+----------------
+5-character alphanumeric code assigned by DLA.
+Example: 1ABC2, 5F654
+
+Identifies the manufacturer/supplier for government contracts.
+
+CONDITION CODES
+---------------
+Standard DoD condition codes supported:
+
+Code | Description
+-----|----------------------------------------
+A    | Serviceable (new or like-new)
+B    | Serviceable (good condition)
+C    | Serviceable (fair condition)
+D    | Serviceable (meets minimum standards)
+E    | Unserviceable (repairable)
+F    | Unserviceable (condemned)
+G    | Unserviceable (incomplete)
+H    | Unserviceable (scrap)
+
+================================================================================
+                         IMPORT VALIDATION RULES
+================================================================================
+
+REQUIRED FIELDS
+---------------
+1. description - Must be non-empty string
+2. quantity - Must be valid integer (defaults to 0 if missing)
+
+AUTOMATIC TRANSFORMATIONS
+-------------------------
+1. Currency symbols removed from price fields
+2. Commas removed from numeric values
+3. Date formats normalized
+4. Leading/trailing whitespace trimmed
+5. Empty strings converted to NULL
+
+VALIDATION WARNINGS (Non-blocking)
+----------------------------------
+- Missing NSN or incomplete format
+- Quantity = 0 (may indicate data issue)
+- Missing location data
+- Expired items (exp_date in past)
+- High-value items without serial numbers
+
+VALIDATION ERRORS (Import Blocked)
+----------------------------------
+- Missing required description field
+- Invalid numeric format in quantity/price fields
+- Duplicate requisition_no within same import (configurable)
+
+================================================================================
+                         SAMPLE IMPORT DATA
+================================================================================
+
+CSV Example:
+------------
+requisition_no,description,quantity,unit,unit_price,location,nsn,condition_code
+REQ-2026-001,SEAL RING O,25,EA,12.50,B-870-A-01,5330-01-234-5678,A
+REQ-2026-002,VALVE ASSEMBLY,1,EA,1250.00,B-871-B-05,4820-00-123-4567,B
+REQ-2026-003,BEARING BALL,10,EA,45.00,B-870-A-02,3110-01-567-8901,A
+
+Excel Column Headers:
+---------------------
+Storage Facility | Ship | Ship Class | Program Code | Requisition No | 
+Authority | Work Item | LI | MATL CTRL | HMIC | SMCC | Item Audit | 
+Audit No | Ship Ind | Ship Avail | NSN | FSC | NIIN | Description | 
+CAGE | Manufacturer | Mfg Date | Contract No | IUID | Unit | Quantity | 
+Unit Price | Receipt Price | Receipt Date | Location | Lot No | Serial No | 
+Barcode | Inventory Type | Material Disposition | Condition Code | 
+Condition | Asset Type | Exp Date | Ext Date | Insp Date | Last Audit Date | 
+User ID | Remarks | In Service Date | Warranty Item | Mission ID | LIN/ESD | 
+Weight
+
+================================================================================
+                         OPTIMIZATION DATA USAGE
+================================================================================
+
+The following fields are used by the optimization algorithms:
+
+CARDSTACK ALGORITHM
+-------------------
+- ship_class: Groups items by ship class for consolidation
+- program_code: Secondary grouping criteria
+- location: Current rack location for stacking analysis
+
+SIZE STANDARDIZATION
+--------------------
+- program_code: Groups items by program for zone optimization
+- location: Current location for movement recommendations
+
+VALUE DENSITY
+-------------
+- unit_price: Determines high-value items
+- quantity: Total value calculation (unit_price x quantity)
+- location: Accessibility scoring for relocations
+
+BIN-PACKING
+-----------
+- material_disposition: Groups items by disposal/transfer status
+- quantity: Pallet capacity calculations
+- weight_lbs: Weight constraint validation
+
+================================================================================
+                         CONTACT & SUPPORT
+================================================================================
+
+For questions about data import or schema updates:
+- Refer to the ARKA WMS User Guide
+- Contact system administrator
+
+For technical schema modifications:
+- Review packages/shared/inventoryColumns.ts
+- Review shared/schema.ts (warehouseInventoryItems table)
+
+================================================================================
+                    END OF SCHEMA DOCUMENTATION
+================================================================================
