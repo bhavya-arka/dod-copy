@@ -3152,29 +3152,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(warehouseInventoryItems)
         .where(eq(warehouseInventoryItems.site_id, siteId));
 
-      // Parse item dimensions and values
+      // Parse item data from raw_row and database fields
       const itemsWithData = items.map(item => {
         const rawRow = item.raw_row as Record<string, any> || {};
-        const dims = rawRow?.dimensions || { l: 0, w: 0, h: 0 };
-        const l = parseFloat(dims.l || rawRow?.length || item.length_in || 0);
-        const w = parseFloat(dims.w || rawRow?.width || item.width_in || 0);
-        const h = parseFloat(dims.h || rawRow?.height || item.height_in || 0);
-        const weight = parseFloat(rawRow?.weight || item.weight_lb || 0);
-        const volume = l * w * h;
-        const qty = item.quantity || 1;
-        const price = parseFloat(item.unit_price?.toString() || "0");
+        const qty = item.quantity || parseInt(rawRow?.qty) || 1;
+        const price = parseFloat(item.unit_price?.toString() || rawRow?.unit_price || "0");
         const value = qty * price;
-
+        const weight = parseFloat(item.weight_lbs?.toString() || rawRow?.weight || "0");
+        
+        // Extract location info - location field in raw_row contains rack location like "2069-B"
+        const location = rawRow?.location || item.location || 'Unassigned';
+        // Extract zone prefix (e.g., "2069" from "2069-B")
+        const locationZone = location.split('-')[0] || location.substring(0, 4) || 'UNK';
+        
         return {
           id: item.id,
           requisition_no: item.requisition_no || `ITEM-${item.id}`,
-          description: item.description || '',
-          l, w, h, weight,
-          volume,
+          description: item.description || rawRow?.description || '',
           quantity: qty,
           value,
-          valueDensity: volume > 0 ? value / volume : 0,
-          rack_location: rawRow?.rack_location || 'Unassigned',
+          weight,
+          rack_location: location,
+          location_zone: locationZone,
+          ship_class: rawRow?.ship_class || '',
+          inventory_type: rawRow?.inventory_type || '',
+          condition_code: rawRow?.condition_code || item.condition || 'A',
+          storage_facility: rawRow?.storage_facility || '',
+          mat_disposition: rawRow?.mat_disposition || '',
+          program_code: rawRow?.program_code || '',
         };
       });
 
@@ -3197,226 +3202,233 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Run algorithm-specific optimization
       if (algorithm === 'cardstack') {
-        const { similarityThreshold = 80, maxStackHeight = 5 } = params || {};
-        const tolerance = (100 - similarityThreshold) / 100;
+        // CardStack: Group similar items by ship_class + inventory_type + location_zone
+        // Then consolidate scattered items of the same category into consolidated locations
+        const { maxConsolidationPerZone = 10 } = params || {};
         
-        // Group items by similar base dimensions
-        const groups: Map<string, typeof itemsWithData> = new Map();
+        // Group items by ship_class + inventory_type (items that belong together)
+        const categoryGroups: Map<string, typeof itemsWithData> = new Map();
         for (const item of itemsWithData) {
-          if (item.l === 0 || item.w === 0) continue;
-          
-          let foundGroup = false;
-          for (const [key, group] of groups.entries()) {
-            const [gl, gw] = key.split('_').map(Number);
-            const lDiff = Math.abs(item.l - gl) / Math.max(gl, 1);
-            const wDiff = Math.abs(item.w - gw) / Math.max(gw, 1);
-            
-            if (lDiff <= tolerance && wDiff <= tolerance) {
-              group.push(item);
-              foundGroup = true;
-              break;
-            }
+          const categoryKey = `${item.ship_class || 'UNASSIGNED'}_${item.inventory_type || 'GENERAL'}`;
+          if (!categoryGroups.has(categoryKey)) {
+            categoryGroups.set(categoryKey, []);
           }
-          
-          if (!foundGroup) {
-            const key = `${item.l}_${item.w}`;
-            groups.set(key, [item]);
-          }
+          categoryGroups.get(categoryKey)!.push(item);
         }
 
-        // Generate stacking actions for groups with multiple items
+        // For each category, find items scattered across different zones and suggest consolidation
         let actionId = 1;
-        let savedSpace = 0;
-        for (const [key, group] of groups.entries()) {
-          if (group.length < 2) continue;
+        let consolidatedItems = 0;
+        for (const [category, groupItems] of categoryGroups.entries()) {
+          if (groupItems.length < 2) continue;
           
-          const stacksNeeded = Math.ceil(group.length / maxStackHeight);
-          const baseItems = group.slice(0, stacksNeeded);
-          const itemsToStack = group.slice(stacksNeeded);
+          // Find unique zones for this category
+          const zoneMap: Map<string, typeof itemsWithData> = new Map();
+          for (const item of groupItems) {
+            if (!zoneMap.has(item.location_zone)) {
+              zoneMap.set(item.location_zone, []);
+            }
+            zoneMap.get(item.location_zone)!.push(item);
+          }
           
-          for (let i = 0; i < itemsToStack.length && i < baseItems.length * (maxStackHeight - 1); i++) {
-            const targetBase = baseItems[i % baseItems.length];
-            const itemToMove = itemsToStack[i];
+          // If items are spread across multiple zones, suggest consolidation
+          if (zoneMap.size > 1) {
+            // Find the zone with the most items as the target
+            let targetZone = '';
+            let maxCount = 0;
+            for (const [zone, zoneItems] of zoneMap.entries()) {
+              if (zoneItems.length > maxCount) {
+                maxCount = zoneItems.length;
+                targetZone = zone;
+              }
+            }
             
-            actions.push({
-              id: `action-${actionId++}`,
-              action: `Stack ${itemToMove.requisition_no} onto ${targetBase.requisition_no}`,
-              item: itemToMove.requisition_no,
-              from: itemToMove.rack_location,
-              to: `Stacked on ${targetBase.rack_location}`,
-              priority: 'medium',
-              estimatedBenefit: `Save ${(itemToMove.l * itemToMove.w).toFixed(0)} sq in floor space`,
-            });
-            savedSpace += itemToMove.l * itemToMove.w;
+            // Suggest moving items from other zones to the target zone
+            const [shipClass, invType] = category.split('_');
+            for (const [zone, zoneItems] of zoneMap.entries()) {
+              if (zone === targetZone) continue;
+              
+              for (const item of zoneItems.slice(0, maxConsolidationPerZone)) {
+                actions.push({
+                  id: `action-${actionId++}`,
+                  action: `Consolidate with ${shipClass} ${invType} items`,
+                  item: item.requisition_no,
+                  from: item.rack_location,
+                  to: `Zone ${targetZone} (consolidation area)`,
+                  priority: zoneItems.length > 5 ? 'high' : 'medium',
+                  estimatedBenefit: `Reduces picking time for ${shipClass} items`,
+                });
+                consolidatedItems++;
+              }
+            }
           }
         }
         
         summary = {
-          potentialSavings: `${savedSpace.toFixed(0)} sq in`,
-          spaceImprovement: items.length > 0 ? `${Math.min(30, Math.round((actions.length / items.length) * 100))}%` : '0%',
-          itemsAffected: actions.length,
+          potentialSavings: `${consolidatedItems} items consolidated`,
+          spaceImprovement: items.length > 0 ? `${Math.min(35, Math.round((consolidatedItems / items.length) * 100))}%` : '0%',
+          itemsAffected: consolidatedItems,
           actionsGenerated: actions.length,
         };
       } 
       else if (algorithm === 'size_standardization') {
-        const { tolerancePercent = 10, minGroupSize = 3 } = params || {};
-        const tolerance = tolerancePercent / 100;
+        // Size Standardization: Group items by program_code and condition_code
+        // Move items to standardized zones based on their category
+        const { minGroupSize = 3 } = params || {};
         
-        // Group by exact size dimensions
-        const sizeGroups: Map<string, typeof itemsWithData> = new Map();
+        // Group by program_code (PM1, PM3, etc.) + condition_code (A, B, etc.)
+        const programGroups: Map<string, typeof itemsWithData> = new Map();
         for (const item of itemsWithData) {
-          if (item.volume === 0) continue;
-          
-          let foundGroup = false;
-          for (const [key, group] of sizeGroups.entries()) {
-            const [gl, gw, gh] = key.split('x').map(Number);
-            const lDiff = Math.abs(item.l - gl) / Math.max(gl, 1);
-            const wDiff = Math.abs(item.w - gw) / Math.max(gw, 1);
-            const hDiff = Math.abs(item.h - gh) / Math.max(gh, 1);
-            
-            if (lDiff <= tolerance && wDiff <= tolerance && hDiff <= tolerance) {
-              group.push(item);
-              foundGroup = true;
-              break;
-            }
+          const key = `${item.program_code || 'UNASSIGNED'}_${item.condition_code || 'A'}`;
+          if (!programGroups.has(key)) {
+            programGroups.set(key, []);
           }
-          
-          if (!foundGroup) {
-            const key = `${item.l}x${item.w}x${item.h}`;
-            sizeGroups.set(key, [item]);
-          }
+          programGroups.get(key)!.push(item);
         }
 
-        // Generate consolidation actions for size groups
+        // For each program group, suggest organizing by standardized zones
         let actionId = 1;
-        for (const [size, group] of sizeGroups.entries()) {
-          if (group.length < minGroupSize) continue;
+        let standardizedCount = 0;
+        for (const [groupKey, groupItems] of programGroups.entries()) {
+          if (groupItems.length < minGroupSize) continue;
           
-          const targetZone = `Size Zone ${size}`;
-          for (const item of group.slice(1)) {
-            if (item.rack_location !== targetZone) {
+          const [program, condition] = groupKey.split('_');
+          const standardZone = `${program}-${condition}-ZONE`;
+          
+          // Find items not in the standard zone
+          for (const item of groupItems) {
+            // If item's current zone doesn't match the standard pattern
+            if (!item.rack_location.startsWith(program)) {
               actions.push({
                 id: `action-${actionId++}`,
-                action: `Relocate to ${targetZone}`,
+                action: `Standardize to ${program} area`,
                 item: item.requisition_no,
                 from: item.rack_location,
-                to: targetZone,
-                priority: 'low',
-                estimatedBenefit: 'Improved picking efficiency',
+                to: standardZone,
+                priority: condition === 'A' ? 'medium' : 'low',
+                estimatedBenefit: `Aligns with ${program} program standards`,
               });
+              standardizedCount++;
             }
           }
         }
         
-        const consolidatedGroups = Array.from(sizeGroups.values()).filter(g => g.length >= minGroupSize).length;
+        const groupsProcessed = Array.from(programGroups.values()).filter(g => g.length >= minGroupSize).length;
         summary = {
-          potentialSavings: `${consolidatedGroups} zones consolidated`,
-          spaceImprovement: `${Math.min(25, consolidatedGroups * 5)}%`,
-          itemsAffected: actions.length,
+          potentialSavings: `${groupsProcessed} program zones standardized`,
+          spaceImprovement: `${Math.min(30, Math.round((standardizedCount / Math.max(items.length, 1)) * 100))}%`,
+          itemsAffected: standardizedCount,
           actionsGenerated: actions.length,
         };
       }
       else if (algorithm === 'value_density') {
-        const { highValueThreshold = 1000, accessibilityWeight = 0.7 } = params || {};
+        // Value Density: Prioritize high-value items for accessible locations
+        const { highValueThreshold = 1000 } = params || {};
         
-        // Sort items by value density
+        // Sort items by total value (price * quantity) descending
         const sortedByValue = [...itemsWithData]
           .filter(i => i.value > 0)
-          .sort((a, b) => b.valueDensity - a.valueDensity);
+          .sort((a, b) => b.value - a.value);
         
-        // High value items should be in accessible locations
+        // High value items should be in accessible (lower numbered) locations
         const highValueItems = sortedByValue.filter(i => i.value >= highValueThreshold);
-        const priorityZones = ['A-1', 'A-2', 'A-3', 'B-1', 'B-2', 'B-3'];
+        
+        // Define priority zones based on accessibility (zones starting with low numbers)
+        const accessibleZones = ['1000', '1001', '1002', '1003', '2000', '2001', '2002', '2003'];
         
         let actionId = 1;
-        for (let i = 0; i < Math.min(highValueItems.length, priorityZones.length); i++) {
-          const item = highValueItems[i];
-          const targetZone = `Priority Zone ${priorityZones[i]}`;
+        let movedValue = 0;
+        for (const item of highValueItems) {
+          // Check if item is in an accessible zone (low number = more accessible)
+          const currentZoneNum = parseInt(item.location_zone) || 9999;
           
-          if (!item.rack_location.includes('Priority')) {
+          // If item is in a less accessible zone (higher number), suggest moving
+          if (currentZoneNum > 3000) {
+            // Find the first available accessible zone
+            const targetZone = accessibleZones[actionId % accessibleZones.length];
             actions.push({
               id: `action-${actionId++}`,
-              action: `Move to priority zone`,
+              action: `Move high-value item to accessible zone`,
               item: item.requisition_no,
               from: item.rack_location,
-              to: targetZone,
+              to: `Zone ${targetZone}-A (Priority Area)`,
               priority: 'high',
-              estimatedBenefit: `$${item.value.toFixed(2)} value item secured`,
+              estimatedBenefit: `$${item.value.toLocaleString()} value item - faster access`,
             });
+            movedValue += item.value;
+            
+            if (actions.length >= 50) break; // Limit actions
           }
         }
         
         const totalHighValue = highValueItems.reduce((sum, i) => sum + i.value, 0);
         summary = {
-          potentialSavings: `$${totalHighValue.toFixed(0)} secured`,
-          spaceImprovement: `${actions.length} items prioritized`,
+          potentialSavings: `$${movedValue.toLocaleString()} moved to priority`,
+          spaceImprovement: `${highValueItems.length} high-value items identified`,
           itemsAffected: actions.length,
           actionsGenerated: actions.length,
         };
       }
       else if (algorithm === 'bin_packing') {
-        const { containerLength = 48, containerWidth = 40, containerHeight = 48, maxWeight = 2000 } = params || {};
+        // Bin Packing: Organize items by mat_disposition for efficient shipping/staging
+        const { maxItemsPerBin = 20 } = params || {};
         
-        // Sort by volume descending for first-fit decreasing
-        const sortedByVolume = [...itemsWithData]
-          .filter(i => i.volume > 0 && i.l <= containerLength && i.w <= containerWidth && i.h <= containerHeight)
-          .sort((a, b) => b.volume - a.volume);
-        
-        // Simulate bin packing
-        const bins: Array<{ items: typeof itemsWithData; usedVolume: number; usedWeight: number }> = [];
-        const containerVolume = containerLength * containerWidth * containerHeight;
-        
-        for (const item of sortedByVolume) {
-          let placed = false;
-          
-          for (const bin of bins) {
-            const newVolume = bin.usedVolume + item.volume;
-            const newWeight = bin.usedWeight + item.weight;
-            
-            if (newVolume <= containerVolume * 0.85 && newWeight <= maxWeight) {
-              bin.items.push(item);
-              bin.usedVolume = newVolume;
-              bin.usedWeight = newWeight;
-              placed = true;
-              break;
-            }
+        // Group items by mat_disposition (SHORESIDE, RESIDUAL, etc.) for shipping
+        const dispositionGroups: Map<string, typeof itemsWithData> = new Map();
+        for (const item of itemsWithData) {
+          const disposition = item.mat_disposition || 'UNASSIGNED';
+          if (!dispositionGroups.has(disposition)) {
+            dispositionGroups.set(disposition, []);
           }
-          
-          if (!placed) {
-            bins.push({
-              items: [item],
-              usedVolume: item.volume,
-              usedWeight: item.weight,
-            });
-          }
+          dispositionGroups.get(disposition)!.push(item);
         }
         
-        // Generate packing order actions
+        // Create bins (shipping containers) for each disposition, sorted by value
         let actionId = 1;
-        for (let binIndex = 0; binIndex < bins.length; binIndex++) {
-          const bin = bins[binIndex];
-          for (let itemIndex = 0; itemIndex < bin.items.length; itemIndex++) {
-            const item = bin.items[itemIndex];
+        let binNumber = 1;
+        let totalBinned = 0;
+        
+        for (const [disposition, dispItems] of dispositionGroups.entries()) {
+          if (dispItems.length < 2) continue;
+          
+          // Sort by value descending within each disposition
+          const sortedItems = dispItems.sort((a, b) => b.value - a.value);
+          
+          // Pack items into bins
+          let currentBinItems = 0;
+          let currentBinNum = binNumber;
+          
+          for (const item of sortedItems) {
+            if (currentBinItems >= maxItemsPerBin) {
+              binNumber++;
+              currentBinNum = binNumber;
+              currentBinItems = 0;
+            }
+            
             actions.push({
               id: `action-${actionId++}`,
-              action: `Pack into Container ${binIndex + 1} (position ${itemIndex + 1})`,
+              action: `Stage for ${disposition} shipment`,
               item: item.requisition_no,
               from: item.rack_location,
-              to: `Container ${binIndex + 1}`,
-              priority: itemIndex === 0 ? 'high' : 'medium',
-              estimatedBenefit: `${((item.volume / containerVolume) * 100).toFixed(1)}% utilization`,
+              to: `Staging Bin ${currentBinNum} (${disposition})`,
+              priority: currentBinItems === 0 ? 'high' : 'medium',
+              estimatedBenefit: `$${item.value.toLocaleString()} value - ${disposition} ready`,
             });
+            
+            currentBinItems++;
+            totalBinned++;
+            
+            if (actions.length >= 100) break; // Limit actions
           }
+          
+          binNumber++;
+          if (actions.length >= 100) break;
         }
         
-        const avgUtilization = bins.length > 0 
-          ? (bins.reduce((sum, b) => sum + b.usedVolume, 0) / (bins.length * containerVolume)) * 100 
-          : 0;
-        
         summary = {
-          potentialSavings: `${bins.length} containers needed`,
-          spaceImprovement: `${avgUtilization.toFixed(1)}% avg utilization`,
-          itemsAffected: sortedByVolume.length,
+          potentialSavings: `${binNumber - 1} staging bins organized`,
+          spaceImprovement: `${dispositionGroups.size} disposition groups processed`,
+          itemsAffected: totalBinned,
           actionsGenerated: actions.length,
         };
       }
