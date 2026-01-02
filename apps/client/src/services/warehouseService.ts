@@ -536,13 +536,44 @@ export async function generateWarehouseInsights(
   }
   
   const data = await response.json();
+  
+  // The insight content may be an object with summary/recommendations or a string
+  const insightContent = data.insight?.content || data.content;
+  let contentString: string;
+  let recommendations: string[] = [];
+  let summary: string | undefined;
+  
+  if (typeof insightContent === 'object' && insightContent !== null) {
+    // Extract structured data from the insight object
+    summary = insightContent.summary || '';
+    recommendations = insightContent.optimization_suggestions || insightContent.recommendations || [];
+    
+    // Build a formatted content string from the object
+    const parts: string[] = [];
+    if (insightContent.summary) {
+      parts.push(insightContent.summary);
+    }
+    if (insightContent.key_metrics) {
+      parts.push(`\nKey Metrics: ${JSON.stringify(insightContent.key_metrics)}`);
+    }
+    if (insightContent.risk_flags && insightContent.risk_flags.length > 0) {
+      parts.push(`\nRisk Flags: ${insightContent.risk_flags.join(', ')}`);
+    }
+    if (insightContent.regulation_notes) {
+      parts.push(`\nRegulation Notes: ${insightContent.regulation_notes}`);
+    }
+    contentString = parts.length > 0 ? parts.join('\n') : 'Analysis complete. Review recommendations below.';
+  } else {
+    contentString = insightContent || 'No insights available';
+  }
+  
   return {
-    id: data.id || Date.now(),
+    id: data.insight?.id || data.id || Date.now(),
     type,
-    content: data.content || data.insight?.content || 'No insights available',
-    summary: data.summary,
-    recommendations: data.recommendations,
-    createdAt: data.createdAt || new Date().toISOString(),
-    cached: data.cached || false
+    content: contentString,
+    summary,
+    recommendations: recommendations.length > 0 ? recommendations : data.recommendations,
+    createdAt: data.insight?.generatedAt || data.createdAt || new Date().toISOString(),
+    cached: data.fromCache || data.cached || false
   };
 }

@@ -14,7 +14,8 @@ import {
   warehouseLocations,
   warehouseSettings,
   warehouseAgingThresholds,
-  warehouseAnalyticsSnapshots
+  warehouseAnalyticsSnapshots,
+  warehouseOptimizationRuns
 } from "@shared/schema";
 import { eq, and, or, like, ilike, sql, gt, lt, isNull, isNotNull, asc, desc, count } from "drizzle-orm";
 import {
