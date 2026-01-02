@@ -204,7 +204,18 @@ export async function runOptimization(siteId: number): Promise<OptimizationResul
     credentials: "include",
   });
   if (!response.ok) throw new Error("Failed to run optimization");
-  return response.json();
+  const data = await response.json();
+  
+  // Map backend response (uses 'summary') to frontend type (uses 'metrics')
+  return {
+    site_name: data.site_name,
+    recommendations: data.recommendations || [],
+    metrics: {
+      total_items: data.summary?.total_items || 0,
+      total_value: data.summary?.total_value || 0,
+      aging_alerts: data.recommendations?.filter((r: any) => r.type?.toLowerCase().includes('aging')).length || 0,
+    },
+  };
 }
 
 /**
@@ -463,4 +474,75 @@ export async function fetchInventoryColumns(): Promise<{
     throw new Error("Failed to fetch inventory columns");
   }
   return response.json();
+}
+
+/** AI insight type for warehouse analysis */
+export type WarehouseInsightType = 
+  | 'warehouse_optimization' 
+  | 'inventory_analysis' 
+  | 'storage_efficiency'
+  | 'mission_readiness';
+
+/** AI-generated warehouse insight response */
+export interface WarehouseAiInsight {
+  id: number;
+  type: WarehouseInsightType;
+  content: string;
+  summary?: string;
+  recommendations?: string[];
+  createdAt: string;
+  cached: boolean;
+}
+
+/**
+ * Generate AI insights for warehouse inventory
+ * @param siteId - Site ID
+ * @param type - Type of insight to generate
+ * @param inventoryData - Optional inventory data to analyze
+ * @param forceRegenerate - Force regeneration instead of using cache
+ * @returns AI-generated insight
+ */
+export async function generateWarehouseInsights(
+  siteId: number,
+  type: WarehouseInsightType = 'warehouse_optimization',
+  inventoryData?: {
+    totalItems?: number;
+    totalValue?: number;
+    agingAlerts?: number;
+    siteCode?: string;
+    siteName?: string;
+  },
+  forceRegenerate: boolean = false
+): Promise<WarehouseAiInsight> {
+  const response = await fetch('/api/insights/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      type: 'allocation_summary',
+      inputData: {
+        analysisType: type,
+        siteId,
+        warehouseContext: true,
+        ...inventoryData
+      },
+      forceRegenerate
+    }),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to generate AI insights');
+  }
+  
+  const data = await response.json();
+  return {
+    id: data.id || Date.now(),
+    type,
+    content: data.content || data.insight?.content || 'No insights available',
+    summary: data.summary,
+    recommendations: data.recommendations,
+    createdAt: data.createdAt || new Date().toISOString(),
+    cached: data.cached || false
+  };
 }

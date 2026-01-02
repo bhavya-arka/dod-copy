@@ -1,8 +1,23 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Brain, Layers, Activity, AlertTriangle, Shield, Loader2, CheckCircle } from "lucide-react";
+import { 
+  Brain, 
+  Layers, 
+  Activity, 
+  AlertTriangle, 
+  Shield, 
+  Loader2, 
+  CheckCircle, 
+  Wand2, 
+  Sparkles,
+  RefreshCw,
+  ChevronRight,
+  Info,
+  Warehouse
+} from "lucide-react";
 import type { WarehouseSite, OptimizationResult, ToastMessage } from "./types";
-import { runOptimization } from "../../services/warehouseService";
+import { runOptimization, generateWarehouseInsights, type WarehouseAiInsight } from "../../services/warehouseService";
+import OptimizationWizardModal, { type Algorithm } from "./modals/OptimizationWizardModal";
 
 interface WMSAiInsightsProps {
   sites: WarehouseSite[];
@@ -11,40 +26,68 @@ interface WMSAiInsightsProps {
   onShowToast: (message: string, type?: ToastMessage["type"]) => void;
 }
 
-const insightCards = [
+interface InsightCard {
+  id: string;
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  bgColor: string;
+  hoverBgColor: string;
+  action: "wizard" | "analysis";
+  algorithm?: Algorithm;
+  tooltip: string;
+}
+
+const insightCards: InsightCard[] = [
   {
+    id: "placement",
     title: "Placement Optimization",
     description: "AI-powered recommendations for optimal item placement based on access frequency and weight distribution",
     icon: Layers,
     color: "text-blue-600",
     bgColor: "bg-blue-50",
+    hoverBgColor: "hover:bg-blue-100",
+    action: "wizard",
+    algorithm: "cardstack",
+    tooltip: "Opens the Optimization Wizard with CardStack algorithm pre-selected",
   },
   {
+    id: "load-balancing",
     title: "Predictive Load Balancing",
     description: "Forecast capacity needs and balance inventory across sites to prevent bottlenecks",
     icon: Activity,
     color: "text-purple-600",
     bgColor: "bg-purple-50",
+    hoverBgColor: "hover:bg-purple-100",
+    action: "wizard",
+    algorithm: "bin_packing",
+    tooltip: "Opens the Optimization Wizard with Bin-Packing algorithm pre-selected",
   },
   {
+    id: "aging",
     title: "Aging Alerts",
     description: "Proactive notifications for items approaching shelf life limits or requiring rotation",
     icon: AlertTriangle,
     color: "text-amber-600",
     bgColor: "bg-amber-50",
+    hoverBgColor: "hover:bg-amber-100",
+    action: "analysis",
+    tooltip: "Runs optimization analysis to identify aging inventory items",
   },
   {
+    id: "readiness",
     title: "Mission Readiness Score",
     description: "Real-time assessment of inventory completeness for active and planned missions",
     icon: Shield,
     color: "text-green-600",
     bgColor: "bg-green-50",
+    hoverBgColor: "hover:bg-green-100",
+    action: "analysis",
+    tooltip: "Runs optimization analysis to calculate mission readiness metrics",
   },
 ];
 
-/**
- * AI Insights tab component - Intelligent optimization and predictive analytics
- */
 export default function WMSAiInsights({
   sites,
   selectedSiteId,
@@ -53,6 +96,13 @@ export default function WMSAiInsights({
 }: WMSAiInsightsProps) {
   const [optimizationLoading, setOptimizationLoading] = useState(false);
   const [optimization, setOptimization] = useState<OptimizationResult | null>(null);
+  const [showWizard, setShowWizard] = useState(false);
+  const [preselectedAlgorithm, setPreselectedAlgorithm] = useState<Algorithm | null>(null);
+  const [aiInsightLoading, setAiInsightLoading] = useState(false);
+  const [aiInsight, setAiInsight] = useState<WarehouseAiInsight | null>(null);
+  const [loadingCardId, setLoadingCardId] = useState<string | null>(null);
+
+  const selectedSite = sites.find(s => s.id === selectedSiteId);
 
   const handleRunOptimization = async () => {
     if (!selectedSiteId) {
@@ -71,66 +121,286 @@ export default function WMSAiInsights({
     }
   };
 
+  const handleCardClick = async (card: InsightCard) => {
+    if (!selectedSiteId) {
+      onShowToast("Please select a warehouse site first", "warning");
+      return;
+    }
+
+    if (card.action === "wizard" && card.algorithm) {
+      setPreselectedAlgorithm(card.algorithm);
+      setShowWizard(true);
+    } else if (card.action === "analysis") {
+      setLoadingCardId(card.id);
+      try {
+        const data = await runOptimization(selectedSiteId);
+        setOptimization(data);
+        onShowToast(`${card.title} analysis complete!`, "success");
+      } catch (err) {
+        onShowToast(`Failed to run ${card.title}`, "error");
+      } finally {
+        setLoadingCardId(null);
+      }
+    }
+  };
+
+  const handleOpenWizard = () => {
+    if (!selectedSiteId) {
+      onShowToast("Please select a warehouse site first", "warning");
+      return;
+    }
+    setPreselectedAlgorithm(null);
+    setShowWizard(true);
+  };
+
+  const handleWizardSuccess = () => {
+    setShowWizard(false);
+    setPreselectedAlgorithm(null);
+    onShowToast("Optimization completed successfully!", "success");
+  };
+
+  const handleGenerateAiInsights = async (forceRegenerate: boolean = false) => {
+    if (!selectedSiteId) {
+      onShowToast("Please select a warehouse site first", "warning");
+      return;
+    }
+
+    setAiInsightLoading(true);
+    try {
+      const data = await generateWarehouseInsights(
+        selectedSiteId,
+        'warehouse_optimization',
+        {
+          totalItems: optimization?.metrics.total_items,
+          totalValue: optimization?.metrics.total_value,
+          agingAlerts: optimization?.metrics.aging_alerts,
+          siteCode: selectedSite?.code,
+          siteName: selectedSite?.name,
+        },
+        forceRegenerate
+      );
+      setAiInsight(data);
+      onShowToast(
+        forceRegenerate ? "AI insights regenerated!" : (data.cached ? "Loaded cached AI insights" : "AI insights generated!"),
+        "success"
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to generate AI insights";
+      onShowToast(message, "error");
+    } finally {
+      setAiInsightLoading(false);
+    }
+  };
+
   return (
     <>
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground mb-1">AI Insights</h1>
-        <p className="text-muted-foreground">Intelligent optimization and predictive analytics</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground mb-1">AI Insights</h1>
+            <p className="text-muted-foreground">Intelligent optimization and predictive analytics</p>
+          </div>
+          <button
+            onClick={handleOpenWizard}
+            disabled={!selectedSiteId}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#004E89] to-[#0066b3] text-white hover:from-[#003d6d] hover:to-[#004E89] transition-all flex items-center gap-2 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-md"
+          >
+            <Wand2 className="w-5 h-5" />
+            <span className="font-medium">Optimization Wizard</span>
+          </button>
+        </div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="rounded-2xl bg-gradient-to-r from-[#004E89]/10 to-[#0066b3]/10 border border-[#004E89]/20 p-4 mb-6"
+      >
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Warehouse className="w-5 h-5 text-[#004E89]" />
+            <span className="text-sm font-medium text-foreground">Select Warehouse:</span>
+          </div>
+          <select
+            value={selectedSiteId || ""}
+            onChange={(e) => {
+              onSelectSite(e.target.value ? Number(e.target.value) : null);
+              setOptimization(null);
+              setAiInsight(null);
+            }}
+            className="flex-1 px-4 py-2.5 rounded-xl bg-white border-2 border-[#004E89]/30 text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-2 focus:ring-[#004E89]/20 transition-all font-medium"
+          >
+            <option value="">Choose a warehouse site to analyze...</option>
+            {sites.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.name} ({site.code}) {site.item_count ? `- ${site.item_count} items` : ''}
+              </option>
+            ))}
+          </select>
+          {selectedSite && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Info className="w-4 h-4" />
+              <span>Selected: <strong className="text-foreground">{selectedSite.name}</strong></span>
+            </div>
+          )}
+        </div>
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {insightCards.map((card, i) => (
-          <motion.div
-            key={card.title}
+          <motion.button
+            key={card.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className="rounded-2xl bg-white border border-border shadow-sm p-6 hover:shadow-md transition-shadow"
+            transition={{ delay: i * 0.1 + 0.2 }}
+            onClick={() => handleCardClick(card)}
+            disabled={!selectedSiteId || loadingCardId === card.id}
+            className={`group rounded-2xl bg-white border border-border shadow-sm p-6 text-left transition-all duration-200 hover:shadow-lg hover:border-[#004E89]/30 ${card.hoverBgColor} disabled:opacity-60 disabled:cursor-not-allowed relative overflow-hidden`}
+            title={card.tooltip}
           >
+            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+              {loadingCardId === card.id ? (
+                <Loader2 className="w-5 h-5 animate-spin text-[#004E89]" />
+              ) : (
+                <ChevronRight className="w-5 h-5 text-[#004E89]" />
+              )}
+            </div>
             <div className="flex items-start gap-4">
-              <div className={`p-3 rounded-xl ${card.bgColor}`}>
+              <div className={`p-3 rounded-xl ${card.bgColor} group-hover:scale-110 transition-transform duration-200`}>
                 <card.icon className={`w-6 h-6 ${card.color}`} />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-foreground mb-1">{card.title}</h3>
+                <h3 className="font-semibold text-foreground mb-1 group-hover:text-[#004E89] transition-colors">
+                  {card.title}
+                </h3>
                 <p className="text-sm text-muted-foreground">{card.description}</p>
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  {card.action === "wizard" ? (
+                    <span className="px-2 py-0.5 bg-[#004E89]/10 text-[#004E89] rounded-full font-medium">
+                      Opens Wizard
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">
+                      Quick Analysis
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-          </motion.div>
+          </motion.button>
         ))}
       </div>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
+        transition={{ delay: 0.5 }}
+        className="rounded-2xl bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 shadow-sm p-6 mb-6"
+      >
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-purple-100 rounded-xl">
+            <Sparkles className="w-6 h-6 text-purple-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">AI-Powered Analysis</h2>
+            <p className="text-sm text-muted-foreground">Generate intelligent insights using AWS Bedrock AI</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <button
+            onClick={() => handleGenerateAiInsights(false)}
+            disabled={!selectedSiteId || aiInsightLoading}
+            className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {aiInsightLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            <span className="font-medium">Generate AI Insights</span>
+          </button>
+          {aiInsight && (
+            <button
+              onClick={() => handleGenerateAiInsights(true)}
+              disabled={!selectedSiteId || aiInsightLoading}
+              className="px-4 py-2.5 rounded-xl border border-purple-300 text-purple-700 hover:bg-purple-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Force regenerate insights (bypass cache)"
+            >
+              <RefreshCw className={`w-4 h-4 ${aiInsightLoading ? 'animate-spin' : ''}`} />
+              <span className="font-medium">Regenerate</span>
+            </button>
+          )}
+        </div>
+
+        {aiInsight && (
+          <div className="space-y-4 mt-4 p-4 bg-white/70 rounded-xl border border-purple-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Brain className="w-5 h-5 text-purple-600" />
+                <span className="font-medium text-foreground">AI Analysis Results</span>
+              </div>
+              {aiInsight.cached && (
+                <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
+                  Cached
+                </span>
+              )}
+            </div>
+            <div className="prose prose-sm max-w-none text-foreground">
+              <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                {aiInsight.content}
+              </div>
+            </div>
+            {aiInsight.recommendations && aiInsight.recommendations.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-purple-100">
+                <h4 className="text-sm font-medium text-foreground mb-2">Key Recommendations:</h4>
+                <ul className="space-y-2">
+                  {aiInsight.recommendations.map((rec, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <span>{rec}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-2">
+              Generated: {new Date(aiInsight.createdAt).toLocaleString()}
+            </p>
+          </div>
+        )}
+
+        {!selectedSiteId && (
+          <p className="text-sm text-purple-600 mt-2 flex items-center gap-2">
+            <Info className="w-4 h-4" />
+            Select a warehouse site above to generate AI insights
+          </p>
+        )}
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6 }}
         className="rounded-2xl bg-white border border-border shadow-sm p-6"
       >
         <h2 className="text-lg font-semibold text-foreground mb-4">Run Optimization Analysis</h2>
         <div className="flex flex-col sm:flex-row gap-4 mb-4">
-          <select
-            value={selectedSiteId || ""}
-            onChange={(e) => {
-              onSelectSite(e.target.value ? Number(e.target.value) : null);
-              setOptimization(null);
-            }}
-            className="flex-1 px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
-          >
-            <option value="">Select warehouse site...</option>
-            {sites.map((site) => (
-              <option key={site.id} value={site.id}>
-                {site.name} ({site.code})
-              </option>
-            ))}
-          </select>
           <button
             onClick={handleRunOptimization}
             disabled={!selectedSiteId || optimizationLoading}
-            className="px-4 py-2 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2.5 rounded-xl bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-w-[160px]"
           >
             {optimizationLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
-            Run Analysis
+            <span className="font-medium">Run Analysis</span>
           </button>
+          {!selectedSiteId && (
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Info className="w-4 h-4" />
+              Select a warehouse site to run optimization analysis
+            </p>
+          )}
         </div>
 
         {optimization && (
@@ -186,6 +456,20 @@ export default function WMSAiInsights({
           </div>
         )}
       </motion.div>
+
+      {showWizard && selectedSiteId && selectedSite && (
+        <OptimizationWizardModal
+          siteId={selectedSiteId}
+          siteName={selectedSite.name}
+          onClose={() => {
+            setShowWizard(false);
+            setPreselectedAlgorithm(null);
+          }}
+          onSuccess={handleWizardSuccess}
+          onShowToast={onShowToast}
+          initialAlgorithm={preselectedAlgorithm}
+        />
+      )}
     </>
   );
 }

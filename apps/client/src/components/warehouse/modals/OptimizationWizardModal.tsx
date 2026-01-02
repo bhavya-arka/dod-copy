@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { X, Loader2, ChevronRight, ChevronLeft, Check, Layers, Ruler, DollarSign, Box, FileDown, Play, Save, AlertCircle } from "lucide-react";
 import type { WarehouseSite, ToastMessage } from "../types";
 import { runOptimizationWizard, applyOptimizationPlan, type OptimizationWizardResult } from "../../../services/warehouseService";
+
+export type Algorithm = "cardstack" | "size_standardization" | "value_density" | "bin_packing";
 
 interface OptimizationWizardModalProps {
   siteId: number;
@@ -9,9 +11,8 @@ interface OptimizationWizardModalProps {
   onClose: () => void;
   onSuccess: () => void;
   onShowToast: (message: string, type?: ToastMessage["type"]) => void;
+  initialAlgorithm?: Algorithm | null;
 }
-
-type Algorithm = "cardstack" | "size_standardization" | "value_density" | "bin_packing";
 
 interface AlgorithmOption {
   id: Algorithm;
@@ -67,15 +68,23 @@ export default function OptimizationWizardModal({
   onClose,
   onSuccess,
   onShowToast,
+  initialAlgorithm,
 }: OptimizationWizardModalProps) {
   const [step, setStep] = useState(1);
-  const [selectedAlgorithm, setSelectedAlgorithm] = useState<Algorithm | null>(null);
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState<Algorithm | null>(initialAlgorithm || null);
   const [params, setParams] = useState<AlgorithmParams>(DEFAULT_PARAMS);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<OptimizationWizardResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   const [applying, setApplying] = useState(false);
+
+  useEffect(() => {
+    if (initialAlgorithm) {
+      setSelectedAlgorithm(initialAlgorithm);
+    }
+  }, [initialAlgorithm]);
 
   const steps = [
     { number: 1, label: "Select Algorithm" },
