@@ -3208,6 +3208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (algorithm === 'cardstack') {
         // CardStack: Find items for the same ship scattered across different racks
         // Consolidate them to reduce picking time and travel distance
+        const { minItemsToConsolidate = 2, maxActionsToGenerate = 50 } = params || {};
         
         // Group items by ship_class (items for the same ship should be together)
         const shipGroups: Map<string, typeof itemsWithData> = new Map();
@@ -3224,7 +3225,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let consolidatedValue = 0;
         
         for (const [shipClass, shipItems] of shipGroups.entries()) {
-          if (shipItems.length < 3) continue;
+          // Skip if fewer items than threshold
+          if (shipItems.length < minItemsToConsolidate) continue;
           
           // Find the most common zone for this ship's items (consolidation target)
           const zoneCounts: Map<string, number> = new Map();
@@ -3265,9 +3267,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             consolidatedItems++;
             consolidatedValue += item.value;
             
-            if (actions.length >= 50) break;
+            if (actions.length >= maxActionsToGenerate) break;
           }
-          if (actions.length >= 50) break;
+          if (actions.length >= maxActionsToGenerate) break;
         }
         
         summary = {
@@ -3280,11 +3282,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else if (algorithm === 'size_standardization') {
         // Size Standardization: Organize items by program code into dedicated zones
         // Items for PM1, PM3, etc. should be in their program's designated area
+        const { minProgramItems = 3, maxActionsToGenerate = 50 } = params || {};
         
         // Find the dominant zone for each program
         const programZones: Map<string, Map<string, number>> = new Map();
+        const programItemCounts: Map<string, number> = new Map();
         for (const item of itemsWithData) {
           if (!item.program_code) continue;
+          programItemCounts.set(item.program_code, (programItemCounts.get(item.program_code) || 0) + 1);
           if (!programZones.has(item.program_code)) {
             programZones.set(item.program_code, new Map());
           }
@@ -3292,9 +3297,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           zones.set(item.location_zone, (zones.get(item.location_zone) || 0) + 1);
         }
         
-        // Determine the primary zone for each program
+        // Determine the primary zone for each program (only for programs with enough items)
         const programPrimaryZone: Map<string, string> = new Map();
         for (const [program, zones] of programZones.entries()) {
+          const itemCount = programItemCounts.get(program) || 0;
+          if (itemCount < minProgramItems) continue; // Skip small programs
+          
           let primaryZone = '';
           let maxCount = 0;
           for (const [zone, count] of zones.entries()) {
@@ -3331,7 +3339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           standardizedCount++;
           standardizedValue += item.value;
           
-          if (actions.length >= 50) break;
+          if (actions.length >= maxActionsToGenerate) break;
         }
         
         summary = {
@@ -3344,7 +3352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else if (algorithm === 'value_density') {
         // Value Density: Move high-value items to more accessible, secure locations
         // Lower zone numbers = closer to dock/entrance = more accessible
-        const { highValueThreshold = 1000 } = params || {};
+        const { highValueThreshold = 1000, zoneDistanceMultiplier = 1.5 } = params || {};
         
         // Sort items by value descending
         const sortedByValue = [...itemsWithData]
@@ -3354,7 +3362,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Find the lowest zone number (most accessible) in the warehouse
         const allZones = new Set(itemsWithData.map(i => parseInt(i.location_zone) || 9999));
         const sortedZones = Array.from(allZones).sort((a, b) => a - b);
-        const accessibleZone = sortedZones[0]?.toString() || '1000';
+        const accessibleZoneNum = sortedZones[0] || 1000;
+        const accessibleZone = accessibleZoneNum.toString();
         
         let actionId = 1;
         let movedValue = 0;
@@ -3364,8 +3373,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (item.value < highValueThreshold) continue;
           
           const currentZoneNum = parseInt(item.location_zone) || 9999;
-          // If item is in a less accessible zone (higher number > 2x the most accessible)
-          if (currentZoneNum > parseInt(accessibleZone) * 1.5) {
+          // Apply user-configurable zone distance multiplier
+          if (currentZoneNum > accessibleZoneNum * zoneDistanceMultiplier) {
             const targetRack = `${accessibleZone}-HV-${String(actionId).padStart(2, '0')}`;
             
             actions.push({
@@ -3379,7 +3388,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               estimatedBenefit: `$${item.value.toLocaleString()} value - faster picking & better security`,
               quantity: item.quantity,
               value: item.value,
-              reason: `High-value item ($${item.value.toLocaleString()}) in distant zone ${item.location_zone} - move closer to dock`,
+              reason: `High-value item ($${item.value.toLocaleString()}) in zone ${item.location_zone} exceeds ${zoneDistanceMultiplier}x accessible zone (${accessibleZone})`,
             });
             movedValue += item.value;
             movedCount++;
@@ -3398,6 +3407,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else if (algorithm === 'bin_packing') {
         // Bin Packing: Stage items by disposition for upcoming shipments
         // SHORESIDE items need staging near dock, RESIDUAL needs different area
+        const { maxItemsPerPallet = 15, prioritizeByValue = true } = params || {};
         
         // Group items by mat_disposition
         const dispositionGroups: Map<string, typeof itemsWithData> = new Map();
@@ -3424,17 +3434,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (dispItems.length < 2) continue;
           
           const stagingArea = stagingAreas[disposition] || `${disposition}-STAGING`;
-          // Sort by ship_class to group items for same ship together
-          const sortedItems = [...dispItems].sort((a, b) => 
-            (a.ship_class || '').localeCompare(b.ship_class || '')
-          );
+          // Sort by value if prioritizeByValue, otherwise by ship_class
+          const sortedItems = [...dispItems].sort((a, b) => {
+            if (prioritizeByValue) {
+              return b.value - a.value; // High value first
+            }
+            return (a.ship_class || '').localeCompare(b.ship_class || '');
+          });
           
           let palletNum = 1;
           let itemsOnPallet = 0;
-          const maxPerPallet = 15;
           
           for (const item of sortedItems) {
-            if (itemsOnPallet >= maxPerPallet) {
+            if (itemsOnPallet >= maxItemsPerPallet) {
               palletNum++;
               itemsOnPallet = 0;
             }

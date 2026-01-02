@@ -49,17 +49,17 @@ const ALGORITHMS: AlgorithmOption[] = [
 ];
 
 interface AlgorithmParams {
-  cardstack: { similarityThreshold: number; maxStackHeight: number };
-  size_standardization: { tolerancePercent: number; minGroupSize: number };
-  value_density: { highValueThreshold: number; accessibilityWeight: number };
-  bin_packing: { containerLength: number; containerWidth: number; containerHeight: number; maxWeight: number };
+  cardstack: { minItemsToConsolidate: number; maxActionsToGenerate: number };
+  size_standardization: { minProgramItems: number; maxActionsToGenerate: number };
+  value_density: { highValueThreshold: number; zoneDistanceMultiplier: number };
+  bin_packing: { maxItemsPerPallet: number; prioritizeByValue: boolean };
 }
 
 const DEFAULT_PARAMS: AlgorithmParams = {
-  cardstack: { similarityThreshold: 80, maxStackHeight: 5 },
-  size_standardization: { tolerancePercent: 10, minGroupSize: 3 },
-  value_density: { highValueThreshold: 1000, accessibilityWeight: 0.7 },
-  bin_packing: { containerLength: 48, containerWidth: 40, containerHeight: 48, maxWeight: 2000 },
+  cardstack: { minItemsToConsolidate: 2, maxActionsToGenerate: 50 },
+  size_standardization: { minProgramItems: 3, maxActionsToGenerate: 50 },
+  value_density: { highValueThreshold: 1000, zoneDistanceMultiplier: 1.5 },
+  bin_packing: { maxItemsPerPallet: 15, prioritizeByValue: true },
 };
 
 export default function OptimizationWizardModal({
@@ -230,80 +230,95 @@ export default function OptimizationWizardModal({
 
     const renderCardStackParams = () => (
       <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Consolidates items for the same ship class that are scattered across multiple zones.
+        </p>
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">
-            Similarity Threshold (%)
+            Minimum Items to Consolidate
           </label>
           <input
             type="range"
-            min="50"
-            max="100"
-            value={params.cardstack.similarityThreshold}
-            onChange={(e) => updateParam("cardstack", "similarityThreshold", parseInt(e.target.value))}
+            min="2"
+            max="10"
+            value={params.cardstack.minItemsToConsolidate}
+            onChange={(e) => updateParam("cardstack", "minItemsToConsolidate", parseInt(e.target.value))}
             className="w-full"
           />
           <div className="flex justify-between text-xs text-muted-foreground mt-1">
-            <span>50% (More groups)</span>
-            <span className="font-medium text-foreground">{params.cardstack.similarityThreshold}%</span>
-            <span>100% (Exact match)</span>
+            <span>2 (More suggestions)</span>
+            <span className="font-medium text-foreground">{params.cardstack.minItemsToConsolidate} items</span>
+            <span>10 (Only large groups)</span>
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Only suggest consolidation if this many items for a ship are in different zones.
+          </p>
         </div>
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">
-            Maximum Stack Height
+            Max Actions to Generate
           </label>
           <input
             type="number"
-            min="2"
-            max="10"
-            value={params.cardstack.maxStackHeight}
-            onChange={(e) => updateParam("cardstack", "maxStackHeight", parseInt(e.target.value))}
+            min="10"
+            max="100"
+            value={params.cardstack.maxActionsToGenerate}
+            onChange={(e) => updateParam("cardstack", "maxActionsToGenerate", parseInt(e.target.value))}
             className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm"
           />
-          <p className="text-xs text-muted-foreground mt-1">Number of items that can be stacked vertically</p>
+          <p className="text-xs text-muted-foreground mt-1">Limit recommendations to focus on highest-impact moves.</p>
         </div>
       </div>
     );
 
     const renderSizeStandardizationParams = () => (
       <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Organizes items by program code (PM1, PM3, etc.) into dedicated zones for each program.
+        </p>
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">
-            Size Tolerance (%)
+            Minimum Items Per Program
           </label>
           <input
             type="range"
-            min="5"
-            max="30"
-            value={params.size_standardization.tolerancePercent}
-            onChange={(e) => updateParam("size_standardization", "tolerancePercent", parseInt(e.target.value))}
+            min="2"
+            max="10"
+            value={params.size_standardization.minProgramItems}
+            onChange={(e) => updateParam("size_standardization", "minProgramItems", parseInt(e.target.value))}
             className="w-full"
           />
           <div className="flex justify-between text-xs text-muted-foreground mt-1">
-            <span>5% (Strict)</span>
-            <span className="font-medium text-foreground">{params.size_standardization.tolerancePercent}%</span>
-            <span>30% (Flexible)</span>
+            <span>2 (Include small programs)</span>
+            <span className="font-medium text-foreground">{params.size_standardization.minProgramItems} items</span>
+            <span>10 (Major programs only)</span>
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Only standardize programs with at least this many items in the warehouse.
+          </p>
         </div>
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">
-            Minimum Group Size
+            Max Actions to Generate
           </label>
           <input
             type="number"
-            min="2"
-            max="20"
-            value={params.size_standardization.minGroupSize}
-            onChange={(e) => updateParam("size_standardization", "minGroupSize", parseInt(e.target.value))}
+            min="10"
+            max="100"
+            value={params.size_standardization.maxActionsToGenerate}
+            onChange={(e) => updateParam("size_standardization", "maxActionsToGenerate", parseInt(e.target.value))}
             className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm"
           />
-          <p className="text-xs text-muted-foreground mt-1">Minimum items required to form a size group</p>
+          <p className="text-xs text-muted-foreground mt-1">Limit recommendations to focus on highest-impact moves.</p>
         </div>
       </div>
     );
 
     const renderValueDensityParams = () => (
       <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Moves high-value items to more accessible zones (lower zone numbers = closer to dock).
+        </p>
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">
             High Value Threshold ($)
@@ -317,69 +332,77 @@ export default function OptimizationWizardModal({
             onChange={(e) => updateParam("value_density", "highValueThreshold", parseInt(e.target.value))}
             className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm"
           />
-          <p className="text-xs text-muted-foreground mt-1">Items above this value get priority placement</p>
+          <p className="text-xs text-muted-foreground mt-1">Items valued above this amount are considered high-priority.</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">
-            Accessibility Weight
+            Zone Distance Threshold
           </label>
           <input
             type="range"
-            min="0"
-            max="100"
-            value={params.value_density.accessibilityWeight * 100}
-            onChange={(e) => updateParam("value_density", "accessibilityWeight", parseInt(e.target.value) / 100)}
+            min="1.2"
+            max="3"
+            step="0.1"
+            value={params.value_density.zoneDistanceMultiplier}
+            onChange={(e) => updateParam("value_density", "zoneDistanceMultiplier", parseFloat(e.target.value))}
             className="w-full"
           />
           <div className="flex justify-between text-xs text-muted-foreground mt-1">
-            <span>0% (Ignore)</span>
-            <span className="font-medium text-foreground">{Math.round(params.value_density.accessibilityWeight * 100)}%</span>
-            <span>100% (Prioritize)</span>
+            <span>1.2x (Aggressive)</span>
+            <span className="font-medium text-foreground">{params.value_density.zoneDistanceMultiplier}x</span>
+            <span>3x (Only far items)</span>
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Suggest moving items when zone number exceeds accessible zone by this multiplier.
+          </p>
         </div>
       </div>
     );
 
     const renderBinPackingParams = () => (
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">Configure container/pallet dimensions for packing optimization</p>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Length (in)</label>
-            <input
-              type="number"
-              value={params.bin_packing.containerLength}
-              onChange={(e) => updateParam("bin_packing", "containerLength", parseInt(e.target.value))}
-              className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm"
-            />
+        <p className="text-sm text-muted-foreground">
+          Stages items by disposition (SHORESIDE, RESIDUAL) onto pallets organized by ship class for efficient shipping.
+        </p>
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-2">
+            Max Items Per Pallet
+          </label>
+          <input
+            type="range"
+            min="5"
+            max="30"
+            value={params.bin_packing.maxItemsPerPallet}
+            onChange={(e) => updateParam("bin_packing", "maxItemsPerPallet", parseInt(e.target.value))}
+            className="w-full"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+            <span>5 (Smaller pallets)</span>
+            <span className="font-medium text-foreground">{params.bin_packing.maxItemsPerPallet} items</span>
+            <span>30 (Larger pallets)</span>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Width (in)</label>
-            <input
-              type="number"
-              value={params.bin_packing.containerWidth}
-              onChange={(e) => updateParam("bin_packing", "containerWidth", parseInt(e.target.value))}
-              className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Height (in)</label>
-            <input
-              type="number"
-              value={params.bin_packing.containerHeight}
-              onChange={(e) => updateParam("bin_packing", "containerHeight", parseInt(e.target.value))}
-              className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm"
-            />
-          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            How many items to group onto each staging pallet.
+          </p>
         </div>
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">Max Weight (lbs)</label>
-          <input
-            type="number"
-            value={params.bin_packing.maxWeight}
-            onChange={(e) => updateParam("bin_packing", "maxWeight", parseInt(e.target.value))}
-            className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm"
-          />
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={Boolean(params.bin_packing.prioritizeByValue)}
+              onChange={(e) => {
+                setParams(prev => ({
+                  ...prev,
+                  bin_packing: { ...prev.bin_packing, prioritizeByValue: e.target.checked }
+                }));
+              }}
+              className="w-4 h-4 rounded border-border"
+            />
+            <span className="text-sm font-medium text-foreground">Prioritize high-value items first</span>
+          </label>
+          <p className="text-xs text-muted-foreground mt-1 ml-6">
+            When enabled, high-value items are staged before lower-value items within each disposition group.
+          </p>
         </div>
       </div>
     );
