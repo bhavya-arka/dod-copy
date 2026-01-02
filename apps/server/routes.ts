@@ -3174,12 +3174,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           weight,
           rack_location: location,
           location_zone: locationZone,
-          ship_class: rawRow?.ship_class || '',
-          inventory_type: rawRow?.inventory_type || '',
-          condition_code: rawRow?.condition_code || item.condition || 'A',
-          storage_facility: rawRow?.storage_facility || '',
-          mat_disposition: rawRow?.mat_disposition || '',
-          program_code: rawRow?.program_code || '',
+          ship_class: item.ship_class || rawRow?.ship_class || '',
+          inventory_type: item.inventory_type || rawRow?.inventory_type || '',
+          condition_code: item.condition_code || item.condition || rawRow?.condition_code || 'A',
+          storage_facility: item.storage_facility || rawRow?.storage_facility || '',
+          mat_disposition: item.material_disposition || rawRow?.mat_disposition || rawRow?.material_disposition || '',
+          program_code: item.program_code || rawRow?.program_code || '',
         };
       });
 
