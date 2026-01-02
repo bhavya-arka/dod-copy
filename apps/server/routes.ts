@@ -2151,6 +2151,198 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/warehouse/sites/:siteId/buildings - Create a new building
+  app.post("/api/warehouse/sites/:siteId/buildings", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const { code, name, length_ft, width_ft, height_ft, geometry_notes, capacity_pallets } = req.body;
+
+      if (!code || !name) {
+        return res.status(400).json({ error: "Building code and name are required" });
+      }
+
+      // Convert feet to meters for storage (1ft = 0.3048m)
+      const length_m = length_ft ? (parseFloat(length_ft) * 0.3048).toFixed(3) : null;
+      const width_m = width_ft ? (parseFloat(width_ft) * 0.3048).toFixed(3) : null;
+      const height_m = height_ft ? (parseFloat(height_ft) * 0.3048).toFixed(3) : null;
+
+      const [building] = await db.insert(warehouseBuildings).values({
+        site_id: siteId,
+        code: code.trim(),
+        name: name.trim(),
+        length_m,
+        width_m,
+        height_m,
+        geometry_notes: geometry_notes || null,
+        active: true,
+      }).returning();
+
+      // If capacity_pallets is provided, create a default zone for this building
+      if (capacity_pallets && parseInt(capacity_pallets) > 0) {
+        await db.insert(warehouseZones).values({
+          building_id: building.id,
+          code: `${code}-MAIN`,
+          name: `${name} Main Storage`,
+          zone_type: 'rack',
+          weight_limit_lbs: 2000,
+          capacity_pallets: parseInt(capacity_pallets),
+        });
+      }
+
+      console.log(`[Warehouse] Created building ${code} for site ${siteId}`);
+      res.status(201).json(building);
+    } catch (error) {
+      console.error("[Warehouse] Failed to create building:", error);
+      res.status(500).json({ error: "Failed to create building" });
+    }
+  });
+
+  // PUT /api/warehouse/sites/:siteId/buildings/:buildingId - Update a building
+  app.put("/api/warehouse/sites/:siteId/buildings/:buildingId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      const buildingId = parseInt(req.params.buildingId);
+      if (isNaN(siteId) || isNaN(buildingId)) {
+        return res.status(400).json({ error: "Invalid site or building ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      // Verify building exists and belongs to this site
+      const [existingBuilding] = await db.select()
+        .from(warehouseBuildings)
+        .where(and(
+          eq(warehouseBuildings.id, buildingId),
+          eq(warehouseBuildings.site_id, siteId)
+        ));
+
+      if (!existingBuilding) {
+        return res.status(404).json({ error: "Building not found" });
+      }
+
+      const { code, name, length_ft, width_ft, height_ft, geometry_notes, active, capacity_pallets } = req.body;
+
+      // Convert feet to meters for storage
+      const updateData: Record<string, any> = {};
+      if (code !== undefined) updateData.code = code.trim();
+      if (name !== undefined) updateData.name = name.trim();
+      if (length_ft !== undefined) updateData.length_m = length_ft ? (parseFloat(length_ft) * 0.3048).toFixed(3) : null;
+      if (width_ft !== undefined) updateData.width_m = width_ft ? (parseFloat(width_ft) * 0.3048).toFixed(3) : null;
+      if (height_ft !== undefined) updateData.height_m = height_ft ? (parseFloat(height_ft) * 0.3048).toFixed(3) : null;
+      if (geometry_notes !== undefined) updateData.geometry_notes = geometry_notes;
+      if (active !== undefined) updateData.active = active;
+
+      const [updated] = await db.update(warehouseBuildings)
+        .set(updateData)
+        .where(eq(warehouseBuildings.id, buildingId))
+        .returning();
+
+      // Update the default zone's capacity if capacity_pallets is provided
+      if (capacity_pallets !== undefined) {
+        const [existingZone] = await db.select()
+          .from(warehouseZones)
+          .where(eq(warehouseZones.building_id, buildingId))
+          .limit(1);
+
+        if (existingZone) {
+          await db.update(warehouseZones)
+            .set({ capacity_pallets: parseInt(capacity_pallets) || 0 })
+            .where(eq(warehouseZones.id, existingZone.id));
+        } else if (capacity_pallets && parseInt(capacity_pallets) > 0) {
+          await db.insert(warehouseZones).values({
+            building_id: buildingId,
+            code: `${updated.code}-MAIN`,
+            name: `${updated.name} Main Storage`,
+            zone_type: 'rack',
+            weight_limit_lbs: 2000,
+            capacity_pallets: parseInt(capacity_pallets),
+          });
+        }
+      }
+
+      console.log(`[Warehouse] Updated building ${buildingId}`);
+      res.json(updated);
+    } catch (error) {
+      console.error("[Warehouse] Failed to update building:", error);
+      res.status(500).json({ error: "Failed to update building" });
+    }
+  });
+
+  // DELETE /api/warehouse/sites/:siteId/buildings/:buildingId - Delete a building
+  app.delete("/api/warehouse/sites/:siteId/buildings/:buildingId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      const buildingId = parseInt(req.params.buildingId);
+      if (isNaN(siteId) || isNaN(buildingId)) {
+        return res.status(400).json({ error: "Invalid site or building ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      // Verify building exists and belongs to this site
+      const [existingBuilding] = await db.select()
+        .from(warehouseBuildings)
+        .where(and(
+          eq(warehouseBuildings.id, buildingId),
+          eq(warehouseBuildings.site_id, siteId)
+        ));
+
+      if (!existingBuilding) {
+        return res.status(404).json({ error: "Building not found" });
+      }
+
+      // Delete zones first (cascade)
+      await db.delete(warehouseZones)
+        .where(eq(warehouseZones.building_id, buildingId));
+
+      // Delete the building
+      await db.delete(warehouseBuildings)
+        .where(eq(warehouseBuildings.id, buildingId));
+
+      console.log(`[Warehouse] Deleted building ${buildingId} and its zones`);
+      res.json({ success: true, message: "Building deleted successfully" });
+    } catch (error) {
+      console.error("[Warehouse] Failed to delete building:", error);
+      res.status(500).json({ error: "Failed to delete building" });
+    }
+  });
+
   // GET /api/warehouse/sites/:siteId/inventory - Get inventory items for a site with pagination
   app.get("/api/warehouse/sites/:siteId/inventory", authMiddleware, async (req: AuthRequest, res) => {
     try {

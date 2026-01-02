@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Building2, ChevronRight, ChevronDown, Move, Zap, Loader2, Trash2 } from "lucide-react";
+import { Plus, Building2, ChevronRight, ChevronDown, Move, Zap, Loader2, Trash2, Pencil } from "lucide-react";
 import type { WarehouseSite, WarehouseBuilding, ToastMessage } from "./types";
-import { deleteSite, getSiteBuildings } from "../../services/warehouseService";
+import { deleteSite, getSiteBuildings, deleteBuilding } from "../../services/warehouseService";
 import ConfirmDestructiveModal from "./modals/ConfirmDestructiveModal";
 import MoveItemModal from "./modals/MoveItemModal";
 import OptimizationWizardModal from "./modals/OptimizationWizardModal";
+import AddBuildingModal from "./modals/AddBuildingModal";
 
 interface WMSSitesStorageProps {
   sites: WarehouseSite[];
@@ -32,6 +33,12 @@ export default function WMSSitesStorage({
   const [moveModalSiteId, setMoveModalSiteId] = useState<number | null>(null);
   const [optimizeModalOpen, setOptimizeModalOpen] = useState(false);
   const [optimizeModalSite, setOptimizeModalSite] = useState<{ id: number; name: string } | null>(null);
+  const [addBuildingModalOpen, setAddBuildingModalOpen] = useState(false);
+  const [addBuildingModalSite, setAddBuildingModalSite] = useState<{ id: number; name: string } | null>(null);
+  const [editBuildingData, setEditBuildingData] = useState<WarehouseBuilding | undefined>(undefined);
+  const [buildingToDelete, setBuildingToDelete] = useState<{ building: WarehouseBuilding; siteId: number } | null>(null);
+  const [deleteBuildingDialogOpen, setDeleteBuildingDialogOpen] = useState(false);
+  const [isDeletingBuilding, setIsDeletingBuilding] = useState(false);
 
   const fetchBuildingsForSite = useCallback(async (siteId: number) => {
     if (siteBuildings[siteId] || loadingBuildings.has(siteId)) {
@@ -122,6 +129,66 @@ export default function WMSSitesStorage({
     setExpandedSites(newExpanded);
   };
 
+  const handleAddBuildingClick = (e: React.MouseEvent, site: WarehouseSite) => {
+    e.stopPropagation();
+    setAddBuildingModalSite({ id: site.id, name: site.name });
+    setEditBuildingData(undefined);
+    setAddBuildingModalOpen(true);
+  };
+
+  const handleEditBuildingClick = (e: React.MouseEvent, building: WarehouseBuilding, siteId: number, siteName: string) => {
+    e.stopPropagation();
+    setAddBuildingModalSite({ id: siteId, name: siteName });
+    setEditBuildingData(building);
+    setAddBuildingModalOpen(true);
+  };
+
+  const handleDeleteBuildingClick = (e: React.MouseEvent, building: WarehouseBuilding, siteId: number) => {
+    e.stopPropagation();
+    setBuildingToDelete({ building, siteId });
+    setDeleteBuildingDialogOpen(true);
+  };
+
+  const handleConfirmDeleteBuilding = async () => {
+    if (!buildingToDelete) return;
+    
+    setIsDeletingBuilding(true);
+    try {
+      await deleteBuilding(buildingToDelete.siteId, buildingToDelete.building.id);
+      onShowToast(`Building "${buildingToDelete.building.code}" deleted successfully`, "success");
+      setSiteBuildings(prev => {
+        const newBuildings = { ...prev };
+        delete newBuildings[buildingToDelete.siteId];
+        return newBuildings;
+      });
+      setDeleteBuildingDialogOpen(false);
+      setBuildingToDelete(null);
+      onRefresh();
+    } catch (error) {
+      onShowToast(
+        error instanceof Error ? error.message : "Failed to delete building",
+        "error"
+      );
+    } finally {
+      setIsDeletingBuilding(false);
+    }
+  };
+
+  const handleBuildingModalSuccess = () => {
+    setAddBuildingModalOpen(false);
+    setAddBuildingModalSite(null);
+    setEditBuildingData(undefined);
+    setSiteBuildings(prev => {
+      if (addBuildingModalSite) {
+        const newBuildings = { ...prev };
+        delete newBuildings[addBuildingModalSite.id];
+        return newBuildings;
+      }
+      return prev;
+    });
+    onRefresh();
+  };
+
   const renderBuildings = (siteId: number) => {
     const isLoading = loadingBuildings.has(siteId);
     const buildings = siteBuildings[siteId] || [];
@@ -186,6 +253,19 @@ export default function WMSSitesStorage({
           </div>
           <div className="flex gap-1">
             <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const site = sites.find(s => siteBuildings[s.id]?.includes(building));
+                if (site) {
+                  handleEditBuildingClick(e, building, site.id, site.name);
+                }
+              }}
+              className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+              title="Edit building"
+            >
+              <Pencil className="w-4 h-4 text-muted-foreground" />
+            </button>
+            <button
               onClick={(e) => handleMoveClick(e, sites.find(s => siteBuildings[s.id]?.includes(building))?.id || 0)}
               className="p-1.5 rounded-lg hover:bg-muted transition-colors"
               title="Move items"
@@ -206,10 +286,38 @@ export default function WMSSitesStorage({
             >
               <Zap className="w-4 h-4 text-muted-foreground" />
             </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const site = sites.find(s => siteBuildings[s.id]?.includes(building));
+                if (site) {
+                  handleDeleteBuildingClick(e, building, site.id);
+                }
+              }}
+              className="p-1.5 rounded-lg hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
+              title="Delete building"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
     ));
+  };
+
+  const renderBuildingsWithAddButton = (site: WarehouseSite) => {
+    return (
+      <>
+        {renderBuildings(site.id)}
+        <button
+          onClick={(e) => handleAddBuildingClick(e, site)}
+          className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-border hover:border-[#004E89] hover:bg-[#004E89]/5 text-muted-foreground hover:text-[#004E89] transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          <span className="text-sm">Add Building</span>
+        </button>
+      </>
+    );
   };
 
   return (
@@ -305,7 +413,7 @@ export default function WMSSitesStorage({
                       className="border-t border-border"
                     >
                       <div className="p-4 pl-12 space-y-3">
-                        {renderBuildings(site.id)}
+                        {renderBuildingsWithAddButton(site)}
                       </div>
                     </motion.div>
                   )}
@@ -361,6 +469,40 @@ export default function WMSSitesStorage({
           onShowToast={onShowToast}
         />
       )}
+
+      {addBuildingModalOpen && addBuildingModalSite !== null && (
+        <AddBuildingModal
+          siteId={addBuildingModalSite.id}
+          siteName={addBuildingModalSite.name}
+          onClose={() => {
+            setAddBuildingModalOpen(false);
+            setAddBuildingModalSite(null);
+            setEditBuildingData(undefined);
+          }}
+          onSuccess={handleBuildingModalSuccess}
+          onShowToast={onShowToast}
+          editBuilding={editBuildingData}
+        />
+      )}
+
+      <ConfirmDestructiveModal
+        isOpen={deleteBuildingDialogOpen}
+        onClose={() => {
+          if (!isDeletingBuilding) {
+            setDeleteBuildingDialogOpen(false);
+            setBuildingToDelete(null);
+          }
+        }}
+        onConfirm={handleConfirmDeleteBuilding}
+        title="Delete Building"
+        description={
+          <>
+            Are you sure you want to delete building <strong>{buildingToDelete?.building.code}</strong>? This action cannot be undone and will permanently delete all zones and locations within this building.
+          </>
+        }
+        confirmText="delete building"
+        isLoading={isDeletingBuilding}
+      />
     </>
   );
 }

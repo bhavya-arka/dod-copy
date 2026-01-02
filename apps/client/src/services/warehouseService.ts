@@ -43,6 +43,61 @@ export async function getSiteBuildings(siteId: number): Promise<WarehouseBuildin
   return response.json();
 }
 
+export async function createBuilding(siteId: number, data: {
+  code: string;
+  name: string;
+  length_ft?: number;
+  width_ft?: number;
+  height_ft?: number;
+  geometry_notes?: string;
+  capacity_pallets?: number;
+}): Promise<WarehouseBuilding> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/buildings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to create building");
+  }
+  return response.json();
+}
+
+export async function updateBuilding(siteId: number, buildingId: number, data: {
+  code?: string;
+  name?: string;
+  length_ft?: number;
+  width_ft?: number;
+  height_ft?: number;
+  geometry_notes?: string;
+  active?: boolean;
+}): Promise<WarehouseBuilding> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/buildings/${buildingId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to update building");
+  }
+  return response.json();
+}
+
+export async function deleteBuilding(siteId: number, buildingId: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/buildings/${buildingId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to delete building");
+  }
+}
+
 /**
  * Create a new warehouse site
  * @param data - Site creation data
