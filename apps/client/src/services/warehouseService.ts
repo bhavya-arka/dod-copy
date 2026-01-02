@@ -441,10 +441,18 @@ export interface OptimizationWizardResult {
   algorithm: string;
   site: { id: number; name: string };
   summary: {
-    potentialSavings: string;
-    spaceImprovement: string;
+    slotsFreed: number;
+    consolidationWins: string;
+    zonesOptimized: number;
+    pickEfficiencyGain: string;
     itemsAffected: number;
     actionsGenerated: number;
+    phases?: Record<string, {
+      actions: number;
+      slotsFreed: number;
+      consolidationWins: string;
+      zonesOptimized: number;
+    }>;
   };
   actions: OptimizationAction[];
   totalActions: number;

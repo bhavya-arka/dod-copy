@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Download, Target, Box, Clock, BarChart3, TrendingUp, RefreshCw, FileText } from "lucide-react";
 import type { WarehouseSite, ToastMessage } from "./types";
 import { AGING_SUMMARY } from "./constants";
+import { generateWarehouseAnalyticsPDF } from "../../lib/warehouseAnalyticsPdfExport";
 
 interface AgingBreakdown {
   lessThan1Year: number;
@@ -168,100 +169,12 @@ export default function WMSAnalytics({
       return;
     }
 
-    const reportDate = new Date().toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Warehouse Analytics Report</title>
-        <style>
-          body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
-          h1 { color: #004E89; border-bottom: 2px solid #004E89; padding-bottom: 10px; }
-          h2 { color: #333; margin-top: 30px; }
-          .metric { display: inline-block; width: 200px; margin: 10px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
-          .metric-value { font-size: 24px; font-weight: bold; color: #004E89; }
-          .metric-label { font-size: 12px; color: #666; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-          th { background-color: #004E89; color: white; }
-          tr:nth-child(even) { background-color: #f9f9f9; }
-          .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <h1>Warehouse Analytics Report</h1>
-        <p>Generated on ${reportDate}</p>
-        
-        <h2>Overall Summary</h2>
-        <div class="metric">
-          <div class="metric-value">${analytics.overall.totalItems}</div>
-          <div class="metric-label">Total Items</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">$${analytics.overall.totalValue.toLocaleString()}</div>
-          <div class="metric-label">Total Value</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">${analytics.overall.readinessScore}%</div>
-          <div class="metric-label">Readiness Score</div>
-        </div>
-        
-        <h2>Aging Breakdown</h2>
-        <table>
-          <tr><th>Age Category</th><th>Count</th></tr>
-          <tr><td>Less than 1 year</td><td>${analytics.overall.agingBreakdown.lessThan1Year}</td></tr>
-          <tr><td>1-3 years</td><td>${analytics.overall.agingBreakdown.oneToThreeYears}</td></tr>
-          <tr><td>3-5 years</td><td>${analytics.overall.agingBreakdown.threeToFiveYears}</td></tr>
-          <tr><td>More than 5 years</td><td>${analytics.overall.agingBreakdown.moreThanFiveYears}</td></tr>
-        </table>
-        
-        <h2>Site Details</h2>
-        <table>
-          <tr>
-            <th>Site</th>
-            <th>Items</th>
-            <th>Value</th>
-            <th>Capacity</th>
-            <th>Readiness</th>
-          </tr>
-          ${analytics.sites
-            .map(
-              (site) => `
-            <tr>
-              <td>${site.siteName} (${site.siteCode})</td>
-              <td>${site.totalItems}</td>
-              <td>$${site.totalValue.toLocaleString()}</td>
-              <td>${site.capacityUtilization}%</td>
-              <td>${site.readinessScore}%</td>
-            </tr>
-          `
-            )
-            .join("")}
-        </table>
-        
-        <div class="footer">
-          <p>Warehouse Management System Analytics Report</p>
-        </div>
-      </body>
-      </html>
-    `;
-
-    const printWindow = window.open("", "_blank");
-    if (printWindow) {
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-      }, 250);
-      onShowToast("PDF report opened for printing", "success");
-    } else {
-      onShowToast("Please allow popups to export PDF", "warning");
+    try {
+      generateWarehouseAnalyticsPDF(analytics);
+      onShowToast("PDF exported successfully!", "success");
+    } catch (error) {
+      console.error("Failed to export PDF:", error);
+      onShowToast(error instanceof Error ? error.message : "Failed to export PDF", "error");
     }
   };
 

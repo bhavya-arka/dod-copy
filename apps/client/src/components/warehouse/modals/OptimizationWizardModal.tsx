@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, Loader2, ChevronRight, ChevronLeft, Check, Layers, Ruler, DollarSign, Box, FileDown, Play, Save, AlertCircle, Zap } from "lucide-react";
 import type { WarehouseSite, ToastMessage } from "../types";
 import { runOptimizationWizard, runAllOptimizations, applyOptimizationPlan, type OptimizationWizardResult } from "../../../services/warehouseService";
+import { generateWarehouseOptimizationPDF } from "../../../lib/warehouseOptimizationPdfExport";
 
 export type Algorithm = "cardstack" | "size_standardization" | "value_density" | "bin_packing" | "run_all";
 
@@ -183,7 +184,16 @@ export default function OptimizationWizardModal({
   };
 
   const handleExportPdf = () => {
-    onShowToast("PDF export will be available soon!", "info");
+    if (!result) {
+      onShowToast("No optimization results to export", "error");
+      return;
+    }
+    try {
+      generateWarehouseOptimizationPDF(result, { siteName });
+      onShowToast("PDF exported successfully!", "success");
+    } catch (err) {
+      onShowToast(err instanceof Error ? err.message : "Failed to export PDF", "error");
+    }
   };
 
   const handleSavePlan = () => {
@@ -529,18 +539,28 @@ export default function OptimizationWizardModal({
 
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="p-4 rounded-xl bg-[#16A34A]/10 text-center">
-            <p className="text-2xl font-bold text-[#16A34A]">{result.summary.potentialSavings}</p>
-            <p className="text-xs text-muted-foreground">Est. Savings</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="p-3 rounded-xl bg-[#16A34A]/10 text-center">
+            <p className="text-xl font-bold text-[#16A34A]">{result.summary.slotsFreed}</p>
+            <p className="text-xs text-muted-foreground">Slots Freed</p>
           </div>
-          <div className="p-4 rounded-xl bg-[#004E89]/10 text-center">
-            <p className="text-2xl font-bold text-[#004E89]">{result.summary.spaceImprovement}</p>
-            <p className="text-xs text-muted-foreground">Space Improvement</p>
+          <div className="p-3 rounded-xl bg-[#004E89]/10 text-center">
+            <p className="text-xl font-bold text-[#004E89]">{result.summary.zonesOptimized}</p>
+            <p className="text-xs text-muted-foreground">Zones Optimized</p>
           </div>
-          <div className="p-4 rounded-xl bg-[#F59E0B]/10 text-center">
-            <p className="text-2xl font-bold text-[#F59E0B]">{result.actions.length}</p>
-            <p className="text-xs text-muted-foreground">Actions Needed</p>
+          <div className="p-3 rounded-xl bg-[#7C3AED]/10 text-center">
+            <p className="text-sm font-bold text-[#7C3AED] leading-tight">{result.summary.consolidationWins}</p>
+            <p className="text-xs text-muted-foreground mt-1">Consolidated</p>
+          </div>
+          <div className="p-3 rounded-xl bg-[#F59E0B]/10 text-center">
+            <p className="text-sm font-bold text-[#F59E0B] leading-tight">{result.summary.pickEfficiencyGain}</p>
+            <p className="text-xs text-muted-foreground mt-1">Pick Efficiency</p>
+          </div>
+        </div>
+        <div className="mb-4 p-3 rounded-xl bg-muted/50 border border-border">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Total Actions:</span>
+            <span className="text-lg font-bold text-foreground">{result.actions.length}</span>
           </div>
         </div>
 

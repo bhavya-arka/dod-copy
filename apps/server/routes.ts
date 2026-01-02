@@ -3390,8 +3390,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }> = [];
       
       let summary = {
-        potentialSavings: '$0',
-        spaceImprovement: '0%',
+        slotsFreed: 0,
+        consolidationWins: '',
+        zonesOptimized: 0,
+        pickEfficiencyGain: '',
         itemsAffected: 0,
         actionsGenerated: 0,
       };
@@ -3464,9 +3466,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (actions.length >= maxActionsToGenerate) break;
         }
         
+        // Calculate unique source zones being freed up
+        const sourceZones = new Set(actions.map(a => a.from.split('-')[0]));
+        const targetZones = new Set(actions.map(a => a.to.split('-')[0]));
+        
         summary = {
-          potentialSavings: `$${consolidatedValue.toLocaleString()} inventory consolidated`,
-          spaceImprovement: `${consolidatedItems} items moved to ship-specific areas`,
+          slotsFreed: consolidatedItems,
+          consolidationWins: `${consolidatedItems} items → ${targetZones.size} locations`,
+          zonesOptimized: sourceZones.size,
+          pickEfficiencyGain: `+${Math.min(consolidatedItems * 2, 25)}% pick time reduction`,
           itemsAffected: consolidatedItems,
           actionsGenerated: actions.length,
         };
@@ -3535,8 +3543,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         summary = {
-          potentialSavings: `$${standardizedValue.toLocaleString()} reorganized by program`,
-          spaceImprovement: `${programPrimaryZone.size} programs standardized`,
+          slotsFreed: standardizedCount,
+          consolidationWins: `${standardizedCount} items → ${programPrimaryZone.size} program zones`,
+          zonesOptimized: programPrimaryZone.size,
+          pickEfficiencyGain: `+${Math.min(programPrimaryZone.size * 5, 20)}% program grouping efficiency`,
           itemsAffected: standardizedCount,
           actionsGenerated: actions.length,
         };
@@ -3590,8 +3600,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         summary = {
-          potentialSavings: `$${movedValue.toLocaleString()} secured in priority zone`,
-          spaceImprovement: `${movedCount} high-value items relocated`,
+          slotsFreed: movedCount,
+          consolidationWins: `${movedCount} high-value items → priority zone`,
+          zonesOptimized: 1,
+          pickEfficiencyGain: `+${Math.min(movedCount * 3, 30)}% accessibility for top items`,
           itemsAffected: movedCount,
           actionsGenerated: actions.length,
         };
@@ -3668,9 +3680,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (actions.length >= 50) break;
         }
         
+        // Count pallets created
+        const palletLocations = new Set(actions.map(a => a.to));
+        
         summary = {
-          potentialSavings: `$${totalValue.toLocaleString()} staged for shipment`,
-          spaceImprovement: `${dispositionGroups.size} disposition groups organized`,
+          slotsFreed: totalStaged,
+          consolidationWins: `${totalStaged} items → ${palletLocations.size} pallets staged`,
+          zonesOptimized: dispositionGroups.size,
+          pickEfficiencyGain: `${palletLocations.size} pallets ready for shipment`,
           itemsAffected: totalStaged,
           actionsGenerated: actions.length,
         };
@@ -3781,9 +3798,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         algorithm: string;
       }> = [];
 
-      let totalSavings = 0;
-      let totalSpaceImprovement = 0;
-      const phaseResults: Record<string, { actions: number; savings: number }> = {};
+      let totalSlotsFreed = 0;
+      let totalZonesOptimized = 0;
+      const seenItems = new Set<string>();
+      const phaseResults: Record<string, { 
+        actions: number; 
+        slotsFreed: number; 
+        consolidationWins: string;
+        zonesOptimized: number;
+      }> = {};
 
       // Phase 1: CardStack - Consolidate items by ship class
       {
@@ -3799,7 +3822,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         let actionId = 1;
         let phaseActions = 0;
-        let phaseSavings = 0;
+        let phaseSlotsFreed = 0;
+        const sourceZonesSet = new Set<string>();
+        const targetZonesSet = new Set<string>();
 
         for (const [shipClass, shipItems] of shipGroups.entries()) {
           if (shipItems.length < minItemsToConsolidate) continue;
@@ -3820,9 +3845,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           for (const item of shipItems) {
             if (item.location_zone !== targetZone && allActions.length < 100) {
-              const benefit = item.value * 0.05;
-              phaseSavings += benefit;
+              phaseSlotsFreed++;
               phaseActions++;
+              sourceZonesSet.add(item.location_zone);
+              targetZonesSet.add(targetZone);
+              seenItems.add(item.requisition_no);
               allActions.push({
                 id: `CS-${actionId++}`,
                 action: 'consolidate',
@@ -3831,7 +3858,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 from: item.rack_location,
                 to: `${targetZone}-CONSOLIDATED`,
                 priority: item.value > 5000 ? 'high' : item.value > 1000 ? 'medium' : 'low',
-                estimatedBenefit: `$${benefit.toFixed(0)} picking efficiency`,
+                estimatedBenefit: `Reduces pick time for ${shipClass}`,
                 quantity: item.quantity,
                 value: item.value,
                 reason: `Consolidate ${shipClass} items to zone ${targetZone}`,
@@ -3840,8 +3867,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         }
-        phaseResults.cardstack = { actions: phaseActions, savings: phaseSavings };
-        totalSavings += phaseSavings;
+        phaseResults.cardstack = { 
+          actions: phaseActions, 
+          slotsFreed: phaseSlotsFreed,
+          consolidationWins: `${phaseSlotsFreed} items → ${targetZonesSet.size} locations`,
+          zonesOptimized: sourceZonesSet.size
+        };
+        totalSlotsFreed += phaseSlotsFreed;
+        totalZonesOptimized += sourceZonesSet.size;
       }
 
       // Phase 2: Size Standardization - Group by program code
@@ -3858,7 +3891,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         let actionId = 1;
         let phaseActions = 0;
-        let phaseSavings = 0;
+        let phaseSlotsFreed = 0;
+        const programsStandardized = new Set<string>();
 
         for (const [programCode, programItems] of programGroups.entries()) {
           if (programItems.length < minProgramItems) continue;
@@ -3866,12 +3900,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const zones = new Set(programItems.map(i => i.location_zone));
           if (zones.size > 1) {
             const targetZone = programItems.sort((a, b) => b.value - a.value)[0].location_zone;
+            programsStandardized.add(programCode);
             
             for (const item of programItems) {
               if (item.location_zone !== targetZone && allActions.length < 150) {
-                const benefit = item.value * 0.03;
-                phaseSavings += benefit;
+                phaseSlotsFreed++;
                 phaseActions++;
+                seenItems.add(item.requisition_no);
                 allActions.push({
                   id: `SS-${actionId++}`,
                   action: 'standardize',
@@ -3880,7 +3915,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   from: item.rack_location,
                   to: `${targetZone}-${programCode}`,
                   priority: 'medium',
-                  estimatedBenefit: `$${benefit.toFixed(0)} rack utilization`,
+                  estimatedBenefit: `Groups ${programCode} program items`,
                   quantity: item.quantity,
                   value: item.value,
                   reason: `Group ${programCode} program items together`,
@@ -3890,9 +3925,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         }
-        phaseResults.size_standardization = { actions: phaseActions, savings: phaseSavings };
-        totalSavings += phaseSavings;
-        totalSpaceImprovement += phaseActions * 0.5;
+        phaseResults.size_standardization = { 
+          actions: phaseActions, 
+          slotsFreed: phaseSlotsFreed,
+          consolidationWins: `${phaseSlotsFreed} items → ${programsStandardized.size} program zones`,
+          zonesOptimized: programsStandardized.size
+        };
+        totalSlotsFreed += phaseSlotsFreed;
+        totalZonesOptimized += programsStandardized.size;
       }
 
       // Phase 3: Value Density - Move high-value items to accessible zones
@@ -3902,7 +3942,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         let actionId = 1;
         let phaseActions = 0;
-        let phaseSavings = 0;
+        let phaseSlotsFreed = 0;
 
         // High-value items should be in accessible zones (lower zone numbers or Zone A)
         // Extract numeric portion from location for accessibility scoring
@@ -3927,9 +3967,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // If item is in less accessible location (score > 1500), suggest moving
           if (accessScore > 1500 && allActions.length < 200) {
-            const benefit = item.value * 0.08;
-            phaseSavings += benefit;
+            phaseSlotsFreed++;
             phaseActions++;
+            seenItems.add(item.requisition_no);
             allActions.push({
               id: `VD-${actionId++}`,
               action: 'relocate_priority',
@@ -3938,7 +3978,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               from: item.rack_location,
               to: `ZONE-A-PRIORITY`,
               priority: 'high',
-              estimatedBenefit: `$${benefit.toFixed(0)} accessibility`,
+              estimatedBenefit: `High-value item to priority zone`,
               quantity: item.quantity,
               value: item.value,
               reason: `High-value item ($${item.value.toFixed(0)}) in zone ${item.location_zone} needs accessible placement`,
@@ -3953,9 +3993,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           for (const item of sortedItems.slice(0, 10)) {
             const alreadyHasAction = allActions.some(a => a.item === item.requisition_no && a.algorithm === 'value_density');
             if (!alreadyHasAction && !item.rack_location.includes('PRIORITY') && allActions.length < 200) {
-              const benefit = item.value * 0.08;
-              phaseSavings += benefit;
+              phaseSlotsFreed++;
               phaseActions++;
+              seenItems.add(item.requisition_no);
               allActions.push({
                 id: `VD-${actionId++}`,
                 action: 'relocate_priority',
@@ -3964,7 +4004,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 from: item.rack_location,
                 to: `ZONE-A-PRIORITY`,
                 priority: 'high',
-                estimatedBenefit: `$${benefit.toFixed(0)} accessibility`,
+                estimatedBenefit: `Top-value item to priority zone`,
                 quantity: item.quantity,
                 value: item.value,
                 reason: `Top-value item ($${item.value.toFixed(0)}) should be in priority zone`,
@@ -3974,8 +4014,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
-        phaseResults.value_density = { actions: phaseActions, savings: phaseSavings };
-        totalSavings += phaseSavings;
+        phaseResults.value_density = { 
+          actions: phaseActions, 
+          slotsFreed: phaseSlotsFreed,
+          consolidationWins: `${phaseSlotsFreed} high-value items → priority zone`,
+          zonesOptimized: phaseActions > 0 ? 1 : 0
+        };
+        totalSlotsFreed += phaseSlotsFreed;
+        if (phaseActions > 0) totalZonesOptimized += 1;
       }
 
       // Phase 4: Bin Packing - Stage items by disposition
@@ -3993,7 +4039,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         let actionId = 1;
         let phaseActions = 0;
-        let phaseSavings = 0;
+        let phaseSlotsFreed = 0;
+        const palletLocationsSet = new Set<string>();
 
         for (const [disposition, dispositionItems] of dispositionGroups.entries()) {
           if (dispositionItems.length < 3) continue;
@@ -4005,20 +4052,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           for (let i = 0; i < Math.min(sorted.length, 50); i++) {
             const item = sorted[i];
             const palletNumber = Math.floor(i / maxItemsPerPallet) + 1;
+            const palletLocation = `STAGING-${disposition}-P${palletNumber}`;
             
             if (allActions.length < 250) {
-              const benefit = item.value * 0.02;
-              phaseSavings += benefit;
+              phaseSlotsFreed++;
               phaseActions++;
+              palletLocationsSet.add(palletLocation);
+              seenItems.add(item.requisition_no);
               allActions.push({
                 id: `BP-${actionId++}`,
                 action: 'stage_pallet',
                 item: item.requisition_no,
                 itemDescription: item.description.substring(0, 50),
                 from: item.rack_location,
-                to: `STAGING-${disposition}-P${palletNumber}`,
+                to: palletLocation,
                 priority: i < maxItemsPerPallet ? 'high' : 'medium',
-                estimatedBenefit: `$${benefit.toFixed(0)} pallet efficiency`,
+                estimatedBenefit: `Ready for ${disposition} shipment`,
                 quantity: item.quantity,
                 value: item.value,
                 reason: `Stage ${disposition} item on pallet ${palletNumber}`,
@@ -4027,8 +4076,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         }
-        phaseResults.bin_packing = { actions: phaseActions, savings: phaseSavings };
-        totalSavings += phaseSavings;
+        phaseResults.bin_packing = { 
+          actions: phaseActions, 
+          slotsFreed: phaseSlotsFreed,
+          consolidationWins: `${phaseSlotsFreed} items → ${palletLocationsSet.size} pallets`,
+          zonesOptimized: dispositionGroups.size
+        };
+        totalSlotsFreed += phaseSlotsFreed;
+        totalZonesOptimized += dispositionGroups.size;
       }
 
       // De-duplicate: Keep highest priority/value action for each item
@@ -4068,9 +4123,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return b.value - a.value;
       });
 
+      // Calculate overall pick efficiency gain based on consolidation and accessibility moves
+      const overallPickEfficiency = Math.min(
+        Math.round((totalSlotsFreed * 1.5) + (totalZonesOptimized * 3)),
+        40
+      );
+      
       const summary = {
-        potentialSavings: `$${totalSavings.toFixed(0)}`,
-        spaceImprovement: `${totalSpaceImprovement.toFixed(1)}%`,
+        slotsFreed: totalSlotsFreed,
+        consolidationWins: `${seenItems.size} items reorganized`,
+        zonesOptimized: totalZonesOptimized,
+        pickEfficiencyGain: `+${overallPickEfficiency}% overall efficiency`,
         itemsAffected: seenItems.size,
         actionsGenerated: deduplicatedActions.length,
         phases: phaseResults,

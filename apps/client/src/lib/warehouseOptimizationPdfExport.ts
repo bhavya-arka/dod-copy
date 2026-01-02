@@ -1,0 +1,405 @@
+/**
+ * Warehouse Optimization PDF Export Engine
+ * 
+ * Generates professional, worker-actionable PDF documents for warehouse
+ * optimization action plans with prioritized move instructions.
+ */
+
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import type { OptimizationWizardResult, OptimizationAction } from '../services/warehouseService';
+
+interface WarehouseOptimizationPDFOptions {
+  siteName?: string;
+  siteCode?: string;
+}
+
+const COLORS = {
+  high: { fill: '#FEE2E2', stroke: '#DC2626', text: '#991B1B' },
+  medium: { fill: '#FEF3C7', stroke: '#F59E0B', text: '#92400E' },
+  low: { fill: '#DCFCE7', stroke: '#16A34A', text: '#166534' },
+  header: { fill: '#004E89', text: '#FFFFFF' },
+  muted: { fill: '#F3F4F6', text: '#6B7280' },
+} as const;
+
+const MARGINS = {
+  top: 15,
+  bottom: 20,
+  left: 15,
+  right: 15,
+};
+
+function hexToRgb(hex: string): [number, number, number] {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
+    : [0, 0, 0];
+}
+
+function formatDate(): string {
+  return new Date().toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZoneName: 'short',
+  });
+}
+
+function formatMilDate(): string {
+  const now = new Date();
+  const day = now.getDate().toString().padStart(2, '0');
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const month = months[now.getMonth()];
+  const year = now.getFullYear().toString().slice(-2);
+  const hours = now.getHours().toString().padStart(2, '0');
+  const mins = now.getMinutes().toString().padStart(2, '0');
+  return `${day}${month}${year} ${hours}${mins}Z`;
+}
+
+function getPriorityOrder(priority: string): number {
+  switch (priority.toLowerCase()) {
+    case 'high': return 0;
+    case 'medium': return 1;
+    case 'low': return 2;
+    default: return 3;
+  }
+}
+
+function extractZone(location: string): string {
+  const match = location.match(/Zone\s*(\d+)/i) || location.match(/^([A-Z]\d+)/i);
+  return match ? match[0] : location.split('-')[0] || 'Unknown';
+}
+
+function sortActions(actions: OptimizationAction[]): OptimizationAction[] {
+  return [...actions].sort((a, b) => {
+    const priorityDiff = getPriorityOrder(a.priority) - getPriorityOrder(b.priority);
+    if (priorityDiff !== 0) return priorityDiff;
+    
+    const zoneA = extractZone(a.to);
+    const zoneB = extractZone(b.to);
+    const zoneDiff = zoneA.localeCompare(zoneB);
+    if (zoneDiff !== 0) return zoneDiff;
+    
+    return a.id.localeCompare(b.id);
+  });
+}
+
+function getZoneSummary(actions: OptimizationAction[]): { zone: string; actionCount: number; priorities: { high: number; medium: number; low: number } }[] {
+  const zoneMap = new Map<string, { actionCount: number; priorities: { high: number; medium: number; low: number } }>();
+  
+  actions.forEach(action => {
+    const zone = extractZone(action.to);
+    const existing = zoneMap.get(zone) || { actionCount: 0, priorities: { high: 0, medium: 0, low: 0 } };
+    existing.actionCount++;
+    existing.priorities[action.priority]++;
+    zoneMap.set(zone, existing);
+  });
+  
+  return Array.from(zoneMap.entries())
+    .map(([zone, data]) => ({ zone, ...data }))
+    .sort((a, b) => a.zone.localeCompare(b.zone));
+}
+
+function drawPriorityLegend(doc: jsPDF, x: number, y: number): void {
+  const legendItems = [
+    { label: 'HIGH Priority', color: COLORS.high },
+    { label: 'MEDIUM Priority', color: COLORS.medium },
+    { label: 'LOW Priority', color: COLORS.low },
+  ];
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(55, 65, 81);
+  doc.text('PRIORITY LEGEND:', x, y);
+
+  let currentX = x + 32;
+  legendItems.forEach((item) => {
+    const [fr, fg, fb] = hexToRgb(item.color.fill);
+    doc.setFillColor(fr, fg, fb);
+    const [sr, sg, sb] = hexToRgb(item.color.stroke);
+    doc.setDrawColor(sr, sg, sb);
+    doc.setLineWidth(0.5);
+    doc.rect(currentX, y - 3, 10, 5, 'FD');
+    
+    const [tr, tg, tb] = hexToRgb(item.color.text);
+    doc.setTextColor(tr, tg, tb);
+    doc.setFont('helvetica', 'normal');
+    doc.text(item.label, currentX + 12, y);
+    currentX += 45;
+  });
+  
+  doc.setTextColor(55, 65, 81);
+}
+
+function addPageFooter(doc: jsPDF, pageNum: number, totalPages: number): void {
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  
+  doc.setDrawColor(229, 231, 235);
+  doc.setLineWidth(0.3);
+  doc.line(MARGINS.left, pageHeight - 15, pageWidth - MARGINS.right, pageHeight - 15);
+  
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(107, 114, 128);
+  doc.text(`Page ${pageNum} of ${totalPages}`, pageWidth / 2, pageHeight - 8, { align: 'center' });
+  doc.text('Generated by ARKA WMS', pageWidth - MARGINS.right, pageHeight - 8, { align: 'right' });
+}
+
+export function generateWarehouseOptimizationPDF(
+  result: OptimizationWizardResult,
+  options?: WarehouseOptimizationPDFOptions
+): void {
+  const siteName = options?.siteName || result.site?.name || 'Warehouse';
+  const sortedActions = sortActions(result.actions);
+  const zoneSummary = getZoneSummary(result.actions);
+
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const contentWidth = pageWidth - MARGINS.left - MARGINS.right;
+
+  let currentY = MARGINS.top;
+
+  doc.setFillColor(0, 78, 137);
+  doc.rect(0, 0, pageWidth, 22, 'F');
+
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text('WAREHOUSE OPTIMIZATION ACTION PLAN', pageWidth / 2, 10, { align: 'center' });
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${siteName} | ${formatDate()} | ${result.actions.length} Actions`, pageWidth / 2, 17, { align: 'center' });
+  
+  currentY = 30;
+
+  doc.setFillColor(243, 244, 246);
+  doc.roundedRect(MARGINS.left, currentY, contentWidth, 20, 2, 2, 'F');
+  currentY += 5;
+
+  const metricsColWidth = contentWidth / 4;
+  const metricsY = currentY + 5;
+  
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(55, 65, 81);
+
+  doc.text('SLOTS FREED', MARGINS.left + metricsColWidth * 0.5, metricsY, { align: 'center' });
+  doc.setFontSize(14);
+  doc.setTextColor(22, 163, 74);
+  doc.text(String(result.summary.slotsFreed), MARGINS.left + metricsColWidth * 0.5, metricsY + 7, { align: 'center' });
+
+  doc.setFontSize(9);
+  doc.setTextColor(55, 65, 81);
+  doc.text('ZONES OPTIMIZED', MARGINS.left + metricsColWidth * 1.5, metricsY, { align: 'center' });
+  doc.setFontSize(14);
+  doc.setTextColor(0, 78, 137);
+  doc.text(String(result.summary.zonesOptimized), MARGINS.left + metricsColWidth * 1.5, metricsY + 7, { align: 'center' });
+
+  doc.setFontSize(9);
+  doc.setTextColor(55, 65, 81);
+  doc.text('CONSOLIDATED', MARGINS.left + metricsColWidth * 2.5, metricsY, { align: 'center' });
+  doc.setFontSize(14);
+  doc.setTextColor(124, 58, 237);
+  doc.text(result.summary.consolidationWins, MARGINS.left + metricsColWidth * 2.5, metricsY + 7, { align: 'center' });
+
+  doc.setFontSize(9);
+  doc.setTextColor(55, 65, 81);
+  doc.text('PICK EFFICIENCY', MARGINS.left + metricsColWidth * 3.5, metricsY, { align: 'center' });
+  doc.setFontSize(14);
+  doc.setTextColor(245, 158, 11);
+  doc.text(result.summary.pickEfficiencyGain, MARGINS.left + metricsColWidth * 3.5, metricsY + 7, { align: 'center' });
+
+  currentY += 23;
+
+  doc.setFillColor(254, 252, 232);
+  doc.setDrawColor(250, 204, 21);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(MARGINS.left, currentY, contentWidth, 16, 2, 2, 'FD');
+  
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(161, 98, 7);
+  doc.text('HOW TO USE THIS DOCUMENT:', MARGINS.left + 4, currentY + 5);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(113, 63, 18);
+  doc.text('1. Complete actions in sequence (Step 1, 2, 3...).  2. HIGH priority items should be moved first.  3. Verify item quantity before and after each move.', MARGINS.left + 4, currentY + 10);
+
+  currentY += 19;
+
+  drawPriorityLegend(doc, MARGINS.left, currentY);
+  currentY += 8;
+
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(17, 24, 39);
+  doc.text('ACTION ITEMS', MARGINS.left, currentY);
+  currentY += 3;
+
+  const tableData = sortedActions.map((action, index) => {
+    const itemParts = action.item.split(' - ');
+    const requisitionNo = itemParts[0] || action.item;
+    const description = itemParts.slice(1).join(' - ') || action.action;
+    
+    const quantity = action.action.match(/Qty:\s*(\d+)/i)?.[1] || 
+                    action.item.match(/\((\d+)\)$/)?.[1] || 
+                    '1';
+    
+    return [
+      (index + 1).toString(),
+      action.priority.toUpperCase(),
+      requisitionNo.length > 15 ? requisitionNo.substring(0, 15) + '...' : requisitionNo,
+      description.length > 30 ? description.substring(0, 30) + '...' : description,
+      quantity,
+      action.from,
+      action.to,
+      action.estimatedBenefit || action.action,
+      'Standard forklift',
+    ];
+  });
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Step', 'Priority', 'Requisition #', 'Description', 'Qty', 'FROM', 'TO', 'Reason', 'Equipment']],
+    body: tableData,
+    margin: { left: MARGINS.left, right: MARGINS.right },
+    styles: {
+      fontSize: 7,
+      cellPadding: 1.5,
+      overflow: 'linebreak',
+      lineColor: [229, 231, 235],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [55, 65, 81],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      halign: 'center',
+    },
+    bodyStyles: {
+      textColor: [55, 65, 81],
+    },
+    alternateRowStyles: {
+      fillColor: [249, 250, 251],
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 12 },
+      1: { halign: 'center', cellWidth: 18 },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 50 },
+      4: { halign: 'center', cellWidth: 12 },
+      5: { cellWidth: 35 },
+      6: { cellWidth: 35 },
+      7: { cellWidth: 45 },
+      8: { halign: 'center', cellWidth: 28 },
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index === 1) {
+        const priority = data.cell.raw?.toString().toLowerCase() || '';
+        if (priority === 'high') {
+          data.cell.styles.fillColor = hexToRgb(COLORS.high.fill);
+          data.cell.styles.textColor = hexToRgb(COLORS.high.text);
+          data.cell.styles.fontStyle = 'bold';
+        } else if (priority === 'medium') {
+          data.cell.styles.fillColor = hexToRgb(COLORS.medium.fill);
+          data.cell.styles.textColor = hexToRgb(COLORS.medium.text);
+          data.cell.styles.fontStyle = 'bold';
+        } else if (priority === 'low') {
+          data.cell.styles.fillColor = hexToRgb(COLORS.low.fill);
+          data.cell.styles.textColor = hexToRgb(COLORS.low.text);
+        }
+      }
+    },
+  });
+
+  const finalY = (doc as any).lastAutoTable?.finalY || currentY + 50;
+
+  if (finalY + 45 > pageHeight - MARGINS.bottom) {
+    doc.addPage();
+    currentY = MARGINS.top;
+  } else {
+    currentY = finalY + 10;
+  }
+
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(17, 24, 39);
+  doc.text('ZONE SUMMARY', MARGINS.left, currentY);
+  currentY += 5;
+
+  const zoneSummaryData = zoneSummary.map(zone => [
+    zone.zone,
+    zone.actionCount.toString(),
+    zone.priorities.high.toString(),
+    zone.priorities.medium.toString(),
+    zone.priorities.low.toString(),
+  ]);
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Zone', 'Total Actions', 'High Priority', 'Medium Priority', 'Low Priority']],
+    body: zoneSummaryData,
+    margin: { left: MARGINS.left, right: MARGINS.right },
+    tableWidth: 'wrap',
+    styles: {
+      fontSize: 8,
+      cellPadding: 2,
+      lineColor: [229, 231, 235],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [55, 65, 81],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      halign: 'center',
+    },
+    bodyStyles: {
+      textColor: [55, 65, 81],
+      halign: 'center',
+    },
+    columnStyles: {
+      0: { halign: 'left', cellWidth: 40 },
+      1: { cellWidth: 30 },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 30 },
+      4: { cellWidth: 30 },
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body') {
+        if (data.column.index === 2 && parseInt(data.cell.raw?.toString() || '0') > 0) {
+          data.cell.styles.fillColor = hexToRgb(COLORS.high.fill);
+          data.cell.styles.textColor = hexToRgb(COLORS.high.text);
+          data.cell.styles.fontStyle = 'bold';
+        } else if (data.column.index === 3 && parseInt(data.cell.raw?.toString() || '0') > 0) {
+          data.cell.styles.fillColor = hexToRgb(COLORS.medium.fill);
+          data.cell.styles.textColor = hexToRgb(COLORS.medium.text);
+        } else if (data.column.index === 4 && parseInt(data.cell.raw?.toString() || '0') > 0) {
+          data.cell.styles.fillColor = hexToRgb(COLORS.low.fill);
+          data.cell.styles.textColor = hexToRgb(COLORS.low.text);
+        }
+      }
+    },
+  });
+
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    addPageFooter(doc, i, totalPages);
+  }
+
+  const fileName = `Warehouse_Optimization_${siteName.replace(/\s+/g, '_')}_${formatMilDate().replace(/\s/g, '_')}.pdf`;
+  doc.save(fileName);
+}
+
+export { formatDate, formatMilDate };
