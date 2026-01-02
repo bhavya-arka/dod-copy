@@ -465,7 +465,7 @@ export default function OptimizationWizardModal({
           <div className="bg-muted/50 px-4 py-2 border-b border-border">
             <p className="font-medium text-foreground">Recommended Actions</p>
           </div>
-          <div className="max-h-64 overflow-y-auto">
+          <div className="max-h-80 overflow-y-auto">
             {result.actions.map((action, index) => (
               <div
                 key={action.id}
@@ -475,13 +475,28 @@ export default function OptimizationWizardModal({
                   {index + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground">{action.action}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {action.from} → {action.to}
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-sm font-medium text-foreground">{action.action}</p>
+                    {(action as any).value > 0 && (
+                      <span className="text-xs px-1.5 py-0.5 bg-green-100 text-green-700 rounded">
+                        ${((action as any).value || 0).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs font-medium text-[#004E89]">
+                    {action.item} {(action as any).itemDescription && `- ${(action as any).itemDescription}`}
                   </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    <span className="font-medium">From:</span> {action.from} → <span className="font-medium">To:</span> {action.to}
+                  </p>
+                  {(action as any).reason && (
+                    <p className="text-xs text-muted-foreground mt-1 italic">
+                      {(action as any).reason}
+                    </p>
+                  )}
                 </div>
                 <span
-                  className={`text-xs px-2 py-1 rounded-full ${
+                  className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${
                     action.priority === "high"
                       ? "bg-red-100 text-red-700"
                       : action.priority === "medium"
