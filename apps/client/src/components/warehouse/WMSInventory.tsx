@@ -60,7 +60,7 @@ interface WMSInventoryProps {
   onShowToast: (message: string, type?: ToastMessage["type"]) => void;
 }
 
-const STORAGE_KEY_COLUMNS = "wms-inventory-columns-v4";
+const STORAGE_KEY_COLUMNS = "wms-inventory-columns-v5";
 const STORAGE_KEY_PAGE_SIZE = "wms-inventory-page-size";
 
 const DEFAULT_COLUMNS: ColumnConfig[] = [
@@ -175,8 +175,25 @@ export default function WMSInventory({
       const saved = localStorage.getItem(STORAGE_KEY_COLUMNS);
       if (saved) {
         try {
-          setColumns(JSON.parse(saved));
+          const savedColumns: ColumnConfig[] = JSON.parse(saved);
+          const savedColumnMap = new Map(savedColumns.map(col => [col.key, col]));
+          
+          // Merge: use saved visibility for columns that exist in both,
+          // add any new columns from DEFAULT_COLUMNS that weren't saved before
+          const mergedColumns = DEFAULT_COLUMNS.map(defaultCol => {
+            const savedCol = savedColumnMap.get(defaultCol.key);
+            if (savedCol) {
+              // Preserve saved visibility and order for existing columns
+              return { ...defaultCol, visible: savedCol.visible };
+            }
+            // New column not in saved settings - use default (visible: true)
+            return defaultCol;
+          });
+          
+          setColumns(mergedColumns);
         } catch {
+          // If parsing fails, use defaults
+          setColumns(DEFAULT_COLUMNS);
         }
       }
       setColumnsInitialized(true);
