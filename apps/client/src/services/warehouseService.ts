@@ -432,3 +432,35 @@ export async function applyOptimizationPlan(
   }
   return response.json();
 }
+
+/**
+ * Dynamic column definition from API
+ */
+export interface InventoryColumnDefinition {
+  key: string;
+  label: string;
+  sortable: boolean;
+  align: "left" | "right" | "center";
+  width?: string;
+  defaultVisible: boolean;
+  category: "identification" | "logistics" | "financial" | "tracking" | "metadata";
+}
+
+/**
+ * Fetch inventory column definitions dynamically from the server
+ * This ensures columns are always in sync with the database schema
+ * @returns Column definitions with version for cache invalidation
+ */
+export async function fetchInventoryColumns(): Promise<{
+  columns: InventoryColumnDefinition[];
+  version: number;
+}> {
+  const response = await fetch(`${API_BASE}/inventory-columns`, {
+    credentials: "include",
+  });
+  
+  if (!response.ok) {
+    throw new Error("Failed to fetch inventory columns");
+  }
+  return response.json();
+}

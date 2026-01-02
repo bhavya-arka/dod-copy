@@ -7,7 +7,8 @@
   "types": "./schema.ts",
   "exports": {
     ".": "./schema.ts",
-    "./schema": "./schema.ts"
+    "./schema": "./schema.ts",
+    "./inventoryColumns": "./inventoryColumns.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.39.1",

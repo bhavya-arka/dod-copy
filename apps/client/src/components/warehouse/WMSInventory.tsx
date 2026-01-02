@@ -30,7 +30,7 @@ import type {
   PaginatedInventoryResponse
 } from "./types";
 import { formatNSN, getConditionColor } from "./utils";
-import { fetchInventoryPaginated, deleteInventoryItem, deleteInventoryItems, deleteAllInventoryItems } from "../../services/warehouseService";
+import { fetchInventoryPaginated, deleteInventoryItem, deleteInventoryItems, deleteAllInventoryItems, fetchInventoryColumns, InventoryColumnDefinition } from "../../services/warehouseService";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,59 +60,46 @@ interface WMSInventoryProps {
   onShowToast: (message: string, type?: ToastMessage["type"]) => void;
 }
 
-const STORAGE_KEY_COLUMNS = "wms-inventory-columns-v5";
+const STORAGE_KEY_COLUMNS = "wms-inventory-columns-v6";
 const STORAGE_KEY_PAGE_SIZE = "wms-inventory-page-size";
+const STORAGE_KEY_COLUMN_VERSION = "wms-inventory-columns-version";
 
-const DEFAULT_COLUMNS: ColumnConfig[] = [
-  { key: "storage_facility", label: "Storage Facility", visible: true, sortable: true, align: "left" },
-  { key: "ship", label: "Ship", visible: true, sortable: true, align: "left" },
-  { key: "ship_class", label: "Ship Class", visible: true, sortable: true, align: "left" },
-  { key: "program_code", label: "Program Code", visible: true, sortable: true, align: "left" },
-  { key: "requisition_no", label: "Requisition No", visible: true, sortable: true, align: "left" },
-  { key: "authority", label: "Authority", visible: true, sortable: true, align: "left" },
-  { key: "work_item", label: "Work Item", visible: true, sortable: true, align: "left" },
-  { key: "li", label: "LI", visible: true, sortable: true, align: "left" },
-  { key: "matl_ctrl", label: "MATL CTRL", visible: true, sortable: true, align: "left" },
-  { key: "hmic", label: "HMIC", visible: true, sortable: true, align: "left" },
-  { key: "smcc", label: "SMCC", visible: true, sortable: true, align: "left" },
-  { key: "item_audit", label: "Item Audit", visible: true, sortable: true, align: "left" },
-  { key: "audit_no", label: "Audit No", visible: true, sortable: true, align: "left" },
-  { key: "ship_ind", label: "Ship Ind", visible: true, sortable: true, align: "left" },
-  { key: "ship_avail", label: "Ship Avail", visible: true, sortable: true, align: "left" },
-  { key: "quantity", label: "Qty", visible: true, sortable: true, align: "right" },
-  { key: "description", label: "Description", visible: true, sortable: true, align: "left", width: "200px" },
-  { key: "cage", label: "CAGE", visible: true, sortable: true, align: "left" },
-  { key: "manufacturer", label: "Manufacturer", visible: true, sortable: true, align: "left" },
-  { key: "mfg_date", label: "Mfg Date", visible: true, sortable: true, align: "left" },
-  { key: "contract_no", label: "Contract No", visible: true, sortable: true, align: "left" },
-  { key: "iuid", label: "IUID", visible: true, sortable: true, align: "left" },
-  { key: "unit", label: "UI", visible: true, sortable: true, align: "left" },
-  { key: "unit_price", label: "Unit Price", visible: true, sortable: true, align: "right" },
-  { key: "receipt_price", label: "Receipt Price", visible: true, sortable: true, align: "right" },
-  { key: "receipt_date", label: "Receipt Date", visible: true, sortable: true, align: "left" },
-  { key: "location", label: "Location", visible: true, sortable: true, align: "left" },
-  { key: "lot_no", label: "Lot No", visible: true, sortable: true, align: "left" },
-  { key: "serial_no", label: "Serial No", visible: true, sortable: true, align: "left" },
-  { key: "barcode", label: "Barcode", visible: true, sortable: true, align: "left" },
-  { key: "inventory_type", label: "Inventory Type", visible: true, sortable: true, align: "left" },
-  { key: "material_disposition", label: "Mat Disposition", visible: true, sortable: true, align: "left" },
-  { key: "condition_code", label: "Condition Code", visible: true, sortable: true, align: "left" },
-  { key: "asset_type", label: "Asset Type", visible: true, sortable: true, align: "left" },
-  { key: "exp_date", label: "Exp Date", visible: true, sortable: true, align: "left" },
-  { key: "ext_date", label: "Ext Date", visible: true, sortable: true, align: "left" },
-  { key: "insp_date", label: "Insp Date", visible: true, sortable: true, align: "left" },
-  { key: "last_audit_date", label: "Last Audit Date", visible: true, sortable: true, align: "left" },
-  { key: "data_user_id", label: "User ID", visible: true, sortable: true, align: "left" },
-  { key: "remarks", label: "Remarks", visible: true, sortable: true, align: "left" },
-  { key: "in_service_date", label: "In Service Date", visible: true, sortable: true, align: "left" },
-  { key: "warranty_item", label: "Warranty Item", visible: true, sortable: true, align: "left" },
-  { key: "nsn", label: "NSN", visible: true, sortable: true, align: "left" },
-  { key: "condition", label: "Condition", visible: true, sortable: true, align: "left" },
-  { key: "mission_id", label: "Mission", visible: true, sortable: true, align: "left" },
-  { key: "last_moved", label: "Last Moved", visible: true, sortable: true, align: "left" },
-  { key: "lin_esd", label: "LIN/ESD", visible: true, sortable: true, align: "left" },
-  { key: "weight_lbs", label: "Weight", visible: true, sortable: true, align: "right" },
-];
+/**
+ * Convert API column definitions to ColumnConfig format
+ */
+function convertToColumnConfig(apiColumns: InventoryColumnDefinition[]): ColumnConfig[] {
+  return apiColumns.map(col => ({
+    key: col.key,
+    label: col.label,
+    visible: col.defaultVisible,
+    sortable: col.sortable,
+    align: col.align,
+    width: col.width,
+  }));
+}
+
+/**
+ * Merge saved column preferences with new columns from API
+ * Preserves visibility preferences for existing columns, adds new columns as visible
+ */
+function mergeColumnsWithSaved(
+  apiColumns: ColumnConfig[],
+  savedColumns: ColumnConfig[] | null
+): ColumnConfig[] {
+  if (!savedColumns || savedColumns.length === 0) {
+    return apiColumns;
+  }
+  
+  const savedColumnMap = new Map(savedColumns.map(col => [col.key, col]));
+  
+  return apiColumns.map(apiCol => {
+    const savedCol = savedColumnMap.get(apiCol.key);
+    if (savedCol) {
+      return { ...apiCol, visible: savedCol.visible };
+    }
+    return apiCol;
+  });
+}
 
 const FILTER_FIELDS = [
   { key: "requisition_no", label: "Requisition" },
@@ -157,8 +144,9 @@ export default function WMSInventory({
   const [filterOpen, setFilterOpen] = useState(false);
   const [columnSettingsOpen, setColumnSettingsOpen] = useState(false);
   
-  const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
+  const [columns, setColumns] = useState<ColumnConfig[]>([]);
   const [columnsInitialized, setColumnsInitialized] = useState(false);
+  const [columnsLoading, setColumnsLoading] = useState(true);
   
   const [draggedColumnKey, setDraggedColumnKey] = useState<string | null>(null);
   const [dragOverColumnKey, setDragOverColumnKey] = useState<string | null>(null);
@@ -170,34 +158,59 @@ export default function WMSInventory({
   const [pageSize, setPageSize] = useState(25);
   const [pageSizeInitialized, setPageSizeInitialized] = useState(false);
 
+  // Fetch columns dynamically from API and merge with saved preferences
   useEffect(() => {
-    if (typeof window !== 'undefined' && !columnsInitialized) {
-      const saved = localStorage.getItem(STORAGE_KEY_COLUMNS);
-      if (saved) {
-        try {
-          const savedColumns: ColumnConfig[] = JSON.parse(saved);
-          const savedColumnMap = new Map(savedColumns.map(col => [col.key, col]));
-          
-          // Merge: use saved visibility for columns that exist in both,
-          // add any new columns from DEFAULT_COLUMNS that weren't saved before
-          const mergedColumns = DEFAULT_COLUMNS.map(defaultCol => {
-            const savedCol = savedColumnMap.get(defaultCol.key);
-            if (savedCol) {
-              // Preserve saved visibility and order for existing columns
-              return { ...defaultCol, visible: savedCol.visible };
-            }
-            // New column not in saved settings - use default (visible: true)
-            return defaultCol;
-          });
-          
-          setColumns(mergedColumns);
-        } catch {
-          // If parsing fails, use defaults
-          setColumns(DEFAULT_COLUMNS);
+    if (columnsInitialized) return;
+    
+    const loadColumns = async () => {
+      setColumnsLoading(true);
+      try {
+        // Fetch dynamic column definitions from API
+        const { columns: apiColumns, version } = await fetchInventoryColumns();
+        const apiColumnConfigs = convertToColumnConfig(apiColumns);
+        
+        // Check if we have saved preferences and if they're still valid
+        const savedVersionStr = localStorage.getItem(STORAGE_KEY_COLUMN_VERSION);
+        const savedVersion = savedVersionStr ? parseInt(savedVersionStr) : 0;
+        const savedColumnsStr = localStorage.getItem(STORAGE_KEY_COLUMNS);
+        
+        let finalColumns: ColumnConfig[];
+        
+        if (savedColumnsStr) {
+          try {
+            const savedColumns: ColumnConfig[] = JSON.parse(savedColumnsStr);
+            // Always merge to pick up new columns from API
+            finalColumns = mergeColumnsWithSaved(apiColumnConfigs, savedColumns);
+          } catch {
+            finalColumns = apiColumnConfigs;
+          }
+        } else {
+          finalColumns = apiColumnConfigs;
         }
+        
+        // Update stored version
+        localStorage.setItem(STORAGE_KEY_COLUMN_VERSION, version.toString());
+        
+        setColumns(finalColumns);
+      } catch (error) {
+        console.error("Failed to fetch column definitions:", error);
+        // Fallback: try to use saved columns if available
+        const savedColumnsStr = localStorage.getItem(STORAGE_KEY_COLUMNS);
+        if (savedColumnsStr) {
+          try {
+            setColumns(JSON.parse(savedColumnsStr));
+          } catch {
+            // If all else fails, use empty array (columns will be loaded on retry)
+            setColumns([]);
+          }
+        }
+      } finally {
+        setColumnsLoading(false);
+        setColumnsInitialized(true);
       }
-      setColumnsInitialized(true);
-    }
+    };
+    
+    loadColumns();
   }, [columnsInitialized]);
 
   useEffect(() => {

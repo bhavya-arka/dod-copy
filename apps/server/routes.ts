@@ -1919,6 +1919,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // WAREHOUSE MANAGEMENT API (PROTECTED)
   // ============================================================================
 
+  // GET /api/warehouse/inventory-columns - Get available inventory column definitions (dynamic)
+  app.get("/api/warehouse/inventory-columns", authMiddleware, async (_req: AuthRequest, res) => {
+    try {
+      // Dynamically generate column definitions from database schema
+      const { INVENTORY_COLUMN_DEFINITIONS } = await import("@arka/shared/inventoryColumns");
+      res.json({
+        columns: INVENTORY_COLUMN_DEFINITIONS,
+        version: Date.now(), // Cache-busting version
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch column definitions:", error);
+      res.status(500).json({ error: "Failed to fetch column definitions" });
+    }
+  });
+
   // GET /api/warehouse/sites - Get all warehouse sites for the current user with inventory counts
   app.get("/api/warehouse/sites", authMiddleware, async (req: AuthRequest, res) => {
     try {
