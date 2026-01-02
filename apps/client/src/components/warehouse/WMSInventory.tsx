@@ -59,7 +59,7 @@ interface WMSInventoryProps {
   onShowToast: (message: string, type?: ToastMessage["type"]) => void;
 }
 
-const STORAGE_KEY_COLUMNS = "wms-inventory-columns-v3";
+const STORAGE_KEY_COLUMNS = "wms-inventory-columns-v4";
 const STORAGE_KEY_PAGE_SIZE = "wms-inventory-page-size";
 
 const DEFAULT_COLUMNS: ColumnConfig[] = [
