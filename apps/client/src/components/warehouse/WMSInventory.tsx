@@ -46,6 +46,7 @@ import ConfirmDestructiveModal from "./modals/ConfirmDestructiveModal";
 const PREFETCH_AHEAD = 5;
 const PREFETCH_BEHIND = 2;
 const MAX_CACHE_SIZE = 20;
+const CACHE_TTL_MS = 30 * 1000; // Cache entries expire after 30 seconds
 
 interface WMSInventoryProps {
   sites: WarehouseSite[];
@@ -207,11 +208,12 @@ export default function WMSInventory({
   const filterRef = useRef<HTMLDivElement>(null);
   const columnSettingsRef = useRef<HTMLDivElement>(null);
 
-  const pageCacheRef = useRef<Map<string, PaginatedInventoryResponse>>(new Map());
+  const pageCacheRef = useRef<Map<string, { data: PaginatedInventoryResponse; timestamp: number }>>(new Map());
   const prefetchingRef = useRef<Set<string>>(new Set());
   const cacheVersionRef = useRef(0);
   const cacheOrderRef = useRef<string[]>([]);
   const visitedPagesRef = useRef<Set<number>>(new Set());
+  const lastInventoryLengthRef = useRef<number>(0);
 
   const getCacheKey = useCallback((pageNum: number) => {
     return JSON.stringify({
@@ -251,6 +253,14 @@ export default function WMSInventory({
     cacheVersionRef.current += 1;
   }, [debouncedSearch, filters, filterLogic, selectedSiteId, sortBy, sortOrder, pageSize]);
 
+  const clearCache = useCallback(() => {
+    pageCacheRef.current.clear();
+    prefetchingRef.current.clear();
+    cacheOrderRef.current = [];
+    visitedPagesRef.current.clear();
+    cacheVersionRef.current += 1;
+  }, []);
+
   const addToCache = useCallback((key: string, data: PaginatedInventoryResponse) => {
     const existingIndex = cacheOrderRef.current.indexOf(key);
     if (existingIndex > -1) {
@@ -264,8 +274,23 @@ export default function WMSInventory({
       }
     }
     
-    pageCacheRef.current.set(key, data);
+    pageCacheRef.current.set(key, { data, timestamp: Date.now() });
     cacheOrderRef.current.push(key);
+  }, []);
+
+  const getFromCache = useCallback((key: string): PaginatedInventoryResponse | null => {
+    const entry = pageCacheRef.current.get(key);
+    if (!entry) return null;
+    
+    // Check if cache entry has expired
+    if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+      pageCacheRef.current.delete(key);
+      const idx = cacheOrderRef.current.indexOf(key);
+      if (idx > -1) cacheOrderRef.current.splice(idx, 1);
+      return null;
+    }
+    
+    return entry.data;
   }, []);
 
   const fetchPageData = useCallback(async (pageNum: number, forPrefetch = false): Promise<PaginatedInventoryResponse | null> => {
@@ -274,7 +299,7 @@ export default function WMSInventory({
     const cacheKey = getCacheKey(pageNum);
     
     if (forPrefetch) {
-      const cached = pageCacheRef.current.get(cacheKey);
+      const cached = getFromCache(cacheKey);
       if (cached) {
         return cached;
       }
@@ -307,7 +332,7 @@ export default function WMSInventory({
         prefetchingRef.current.delete(cacheKey);
       }
     }
-  }, [selectedSiteId, pageSize, sortBy, sortOrder, debouncedSearch, filters, filterLogic, getCacheKey, addToCache]);
+  }, [selectedSiteId, pageSize, sortBy, sortOrder, debouncedSearch, filters, filterLogic, getCacheKey, addToCache, getFromCache]);
 
   const fetchData = useCallback(async () => {
     if (!selectedSiteId) return;
@@ -316,7 +341,7 @@ export default function WMSInventory({
     const hasVisitedBefore = visitedPagesRef.current.has(page);
     
     if (hasVisitedBefore) {
-      const cached = pageCacheRef.current.get(cacheKey);
+      const cached = getFromCache(cacheKey);
       if (cached) {
         setPaginatedData(cached);
         return;
@@ -346,7 +371,7 @@ export default function WMSInventory({
     } finally {
       setLoading(false);
     }
-  }, [selectedSiteId, page, pageSize, sortBy, sortOrder, debouncedSearch, filters, filterLogic, getCacheKey, addToCache, onShowToast]);
+  }, [selectedSiteId, page, pageSize, sortBy, sortOrder, debouncedSearch, filters, filterLogic, getCacheKey, addToCache, getFromCache, onShowToast]);
 
   const prefetchAdjacentPages = useCallback(async () => {
     if (!selectedSiteId || !paginatedData) return;
@@ -370,15 +395,40 @@ export default function WMSInventory({
     
     for (const pageNum of pagesToPrefetch) {
       const cacheKey = getCacheKey(pageNum);
-      if (!pageCacheRef.current.has(cacheKey) && !prefetchingRef.current.has(cacheKey)) {
+      if (!getFromCache(cacheKey) && !prefetchingRef.current.has(cacheKey)) {
         fetchPageData(pageNum, true);
       }
     }
-  }, [selectedSiteId, page, paginatedData, getCacheKey, fetchPageData]);
+  }, [selectedSiteId, page, paginatedData, getCacheKey, fetchPageData, getFromCache]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Clear cache when external inventory changes (from imports, etc.)
+  useEffect(() => {
+    const newLength = _legacyInventory?.length || 0;
+    if (lastInventoryLengthRef.current !== newLength && lastInventoryLengthRef.current > 0) {
+      clearCache();
+      fetchData();
+    }
+    lastInventoryLengthRef.current = newLength;
+  }, [_legacyInventory, clearCache, fetchData]);
+
+  // Periodic cache cleanup every 60 seconds
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [key, entry] of pageCacheRef.current.entries()) {
+        if (now - entry.timestamp > CACHE_TTL_MS) {
+          pageCacheRef.current.delete(key);
+          const idx = cacheOrderRef.current.indexOf(key);
+          if (idx > -1) cacheOrderRef.current.splice(idx, 1);
+        }
+      }
+    }, 60 * 1000);
+    return () => clearInterval(cleanupInterval);
+  }, []);
 
   useEffect(() => {
     if (paginatedData && !loading) {
@@ -507,11 +557,7 @@ export default function WMSInventory({
   };
 
   const handleRefresh = () => {
-    pageCacheRef.current.clear();
-    prefetchingRef.current.clear();
-    cacheOrderRef.current = [];
-    visitedPagesRef.current.clear();
-    cacheVersionRef.current += 1;
+    clearCache();
     setSelectedItems(new Set());
     fetchData();
     onRefresh();
