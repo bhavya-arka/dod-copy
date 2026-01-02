@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { X, Loader2, ChevronRight, ChevronLeft, Check, Layers, Ruler, DollarSign, Box, FileDown, Play, Save, AlertCircle } from "lucide-react";
+import { X, Loader2, ChevronRight, ChevronLeft, Check, Layers, Ruler, DollarSign, Box, FileDown, Play, Save, AlertCircle, Zap } from "lucide-react";
 import type { WarehouseSite, ToastMessage } from "../types";
-import { runOptimizationWizard, applyOptimizationPlan, type OptimizationWizardResult } from "../../../services/warehouseService";
+import { runOptimizationWizard, runAllOptimizations, applyOptimizationPlan, type OptimizationWizardResult } from "../../../services/warehouseService";
 
-export type Algorithm = "cardstack" | "size_standardization" | "value_density" | "bin_packing";
+export type Algorithm = "cardstack" | "size_standardization" | "value_density" | "bin_packing" | "run_all";
 
 interface OptimizationWizardModalProps {
   siteId: number;
@@ -22,6 +22,12 @@ interface AlgorithmOption {
 }
 
 const ALGORITHMS: AlgorithmOption[] = [
+  {
+    id: "run_all",
+    name: "Run All (Recommended)",
+    description: "Execute all 4 algorithms in optimal sequence: CardStack → Size → Value → Bin-Packing for comprehensive optimization.",
+    icon: <Zap className="w-6 h-6" />,
+  },
   {
     id: "cardstack",
     name: "CardStack",
@@ -141,8 +147,15 @@ export default function OptimizationWizardModal({
     }, 500);
 
     try {
-      const algorithmParams = params[selectedAlgorithm];
-      const optimizationResult = await runOptimizationWizard(siteId, selectedAlgorithm, algorithmParams);
+      let optimizationResult: OptimizationWizardResult;
+      
+      if (selectedAlgorithm === "run_all") {
+        optimizationResult = await runAllOptimizations(siteId, params);
+      } else {
+        const algorithmParams = params[selectedAlgorithm];
+        optimizationResult = await runOptimizationWizard(siteId, selectedAlgorithm, algorithmParams);
+      }
+      
       setProgress(100);
       setResult(optimizationResult);
       setStep(4);
@@ -407,6 +420,52 @@ export default function OptimizationWizardModal({
       </div>
     );
 
+    const renderRunAllParams = () => (
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Comprehensive optimization runs all 4 algorithms in the optimal sequence for maximum warehouse efficiency.
+        </p>
+        <div className="p-4 rounded-xl bg-muted/50 border border-border">
+          <p className="text-sm font-medium text-foreground mb-3">Execution Order:</p>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 rounded-full bg-[#004E89] text-white text-xs flex items-center justify-center font-bold">1</div>
+              <div>
+                <p className="text-sm font-medium">CardStack</p>
+                <p className="text-xs text-muted-foreground">Consolidate items by ship class</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 rounded-full bg-[#004E89] text-white text-xs flex items-center justify-center font-bold">2</div>
+              <div>
+                <p className="text-sm font-medium">Size Standardization</p>
+                <p className="text-xs text-muted-foreground">Group by program code for rack optimization</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 rounded-full bg-[#004E89] text-white text-xs flex items-center justify-center font-bold">3</div>
+              <div>
+                <p className="text-sm font-medium">Value Density Analysis</p>
+                <p className="text-xs text-muted-foreground">Prioritize high-value items for accessibility</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 rounded-full bg-[#004E89] text-white text-xs flex items-center justify-center font-bold">4</div>
+              <div>
+                <p className="text-sm font-medium">Bin-Packing Order</p>
+                <p className="text-xs text-muted-foreground">Stage items for efficient pallet utilization</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="p-3 rounded-xl bg-green-50 border border-green-200">
+          <p className="text-sm text-green-800">
+            <strong>Best Practice:</strong> Each algorithm builds on the previous one's insights, producing a unified action plan with de-duplicated, prioritized recommendations.
+          </p>
+        </div>
+      </div>
+    );
+
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2 p-3 rounded-xl bg-[#004E89]/10">
@@ -415,6 +474,7 @@ export default function OptimizationWizardModal({
             {ALGORITHMS.find((a) => a.id === selectedAlgorithm)?.name}
           </span>
         </div>
+        {selectedAlgorithm === "run_all" && renderRunAllParams()}
         {selectedAlgorithm === "cardstack" && renderCardStackParams()}
         {selectedAlgorithm === "size_standardization" && renderSizeStandardizationParams()}
         {selectedAlgorithm === "value_density" && renderValueDensityParams()}

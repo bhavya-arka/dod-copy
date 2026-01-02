@@ -476,6 +476,24 @@ export async function runOptimizationWizard(
   return response.json();
 }
 
+export async function runAllOptimizations(
+  siteId: number,
+  params: Record<string, any>
+): Promise<OptimizationWizardResult> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/optimize/run-all`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ params }),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to run all optimizations");
+  }
+  return response.json();
+}
+
 /**
  * Apply optimization plan
  * @param siteId - Site ID

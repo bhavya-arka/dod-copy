@@ -3702,6 +3702,408 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/warehouse/sites/:siteId/optimize/run-all - Run all optimization algorithms in sequence
+  app.post("/api/warehouse/sites/:siteId/optimize/run-all", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const { params: userParams } = req.body;
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      // Fetch inventory items for analysis
+      const items = await db.select()
+        .from(warehouseInventoryItems)
+        .where(eq(warehouseInventoryItems.site_id, siteId));
+
+      // Parse item data
+      const itemsWithData = items.map(item => {
+        const rawRow = item.raw_row as Record<string, any> || {};
+        const qty = item.quantity || parseInt(rawRow?.qty) || 1;
+        const price = parseFloat(item.unit_price?.toString() || rawRow?.unit_price || "0");
+        const value = qty * price;
+        const weight = parseFloat(item.weight_lbs?.toString() || rawRow?.weight || "0");
+        const location = rawRow?.location || item.location || 'Unassigned';
+        const locationZone = location.split('-')[0] || location.substring(0, 4) || 'UNK';
+        
+        return {
+          id: item.id,
+          requisition_no: item.requisition_no || `ITEM-${item.id}`,
+          description: item.description || rawRow?.description || '',
+          quantity: qty,
+          value,
+          weight,
+          rack_location: location,
+          location_zone: locationZone,
+          ship_class: item.ship_class || rawRow?.ship_class || '',
+          inventory_type: item.inventory_type || rawRow?.inventory_type || '',
+          condition_code: item.condition_code || item.condition || rawRow?.condition_code || 'A',
+          storage_facility: item.storage_facility || rawRow?.storage_facility || '',
+          mat_disposition: item.material_disposition || rawRow?.mat_disposition || rawRow?.material_disposition || '',
+          program_code: item.program_code || rawRow?.program_code || '',
+        };
+      });
+
+      // Default parameters for all algorithms
+      const defaultParams = {
+        cardstack: userParams?.cardstack || { minItemsToConsolidate: 2, maxActionsToGenerate: 50 },
+        size_standardization: userParams?.size_standardization || { minProgramItems: 3, maxActionsToGenerate: 50 },
+        value_density: userParams?.value_density || { highValueThreshold: 1000, zoneDistanceMultiplier: 1.5 },
+        bin_packing: userParams?.bin_packing || { maxItemsPerPallet: 15, prioritizeByValue: true },
+      };
+
+      // Collect all actions from all algorithms
+      const allActions: Array<{
+        id: string;
+        action: string;
+        item: string;
+        itemDescription: string;
+        from: string;
+        to: string;
+        priority: 'high' | 'medium' | 'low';
+        estimatedBenefit: string;
+        quantity: number;
+        value: number;
+        reason: string;
+        algorithm: string;
+      }> = [];
+
+      let totalSavings = 0;
+      let totalSpaceImprovement = 0;
+      const phaseResults: Record<string, { actions: number; savings: number }> = {};
+
+      // Phase 1: CardStack - Consolidate items by ship class
+      {
+        const { minItemsToConsolidate = 2 } = defaultParams.cardstack;
+        const shipGroups: Map<string, typeof itemsWithData> = new Map();
+        for (const item of itemsWithData) {
+          if (!item.ship_class) continue;
+          if (!shipGroups.has(item.ship_class)) {
+            shipGroups.set(item.ship_class, []);
+          }
+          shipGroups.get(item.ship_class)!.push(item);
+        }
+
+        let actionId = 1;
+        let phaseActions = 0;
+        let phaseSavings = 0;
+
+        for (const [shipClass, shipItems] of shipGroups.entries()) {
+          if (shipItems.length < minItemsToConsolidate) continue;
+          
+          const zoneCounts: Map<string, number> = new Map();
+          for (const item of shipItems) {
+            zoneCounts.set(item.location_zone, (zoneCounts.get(item.location_zone) || 0) + 1);
+          }
+          
+          let targetZone = '';
+          let maxCount = 0;
+          for (const [zone, count] of zoneCounts.entries()) {
+            if (count > maxCount) {
+              maxCount = count;
+              targetZone = zone;
+            }
+          }
+
+          for (const item of shipItems) {
+            if (item.location_zone !== targetZone && allActions.length < 100) {
+              const benefit = item.value * 0.05;
+              phaseSavings += benefit;
+              phaseActions++;
+              allActions.push({
+                id: `CS-${actionId++}`,
+                action: 'consolidate',
+                item: item.requisition_no,
+                itemDescription: item.description.substring(0, 50),
+                from: item.rack_location,
+                to: `${targetZone}-CONSOLIDATED`,
+                priority: item.value > 5000 ? 'high' : item.value > 1000 ? 'medium' : 'low',
+                estimatedBenefit: `$${benefit.toFixed(0)} picking efficiency`,
+                quantity: item.quantity,
+                value: item.value,
+                reason: `Consolidate ${shipClass} items to zone ${targetZone}`,
+                algorithm: 'cardstack',
+              });
+            }
+          }
+        }
+        phaseResults.cardstack = { actions: phaseActions, savings: phaseSavings };
+        totalSavings += phaseSavings;
+      }
+
+      // Phase 2: Size Standardization - Group by program code
+      {
+        const { minProgramItems = 3 } = defaultParams.size_standardization;
+        const programGroups: Map<string, typeof itemsWithData> = new Map();
+        for (const item of itemsWithData) {
+          if (!item.program_code) continue;
+          if (!programGroups.has(item.program_code)) {
+            programGroups.set(item.program_code, []);
+          }
+          programGroups.get(item.program_code)!.push(item);
+        }
+
+        let actionId = 1;
+        let phaseActions = 0;
+        let phaseSavings = 0;
+
+        for (const [programCode, programItems] of programGroups.entries()) {
+          if (programItems.length < minProgramItems) continue;
+          
+          const zones = new Set(programItems.map(i => i.location_zone));
+          if (zones.size > 1) {
+            const targetZone = programItems.sort((a, b) => b.value - a.value)[0].location_zone;
+            
+            for (const item of programItems) {
+              if (item.location_zone !== targetZone && allActions.length < 150) {
+                const benefit = item.value * 0.03;
+                phaseSavings += benefit;
+                phaseActions++;
+                allActions.push({
+                  id: `SS-${actionId++}`,
+                  action: 'standardize',
+                  item: item.requisition_no,
+                  itemDescription: item.description.substring(0, 50),
+                  from: item.rack_location,
+                  to: `${targetZone}-${programCode}`,
+                  priority: 'medium',
+                  estimatedBenefit: `$${benefit.toFixed(0)} rack utilization`,
+                  quantity: item.quantity,
+                  value: item.value,
+                  reason: `Group ${programCode} program items together`,
+                  algorithm: 'size_standardization',
+                });
+              }
+            }
+          }
+        }
+        phaseResults.size_standardization = { actions: phaseActions, savings: phaseSavings };
+        totalSavings += phaseSavings;
+        totalSpaceImprovement += phaseActions * 0.5;
+      }
+
+      // Phase 3: Value Density - Move high-value items to accessible zones
+      {
+        const { highValueThreshold = 1000 } = defaultParams.value_density;
+        const highValueItems = itemsWithData.filter(i => i.value >= highValueThreshold);
+        
+        let actionId = 1;
+        let phaseActions = 0;
+        let phaseSavings = 0;
+
+        // High-value items should be in accessible zones (lower zone numbers or Zone A)
+        // Extract numeric portion from location for accessibility scoring
+        const getAccessibilityScore = (location: string): number => {
+          // Extract all numbers from location string
+          const numbers = location.match(/\d+/g);
+          if (numbers && numbers.length > 0) {
+            return parseInt(numbers[0]);
+          }
+          // If starts with A/B, assign low scores (accessible)
+          if (location.startsWith('A') || location.startsWith('1')) return 100;
+          if (location.startsWith('B') || location.startsWith('2')) return 200;
+          return 500; // Default mid-range
+        };
+
+        // Sort by value desc, then by accessibility score (higher = less accessible)
+        const sortedItems = highValueItems.sort((a, b) => b.value - a.value);
+        
+        // Take top high-value items that are in less accessible locations
+        for (const item of sortedItems.slice(0, 30)) {
+          const accessScore = getAccessibilityScore(item.rack_location);
+          
+          // If item is in less accessible location (score > 1500), suggest moving
+          if (accessScore > 1500 && allActions.length < 200) {
+            const benefit = item.value * 0.08;
+            phaseSavings += benefit;
+            phaseActions++;
+            allActions.push({
+              id: `VD-${actionId++}`,
+              action: 'relocate_priority',
+              item: item.requisition_no,
+              itemDescription: item.description.substring(0, 50),
+              from: item.rack_location,
+              to: `ZONE-A-PRIORITY`,
+              priority: 'high',
+              estimatedBenefit: `$${benefit.toFixed(0)} accessibility`,
+              quantity: item.quantity,
+              value: item.value,
+              reason: `High-value item ($${item.value.toFixed(0)}) in zone ${item.location_zone} needs accessible placement`,
+              algorithm: 'value_density',
+            });
+          }
+        }
+        
+        // Also recommend moving any high-value items already not processed
+        if (phaseActions < 10 && highValueItems.length > 0) {
+          // If few items qualified above, take top 10 by value that aren't already in Zone A
+          for (const item of sortedItems.slice(0, 10)) {
+            const alreadyHasAction = allActions.some(a => a.item === item.requisition_no && a.algorithm === 'value_density');
+            if (!alreadyHasAction && !item.rack_location.includes('PRIORITY') && allActions.length < 200) {
+              const benefit = item.value * 0.08;
+              phaseSavings += benefit;
+              phaseActions++;
+              allActions.push({
+                id: `VD-${actionId++}`,
+                action: 'relocate_priority',
+                item: item.requisition_no,
+                itemDescription: item.description.substring(0, 50),
+                from: item.rack_location,
+                to: `ZONE-A-PRIORITY`,
+                priority: 'high',
+                estimatedBenefit: `$${benefit.toFixed(0)} accessibility`,
+                quantity: item.quantity,
+                value: item.value,
+                reason: `Top-value item ($${item.value.toFixed(0)}) should be in priority zone`,
+                algorithm: 'value_density',
+              });
+            }
+          }
+        }
+        
+        phaseResults.value_density = { actions: phaseActions, savings: phaseSavings };
+        totalSavings += phaseSavings;
+      }
+
+      // Phase 4: Bin Packing - Stage items by disposition
+      {
+        const { maxItemsPerPallet = 15, prioritizeByValue = true } = defaultParams.bin_packing;
+        const dispositionGroups: Map<string, typeof itemsWithData> = new Map();
+        
+        for (const item of itemsWithData) {
+          if (!item.mat_disposition) continue;
+          if (!dispositionGroups.has(item.mat_disposition)) {
+            dispositionGroups.set(item.mat_disposition, []);
+          }
+          dispositionGroups.get(item.mat_disposition)!.push(item);
+        }
+
+        let actionId = 1;
+        let phaseActions = 0;
+        let phaseSavings = 0;
+
+        for (const [disposition, dispositionItems] of dispositionGroups.entries()) {
+          if (dispositionItems.length < 3) continue;
+          
+          const sorted = prioritizeByValue 
+            ? dispositionItems.sort((a, b) => b.value - a.value)
+            : dispositionItems;
+
+          for (let i = 0; i < Math.min(sorted.length, 50); i++) {
+            const item = sorted[i];
+            const palletNumber = Math.floor(i / maxItemsPerPallet) + 1;
+            
+            if (allActions.length < 250) {
+              const benefit = item.value * 0.02;
+              phaseSavings += benefit;
+              phaseActions++;
+              allActions.push({
+                id: `BP-${actionId++}`,
+                action: 'stage_pallet',
+                item: item.requisition_no,
+                itemDescription: item.description.substring(0, 50),
+                from: item.rack_location,
+                to: `STAGING-${disposition}-P${palletNumber}`,
+                priority: i < maxItemsPerPallet ? 'high' : 'medium',
+                estimatedBenefit: `$${benefit.toFixed(0)} pallet efficiency`,
+                quantity: item.quantity,
+                value: item.value,
+                reason: `Stage ${disposition} item on pallet ${palletNumber}`,
+                algorithm: 'bin_packing',
+              });
+            }
+          }
+        }
+        phaseResults.bin_packing = { actions: phaseActions, savings: phaseSavings };
+        totalSavings += phaseSavings;
+      }
+
+      // De-duplicate: Keep highest priority/value action for each item
+      // Priority order: high > medium > low, then by value, then by algorithm phase order
+      const algorithmPriority: Record<string, number> = {
+        'cardstack': 1,
+        'size_standardization': 2, 
+        'value_density': 3,
+        'bin_packing': 4,
+      };
+      
+      const priorityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
+      
+      const scoreAction = (action: typeof allActions[0]): number => {
+        // Higher score = better action to keep
+        const priorityScore = (2 - priorityOrder[action.priority]) * 10000; // 0-20000
+        const valueScore = Math.min(action.value, 10000); // 0-10000
+        const phaseScore = (5 - algorithmPriority[action.algorithm]) * 100; // 100-400
+        return priorityScore + valueScore + phaseScore;
+      };
+      
+      const itemBestAction = new Map<string, typeof allActions[0]>();
+      for (const action of allActions) {
+        const existing = itemBestAction.get(action.item);
+        if (!existing || scoreAction(action) > scoreAction(existing)) {
+          itemBestAction.set(action.item, action);
+        }
+      }
+      
+      const deduplicatedActions = Array.from(itemBestAction.values());
+
+      // Sort by priority and value
+      deduplicatedActions.sort((a, b) => {
+        if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+        }
+        return b.value - a.value;
+      });
+
+      const summary = {
+        potentialSavings: `$${totalSavings.toFixed(0)}`,
+        spaceImprovement: `${totalSpaceImprovement.toFixed(1)}%`,
+        itemsAffected: seenItems.size,
+        actionsGenerated: deduplicatedActions.length,
+        phases: phaseResults,
+      };
+
+      // Store optimization run
+      const [optimizationRun] = await db.insert(warehouseOptimizationRuns).values({
+        user_id: req.user!.id,
+        site_id: siteId,
+        algorithm: 'run_all',
+        input_params: defaultParams,
+        results: { summary, itemsAnalyzed: items.length, phases: phaseResults },
+        action_plan: { actions: deduplicatedActions },
+        status: 'completed',
+        completed_at: new Date(),
+      }).returning();
+
+      console.log(`[Warehouse] Run-all optimization completed: ${deduplicatedActions.length} actions from 4 algorithms`);
+
+      res.status(201).json({
+        runId: optimizationRun.id,
+        algorithm: 'run_all',
+        site: { id: siteId, name: site.name },
+        summary,
+        actions: deduplicatedActions.slice(0, 50),
+        totalActions: deduplicatedActions.length,
+      });
+    } catch (error) {
+      console.error("[Warehouse] Run-all optimization failed:", error);
+      res.status(500).json({ error: "Failed to run all optimizations" });
+    }
+  });
+
   // POST /api/warehouse/sites/:siteId/optimize/:runId/apply - Apply optimization plan
   app.post("/api/warehouse/sites/:siteId/optimize/:runId/apply", authMiddleware, async (req: AuthRequest, res) => {
     try {
