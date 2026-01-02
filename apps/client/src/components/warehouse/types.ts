@@ -26,29 +26,67 @@ export interface WarehouseBuilding {
   active: boolean;
 }
 
-/** Inventory item in a warehouse */
+/** Inventory item in a warehouse - includes all BATS fields */
 export interface InventoryItem {
   id: number;
+  site_id: number;
+  location_id?: number;
+  storage_facility?: string;
+  ship?: string;
+  ship_class?: string;
+  program_code?: string;
   requisition_no: string;
-  description?: string;
-  quantity: number;
-  unit_price?: string;
-  length_in?: string;
-  width_in?: string;
-  height_in?: string;
-  weight_lb?: string;
-  weight_lbs?: string;
+  authority?: string;
+  work_item?: string;
+  li?: string;
+  matl_ctrl?: string;
+  hmic?: string;
+  smcc?: string;
+  item_audit?: string;
+  audit_no?: string;
+  ship_ind?: string;
+  ship_avail?: string;
   nsn?: string;
   fsc?: string;
   niin?: string;
+  description?: string;
+  cage?: string;
+  manufacturer?: string;
+  mfg_date?: string;
+  contract_no?: string;
+  iuid?: string;
+  unit?: string;
+  quantity: number;
+  unit_price?: string;
+  receipt_price?: string;
+  receipt_date?: string;
+  location?: string;
+  lot_no?: string;
+  serial_no?: string;
+  barcode?: string;
+  inventory_type?: string;
+  material_disposition?: string;
+  condition_code?: string;
   condition?: string;
+  asset_type?: string;
+  exp_date?: string;
+  ext_date?: string;
+  insp_date?: string;
+  last_audit_date?: string;
+  data_user_id?: string;
+  remarks?: string;
+  in_service_date?: string;
+  warranty_item?: string;
   mission_id?: string;
+  lin_esd?: string;
   last_moved?: string;
+  weight_lb?: string;
+  weight_lbs?: string;
+  length_in?: string;
+  width_in?: string;
+  height_in?: string;
   rack_location?: string;
   container_id?: string;
-  receipt_date?: string;
-  serial_no?: string;
-  lin_esd?: string;
 }
 
 /** Transfer item details */

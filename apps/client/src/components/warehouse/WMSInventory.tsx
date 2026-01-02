@@ -59,20 +59,57 @@ interface WMSInventoryProps {
   onShowToast: (message: string, type?: ToastMessage["type"]) => void;
 }
 
-const STORAGE_KEY_COLUMNS = "wms-inventory-columns";
+const STORAGE_KEY_COLUMNS = "wms-inventory-columns-v2";
 const STORAGE_KEY_PAGE_SIZE = "wms-inventory-page-size";
 
 const DEFAULT_COLUMNS: ColumnConfig[] = [
-  { key: "requisition_no", label: "Requisition", visible: true, sortable: true, align: "left" },
-  { key: "nsn", label: "NSN", visible: true, sortable: true, align: "left" },
-  { key: "description", label: "Description", visible: true, sortable: true, align: "left", width: "200px" },
+  { key: "storage_facility", label: "Storage Facility", visible: false, sortable: true, align: "left" },
+  { key: "ship", label: "Ship", visible: false, sortable: true, align: "left" },
+  { key: "ship_class", label: "Ship Class", visible: false, sortable: true, align: "left" },
+  { key: "program_code", label: "Program Code", visible: false, sortable: true, align: "left" },
+  { key: "requisition_no", label: "Requisition No", visible: true, sortable: true, align: "left" },
+  { key: "authority", label: "Authority", visible: false, sortable: true, align: "left" },
+  { key: "work_item", label: "Work Item", visible: false, sortable: true, align: "left" },
+  { key: "li", label: "LI", visible: false, sortable: true, align: "left" },
+  { key: "matl_ctrl", label: "MATL CTRL", visible: false, sortable: true, align: "left" },
+  { key: "hmic", label: "HMIC", visible: false, sortable: true, align: "left" },
+  { key: "smcc", label: "SMCC", visible: false, sortable: true, align: "left" },
+  { key: "item_audit", label: "Item Audit", visible: false, sortable: true, align: "left" },
+  { key: "audit_no", label: "Audit No", visible: false, sortable: true, align: "left" },
+  { key: "ship_ind", label: "Ship Ind", visible: false, sortable: true, align: "left" },
+  { key: "ship_avail", label: "Ship Avail", visible: false, sortable: true, align: "left" },
   { key: "quantity", label: "Qty", visible: true, sortable: true, align: "right" },
-  { key: "condition", label: "Condition", visible: true, sortable: true, align: "left" },
-  { key: "mission_id", label: "Mission", visible: true, sortable: true, align: "left" },
-  { key: "last_moved", label: "Last Moved", visible: true, sortable: true, align: "left" },
+  { key: "description", label: "Description", visible: true, sortable: true, align: "left", width: "200px" },
+  { key: "cage", label: "CAGE", visible: true, sortable: true, align: "left" },
+  { key: "manufacturer", label: "Manufacturer", visible: false, sortable: true, align: "left" },
+  { key: "mfg_date", label: "Mfg Date", visible: false, sortable: true, align: "left" },
+  { key: "contract_no", label: "Contract No", visible: false, sortable: true, align: "left" },
+  { key: "iuid", label: "IUID", visible: true, sortable: true, align: "left" },
+  { key: "unit", label: "UI", visible: false, sortable: true, align: "left" },
+  { key: "unit_price", label: "Unit Price", visible: true, sortable: true, align: "right" },
+  { key: "receipt_price", label: "Receipt Price", visible: false, sortable: true, align: "right" },
+  { key: "receipt_date", label: "Receipt Date", visible: false, sortable: true, align: "left" },
+  { key: "location", label: "Location", visible: true, sortable: true, align: "left" },
+  { key: "lot_no", label: "Lot No", visible: false, sortable: true, align: "left" },
   { key: "serial_no", label: "Serial No", visible: false, sortable: true, align: "left" },
+  { key: "barcode", label: "Barcode", visible: false, sortable: true, align: "left" },
+  { key: "inventory_type", label: "Inventory Type", visible: false, sortable: true, align: "left" },
+  { key: "material_disposition", label: "Mat Disposition", visible: false, sortable: true, align: "left" },
+  { key: "condition_code", label: "Condition Code", visible: true, sortable: true, align: "left" },
+  { key: "asset_type", label: "Asset Type", visible: false, sortable: true, align: "left" },
+  { key: "exp_date", label: "Exp Date", visible: false, sortable: true, align: "left" },
+  { key: "ext_date", label: "Ext Date", visible: false, sortable: true, align: "left" },
+  { key: "insp_date", label: "Insp Date", visible: false, sortable: true, align: "left" },
+  { key: "last_audit_date", label: "Last Audit Date", visible: false, sortable: true, align: "left" },
+  { key: "data_user_id", label: "User ID", visible: false, sortable: true, align: "left" },
+  { key: "remarks", label: "Remarks", visible: false, sortable: true, align: "left" },
+  { key: "in_service_date", label: "In Service Date", visible: false, sortable: true, align: "left" },
+  { key: "warranty_item", label: "Warranty Item", visible: false, sortable: true, align: "left" },
+  { key: "nsn", label: "NSN", visible: false, sortable: true, align: "left" },
+  { key: "condition", label: "Condition", visible: false, sortable: true, align: "left" },
+  { key: "mission_id", label: "Mission", visible: false, sortable: true, align: "left" },
+  { key: "last_moved", label: "Last Moved", visible: false, sortable: true, align: "left" },
   { key: "lin_esd", label: "LIN/ESD", visible: false, sortable: true, align: "left" },
-  { key: "unit_price", label: "Unit Price", visible: false, sortable: true, align: "right" },
   { key: "weight_lbs", label: "Weight", visible: false, sortable: true, align: "right" },
 ];
 
@@ -580,6 +617,7 @@ export default function WMSInventory({
   const someSelected = items.some(item => selectedItems.has(item.id)) && !allSelected;
 
   const renderCellValue = (item: InventoryItem, columnKey: string) => {
+    const value = (item as any)[columnKey];
     switch (columnKey) {
       case "requisition_no":
         return <span className="font-medium">{item.requisition_no || "-"}</span>;
@@ -590,25 +628,22 @@ export default function WMSInventory({
       case "quantity":
         return <span className="font-medium">{item.quantity}</span>;
       case "condition":
+      case "condition_code":
         return (
-          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getConditionColor(item.condition || "")}`}>
-            {item.condition || "-"}
+          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getConditionColor(value || "")}`}>
+            {value || "-"}
           </span>
         );
-      case "mission_id":
-        return <span className="text-xs">{item.mission_id || "-"}</span>;
+      case "unit_price":
+        return <span className="text-xs">{value ? `$${parseFloat(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}</span>;
+      case "receipt_price":
+        return <span className="text-xs">{value ? `$${parseFloat(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}</span>;
       case "last_moved":
         return <span className="text-xs">{item.last_moved ? new Date(item.last_moved).toLocaleDateString() : "-"}</span>;
-      case "serial_no":
-        return <span className="text-xs font-mono">{item.serial_no || "-"}</span>;
-      case "lin_esd":
-        return <span className="text-xs">{item.lin_esd || "-"}</span>;
-      case "unit_price":
-        return <span className="text-xs">{item.unit_price ? `$${parseFloat(item.unit_price).toFixed(2)}` : "-"}</span>;
       case "weight_lbs":
         return <span className="text-xs">{item.weight_lb || "-"}</span>;
       default:
-        return "-";
+        return <span className="text-xs">{value ?? "-"}</span>;
     }
   };
 
