@@ -101,10 +101,21 @@ export default function PlanActionsModal({
     
     setLoading(true);
     try {
-      for (const action of inProgressActions) {
-        await updateOptimizationAction(currentPlan.id, action.id, { status: 'completed' });
+      const results = await Promise.allSettled(
+        inProgressActions.map(action => 
+          updateOptimizationAction(currentPlan.id, action.id, { status: 'completed' })
+        )
+      );
+      
+      const succeeded = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+      
+      if (failed > 0) {
+        onShowToast(`Completed ${succeeded} actions, ${failed} failed`, failed === inProgressActions.length ? "error" : "warning");
+      } else {
+        onShowToast(`${succeeded} actions marked complete`, "success");
       }
-      onShowToast(`${inProgressActions.length} actions marked complete`, "success");
+      
       await refreshPlan();
       onActionUpdate();
     } catch (err) {
@@ -120,10 +131,21 @@ export default function PlanActionsModal({
     
     setLoading(true);
     try {
-      for (const action of pendingActions) {
-        await updateOptimizationAction(currentPlan.id, action.id, { status: 'skipped' });
+      const results = await Promise.allSettled(
+        pendingActions.map(action => 
+          updateOptimizationAction(currentPlan.id, action.id, { status: 'skipped' })
+        )
+      );
+      
+      const succeeded = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+      
+      if (failed > 0) {
+        onShowToast(`Skipped ${succeeded} actions, ${failed} failed`, failed === pendingActions.length ? "error" : "warning");
+      } else {
+        onShowToast(`${succeeded} actions skipped`, "success");
       }
-      onShowToast(`${pendingActions.length} actions skipped`, "success");
+      
       await refreshPlan();
       onActionUpdate();
     } catch (err) {
@@ -236,6 +258,8 @@ export default function PlanActionsModal({
 
   const pendingCount = sortedActions.filter(a => a.status === 'pending').length;
   const inProgressCount = sortedActions.filter(a => a.status === 'in_progress').length;
+  
+  const isPlanFinalized = currentPlan.status === 'completed' || currentPlan.status === 'cancelled';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -279,13 +303,20 @@ export default function PlanActionsModal({
             />
           </div>
           
-          {(currentPlan.status === 'in_progress' || currentPlan.status === 'pending') && (
+          {isPlanFinalized ? (
+            <div className="flex items-center gap-2 mt-4 p-3 rounded-xl bg-muted/50 border border-border">
+              <AlertCircle className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <span className="text-sm text-muted-foreground">
+                This plan is {currentPlan.status}. Actions cannot be modified.
+              </span>
+            </div>
+          ) : (currentPlan.status === 'in_progress' || currentPlan.status === 'pending') && (
             <div className="flex gap-2 mt-4">
               {inProgressCount > 0 && (
                 <button
                   onClick={handleBatchComplete}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  disabled={loading || isPlanFinalized}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   Mark All Complete ({inProgressCount})
@@ -294,8 +325,8 @@ export default function PlanActionsModal({
               {pendingCount > 0 && (
                 <button
                   onClick={handleSkipRemaining}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-gray-600 text-white hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                  disabled={loading || isPlanFinalized}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-gray-600 text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <SkipForward className="w-4 h-4" />
                   Skip Remaining ({pendingCount})
@@ -368,11 +399,11 @@ export default function PlanActionsModal({
                     </div>
 
                     <div className="flex-shrink-0">
-                      {action.status === 'pending' && (
+                      {action.status === 'pending' && !isPlanFinalized && (
                         <button
                           onClick={() => handleUpdateAction(action.id, 'in_progress')}
-                          disabled={processingActions.has(action.id)}
-                          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                          disabled={processingActions.has(action.id) || isPlanFinalized}
+                          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           {processingActions.has(action.id) ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -383,7 +414,7 @@ export default function PlanActionsModal({
                         </button>
                       )}
                       
-                      {action.status === 'in_progress' && (
+                      {action.status === 'in_progress' && !isPlanFinalized && (
                         <div className="flex flex-col gap-2">
                           {activeNoteInput === action.id ? (
                             <div className="flex flex-col gap-2">
@@ -394,12 +425,13 @@ export default function PlanActionsModal({
                                 onChange={(e) => setActionNotes(prev => ({ ...prev, [action.id]: e.target.value }))}
                                 className="w-40 px-2 py-1 text-sm rounded-lg border border-border bg-background text-foreground"
                                 autoFocus
+                                disabled={isPlanFinalized}
                               />
                               <div className="flex gap-1">
                                 <button
                                   onClick={() => handleUpdateAction(action.id, 'completed')}
-                                  disabled={processingActions.has(action.id)}
-                                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+                                  disabled={processingActions.has(action.id) || isPlanFinalized}
+                                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
                                   {processingActions.has(action.id) ? (
                                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -420,16 +452,16 @@ export default function PlanActionsModal({
                             <div className="flex gap-2">
                               <button
                                 onClick={() => setActiveNoteInput(action.id)}
-                                disabled={processingActions.has(action.id)}
-                                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+                                disabled={processingActions.has(action.id) || isPlanFinalized}
+                                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                               >
                                 <Check className="w-4 h-4" />
                                 Complete
                               </button>
                               <button
                                 onClick={() => handleUpdateAction(action.id, 'skipped')}
-                                disabled={processingActions.has(action.id)}
-                                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-gray-500 text-white hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                                disabled={processingActions.has(action.id) || isPlanFinalized}
+                                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-gray-500 text-white hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                               >
                                 {processingActions.has(action.id) ? (
                                   <Loader2 className="w-4 h-4 animate-spin" />

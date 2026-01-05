@@ -5261,7 +5261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (plan.status !== "pending") {
-        return res.status(400).json({ error: "Plan can only be executed when in pending status" });
+        return res.status(400).json({ error: "Plan can only be executed when status is pending" });
       }
 
       // Use transaction to update plan and create event
@@ -5322,8 +5322,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied" });
       }
 
-      if (plan.status === "completed" || plan.status === "cancelled") {
-        return res.status(400).json({ error: "Plan is already completed or cancelled" });
+      if (plan.status !== "pending" && plan.status !== "in_progress") {
+        return res.status(400).json({ error: "Plan can only be cancelled when status is pending or in_progress" });
       }
 
       // Use transaction to update plan, mark actions as skipped, and create event
@@ -5434,6 +5434,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!site) {
         return res.status(403).json({ error: "Access denied" });
+      }
+
+      if (plan.status === "completed" || plan.status === "cancelled") {
+        return res.status(400).json({ error: "Cannot update actions for completed or cancelled plans" });
       }
 
       // Fetch the action

@@ -1,4 +1,5 @@
 import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uuid, numeric, date } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -897,10 +898,10 @@ export const warehouseOptimizationPlans = pgTable("warehouse_optimization_plans"
   version: integer("version").notNull().default(1),
   
   // Store diff as JSON patch for efficient storage
-  diff_patch: jsonb("diff_patch").notNull().default([]), // Array of movement operations
+  diff_patch: jsonb("diff_patch").notNull().default(sql`'[]'::jsonb`), // Array of movement operations
   
   // Summary metrics
-  summary: jsonb("summary").notNull().default({}), // slotsFreed, consolidationWins, etc.
+  summary: jsonb("summary").notNull().default(sql`'{}'::jsonb`), // slotsFreed, consolidationWins, etc.
   total_actions: integer("total_actions").notNull().default(0),
   completed_actions: integer("completed_actions").notNull().default(0),
   
@@ -964,7 +965,7 @@ export const warehouseOptimizationEvents = pgTable("warehouse_optimization_event
   plan_id: integer("plan_id").notNull().references(() => warehouseOptimizationPlans.id, { onDelete: 'cascade' }),
   user_id: integer("user_id").notNull(),
   event_type: text("event_type").notNull(), // created, executed, action_started, action_completed, cancelled
-  payload: jsonb("payload").notNull().default({}),
+  payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
