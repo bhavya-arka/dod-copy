@@ -19,6 +19,7 @@ interface AlgorithmOption {
   id: Algorithm;
   name: string;
   description: string;
+  bullets: string[];
   icon: React.ReactNode;
 }
 
@@ -26,31 +27,61 @@ const ALGORITHMS: AlgorithmOption[] = [
   {
     id: "run_all",
     name: "Run All (Recommended)",
-    description: "Execute all 4 algorithms in optimal sequence: CardStack → Size → Value → Bin-Packing for comprehensive optimization.",
+    description: "Execute all 4 algorithms in optimal sequence for comprehensive optimization.",
+    bullets: [
+      "Runs CardStack → Size → Value → Bin-Packing in order",
+      "De-duplicates overlapping recommendations automatically",
+      "Produces a unified action plan with prioritized moves",
+      "Best for initial warehouse optimization or periodic audits",
+    ],
     icon: <Zap className="w-6 h-6" />,
   },
   {
     id: "cardstack",
     name: "CardStack",
-    description: "Stack similar items together to reduce footprint and improve picking efficiency.",
+    description: "Consolidate items for the same ship class scattered across zones.",
+    bullets: [
+      "Groups items by ship class (e.g., DDG-51, CVN-78)",
+      "Reduces travel time for picking related items",
+      "Frees up scattered slots for new inventory",
+      "Prioritizes high-frequency access items",
+    ],
     icon: <Layers className="w-6 h-6" />,
   },
   {
     id: "size_standardization",
     name: "Size Standardization",
-    description: "Group items by similar dimensions to optimize rack utilization and storage density.",
+    description: "Organize items by program code into dedicated zones.",
+    bullets: [
+      "Groups items by program (PM1, PM3, etc.)",
+      "Creates logical zones for each maintenance program",
+      "Improves rack utilization by standardizing storage",
+      "Reduces picking errors with clear zone assignments",
+    ],
     icon: <Ruler className="w-6 h-6" />,
   },
   {
     id: "value_density",
     name: "Value Density Analysis",
-    description: "Organize items by value-to-volume ratio, placing high-value items in accessible locations.",
+    description: "Place high-value items in accessible, secure locations.",
+    bullets: [
+      "Calculates value-to-volume ratio for each item",
+      "Moves high-value items to accessible locations (lower shelf numbers)",
+      "Flags items in remote locations (shelf >1500) for relocation",
+      "Improves inventory security and audit efficiency",
+    ],
     icon: <DollarSign className="w-6 h-6" />,
   },
   {
     id: "bin_packing",
     name: "Bin-Packing Order",
-    description: "Calculate optimal placement order for maximum container and pallet utilization.",
+    description: "Calculate optimal placement for maximum container utilization.",
+    bullets: [
+      "Analyzes weight and volume constraints per location",
+      "Suggests consolidation to free up pallet positions",
+      "Optimizes for 463L pallet loading sequences",
+      "Balances load distribution across warehouse zones",
+    ],
     icon: <Box className="w-6 h-6" />,
   },
 ];
@@ -257,19 +288,29 @@ export default function OptimizationWizardModal({
           >
             <div className="flex items-start gap-3">
               <div
-                className={`p-2 rounded-lg ${
+                className={`p-2 rounded-lg flex-shrink-0 ${
                   selectedAlgorithm === algo.id ? "bg-[#004E89] text-white" : "bg-muted text-muted-foreground"
                 }`}
               >
                 {algo.icon}
               </div>
-              <div className="flex-1">
-                <p className="font-medium text-foreground">{algo.name}</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-medium text-foreground">{algo.name}</p>
+                  {selectedAlgorithm === algo.id && (
+                    <Check className="w-5 h-5 text-[#004E89] flex-shrink-0" />
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">{algo.description}</p>
+                <ul className="mt-2 space-y-1">
+                  {algo.bullets.map((bullet, idx) => (
+                    <li key={idx} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                      <span className="text-[#004E89] mt-0.5">•</span>
+                      <span>{bullet}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              {selectedAlgorithm === algo.id && (
-                <Check className="w-5 h-5 text-[#004E89]" />
-              )}
             </div>
           </button>
         ))}
@@ -721,7 +762,7 @@ export default function OptimizationWizardModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-lg w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-border">
           <div>
             <h2 className="text-lg font-semibold text-foreground">Optimize Warehouse</h2>
