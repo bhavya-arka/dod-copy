@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
   Brain, 
@@ -13,7 +13,10 @@ import {
   RefreshCw,
   ChevronRight,
   Info,
-  Warehouse
+  Warehouse,
+  Save,
+  Clock,
+  Trash2
 } from "lucide-react";
 import type { WarehouseSite, OptimizationResult, ToastMessage } from "./types";
 import { runOptimization, generateWarehouseInsights, type WarehouseAiInsight } from "../../services/warehouseService";
@@ -38,6 +41,26 @@ interface InsightCard {
   algorithm?: Algorithm;
   tooltip: string;
 }
+
+interface SavedPlan {
+  id: string;
+  savedAt: string;
+  siteId: number;
+  siteName: string;
+  algorithm: string;
+  runId: number;
+  summary: {
+    slotsFreed: number;
+    consolidationWins: string;
+    zonesOptimized: number;
+    pickEfficiencyGain: string;
+    itemsAffected: number;
+    actionsGenerated: number;
+  };
+  totalActions: number;
+}
+
+const SAVED_PLANS_STORAGE_KEY = "arka_saved_plans";
 
 const insightCards: InsightCard[] = [
   {
@@ -101,8 +124,57 @@ export default function WMSAiInsights({
   const [aiInsightLoading, setAiInsightLoading] = useState(false);
   const [aiInsight, setAiInsight] = useState<WarehouseAiInsight | null>(null);
   const [loadingCardId, setLoadingCardId] = useState<string | null>(null);
+  const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
 
   const selectedSite = sites.find(s => s.id === selectedSiteId);
+
+  // Load saved plans from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SAVED_PLANS_STORAGE_KEY);
+      if (stored) {
+        setSavedPlans(JSON.parse(stored));
+      }
+    } catch (err) {
+      console.error("Failed to load saved plans:", err);
+    }
+  }, []);
+
+  // Reload saved plans when wizard closes (in case a new plan was saved)
+  useEffect(() => {
+    if (!showWizard) {
+      try {
+        const stored = localStorage.getItem(SAVED_PLANS_STORAGE_KEY);
+        if (stored) {
+          setSavedPlans(JSON.parse(stored));
+        }
+      } catch (err) {
+        console.error("Failed to reload saved plans:", err);
+      }
+    }
+  }, [showWizard]);
+
+  const handleDeleteSavedPlan = (planId: string) => {
+    try {
+      const updatedPlans = savedPlans.filter(p => p.id !== planId);
+      localStorage.setItem(SAVED_PLANS_STORAGE_KEY, JSON.stringify(updatedPlans));
+      setSavedPlans(updatedPlans);
+      onShowToast("Plan removed", "success");
+    } catch (err) {
+      onShowToast("Failed to remove plan", "error");
+    }
+  };
+
+  const formatAlgorithmName = (algo: string) => {
+    const names: Record<string, string> = {
+      cardstack: "CardStack",
+      size_standardization: "Size Standardization",
+      value_density: "Value Density",
+      bin_packing: "Bin-Packing",
+      run_all: "Run All",
+    };
+    return names[algo] || algo;
+  };
 
   const handleRunOptimization = async () => {
     if (!selectedSiteId) {
@@ -291,6 +363,67 @@ export default function WMSAiInsights({
           </motion.button>
         ))}
       </div>
+
+      {savedPlans.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45 }}
+          className="rounded-2xl bg-white border border-border shadow-sm p-6 mb-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-[#004E89]/10 rounded-xl">
+                <Save className="w-5 h-5 text-[#004E89]" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Saved Plans</h2>
+                <p className="text-sm text-muted-foreground">Previously saved optimization plans</p>
+              </div>
+            </div>
+            <span className="text-xs px-2 py-1 bg-muted rounded-full text-muted-foreground">
+              {savedPlans.length} plan{savedPlans.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          <div className="space-y-3 max-h-[300px] overflow-y-auto">
+            {savedPlans.map((plan) => (
+              <div
+                key={plan.id}
+                className="p-4 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-foreground truncate">
+                        {plan.siteName}
+                      </span>
+                      <span className="text-xs px-2 py-0.5 bg-[#004E89]/10 text-[#004E89] rounded-full font-medium">
+                        {formatAlgorithmName(plan.algorithm)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {new Date(plan.savedAt).toLocaleDateString()} {new Date(plan.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span>{plan.totalActions} actions</span>
+                      <span>{plan.summary.slotsFreed} slots freed</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteSavedPlan(plan.id)}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
+                    title="Remove saved plan"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}

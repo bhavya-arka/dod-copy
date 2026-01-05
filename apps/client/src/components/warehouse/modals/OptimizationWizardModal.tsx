@@ -197,7 +197,36 @@ export default function OptimizationWizardModal({
   };
 
   const handleSavePlan = () => {
-    onShowToast("Plan saved for later!", "success");
+    if (!result) {
+      onShowToast("No optimization results to save", "error");
+      return;
+    }
+    
+    try {
+      const STORAGE_KEY = "arka_saved_plans";
+      const existingPlans = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      
+      const savedPlan = {
+        id: `plan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        savedAt: new Date().toISOString(),
+        siteId: siteId,
+        siteName: siteName,
+        algorithm: result.algorithm,
+        runId: result.runId,
+        summary: result.summary,
+        totalActions: result.totalActions,
+      };
+      
+      existingPlans.unshift(savedPlan);
+      
+      // Keep only the last 20 plans
+      const trimmedPlans = existingPlans.slice(0, 20);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmedPlans));
+      
+      onShowToast("Plan saved for later!", "success");
+    } catch (err) {
+      onShowToast("Failed to save plan", "error");
+    }
   };
 
   const updateParam = (algorithm: Algorithm, key: string, value: number) => {
