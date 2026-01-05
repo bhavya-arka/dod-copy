@@ -17,7 +17,8 @@ import {
   Save,
   Clock,
   Trash2,
-  Play
+  Play,
+  Eye
 } from "lucide-react";
 import type { WarehouseSite, OptimizationResult, ToastMessage } from "./types";
 import { 
@@ -30,6 +31,7 @@ import {
   type OptimizationPlan
 } from "../../services/warehouseService";
 import OptimizationWizardModal, { type Algorithm } from "./modals/OptimizationWizardModal";
+import PlanActionsModal from "./modals/PlanActionsModal";
 import TextConfirmationDialog from "../ui/TextConfirmationDialog";
 
 interface WMSAiInsightsProps {
@@ -119,6 +121,7 @@ export default function WMSAiInsights({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<OptimizationPlan | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [viewingPlan, setViewingPlan] = useState<OptimizationPlan | null>(null);
 
   const selectedSite = sites.find(s => s.id === selectedSiteId);
 
@@ -464,6 +467,15 @@ export default function WMSAiInsights({
                       )}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
+                      {(plan.status === 'in_progress' || plan.status === 'completed') && (
+                        <button
+                          onClick={() => setViewingPlan(plan)}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-[#004E89] hover:bg-[#004E89]/10 transition-colors"
+                          title="View details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      )}
                       {plan.status === 'pending' && (
                         <button
                           onClick={() => {
@@ -695,6 +707,13 @@ export default function WMSAiInsights({
         onConfirm={handleDeletePlan}
         isDestructive
         isLoading={actionLoading}
+      />
+
+      <PlanActionsModal
+        plan={viewingPlan}
+        onClose={() => setViewingPlan(null)}
+        onActionUpdate={fetchPlans}
+        onShowToast={onShowToast}
       />
     </>
   );

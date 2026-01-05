@@ -397,6 +397,33 @@ export async function deleteSite(siteId: number): Promise<{ success: boolean; me
 }
 
 /**
+ * Get a preview of what will be deleted when a warehouse site is removed
+ * @param siteId - Site ID to preview deletion for
+ * @returns Preview of data counts that will be deleted
+ */
+export async function getWarehouseDeletionPreview(siteId: number): Promise<{
+  siteName: string;
+  counts: {
+    buildings: number;
+    zones: number;
+    locations: number;
+    inventoryItems: number;
+    optimizationPlans: number;
+    optimizationActions: number;
+  };
+}> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/deletion-preview`, {
+    credentials: "include",
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to get deletion preview");
+  }
+  return response.json();
+}
+
+/**
  * Move an inventory item to a new location or site
  * @param siteId - Current site ID
  * @param itemId - Item ID to move

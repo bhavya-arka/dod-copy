@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Building2, ChevronRight, ChevronDown, Move, Zap, Loader2, Trash2, Pencil } from "lucide-react";
 import type { WarehouseSite, WarehouseBuilding, ToastMessage } from "./types";
-import { deleteSite, getSiteBuildings, deleteBuilding } from "../../services/warehouseService";
+import { deleteSite, getSiteBuildings, deleteBuilding, getWarehouseDeletionPreview } from "../../services/warehouseService";
 import ConfirmDestructiveModal from "./modals/ConfirmDestructiveModal";
+import TextConfirmationDialog from "../ui/TextConfirmationDialog";
 import MoveItemModal from "./modals/MoveItemModal";
 import OptimizationWizardModal from "./modals/OptimizationWizardModal";
 import AddBuildingModal from "./modals/AddBuildingModal";
@@ -27,8 +28,19 @@ export default function WMSSitesStorage({
   const [siteBuildings, setSiteBuildings] = useState<Record<number, WarehouseBuilding[]>>({});
   const [loadingBuildings, setLoadingBuildings] = useState<Set<number>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [siteToDelete, setSiteToDelete] = useState<WarehouseSite | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [siteToDelete, setSiteToDelete] = useState<number | null>(null);
+  const [deletePreview, setDeletePreview] = useState<{
+    siteName: string;
+    counts: {
+      buildings: number;
+      zones: number;
+      locations: number;
+      inventoryItems: number;
+      optimizationPlans: number;
+      optimizationActions: number;
+    };
+  } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [moveModalOpen, setMoveModalOpen] = useState(false);
   const [moveModalSiteId, setMoveModalSiteId] = useState<number | null>(null);
   const [optimizeModalOpen, setOptimizeModalOpen] = useState(false);
@@ -86,36 +98,36 @@ export default function WMSSitesStorage({
     setMoveModalSiteId(null);
   };
 
-  const handleDeleteClick = (e: React.MouseEvent, site: WarehouseSite) => {
+  const handleInitiateDelete = async (e: React.MouseEvent, siteId: number) => {
     e.stopPropagation();
-    setSiteToDelete(site);
-    setDeleteDialogOpen(true);
+    try {
+      const preview = await getWarehouseDeletionPreview(siteId);
+      setDeletePreview(preview);
+      setSiteToDelete(siteId);
+      setDeleteDialogOpen(true);
+    } catch (err) {
+      onShowToast("Failed to load deletion preview", "error");
+    }
   };
 
   const handleConfirmDelete = async () => {
     if (!siteToDelete) return;
     
-    setIsDeleting(true);
+    setDeleteLoading(true);
     try {
-      await deleteSite(siteToDelete.id);
-      onShowToast(`Site "${siteToDelete.name}" deleted successfully`, "success");
+      await deleteSite(siteToDelete);
+      onShowToast("Warehouse site deleted successfully", "success");
       setDeleteDialogOpen(false);
       setSiteToDelete(null);
+      setDeletePreview(null);
       onRefresh();
     } catch (error) {
       onShowToast(
-        error instanceof Error ? error.message : "Failed to delete site",
+        error instanceof Error ? error.message : "Failed to delete warehouse site",
         "error"
       );
     } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleCloseDeleteDialog = () => {
-    if (!isDeleting) {
-      setDeleteDialogOpen(false);
-      setSiteToDelete(null);
+      setDeleteLoading(false);
     }
   };
 
@@ -395,7 +407,7 @@ export default function WMSSitesStorage({
                       <p className="text-xs text-muted-foreground">Total inventory</p>
                     </div>
                     <button
-                      onClick={(e) => handleDeleteClick(e, site)}
+                      onClick={(e) => handleInitiateDelete(e, site.id)}
                       className="p-2 rounded-lg hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
                       title="Delete site"
                     >
@@ -424,24 +436,37 @@ export default function WMSSitesStorage({
         )}
       </motion.div>
 
-      <ConfirmDestructiveModal
-        isOpen={deleteDialogOpen}
-        onClose={handleCloseDeleteDialog}
-        onConfirm={handleConfirmDelete}
+      <TextConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) {
+            setSiteToDelete(null);
+            setDeletePreview(null);
+          }
+        }}
         title="Delete Warehouse Site"
-        description={
-          <>
-            Are you sure you want to delete <strong>{siteToDelete?.name}</strong>? This action cannot be undone and will permanently delete:
-            <ul className="list-disc list-inside mt-2 space-y-1">
-              <li>All inventory items ({siteToDelete?.item_count || 0} items)</li>
-              <li>All buildings, zones, and locations</li>
-              <li>All associated data</li>
+        description={deletePreview ? `This will permanently delete "${deletePreview.siteName}" and all associated data.` : ""}
+        confirmLabel="Delete Everything"
+        expectedPhrase="permanently delete"
+        onConfirm={handleConfirmDelete}
+        isDestructive
+        isLoading={deleteLoading}
+      >
+        {deletePreview && (
+          <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm">
+            <p className="font-medium text-red-600 mb-2">The following will be deleted:</p>
+            <ul className="space-y-1 text-muted-foreground">
+              <li>{deletePreview.counts.buildings} buildings</li>
+              <li>{deletePreview.counts.zones} zones</li>
+              <li>{deletePreview.counts.locations} locations</li>
+              <li>{deletePreview.counts.inventoryItems} inventory items</li>
+              <li>{deletePreview.counts.optimizationPlans} optimization plans</li>
+              <li>{deletePreview.counts.optimizationActions} optimization actions</li>
             </ul>
-          </>
-        }
-        confirmText="permanently delete"
-        isLoading={isDeleting}
-      />
+          </div>
+        )}
+      </TextConfirmationDialog>
 
       {moveModalOpen && moveModalSiteId !== null && (
         <MoveItemModal

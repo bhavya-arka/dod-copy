@@ -1998,6 +1998,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/warehouse/sites/:siteId/deletion-preview - Get counts of data that will be deleted
+  app.get("/api/warehouse/sites/:siteId/deletion-preview", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      // Get building IDs for this site
+      const buildings = await db.select({ id: warehouseBuildings.id })
+        .from(warehouseBuildings)
+        .where(eq(warehouseBuildings.site_id, siteId));
+      const buildingIds = buildings.map(b => b.id);
+
+      // Get optimization plan IDs for this site
+      const plans = await db.select({ id: warehouseOptimizationPlans.id })
+        .from(warehouseOptimizationPlans)
+        .where(eq(warehouseOptimizationPlans.site_id, siteId));
+      const planIds = plans.map(p => p.id);
+
+      // Count buildings
+      const [buildingsCount] = await db.select({ count: count() })
+        .from(warehouseBuildings)
+        .where(eq(warehouseBuildings.site_id, siteId));
+
+      // Count zones (through building_id)
+      let zonesTotal = 0;
+      if (buildingIds.length > 0) {
+        const [zonesCount] = await db.select({ count: count() })
+          .from(warehouseZones)
+          .where(inArray(warehouseZones.building_id, buildingIds));
+        zonesTotal = Number(zonesCount?.count || 0);
+      }
+
+      // Count locations
+      const [locationsCount] = await db.select({ count: count() })
+        .from(warehouseLocations)
+        .where(eq(warehouseLocations.site_id, siteId));
+
+      // Count inventory items
+      const [inventoryCount] = await db.select({ count: count() })
+        .from(warehouseInventoryItems)
+        .where(eq(warehouseInventoryItems.site_id, siteId));
+
+      // Count optimization plans
+      const [plansCount] = await db.select({ count: count() })
+        .from(warehouseOptimizationPlans)
+        .where(eq(warehouseOptimizationPlans.site_id, siteId));
+
+      // Count optimization actions (through plan_id)
+      let actionsTotal = 0;
+      if (planIds.length > 0) {
+        const [actionsCount] = await db.select({ count: count() })
+          .from(warehouseOptimizationActions)
+          .where(inArray(warehouseOptimizationActions.plan_id, planIds));
+        actionsTotal = Number(actionsCount?.count || 0);
+      }
+
+      res.json({
+        siteName: site.name,
+        counts: {
+          buildings: Number(buildingsCount?.count || 0),
+          zones: zonesTotal,
+          locations: Number(locationsCount?.count || 0),
+          inventoryItems: Number(inventoryCount?.count || 0),
+          optimizationPlans: Number(plansCount?.count || 0),
+          optimizationActions: actionsTotal
+        }
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to get deletion preview:", error);
+      res.status(500).json({ error: "Failed to get deletion preview" });
+    }
+  });
+
   // DELETE /api/warehouse/sites/:siteId - Delete a warehouse site and all related data
   app.delete("/api/warehouse/sites/:siteId", authMiddleware, async (req: AuthRequest, res) => {
     try {
@@ -2018,6 +2105,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Warehouse site not found" });
       }
 
+      // Get counts before deletion for response
+      const buildings = await db.select({ id: warehouseBuildings.id })
+        .from(warehouseBuildings)
+        .where(eq(warehouseBuildings.site_id, siteId));
+      const buildingIds = buildings.map(b => b.id);
+
+      const plans = await db.select({ id: warehouseOptimizationPlans.id })
+        .from(warehouseOptimizationPlans)
+        .where(eq(warehouseOptimizationPlans.site_id, siteId));
+      const planIds = plans.map(p => p.id);
+
+      // Count items before deletion
+      const [buildingsCount] = await db.select({ count: count() })
+        .from(warehouseBuildings)
+        .where(eq(warehouseBuildings.site_id, siteId));
+
+      let zonesTotal = 0;
+      if (buildingIds.length > 0) {
+        const [zonesCount] = await db.select({ count: count() })
+          .from(warehouseZones)
+          .where(inArray(warehouseZones.building_id, buildingIds));
+        zonesTotal = Number(zonesCount?.count || 0);
+      }
+
+      const [locationsCount] = await db.select({ count: count() })
+        .from(warehouseLocations)
+        .where(eq(warehouseLocations.site_id, siteId));
+
+      const [inventoryCount] = await db.select({ count: count() })
+        .from(warehouseInventoryItems)
+        .where(eq(warehouseInventoryItems.site_id, siteId));
+
+      const [plansCount] = await db.select({ count: count() })
+        .from(warehouseOptimizationPlans)
+        .where(eq(warehouseOptimizationPlans.site_id, siteId));
+
+      let actionsTotal = 0;
+      if (planIds.length > 0) {
+        const [actionsCount] = await db.select({ count: count() })
+          .from(warehouseOptimizationActions)
+          .where(inArray(warehouseOptimizationActions.plan_id, planIds));
+        actionsTotal = Number(actionsCount?.count || 0);
+      }
+
       // Delete in correct order due to foreign key constraints:
       // 1. Delete related transfers first
       await db.delete(warehouseTransfers)
@@ -2026,22 +2157,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(warehouseTransfers.destination_site_id, siteId)
         ));
 
-      // 2. Delete inventory items
+      // 2. Delete optimization actions (through plan_id)
+      if (planIds.length > 0) {
+        await db.delete(warehouseOptimizationActions)
+          .where(inArray(warehouseOptimizationActions.plan_id, planIds));
+        
+        // Delete optimization events
+        await db.delete(warehouseOptimizationEvents)
+          .where(inArray(warehouseOptimizationEvents.plan_id, planIds));
+      }
+
+      // 3. Delete optimization plans
+      await db.delete(warehouseOptimizationPlans)
+        .where(eq(warehouseOptimizationPlans.site_id, siteId));
+
+      // 4. Delete inventory items
       await db.delete(warehouseInventoryItems)
         .where(eq(warehouseInventoryItems.site_id, siteId));
 
-      // 3. Delete locations
+      // 5. Delete locations
       await db.delete(warehouseLocations)
         .where(eq(warehouseLocations.site_id, siteId));
 
-      // 4. Get building IDs for this site to delete zones
-      const buildings = await db.select({ id: warehouseBuildings.id })
-        .from(warehouseBuildings)
-        .where(eq(warehouseBuildings.site_id, siteId));
-      
-      const buildingIds = buildings.map(b => b.id);
-      
-      // 5. Delete zones for all buildings in this site
+      // 6. Delete zones for all buildings in this site
       if (buildingIds.length > 0) {
         for (const buildingId of buildingIds) {
           await db.delete(warehouseZones)
@@ -2049,15 +2187,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // 6. Delete buildings
+      // 7. Delete buildings
       await db.delete(warehouseBuildings)
         .where(eq(warehouseBuildings.site_id, siteId));
 
-      // 7. Delete the site itself
+      // 8. Delete the site itself
       await db.delete(warehouseSites)
         .where(eq(warehouseSites.id, siteId));
 
-      res.json({ success: true, message: "Site and all related data deleted successfully" });
+      res.json({ 
+        success: true, 
+        message: "Site and all related data deleted successfully",
+        deletedCounts: {
+          buildings: Number(buildingsCount?.count || 0),
+          zones: zonesTotal,
+          locations: Number(locationsCount?.count || 0),
+          inventoryItems: Number(inventoryCount?.count || 0),
+          optimizationPlans: Number(plansCount?.count || 0),
+          optimizationActions: actionsTotal
+        }
+      });
     } catch (error) {
       console.error("[Warehouse] Failed to delete site:", error);
       res.status(500).json({ error: "Failed to delete warehouse site" });
