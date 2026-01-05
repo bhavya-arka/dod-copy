@@ -880,3 +880,97 @@ export const insertWarehouseActionPlanSchema = createInsertSchema(warehouseActio
 });
 export type InsertWarehouseActionPlan = z.infer<typeof insertWarehouseActionPlanSchema>;
 export type WarehouseActionPlan = typeof warehouseActionPlans.$inferSelect;
+
+// ============================================================================
+// WAREHOUSE OPTIMIZATION PLANS TABLES
+// ============================================================================
+
+// Warehouse Optimization Plans - stores optimization plan configurations and results
+export const warehouseOptimizationPlans = pgTable("warehouse_optimization_plans", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull().references(() => warehouseSites.id, { onDelete: 'cascade' }),
+  user_id: integer("user_id").notNull(),
+  parent_plan_id: integer("parent_plan_id"), // For version chaining
+  name: text("name").notNull(),
+  algorithm: text("algorithm").notNull(), // cardstack, size_standardization, value_density, bin_packing, run_all
+  status: text("status").notNull().default("pending"), // pending, in_progress, completed, cancelled
+  version: integer("version").notNull().default(1),
+  
+  // Store diff as JSON patch for efficient storage
+  diff_patch: jsonb("diff_patch").notNull().default([]), // Array of movement operations
+  
+  // Summary metrics
+  summary: jsonb("summary").notNull().default({}), // slotsFreed, consolidationWins, etc.
+  total_actions: integer("total_actions").notNull().default(0),
+  completed_actions: integer("completed_actions").notNull().default(0),
+  
+  // Comparison context
+  comparison_context: jsonb("comparison_context"), // Base data snapshot hash or reference
+  
+  // Execution tracking
+  executed_at: timestamp("executed_at"),
+  executed_by: integer("executed_by"),
+  cancelled_at: timestamp("cancelled_at"),
+  cancelled_by: integer("cancelled_by"),
+  
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseOptimizationPlanSchema = createInsertSchema(warehouseOptimizationPlans).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertWarehouseOptimizationPlan = z.infer<typeof insertWarehouseOptimizationPlanSchema>;
+export type WarehouseOptimizationPlan = typeof warehouseOptimizationPlans.$inferSelect;
+
+// Warehouse Optimization Actions - individual actions within a plan
+export const warehouseOptimizationActions = pgTable("warehouse_optimization_actions", {
+  id: serial("id").primaryKey(),
+  plan_id: integer("plan_id").notNull().references(() => warehouseOptimizationPlans.id, { onDelete: 'cascade' }),
+  item_id: integer("item_id").notNull(),
+  action_type: text("action_type").notNull(), // move, consolidate, reposition
+  
+  // Movement details
+  from_location: text("from_location"),
+  to_location: text("to_location"),
+  quantity: integer("quantity").notNull().default(1),
+  
+  // Status tracking
+  status: text("status").notNull().default("pending"), // pending, in_progress, completed, skipped
+  
+  // Movement completion
+  completed_by: integer("completed_by"),
+  completed_at: timestamp("completed_at"),
+  movement_notes: text("movement_notes"),
+  
+  // Ordering
+  sequence: integer("sequence").notNull().default(0),
+  
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseOptimizationActionSchema = createInsertSchema(warehouseOptimizationActions).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseOptimizationAction = z.infer<typeof insertWarehouseOptimizationActionSchema>;
+export type WarehouseOptimizationAction = typeof warehouseOptimizationActions.$inferSelect;
+
+// Warehouse Optimization Events - audit trail for optimization plans
+export const warehouseOptimizationEvents = pgTable("warehouse_optimization_events", {
+  id: serial("id").primaryKey(),
+  plan_id: integer("plan_id").notNull().references(() => warehouseOptimizationPlans.id, { onDelete: 'cascade' }),
+  user_id: integer("user_id").notNull(),
+  event_type: text("event_type").notNull(), // created, executed, action_started, action_completed, cancelled
+  payload: jsonb("payload").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseOptimizationEventSchema = createInsertSchema(warehouseOptimizationEvents).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseOptimizationEvent = z.infer<typeof insertWarehouseOptimizationEventSchema>;
+export type WarehouseOptimizationEvent = typeof warehouseOptimizationEvents.$inferSelect;
