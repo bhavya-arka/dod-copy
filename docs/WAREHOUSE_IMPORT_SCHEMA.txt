@@ -324,17 +324,5 @@ BIN-PACKING
 - weight_lbs: Weight constraint validation
 
 ================================================================================
-                         CONTACT & SUPPORT
-================================================================================
-
-For questions about data import or schema updates:
-- Refer to the ARKA WMS User Guide
-- Contact system administrator
-
-For technical schema modifications:
-- Review packages/shared/inventoryColumns.ts
-- Review shared/schema.ts (warehouseInventoryItems table)
-
-================================================================================
                     END OF SCHEMA DOCUMENTATION
 ================================================================================

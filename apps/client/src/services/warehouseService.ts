@@ -138,7 +138,9 @@ export async function fetchInventoryPaginated(
   if (params.pageSize) searchParams.set("pageSize", params.pageSize.toString());
   if (params.sortBy) searchParams.set("sortBy", params.sortBy);
   if (params.sortOrder) searchParams.set("sortOrder", params.sortOrder);
-  if (params.search) searchParams.set("search", params.search);
+  if (params.searchTerms && params.searchTerms.length > 0) {
+    searchParams.set("searchTerms", JSON.stringify(params.searchTerms));
+  }
   if (params.filters && params.filters.length > 0) {
     searchParams.set("filters", JSON.stringify(params.filters));
   }

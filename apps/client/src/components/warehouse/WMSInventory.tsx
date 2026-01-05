@@ -139,8 +139,8 @@ export default function WMSInventory({
   onRefresh,
   onShowToast,
 }: WMSInventoryProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchTerms, setSearchTerms] = useState<string[]>([]);
+  const [searchInput, setSearchInput] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [columnSettingsOpen, setColumnSettingsOpen] = useState(false);
   
@@ -252,12 +252,12 @@ export default function WMSInventory({
       pageSize,
       sortBy,
       sortOrder,
-      search: debouncedSearch,
+      searchTerms,
       filters: filters.length > 0 ? filters : [],
       filterLogic: filters.length > 1 ? filterLogic : "and",
       version: cacheVersionRef.current,
     });
-  }, [selectedSiteId, pageSize, sortBy, sortOrder, debouncedSearch, filters, filterLogic]);
+  }, [selectedSiteId, pageSize, sortBy, sortOrder, searchTerms, filters, filterLogic]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_COLUMNS, JSON.stringify(columns));
@@ -268,20 +268,13 @@ export default function WMSInventory({
   }, [pageSize]);
 
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-    }, 300);
-    return () => clearTimeout(handler);
-  }, [searchTerm]);
-
-  useEffect(() => {
     setPage(1);
     pageCacheRef.current.clear();
     prefetchingRef.current.clear();
     cacheOrderRef.current = [];
     visitedPagesRef.current.clear();
     cacheVersionRef.current += 1;
-  }, [debouncedSearch, filters, filterLogic, selectedSiteId, sortBy, sortOrder, pageSize]);
+  }, [searchTerms, filters, filterLogic, selectedSiteId, sortBy, sortOrder, pageSize]);
 
   const clearCache = useCallback(() => {
     pageCacheRef.current.clear();
@@ -347,7 +340,7 @@ export default function WMSInventory({
         pageSize,
         sortBy,
         sortOrder,
-        search: debouncedSearch,
+        searchTerms: searchTerms.length > 0 ? searchTerms : undefined,
         filters: filters.length > 0 ? filters : undefined,
         filterLogic: filters.length > 1 ? filterLogic : undefined,
       });
@@ -362,7 +355,7 @@ export default function WMSInventory({
         prefetchingRef.current.delete(cacheKey);
       }
     }
-  }, [selectedSiteId, pageSize, sortBy, sortOrder, debouncedSearch, filters, filterLogic, getCacheKey, addToCache, getFromCache]);
+  }, [selectedSiteId, pageSize, sortBy, sortOrder, searchTerms, filters, filterLogic, getCacheKey, addToCache, getFromCache]);
 
   const fetchData = useCallback(async () => {
     if (!selectedSiteId) return;
@@ -385,7 +378,7 @@ export default function WMSInventory({
         pageSize,
         sortBy,
         sortOrder,
-        search: debouncedSearch,
+        searchTerms: searchTerms.length > 0 ? searchTerms : undefined,
         filters: filters.length > 0 ? filters : undefined,
         filterLogic: filters.length > 1 ? filterLogic : undefined,
       });
@@ -401,7 +394,7 @@ export default function WMSInventory({
     } finally {
       setLoading(false);
     }
-  }, [selectedSiteId, page, pageSize, sortBy, sortOrder, debouncedSearch, filters, filterLogic, getCacheKey, addToCache, getFromCache, onShowToast]);
+  }, [selectedSiteId, page, pageSize, sortBy, sortOrder, searchTerms, filters, filterLogic, getCacheKey, addToCache, getFromCache, onShowToast]);
 
   const prefetchAdjacentPages = useCallback(async () => {
     if (!selectedSiteId || !paginatedData) return;
@@ -568,6 +561,30 @@ export default function WMSInventory({
 
   const clearFilters = () => {
     setFilters([]);
+  };
+
+  const handleAddSearchTerm = (term: string) => {
+    const trimmed = term.trim();
+    if (trimmed && !searchTerms.includes(trimmed)) {
+      setSearchTerms([...searchTerms, trimmed]);
+      setSearchInput("");
+    }
+  };
+
+  const handleRemoveSearchTerm = (term: string) => {
+    setSearchTerms(searchTerms.filter(t => t !== term));
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && searchInput.trim()) {
+      e.preventDefault();
+      handleAddSearchTerm(searchInput);
+    }
+  };
+
+  const clearAllSearchTerms = () => {
+    setSearchTerms([]);
+    setSearchInput("");
   };
 
   const handleAddItem = () => {
@@ -826,9 +843,10 @@ export default function WMSInventory({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search by NSN, requisition, description, serial no..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Type and press Enter to search..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
               className="w-full pl-10 pr-4 py-2 rounded-xl bg-muted border border-border text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
             />
           </div>
@@ -979,6 +997,35 @@ export default function WMSInventory({
           </button>
         </div>
 
+        {searchTerms.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span className="text-xs text-muted-foreground">Active searches:</span>
+            {searchTerms.map((term) => (
+              <span
+                key={term}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#004E89]/10 text-[#004E89] text-sm border border-[#004E89]/20"
+              >
+                {term}
+                <button
+                  onClick={() => handleRemoveSearchTerm(term)}
+                  className="hover:bg-[#004E89]/20 rounded-full p-0.5 transition-colors"
+                  title="Remove search term"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+            {searchTerms.length > 1 && (
+              <button
+                onClick={clearAllSearchTerms}
+                className="text-xs text-muted-foreground hover:text-red-500 transition-colors ml-2"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        )}
+
         {!selectedSiteId ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Package className="w-16 h-16 mb-4 opacity-50" />
@@ -994,9 +1041,9 @@ export default function WMSInventory({
             <Package className="w-16 h-16 mb-4 opacity-50" />
             <p className="text-lg mb-2">No inventory items</p>
             <p className="text-sm text-muted-foreground/70 mb-4">
-              {filters.length > 0 || debouncedSearch ? "No items match your filters" : "Import CSV or add items manually"}
+              {filters.length > 0 || searchTerms.length > 0 ? "No items match your search or filters" : "Import CSV or add items manually"}
             </p>
-            {filters.length === 0 && !debouncedSearch && (
+            {filters.length === 0 && searchTerms.length === 0 && (
               <button
                 onClick={handleImport}
                 className="text-sm px-4 py-2 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center gap-2"

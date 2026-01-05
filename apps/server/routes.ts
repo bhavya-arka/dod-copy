@@ -2368,8 +2368,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string) || 25));
       const sortBy = (req.query.sortBy as string) || "id";
       const sortOrder = (req.query.sortOrder as string) === "desc" ? "desc" : "asc";
-      const search = (req.query.search as string) || "";
+      const searchTermsJson = req.query.searchTerms as string;
       const filtersJson = req.query.filters as string;
+
+      // Parse search terms array (supports multiple LIKE queries)
+      let searchTerms: string[] = [];
+      if (searchTermsJson) {
+        try {
+          const parsed = JSON.parse(searchTermsJson);
+          if (Array.isArray(parsed)) {
+            searchTerms = parsed.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim());
+          }
+        } catch (e) {
+          console.warn("[Warehouse] Invalid searchTerms JSON:", e);
+        }
+      }
       const filterLogic = (req.query.filterLogic as string) === "or" ? "or" : "and";
 
       // Parse and validate filters if provided
@@ -2401,16 +2414,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const baseCondition = eq(warehouseInventoryItems.site_id, siteId);
       const whereConditions: any[] = [baseCondition];
 
-      // Add search condition
-      if (search.trim()) {
-        const searchTerm = `%${search.trim().toLowerCase()}%`;
+      // Add search conditions - each term must match at least one searchable field
+      // Multiple terms are AND'ed together (all must match)
+      for (const term of searchTerms) {
+        const searchPattern = `%${term.toLowerCase()}%`;
         whereConditions.push(
           or(
-            ilike(warehouseInventoryItems.requisition_no, searchTerm),
-            ilike(warehouseInventoryItems.description, searchTerm),
-            ilike(warehouseInventoryItems.nsn, searchTerm),
-            ilike(warehouseInventoryItems.niin, searchTerm),
-            ilike(warehouseInventoryItems.serial_no, searchTerm)
+            ilike(warehouseInventoryItems.requisition_no, searchPattern),
+            ilike(warehouseInventoryItems.description, searchPattern),
+            ilike(warehouseInventoryItems.nsn, searchPattern),
+            ilike(warehouseInventoryItems.niin, searchPattern),
+            ilike(warehouseInventoryItems.serial_no, searchPattern),
+            ilike(warehouseInventoryItems.location, searchPattern),
+            ilike(warehouseInventoryItems.cage, searchPattern),
+            ilike(warehouseInventoryItems.manufacturer, searchPattern)
           )
         );
       }

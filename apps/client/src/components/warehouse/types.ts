@@ -256,7 +256,7 @@ export interface InventoryQueryParams {
   pageSize?: number;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
-  search?: string;
+  searchTerms?: string[];
   filters?: FilterCondition[];
   filterLogic?: "and" | "or";
 }
