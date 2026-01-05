@@ -14,7 +14,6 @@ import {
   LayoutDashboard,
   Building2,
   Brain,
-  TrendingUp,
   Settings,
 } from "lucide-react";
 import { User } from "../../hooks/useAuth";
@@ -23,7 +22,6 @@ import {
   WMSInventory,
   WMSOperations,
   WMSSitesStorage,
-  WMSAnalytics,
   WMSAiInsights,
   WMSAdmin,
   Toast,
@@ -130,7 +128,6 @@ export default function WarehouseManagement({
     { id: "inventory", label: "Inventory", icon: <Package className="w-4 h-4" /> },
     { id: "operations", label: "Operations", icon: <ArrowRightLeft className="w-4 h-4" /> },
     { id: "sites", label: "Sites & Storage", icon: <Building2 className="w-4 h-4" /> },
-    { id: "analytics", label: "Analytics", icon: <TrendingUp className="w-4 h-4" /> },
     { id: "ai-insights", label: "AI Insights", icon: <Brain className="w-4 h-4" /> },
     { id: "admin", label: "Admin", icon: <Settings className="w-4 h-4" /> },
   ];
@@ -260,15 +257,6 @@ export default function WarehouseManagement({
             loading={loading}
             onAddSite={() => setAddSiteOpen(true)}
             onRefresh={fetchSites}
-            onShowToast={showToast}
-          />
-        )}
-
-        {activeTab === "analytics" && (
-          <WMSAnalytics
-            sites={sites}
-            selectedSiteId={selectedSiteId}
-            onSelectSite={setSelectedSiteId}
             onShowToast={showToast}
           />
         )}

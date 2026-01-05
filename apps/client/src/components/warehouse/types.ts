@@ -180,7 +180,7 @@ export interface ToastMessage {
 }
 
 /** WMS navigation tabs */
-export type WMSTab = "dashboard" | "inventory" | "operations" | "sites" | "analytics" | "ai-insights" | "admin";
+export type WMSTab = "dashboard" | "inventory" | "operations" | "sites" | "ai-insights" | "admin";
 
 /** Inventory filter options (legacy) */
 export interface InventoryFilter {
