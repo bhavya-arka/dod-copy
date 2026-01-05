@@ -1,6 +1,7 @@
 /**
  * AWS Bedrock Service for AI Insights
  * Uses Nova Lite model with Knowledge Base retrieval for regulation-aware insights
+ * Optimized for low TTFT with structured prompts and concise system messages
  */
 
 import {
@@ -134,259 +135,153 @@ export function generateInputHash(data: any, flightPlanId?: number | null): stri
   return crypto.createHash("sha256").update(normalized).digest("hex");
 }
 
-// Guardrail instructions added to all prompts
-const GUARDRAIL_INSTRUCTIONS = `
-IMPORTANT GUARDRAILS - You MUST follow these rules:
-1. NEVER give percentage-based quality ratings implying the optimization is incomplete (e.g., "80% optimal", "could be 20% better")
-2. NEVER suggest the system's optimization algorithm is flawed or could produce significantly better results
-3. Present the allocation as the OPTIMAL solution given the constraints (aircraft availability, cargo dimensions, weight limits)
-4. Frame any suggestions as OPERATIONAL considerations or situational enhancements, NOT corrections to the algorithm
-5. Focus on INFORMING the user about the load plan, not critiquing the optimization quality
-6. If there are genuine constraint violations or safety issues, report them factually without implying algorithmic failure
-7. Use phrases like "the optimized solution" or "this allocation" rather than "this could be improved by X%"
-`;
+// Guardrail instructions for all prompts
+const GUARDRAILS = [
+  "NEVER give percentage-based quality ratings implying the optimization is incomplete",
+  "Present the allocation as the OPTIMAL solution given the constraints",
+  "Frame suggestions as OPERATIONAL considerations, NOT algorithm corrections",
+  "Focus on INFORMING the user, not critiquing optimization quality",
+  "Report constraint violations factually without implying algorithmic failure",
+];
 
-// System prompts for each insight type - strict JSON output
-const SYSTEM_PROMPTS: Record<AiInsightType, string> = {
-  allocation_summary: `You are a military airlift planning expert analyzing cargo allocation for PACAF operations.
-Your task is to provide an executive summary of the load plan with operational notes and safety flags.
-${GUARDRAIL_INSTRUCTIONS}
-CRITICAL: You must respond with ONLY valid JSON in this exact format:
-{
-  "summary": "Brief 2-3 sentence overview of the allocation",
-  "key_metrics": {
-    "utilization_percentage": <number>,
-    "balance_status": "optimal|acceptable|needs_attention",
-    "risk_level": "low|medium|high"
-  },
-  "optimization_suggestions": ["suggestion1", "suggestion2"],
-  "risk_flags": ["flag1", "flag2"],
-  "regulation_notes": ["Any relevant regulations from the knowledge base"]
-}
+// Compact JSON schema definitions for each insight type
+const JSON_SCHEMAS: Record<AiInsightType, string> = {
+  allocation_summary: `{
+  "summary": "string (2-3 sentence overview)",
+  "key_metrics": { "utilization_percentage": number, "balance_status": "optimal|acceptable|needs_attention", "risk_level": "low|medium|high" },
+  "optimization_suggestions": ["string"],
+  "risk_flags": ["string"],
+  "regulation_notes": ["string"]
+}`,
 
-Do not include any text outside the JSON object.`,
+  cob_analysis: `{
+  "cob_assessment": { "current_mac_percent": number, "target_mac_percent": 28, "deviation": number, "status": "within_limits|marginal|out_of_limits" },
+  "balance_analysis": "string",
+  "safety_notes": ["string"],
+  "optimization_recommendations": ["string"]
+}`,
 
-  cob_analysis: `You are a Center of Balance (CoB) specialist for military cargo aircraft.
-Analyze the CoB calculations and provide safety assessment based on MAC percentages and position weights.
-${GUARDRAIL_INSTRUCTIONS}
-CRITICAL: You must respond with ONLY valid JSON in this exact format:
-{
-  "cob_assessment": {
-    "current_mac_percent": <number>,
-    "target_mac_percent": 28,
-    "deviation": <number>,
-    "status": "within_limits|marginal|out_of_limits"
-  },
-  "balance_analysis": "Detailed analysis of weight distribution",
-  "safety_notes": ["note1", "note2"],
-  "optimization_recommendations": ["recommendation1", "recommendation2"],
-  "regulatory_compliance": ["Relevant regulations and compliance status"]
-}
+  pallet_review: `{
+  "pallet_efficiency": { "weight_utilization": number, "volume_utilization": number, "overall_grade": "A|B|C|D" },
+  "configuration_notes": ["string"],
+  "tiedown_recommendations": ["string"],
+  "hazmat_proximity_issues": ["string or 'None identified'"]
+}`,
 
-Do not include any text outside the JSON object.`,
+  route_planning: `{
+  "route_assessment": { "total_distance_nm": number, "estimated_fuel_lb": number, "efficiency_rating": "optimal|acceptable|suboptimal" },
+  "optimization_notes": ["string"],
+  "fuel_efficiency_tips": ["string"],
+  "alternate_routes": ["string"]
+}`,
 
-  pallet_review: `You are a 463L pallet configuration expert for military airlift operations.
-Review pallet contents and provide efficiency analysis, tiedown recommendations, and hazmat proximity checks.
-${GUARDRAIL_INSTRUCTIONS}
-CRITICAL: You must respond with ONLY valid JSON in this exact format:
-{
-  "pallet_efficiency": {
-    "weight_utilization": <percentage>,
-    "volume_utilization": <percentage>,
-    "overall_grade": "A|B|C|D"
-  },
-  "configuration_notes": ["note1", "note2"],
-  "tiedown_recommendations": ["recommendation1", "recommendation2"],
-  "hazmat_proximity_issues": ["issue1 or 'None identified'"],
-  "improvement_suggestions": ["suggestion1", "suggestion2"]
-}
-
-Do not include any text outside the JSON object.`,
-
-  route_planning: `You are a military airlift route planning specialist.
-Analyze route data and provide operational notes, fuel efficiency tips, and alternate route recommendations.
-${GUARDRAIL_INSTRUCTIONS}
-CRITICAL: You must respond with ONLY valid JSON in this exact format:
-{
-  "route_assessment": {
-    "total_distance_nm": <number>,
-    "estimated_fuel_lb": <number>,
-    "efficiency_rating": "optimal|acceptable|suboptimal"
-  },
-  "optimization_notes": ["note1", "note2"],
-  "fuel_efficiency_tips": ["tip1", "tip2"],
-  "alternate_routes": ["alternative1", "alternative2"],
-  "weather_considerations": ["consideration1", "consideration2"]
-}
-
-Do not include any text outside the JSON object.`,
-
-  compliance: `You are a military cargo compliance officer specializing in USAF and DoD regulations.
-Review the cargo manifest and provide regulation citations, compliance checklist, and hazmat handling requirements.
-${GUARDRAIL_INSTRUCTIONS}
-CRITICAL: You must respond with ONLY valid JSON in this exact format:
-{
+  compliance: `{
   "compliance_status": "compliant|needs_review|non_compliant",
-  "regulation_citations": [
-    {"regulation": "AFI/DODI number", "section": "relevant section", "requirement": "brief description"}
-  ],
-  "checklist_items": [
-    {"item": "description", "status": "complete|incomplete|na", "notes": "any notes"}
-  ],
-  "hazmat_requirements": ["requirement1", "requirement2"],
-  "action_items": ["action1", "action2"]
-}
+  "regulation_citations": [{ "regulation": "string", "section": "string", "requirement": "string" }],
+  "checklist_items": [{ "item": "string", "status": "complete|incomplete|na", "notes": "string" }],
+  "hazmat_requirements": ["string"],
+  "action_items": ["string"]
+}`,
 
-Do not include any text outside the JSON object.`,
+  mission_briefing: `{
+  "mission_overview": "string (1-2 paragraph summary)",
+  "key_statistics": { "total_cargo_weight_lb": number, "aircraft_count": number, "pallet_count": number, "pax_count": number },
+  "critical_items": ["string"],
+  "commander_notes": ["string"]
+}`,
 
-  mission_briefing: `You are a military mission briefing specialist for PACAF airlift operations.
-Generate a concise executive summary suitable for command briefing.
-${GUARDRAIL_INSTRUCTIONS}
-CRITICAL: You must respond with ONLY valid JSON in this exact format:
-{
-  "mission_overview": "1-2 paragraph executive summary",
-  "key_statistics": {
-    "total_cargo_weight_lb": <number>,
-    "aircraft_count": <number>,
-    "pallet_count": <number>,
-    "pax_count": <number>
-  },
-  "critical_items": ["critical item 1", "critical item 2"],
-  "timeline_summary": "Brief timeline overview",
-  "commander_notes": ["Note for commander attention 1", "Note 2"],
-  "risk_summary": "Brief risk assessment"
-}
+  mission_analytics: `{
+  "mission_summary": { "total_aircraft": number, "aircraft_breakdown": [{ "type": "C-17|C-130", "count": number, "total_weight_lb": number }], "total_pallets": number, "total_weight_lb": number, "total_pax": number },
+  "route_details": [{ "flight_id": "string", "origin": "ICAO", "destination": "ICAO", "distance_nm": number, "cargo_weight_lb": number }],
+  "performance_metrics": { "overall_utilization_percent": number, "average_cob_percent": number, "efficiency_grade": "A|B|C|D", "cob_status": "all_in_envelope|some_marginal|issues_detected" },
+  "advice_messages": [{ "priority": "high|medium|low", "category": "optimization|safety|compliance|efficiency", "message": "string", "action": "string" }],
+  "risk_assessment": { "overall_risk": "low|medium|high", "risk_factors": ["string"], "mitigation_notes": ["string"] }
+}`,
 
-Do not include any text outside the JSON object.`,
-
-  mission_analytics: `You are a military airlift mission analytics expert providing comprehensive structured analytics for PACAF operations.
-Analyze all mission data and provide detailed metrics, operational assessments, and actionable advice.
-${GUARDRAIL_INSTRUCTIONS}
-CRITICAL: You must respond with ONLY valid JSON in this exact format:
-{
-  "mission_summary": {
-    "total_aircraft": <number>,
-    "aircraft_breakdown": [{"type": "C-17|C-130", "count": <number>, "total_weight_lb": <number>}],
-    "total_pallets": <number>,
-    "total_weight_lb": <number>,
-    "total_pax": <number>
-  },
-  "route_details": [
-    {"flight_id": "string", "origin": "ICAO", "destination": "ICAO", "distance_nm": <number>, "cargo_weight_lb": <number>}
-  ],
-  "performance_metrics": {
-    "overall_utilization_percent": <number>,
-    "average_cob_percent": <number>,
-    "efficiency_grade": "A|B|C|D",
-    "cob_status": "all_in_envelope|some_marginal|issues_detected"
-  },
-  "advice_messages": [
-    {"priority": "high|medium|low", "category": "optimization|safety|compliance|efficiency", "message": "string", "action": "string"}
-  ],
-  "risk_assessment": {
-    "overall_risk": "low|medium|high",
-    "risk_factors": ["string"],
-    "mitigation_notes": ["string"]
-  }
-}
-
-Guidelines for generating analytics:
-- Calculate utilization based on actual vs maximum allowable cargo weight
-- Assign efficiency grades: A (>90%), B (75-90%), C (60-75%), D (<60%)
-- Prioritize advice by impact: high for safety/compliance, medium for efficiency, low for optimization
-- Include at least 2-4 actionable advice messages
-- Risk factors should identify specific concerns with cargo, routes, or timing
-- Mitigation notes should provide concrete steps to address each risk
-
-Do not include any text outside the JSON object.`,
-
-  flight_allocation_analysis: `You are a PACAF military airlift mission planner providing a comprehensive flight allocation analysis.
-${GUARDRAIL_INSTRUCTIONS}
-
-ABSOLUTE RULE - USE ONLY PROVIDED DATA:
-You MUST use EXACTLY the numbers from the input data. DO NOT invent, estimate, or hallucinate any numbers.
-The input contains a "summary" object with authoritative values - USE THESE EXACT VALUES:
-- summary.aircraft_count = exact number of aircraft used
-- summary.c17_count = exact number of C-17 aircraft
-- summary.c130_count = exact number of C-130 aircraft  
-- summary.total_pallets = exact pallet count
-- summary.total_rolling_stock = exact rolling stock count
-- summary.total_pax = exact passenger count (USE THIS, DO NOT MAKE UP NUMBERS)
-- summary.total_cargo_weight_lb = exact cargo weight
-- summary.average_utilization_percent = exact utilization
-- summary.unloaded_item_count = exact count of items that could NOT be loaded (this IS the shortage)
-- summary.unloaded_weight_lb = exact weight of unloaded cargo
-- summary.advon_item_count = exact ADVON items loaded (if 0, say "None")
-- summary.hazmat_item_count = exact HAZMAT items loaded (if 0, say "None")
-- has_shortage = true/false indicating if there are unloaded items
-
-The "load_plans" array contains each aircraft with its actual pallet_count, rolling_stock_count, pax_count, cob_percent.
-The "unloaded_items" array contains items that could NOT fit - this is your shortage data.
-The "cob_issues" array contains aircraft with CoB problems.
-
-CRITICAL: You must respond with ONLY valid JSON in this exact format:
-{
-  "executive_summary": "2-3 sentences using EXACT numbers from summary",
-  "fleet_status": {
-    "aircraft_used": <USE summary.aircraft_count>,
-    "total_pallets_loaded": <USE summary.total_pallets>,
-    "total_rolling_stock_loaded": <USE summary.total_rolling_stock>,
-    "total_pax": <USE summary.total_pax - DO NOT INVENT>,
-    "total_cargo_weight_lb": <USE summary.total_cargo_weight_lb>,
-    "average_utilization_percent": <USE summary.average_utilization_percent>
-  },
-  "aircraft_selection_rationale": {
-    "c17_rationale": "Explain based on summary.c17_count (if 0, say 'No C-17s were used')",
-    "c130_rationale": "Explain based on summary.c130_count (if 0, say 'No C-130s were used')", 
-    "fleet_mix_reasoning": "Explain the fleet composition based on actual counts"
-  },
-  "allocation_issues": [
-    {"severity": "critical|warning|info", "title": "short title", "description": "detailed explanation", "recommendation": "actionable suggestion"}
-  ],
-  "cargo_shift_recommendations": [],
-  "cob_summary": {
-    "aircraft_in_envelope": <count from load_plans where cob_in_envelope=true>,
-    "aircraft_out_of_envelope": <USE summary.cob_issues_count>,
-    "worst_offender": "aircraft_id from cob_issues or null",
-    "corrective_action": "action or 'No action needed' if all in envelope",
-    "per_aircraft_cob": [
-      <ONLY include aircraft from load_plans array - use their EXACT aircraft_id and cob_percent>
-    ]
-  },
-  "special_cargo_notes": {
-    "advon_items": "<IF summary.advon_item_count is 0, say 'None'. Otherwise describe>",
-    "hazmat_items": "<IF summary.hazmat_item_count is 0, say 'None'. Otherwise describe>",
-    "oversized_items": "None or describe if present"
-  },
-  "pax_analysis": {
-    "total_passengers": <USE summary.total_pax - THIS IS THE EXACT NUMBER>,
-    "seat_utilization": "Based on per-aircraft pax_count from load_plans",
-    "pax_considerations": "Notes based on actual passenger count"
-  },
-  "fueling_considerations": {
-    "estimated_fuel_impact": "Based on total_cargo_weight_lb",
-    "range_notes": "Mission range notes"
-  },
-  "fleet_shortage_analysis": {
-    "has_unloaded_cargo": <USE has_shortage boolean>,
-    "unloaded_item_count": <USE summary.unloaded_item_count - this is the ACTUAL shortage>,
-    "unloaded_weight_lb": <USE summary.unloaded_weight_lb>,
-    "recommended_additional_aircraft": <ONLY if has_shortage is true and unloaded_item_count > 0>
-  },
-  "optimization_notes": ["note1", "note2"]
-}
-
-VALIDATION RULES:
-1. fleet_status numbers MUST match summary exactly
-2. pax_analysis.total_passengers MUST equal summary.total_pax
-3. fleet_shortage_analysis values MUST match summary.unloaded_* values
-4. per_aircraft_cob MUST only list aircraft IDs that appear in load_plans
-5. If has_shortage is false OR summary.unloaded_item_count is 0, recommended_additional_aircraft must be empty []
-6. If summary.advon_item_count is 0, advon_items MUST say "None"
-7. If summary.hazmat_item_count is 0, hazmat_items MUST say "None"
-
-Do not include any text outside the JSON object.`
+  flight_allocation_analysis: `{
+  "executive_summary": "string (use EXACT numbers from summary)",
+  "fleet_status": { "aircraft_used": number, "total_pallets_loaded": number, "total_rolling_stock_loaded": number, "total_pax": number, "total_cargo_weight_lb": number, "average_utilization_percent": number },
+  "aircraft_selection_rationale": { "c17_rationale": "string", "c130_rationale": "string", "fleet_mix_reasoning": "string" },
+  "cob_summary": { "aircraft_in_envelope": number, "aircraft_out_of_envelope": number, "worst_offender": "string|null", "corrective_action": "string" },
+  "special_cargo_notes": { "advon_items": "string", "hazmat_items": "string", "oversized_items": "string" },
+  "fleet_shortage_analysis": { "has_unloaded_cargo": boolean, "unloaded_item_count": number, "unloaded_weight_lb": number, "recommended_additional_aircraft": [] },
+  "optimization_notes": ["string"]
+}`
 };
+
+// Required fields for response validation
+const RESPONSE_SCHEMAS: Record<string, string[]> = {
+  allocation_summary: ["summary", "key_metrics", "optimization_suggestions", "risk_flags"],
+  cob_analysis: ["cob_assessment", "balance_analysis", "safety_notes"],
+  pallet_review: ["pallet_efficiency", "configuration_notes", "tiedown_recommendations"],
+  route_planning: ["route_assessment", "optimization_notes", "fuel_efficiency_tips"],
+  compliance: ["compliance_status", "regulation_citations", "checklist_items"],
+  mission_briefing: ["mission_overview", "key_statistics", "critical_items"],
+  mission_analytics: ["mission_summary", "performance_metrics", "advice_messages", "risk_assessment"],
+  flight_allocation_analysis: ["executive_summary", "fleet_status", "cob_summary", "fleet_shortage_analysis"],
+  warehouse_optimization: ["summary", "recommendations", "metrics"],
+};
+
+// Knowledge base query mappings per insight type
+const KB_QUERIES: Record<AiInsightType, string> = {
+  allocation_summary: "military cargo allocation regulations weight limits",
+  cob_analysis: "aircraft center of gravity MAC percentage safety limits",
+  pallet_review: "463L pallet tiedown hazmat cargo stacking regulations",
+  route_planning: "military airlift route planning fuel efficiency",
+  compliance: "DoD cargo transportation regulations hazmat compliance",
+  mission_briefing: "military mission briefing format requirements",
+  mission_analytics: "military airlift mission performance metrics efficiency optimization",
+  flight_allocation_analysis: "military airlift fleet allocation cargo loading regulations"
+};
+
+// Validate response against expected schema fields
+function validateResponse(result: any, insightType: string): { valid: boolean; missing: string[] } {
+  const expectedFields = RESPONSE_SCHEMAS[insightType] || [];
+  if (!result || typeof result !== 'object' || result.error) {
+    return { valid: false, missing: expectedFields };
+  }
+  const missing = expectedFields.filter(field => !(field in result));
+  return { valid: missing.length === 0, missing };
+}
+
+// Build structured prompt in CONTEXT/QUERY/INSTRUCTION format for low TTFT
+function buildStructuredPrompt(
+  context: string,
+  queryData: string,
+  schema: string,
+  guardrails: string[]
+): { system: string; user: string } {
+  // Concise system prompt for faster first token
+  const system = `You are an expert military logistics analyst. Output ONLY valid JSON matching the schema. No markdown, no explanations.
+
+GUARDRAILS:
+${guardrails.map((g, i) => `${i + 1}. ${g}`).join('\n')}`;
+
+  // Structured user prompt
+  const user = context
+    ? `### CONTEXT START
+${context}
+### CONTEXT END
+
+### QUERY
+${queryData}
+
+### INSTRUCTION
+Generate structured JSON matching this schema:
+${schema}
+
+Output ONLY the JSON object. No other text.`
+    : `### QUERY
+${queryData}
+
+### INSTRUCTION
+Generate structured JSON matching this schema:
+${schema}
+
+Output ONLY the JSON object. No other text.`;
+
+  return { system, user };
+}
 
 // Retrieve context from Knowledge Base
 async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 3): Promise<string> {
@@ -395,7 +290,8 @@ async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 
     return "";
   }
 
-  console.log("[Bedrock:DEBUG] Retrieving KB context", { query });
+  const kbStartTime = Date.now();
+  console.log("[Bedrock:TIMING] KB retrieval started");
 
   try {
     const client = getBedrockAgentClient();
@@ -410,9 +306,10 @@ async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 
     });
 
     const response = await client.send(command);
+    const kbDuration = Date.now() - kbStartTime;
     
     if (!response.retrievalResults || response.retrievalResults.length === 0) {
-      console.log("[Bedrock:DEBUG] KB context retrieved", { contextLength: 0 });
+      console.log("[Bedrock:TIMING] KB retrieval completed", { durationMs: kbDuration, contextLength: 0 });
       return "";
     }
 
@@ -421,35 +318,32 @@ async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 
       .filter(text => text.length > 0)
       .join("\n\n---\n\n");
 
-    console.log("[Bedrock:DEBUG] KB context retrieved", { contextLength: context.length });
+    console.log("[Bedrock:TIMING] KB retrieval completed", { durationMs: kbDuration, contextLength: context.length });
     return context;
   } catch (error) {
-    console.error("[Bedrock:ERROR]", error);
+    const kbDuration = Date.now() - kbStartTime;
+    console.error("[Bedrock:ERROR] KB retrieval failed", { durationMs: kbDuration, error });
     return "";
   }
 }
 
-// Invoke Nova Lite model
+// Invoke Nova Lite model with structured prompts
 async function invokeModel(
   systemPrompt: string,
-  userPrompt: string,
-  context: string
-): Promise<{ result: any; tokenUsage: { inputTokens: number; outputTokens: number } }> {
-  console.log("[Bedrock:DEBUG] Invoking model", { modelId: MODEL_ID });
+  userPrompt: string
+): Promise<{ result: any; tokenUsage: { inputTokens: number; outputTokens: number }; ttftMs: number }> {
+  const invokeStartTime = Date.now();
+  console.log("[Bedrock:TIMING] Model invocation started", { modelId: MODEL_ID });
   
   try {
     const client = getBedrockRuntimeClient();
-
-    const fullPrompt = context
-      ? `Reference Information from Regulations:\n${context}\n\n---\n\nUser Query:\n${userPrompt}`
-      : userPrompt;
 
     const requestBody = {
       schemaVersion: "messages-v1",
       messages: [
         {
           role: "user",
-          content: [{ text: fullPrompt }]
+          content: [{ text: userPrompt }]
         }
       ],
       system: [{ text: systemPrompt }],
@@ -468,6 +362,7 @@ async function invokeModel(
     });
 
     const response = await client.send(command);
+    const ttftMs = Date.now() - invokeStartTime;
     const responseBody = JSON.parse(new TextDecoder().decode(response.body));
 
     // Extract text from Nova response format
@@ -495,7 +390,7 @@ async function invokeModel(
           error: true,
           errorType: "json_extraction_failed",
           message: "No valid JSON object found in model response",
-          rawResponse: resultText.substring(0, 500) // Truncate for safety
+          rawResponse: resultText.substring(0, 500)
         };
       }
     } catch (e) {
@@ -503,7 +398,7 @@ async function invokeModel(
         error: true,
         errorType: "json_parse_error",
         message: e instanceof Error ? e.message : "Failed to parse JSON",
-        rawResponse: resultText.substring(0, 500) // Truncate for safety
+        rawResponse: resultText.substring(0, 500)
       };
     }
 
@@ -512,11 +407,18 @@ async function invokeModel(
       outputTokens: responseBody.usage?.outputTokens || 0
     };
 
-    console.log("[Bedrock:DEBUG] Model response received", { tokenUsage, hasValidJson: isValidJson });
+    console.log("[Bedrock:TIMING] Model response received", { 
+      ttftMs, 
+      tokenUsage, 
+      hasValidJson: isValidJson,
+      systemPromptLength: systemPrompt.length,
+      userPromptLength: userPrompt.length
+    });
 
-    return { result: parsedResult, tokenUsage };
+    return { result: parsedResult, tokenUsage, ttftMs };
   } catch (error) {
-    console.error("[Bedrock:ERROR]", error);
+    const ttftMs = Date.now() - invokeStartTime;
+    console.error("[Bedrock:ERROR] Model invocation failed", { ttftMs, error });
     throw error;
   }
 }
@@ -535,17 +437,19 @@ export interface InsightResult {
   inputHash: string;
   tokenUsage: { inputTokens: number; outputTokens: number };
   fromCache: boolean;
+  timingMs?: { kb: number; model: number; total: number };
 }
 
 export async function generateInsight(
   options: GenerateInsightOptions
 ): Promise<InsightResult> {
   const { type, inputData, userId, flightPlanId, forceRegenerate = false } = options;
+  const totalStartTime = Date.now();
 
   // Include flightPlanId in hash to ensure proper cache isolation per flight plan
   const inputHash = generateInputHash({ type, ...inputData }, flightPlanId);
   
-  console.log("[Bedrock:DEBUG] Starting insight generation", { type, flightPlanId, inputHash });
+  console.log("[Bedrock:TIMING] Insight generation started", { type, flightPlanId, inputHash });
 
   try {
     // Rate limit check
@@ -554,61 +458,56 @@ export async function generateInsight(
       throw new Error(`Rate limit exceeded. Try again in ${Math.ceil((rateCheck.retryAfterMs || 60000) / 1000)} seconds.`);
     }
 
-    const systemPrompt = SYSTEM_PROMPTS[type];
-
-    if (!systemPrompt) {
+    const schema = JSON_SCHEMAS[type];
+    if (!schema) {
       throw new Error(`Unknown insight type: ${type}`);
     }
 
-    // Build user prompt based on insight type
-    let userPrompt = "";
-    let kbQuery = "";
-
-    switch (type) {
-      case "allocation_summary":
-        userPrompt = `Analyze this cargo allocation:\n${JSON.stringify(inputData, null, 2)}`;
-        kbQuery = "military cargo allocation regulations weight limits";
-        break;
-      case "cob_analysis":
-        userPrompt = `Analyze Center of Balance for this load:\n${JSON.stringify(inputData, null, 2)}`;
-        kbQuery = "aircraft center of gravity MAC percentage safety limits";
-        break;
-      case "pallet_review":
-        userPrompt = `Review this 463L pallet configuration:\n${JSON.stringify(inputData, null, 2)}`;
-        kbQuery = "463L pallet tiedown hazmat cargo stacking regulations";
-        break;
-      case "route_planning":
-        userPrompt = `Analyze this airlift route:\n${JSON.stringify(inputData, null, 2)}`;
-        kbQuery = "military airlift route planning fuel efficiency";
-        break;
-      case "compliance":
-        userPrompt = `Check compliance for this cargo manifest:\n${JSON.stringify(inputData, null, 2)}`;
-        kbQuery = "DoD cargo transportation regulations hazmat compliance";
-        break;
-      case "mission_briefing":
-        userPrompt = `Generate mission briefing for:\n${JSON.stringify(inputData, null, 2)}`;
-        kbQuery = "military mission briefing format requirements";
-        break;
-      case "mission_analytics":
-        userPrompt = `Generate comprehensive mission analytics for:\n${JSON.stringify(inputData, null, 2)}`;
-        kbQuery = "military airlift mission performance metrics efficiency optimization";
-        break;
-    }
-
     // Retrieve knowledge base context
+    const kbStartTime = Date.now();
+    const kbQuery = KB_QUERIES[type] || `military logistics ${type}`;
     const kbContext = await retrieveKnowledgeBaseContext(kbQuery);
+    const kbDuration = Date.now() - kbStartTime;
+
+    // Build structured prompt
+    const queryData = JSON.stringify(inputData, null, 2);
+    const { system, user } = buildStructuredPrompt(kbContext, queryData, schema, GUARDRAILS);
 
     // Invoke model
-    const { result, tokenUsage } = await invokeModel(systemPrompt, userPrompt, kbContext);
+    const modelStartTime = Date.now();
+    const { result, tokenUsage, ttftMs } = await invokeModel(system, user);
+    const modelDuration = Date.now() - modelStartTime;
+
+    // Validate response structure
+    const validation = validateResponse(result, type);
+    if (!validation.valid) {
+      console.warn("[Bedrock:VALIDATION] Response missing required fields", { 
+        type, 
+        missing: validation.missing,
+        hasError: !!result?.error
+      });
+    }
+
+    const totalDuration = Date.now() - totalStartTime;
+    console.log("[Bedrock:TIMING] Insight generation completed", {
+      type,
+      kbMs: kbDuration,
+      modelMs: modelDuration,
+      ttftMs,
+      totalMs: totalDuration,
+      valid: validation.valid
+    });
 
     return {
       insight: result,
       inputHash,
       tokenUsage,
-      fromCache: false
+      fromCache: false,
+      timingMs: { kb: kbDuration, model: modelDuration, total: totalDuration }
     };
   } catch (error) {
-    console.error("[Bedrock:ERROR]", error);
+    const totalDuration = Date.now() - totalStartTime;
+    console.error("[Bedrock:ERROR] Insight generation failed", { type, totalMs: totalDuration, error });
     throw error;
   }
 }
