@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Loader2, ChevronRight, ChevronLeft, Check, Layers, Ruler, DollarSign, Box, FileDown, Play, Save, AlertCircle, Zap } from "lucide-react";
 import type { WarehouseSite, ToastMessage } from "../types";
-import { runOptimizationWizard, runAllOptimizations, applyOptimizationPlan, type OptimizationWizardResult } from "../../../services/warehouseService";
+import { runOptimizationWizard, runAllOptimizations, applyOptimizationPlan, createOptimizationPlan, type OptimizationWizardResult, type CreatePlanData } from "../../../services/warehouseService";
 import { generateWarehouseOptimizationPDF } from "../../../lib/warehouseOptimizationPdfExport";
 
 export type Algorithm = "cardstack" | "size_standardization" | "value_density" | "bin_packing" | "run_all";
@@ -117,6 +117,7 @@ export default function OptimizationWizardModal({
   const [error, setError] = useState<string | null>(null);
 
   const [applying, setApplying] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (initialAlgorithm) {
@@ -227,36 +228,53 @@ export default function OptimizationWizardModal({
     }
   };
 
-  const handleSavePlan = () => {
-    if (!result) {
+  const formatAlgorithmName = (algorithm: string): string => {
+    const names: Record<string, string> = {
+      cardstack: "CardStack",
+      size_standardization: "Size Standardization",
+      value_density: "Value Density",
+      bin_packing: "Bin-Packing",
+      run_all: "Full Optimization",
+    };
+    return names[algorithm] || algorithm;
+  };
+
+  const handleSavePlan = async () => {
+    if (!result || !selectedAlgorithm) {
       onShowToast("No optimization results to save", "error");
       return;
     }
     
+    setSaving(true);
     try {
-      const STORAGE_KEY = "arka_saved_plans";
-      const existingPlans = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-      
-      const savedPlan = {
-        id: `plan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        savedAt: new Date().toISOString(),
-        siteId: siteId,
-        siteName: siteName,
-        algorithm: result.algorithm,
-        runId: result.runId,
-        summary: result.summary,
-        totalActions: result.totalActions,
+      const planData: CreatePlanData = {
+        name: `${formatAlgorithmName(selectedAlgorithm)} - ${new Date().toLocaleDateString()}`,
+        algorithm: selectedAlgorithm,
+        diff_patch: result.actions || [],
+        summary: {
+          slotsFreed: result.summary?.slotsFreed || 0,
+          consolidationWins: result.summary?.consolidationWins || "0",
+          zonesOptimized: result.summary?.zonesOptimized || 0,
+          pickEfficiencyGain: result.summary?.pickEfficiencyGain || "0%",
+          itemsAffected: result.summary?.itemsAffected || 0,
+          actionsGenerated: result.actions?.length || 0,
+        },
+        actions: (result.actions || []).map((action, index) => ({
+          item_id: parseInt(action.id) || 0,
+          action_type: action.action || "move",
+          from_location: action.from || null,
+          to_location: action.to || null,
+          quantity: 1,
+          sequence: index,
+        })),
       };
-      
-      existingPlans.unshift(savedPlan);
-      
-      // Keep only the last 20 plans
-      const trimmedPlans = existingPlans.slice(0, 20);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmedPlans));
-      
-      onShowToast("Plan saved for later!", "success");
+
+      await createOptimizationPlan(siteId, planData);
+      onShowToast("Plan saved to database!", "success");
     } catch (err) {
-      onShowToast("Failed to save plan", "error");
+      onShowToast(err instanceof Error ? err.message : "Failed to save plan", "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -726,10 +744,15 @@ export default function OptimizationWizardModal({
           </button>
           <button
             onClick={handleSavePlan}
-            className="flex items-center justify-center gap-2 p-4 rounded-xl border border-border hover:bg-muted transition-colors"
+            disabled={saving}
+            className="flex items-center justify-center gap-2 p-4 rounded-xl border border-border hover:bg-muted transition-colors disabled:opacity-50"
           >
-            <Save className="w-5 h-5 text-muted-foreground" />
-            <span className="font-medium text-foreground">Save for Later</span>
+            {saving ? (
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            ) : (
+              <Save className="w-5 h-5 text-muted-foreground" />
+            )}
+            <span className="font-medium text-foreground">{saving ? "Saving..." : "Save for Later"}</span>
           </button>
           <button
             onClick={handleApplyChanges}

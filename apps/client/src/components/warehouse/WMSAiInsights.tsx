@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { 
   Brain, 
@@ -16,11 +16,21 @@ import {
   Warehouse,
   Save,
   Clock,
-  Trash2
+  Trash2,
+  Play
 } from "lucide-react";
 import type { WarehouseSite, OptimizationResult, ToastMessage } from "./types";
-import { runOptimization, generateWarehouseInsights, type WarehouseAiInsight } from "../../services/warehouseService";
+import { 
+  runOptimization, 
+  generateWarehouseInsights, 
+  getOptimizationPlans,
+  executeOptimizationPlan,
+  deleteOptimizationPlan,
+  type WarehouseAiInsight,
+  type OptimizationPlan
+} from "../../services/warehouseService";
 import OptimizationWizardModal, { type Algorithm } from "./modals/OptimizationWizardModal";
+import TextConfirmationDialog from "../ui/TextConfirmationDialog";
 
 interface WMSAiInsightsProps {
   sites: WarehouseSite[];
@@ -41,26 +51,6 @@ interface InsightCard {
   algorithm?: Algorithm;
   tooltip: string;
 }
-
-interface SavedPlan {
-  id: string;
-  savedAt: string;
-  siteId: number;
-  siteName: string;
-  algorithm: string;
-  runId: number;
-  summary: {
-    slotsFreed: number;
-    consolidationWins: string;
-    zonesOptimized: number;
-    pickEfficiencyGain: string;
-    itemsAffected: number;
-    actionsGenerated: number;
-  };
-  totalActions: number;
-}
-
-const SAVED_PLANS_STORAGE_KEY = "arka_saved_plans";
 
 const insightCards: InsightCard[] = [
   {
@@ -124,44 +114,67 @@ export default function WMSAiInsights({
   const [aiInsightLoading, setAiInsightLoading] = useState(false);
   const [aiInsight, setAiInsight] = useState<WarehouseAiInsight | null>(null);
   const [loadingCardId, setLoadingCardId] = useState<string | null>(null);
-  const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
+  const [savedPlans, setSavedPlans] = useState<OptimizationPlan[]>([]);
+  const [executeDialogOpen, setExecuteDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<OptimizationPlan | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const selectedSite = sites.find(s => s.id === selectedSiteId);
 
-  // Load saved plans from localStorage on mount
-  useEffect(() => {
+  const fetchPlans = useCallback(async () => {
+    if (!selectedSiteId) return;
     try {
-      const stored = localStorage.getItem(SAVED_PLANS_STORAGE_KEY);
-      if (stored) {
-        setSavedPlans(JSON.parse(stored));
-      }
+      const plans = await getOptimizationPlans(selectedSiteId);
+      setSavedPlans(plans);
     } catch (err) {
-      console.error("Failed to load saved plans:", err);
+      console.error("Failed to fetch plans:", err);
     }
-  }, []);
+  }, [selectedSiteId]);
 
-  // Reload saved plans when wizard closes (in case a new plan was saved)
   useEffect(() => {
-    if (!showWizard) {
-      try {
-        const stored = localStorage.getItem(SAVED_PLANS_STORAGE_KEY);
-        if (stored) {
-          setSavedPlans(JSON.parse(stored));
-        }
-      } catch (err) {
-        console.error("Failed to reload saved plans:", err);
-      }
+    if (selectedSiteId) {
+      fetchPlans();
+    } else {
+      setSavedPlans([]);
     }
-  }, [showWizard]);
+  }, [selectedSiteId, fetchPlans]);
 
-  const handleDeleteSavedPlan = (planId: string) => {
+  useEffect(() => {
+    if (!showWizard && selectedSiteId) {
+      fetchPlans();
+    }
+  }, [showWizard, selectedSiteId, fetchPlans]);
+
+  const handleExecutePlan = async () => {
+    if (!selectedPlan) return;
+    setActionLoading(true);
     try {
-      const updatedPlans = savedPlans.filter(p => p.id !== planId);
-      localStorage.setItem(SAVED_PLANS_STORAGE_KEY, JSON.stringify(updatedPlans));
-      setSavedPlans(updatedPlans);
-      onShowToast("Plan removed", "success");
+      await executeOptimizationPlan(selectedPlan.id);
+      onShowToast("Optimization plan started!", "success");
+      setExecuteDialogOpen(false);
+      setSelectedPlan(null);
+      fetchPlans();
     } catch (err) {
-      onShowToast("Failed to remove plan", "error");
+      onShowToast("Failed to execute plan", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeletePlan = async () => {
+    if (!selectedPlan) return;
+    setActionLoading(true);
+    try {
+      await deleteOptimizationPlan(selectedPlan.id);
+      onShowToast("Plan deleted", "success");
+      setDeleteDialogOpen(false);
+      setSelectedPlan(null);
+      fetchPlans();
+    } catch (err) {
+      onShowToast("Failed to delete plan", "error");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -174,6 +187,21 @@ export default function WMSAiInsights({
       run_all: "Run All",
     };
     return names[algo] || algo;
+  };
+
+  const getStatusBadge = (status: OptimizationPlan['status']) => {
+    switch (status) {
+      case 'pending':
+        return { color: 'bg-amber-100 text-amber-700', label: 'Pending' };
+      case 'in_progress':
+        return { color: 'bg-blue-100 text-blue-700', label: 'In Progress' };
+      case 'completed':
+        return { color: 'bg-green-100 text-green-700', label: 'Completed' };
+      case 'cancelled':
+        return { color: 'bg-gray-100 text-gray-600', label: 'Cancelled' };
+      default:
+        return { color: 'bg-gray-100 text-gray-600', label: status };
+    }
   };
 
   const handleRunOptimization = async () => {
@@ -386,41 +414,83 @@ export default function WMSAiInsights({
             </span>
           </div>
 
-          <div className="space-y-3 max-h-[300px] overflow-y-auto">
-            {savedPlans.map((plan) => (
-              <div
-                key={plan.id}
-                className="p-4 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-foreground truncate">
-                        {plan.siteName}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 bg-[#004E89]/10 text-[#004E89] rounded-full font-medium">
-                        {formatAlgorithmName(plan.algorithm)}
-                      </span>
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {savedPlans.map((plan) => {
+              const statusBadge = getStatusBadge(plan.status);
+              const progressPercent = plan.total_actions > 0 
+                ? Math.round((plan.completed_actions / plan.total_actions) * 100) 
+                : 0;
+
+              return (
+                <div
+                  key={plan.id}
+                  className="p-4 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-foreground truncate">
+                          {plan.name}
+                        </span>
+                        <span className="text-xs px-2 py-0.5 bg-[#004E89]/10 text-[#004E89] rounded-full font-medium">
+                          {formatAlgorithmName(plan.algorithm)}
+                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusBadge.color}`}>
+                          {statusBadge.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {new Date(plan.created_at).toLocaleDateString()} {new Date(plan.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <span>{plan.total_actions} actions</span>
+                        <span>{plan.summary.slotsFreed} slots freed</span>
+                      </div>
+                      
+                      {plan.status === 'in_progress' && (
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                            <span>Progress</span>
+                            <span>{plan.completed_actions} / {plan.total_actions} ({progressPercent}%)</span>
+                          </div>
+                          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                              style={{ width: `${progressPercent}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {new Date(plan.savedAt).toLocaleDateString()} {new Date(plan.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <span>{plan.totalActions} actions</span>
-                      <span>{plan.summary.slotsFreed} slots freed</span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {plan.status === 'pending' && (
+                        <button
+                          onClick={() => {
+                            setSelectedPlan(plan);
+                            setExecuteDialogOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-green-600 hover:bg-green-50 transition-colors"
+                          title="Execute plan"
+                        >
+                          <Play className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setSelectedPlan(plan);
+                          setDeleteDialogOpen(true);
+                        }}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
+                        title="Delete plan"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDeleteSavedPlan(plan.id)}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
-                    title="Remove saved plan"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </motion.div>
       )}
@@ -603,6 +673,29 @@ export default function WMSAiInsights({
           initialAlgorithm={preselectedAlgorithm}
         />
       )}
+
+      <TextConfirmationDialog
+        open={executeDialogOpen}
+        onOpenChange={setExecuteDialogOpen}
+        title="Execute Optimization Plan"
+        description={`This will start the "${selectedPlan?.name}" optimization. Warehouse staff will need to physically move inventory items according to the plan.`}
+        confirmLabel="Start Optimization"
+        expectedPhrase="run optimization"
+        onConfirm={handleExecutePlan}
+        isLoading={actionLoading}
+      />
+
+      <TextConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Optimization Plan"
+        description={`This will permanently delete the "${selectedPlan?.name}" plan and all its actions. This cannot be undone.`}
+        confirmLabel="Delete Plan"
+        expectedPhrase="permanently delete"
+        onConfirm={handleDeletePlan}
+        isDestructive
+        isLoading={actionLoading}
+      />
     </>
   );
 }
