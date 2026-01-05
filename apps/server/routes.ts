@@ -15,9 +15,12 @@ import {
   warehouseSettings,
   warehouseAgingThresholds,
   warehouseAnalyticsSnapshots,
-  warehouseOptimizationRuns
+  warehouseOptimizationRuns,
+  warehouseOptimizationPlans,
+  warehouseOptimizationActions,
+  warehouseOptimizationEvents
 } from "@shared/schema";
-import { eq, and, or, like, ilike, sql, gt, lt, isNull, isNotNull, asc, desc, count } from "drizzle-orm";
+import { eq, and, or, like, ilike, sql, gt, lt, isNull, isNotNull, asc, desc, count, inArray } from "drizzle-orm";
 import {
   dagNodeService,
   dagEdgeService,
@@ -4890,6 +4893,483 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Warehouse Analytics] Failed to get history:", error);
       res.status(500).json({ error: "Failed to get analytics history" });
+    }
+  });
+
+  // ============================================================================
+  // WAREHOUSE OPTIMIZATION PLANS API
+  // ============================================================================
+
+  // GET /api/warehouse/sites/:siteId/optimization-plans - List all optimization plans for a site
+  app.get("/api/warehouse/sites/:siteId/optimization-plans", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      // Build query conditions
+      const conditions = [eq(warehouseOptimizationPlans.site_id, siteId)];
+
+      // Filter by status if provided
+      const statusParam = req.query.status as string;
+      if (statusParam) {
+        const statuses = statusParam.split(',').map(s => s.trim()).filter(Boolean);
+        if (statuses.length > 0) {
+          conditions.push(inArray(warehouseOptimizationPlans.status, statuses));
+        }
+      }
+
+      // Fetch plans with action counts
+      const plans = await db.select({
+        id: warehouseOptimizationPlans.id,
+        site_id: warehouseOptimizationPlans.site_id,
+        user_id: warehouseOptimizationPlans.user_id,
+        parent_plan_id: warehouseOptimizationPlans.parent_plan_id,
+        name: warehouseOptimizationPlans.name,
+        algorithm: warehouseOptimizationPlans.algorithm,
+        status: warehouseOptimizationPlans.status,
+        version: warehouseOptimizationPlans.version,
+        diff_patch: warehouseOptimizationPlans.diff_patch,
+        summary: warehouseOptimizationPlans.summary,
+        total_actions: warehouseOptimizationPlans.total_actions,
+        completed_actions: warehouseOptimizationPlans.completed_actions,
+        comparison_context: warehouseOptimizationPlans.comparison_context,
+        executed_at: warehouseOptimizationPlans.executed_at,
+        executed_by: warehouseOptimizationPlans.executed_by,
+        cancelled_at: warehouseOptimizationPlans.cancelled_at,
+        cancelled_by: warehouseOptimizationPlans.cancelled_by,
+        created_at: warehouseOptimizationPlans.created_at,
+        updated_at: warehouseOptimizationPlans.updated_at,
+      })
+        .from(warehouseOptimizationPlans)
+        .where(and(...conditions))
+        .orderBy(desc(warehouseOptimizationPlans.created_at));
+
+      res.json(plans);
+    } catch (error) {
+      console.error("[Warehouse Optimization Plans] Failed to list plans:", error);
+      res.status(500).json({ error: "Failed to list optimization plans" });
+    }
+  });
+
+  // POST /api/warehouse/sites/:siteId/optimization-plans - Create a new optimization plan
+  app.post("/api/warehouse/sites/:siteId/optimization-plans", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const { name, algorithm, diff_patch, summary, actions } = req.body;
+
+      if (!name || !algorithm) {
+        return res.status(400).json({ error: "Name and algorithm are required" });
+      }
+
+      // Use a transaction to create plan and actions together
+      const result = await db.transaction(async (tx) => {
+        // Create the plan
+        const [plan] = await tx.insert(warehouseOptimizationPlans).values({
+          site_id: siteId,
+          user_id: req.user!.id,
+          name,
+          algorithm,
+          status: "pending",
+          diff_patch: diff_patch || [],
+          summary: summary || {},
+          total_actions: Array.isArray(actions) ? actions.length : 0,
+          completed_actions: 0,
+        }).returning();
+
+        // Create the actions if provided
+        if (Array.isArray(actions) && actions.length > 0) {
+          const actionRecords = actions.map((action: any, index: number) => ({
+            plan_id: plan.id,
+            item_id: action.item_id || action.itemId || 0,
+            action_type: action.action_type || action.action || "move",
+            from_location: action.from_location || action.from || null,
+            to_location: action.to_location || action.to || null,
+            quantity: action.quantity || 1,
+            status: "pending",
+            sequence: index,
+          }));
+
+          await tx.insert(warehouseOptimizationActions).values(actionRecords);
+        }
+
+        // Create a "created" event
+        await tx.insert(warehouseOptimizationEvents).values({
+          plan_id: plan.id,
+          user_id: req.user!.id,
+          event_type: "created",
+          payload: { algorithm, total_actions: actions?.length || 0 },
+        });
+
+        return plan;
+      });
+
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("[Warehouse Optimization Plans] Failed to create plan:", error);
+      res.status(500).json({ error: "Failed to create optimization plan" });
+    }
+  });
+
+  // GET /api/warehouse/optimization-plans/:planId - Get a single plan with all its actions
+  app.get("/api/warehouse/optimization-plans/:planId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const planId = parseInt(req.params.planId);
+      if (isNaN(planId)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+
+      // Fetch the plan
+      const [plan] = await db.select()
+        .from(warehouseOptimizationPlans)
+        .where(eq(warehouseOptimizationPlans.id, planId));
+
+      if (!plan) {
+        return res.status(404).json({ error: "Optimization plan not found" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, plan.site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Fetch actions ordered by sequence
+      const actions = await db.select()
+        .from(warehouseOptimizationActions)
+        .where(eq(warehouseOptimizationActions.plan_id, planId))
+        .orderBy(asc(warehouseOptimizationActions.sequence));
+
+      res.json({ ...plan, actions });
+    } catch (error) {
+      console.error("[Warehouse Optimization Plans] Failed to get plan:", error);
+      res.status(500).json({ error: "Failed to get optimization plan" });
+    }
+  });
+
+  // POST /api/warehouse/optimization-plans/:planId/execute - Mark plan as in_progress
+  app.post("/api/warehouse/optimization-plans/:planId/execute", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const planId = parseInt(req.params.planId);
+      if (isNaN(planId)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+
+      // Fetch the plan
+      const [plan] = await db.select()
+        .from(warehouseOptimizationPlans)
+        .where(eq(warehouseOptimizationPlans.id, planId));
+
+      if (!plan) {
+        return res.status(404).json({ error: "Optimization plan not found" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, plan.site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      if (plan.status !== "pending") {
+        return res.status(400).json({ error: "Plan can only be executed when in pending status" });
+      }
+
+      // Use transaction to update plan and create event
+      const result = await db.transaction(async (tx) => {
+        const [updatedPlan] = await tx.update(warehouseOptimizationPlans)
+          .set({
+            status: "in_progress",
+            executed_at: new Date(),
+            executed_by: req.user!.id,
+            updated_at: new Date(),
+          })
+          .where(eq(warehouseOptimizationPlans.id, planId))
+          .returning();
+
+        await tx.insert(warehouseOptimizationEvents).values({
+          plan_id: planId,
+          user_id: req.user!.id,
+          event_type: "executed",
+          payload: { executed_at: new Date().toISOString() },
+        });
+
+        return updatedPlan;
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("[Warehouse Optimization Plans] Failed to execute plan:", error);
+      res.status(500).json({ error: "Failed to execute optimization plan" });
+    }
+  });
+
+  // POST /api/warehouse/optimization-plans/:planId/cancel - Cancel a plan
+  app.post("/api/warehouse/optimization-plans/:planId/cancel", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const planId = parseInt(req.params.planId);
+      if (isNaN(planId)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+
+      // Fetch the plan
+      const [plan] = await db.select()
+        .from(warehouseOptimizationPlans)
+        .where(eq(warehouseOptimizationPlans.id, planId));
+
+      if (!plan) {
+        return res.status(404).json({ error: "Optimization plan not found" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, plan.site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      if (plan.status === "completed" || plan.status === "cancelled") {
+        return res.status(400).json({ error: "Plan is already completed or cancelled" });
+      }
+
+      // Use transaction to update plan, mark actions as skipped, and create event
+      const result = await db.transaction(async (tx) => {
+        // Update plan status
+        const [updatedPlan] = await tx.update(warehouseOptimizationPlans)
+          .set({
+            status: "cancelled",
+            cancelled_at: new Date(),
+            cancelled_by: req.user!.id,
+            updated_at: new Date(),
+          })
+          .where(eq(warehouseOptimizationPlans.id, planId))
+          .returning();
+
+        // Mark all pending actions as skipped
+        await tx.update(warehouseOptimizationActions)
+          .set({ status: "skipped" })
+          .where(and(
+            eq(warehouseOptimizationActions.plan_id, planId),
+            eq(warehouseOptimizationActions.status, "pending")
+          ));
+
+        // Create cancelled event
+        await tx.insert(warehouseOptimizationEvents).values({
+          plan_id: planId,
+          user_id: req.user!.id,
+          event_type: "cancelled",
+          payload: { cancelled_at: new Date().toISOString() },
+        });
+
+        return updatedPlan;
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("[Warehouse Optimization Plans] Failed to cancel plan:", error);
+      res.status(500).json({ error: "Failed to cancel optimization plan" });
+    }
+  });
+
+  // DELETE /api/warehouse/optimization-plans/:planId - Delete a plan
+  app.delete("/api/warehouse/optimization-plans/:planId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const planId = parseInt(req.params.planId);
+      if (isNaN(planId)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+
+      // Fetch the plan
+      const [plan] = await db.select()
+        .from(warehouseOptimizationPlans)
+        .where(eq(warehouseOptimizationPlans.id, planId));
+
+      if (!plan) {
+        return res.status(404).json({ error: "Optimization plan not found" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, plan.site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Delete the plan (cascade handles actions and events)
+      await db.delete(warehouseOptimizationPlans)
+        .where(eq(warehouseOptimizationPlans.id, planId));
+
+      res.status(204).send();
+    } catch (error) {
+      console.error("[Warehouse Optimization Plans] Failed to delete plan:", error);
+      res.status(500).json({ error: "Failed to delete optimization plan" });
+    }
+  });
+
+  // PATCH /api/warehouse/optimization-plans/:planId/actions/:actionId - Update action status
+  app.patch("/api/warehouse/optimization-plans/:planId/actions/:actionId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const planId = parseInt(req.params.planId);
+      const actionId = parseInt(req.params.actionId);
+      
+      if (isNaN(planId) || isNaN(actionId)) {
+        return res.status(400).json({ error: "Invalid plan ID or action ID" });
+      }
+
+      // Fetch the plan
+      const [plan] = await db.select()
+        .from(warehouseOptimizationPlans)
+        .where(eq(warehouseOptimizationPlans.id, planId));
+
+      if (!plan) {
+        return res.status(404).json({ error: "Optimization plan not found" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, plan.site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Fetch the action
+      const [action] = await db.select()
+        .from(warehouseOptimizationActions)
+        .where(and(
+          eq(warehouseOptimizationActions.id, actionId),
+          eq(warehouseOptimizationActions.plan_id, planId)
+        ));
+
+      if (!action) {
+        return res.status(404).json({ error: "Action not found" });
+      }
+
+      const { status, notes, completed_by } = req.body;
+
+      if (!status || !["in_progress", "completed", "skipped"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status. Must be in_progress, completed, or skipped" });
+      }
+
+      // Use transaction to update action and potentially plan
+      const result = await db.transaction(async (tx) => {
+        const updateData: any = { status };
+        
+        if (status === "completed") {
+          updateData.completed_at = new Date();
+          updateData.completed_by = completed_by || req.user!.id;
+        }
+        
+        if (notes !== undefined) {
+          updateData.movement_notes = notes;
+        }
+
+        // Update the action
+        const [updatedAction] = await tx.update(warehouseOptimizationActions)
+          .set(updateData)
+          .where(eq(warehouseOptimizationActions.id, actionId))
+          .returning();
+
+        // If action was completed, update plan's completed_actions count
+        if (status === "completed" && action.status !== "completed") {
+          await tx.update(warehouseOptimizationPlans)
+            .set({
+              completed_actions: sql`${warehouseOptimizationPlans.completed_actions} + 1`,
+              updated_at: new Date(),
+            })
+            .where(eq(warehouseOptimizationPlans.id, planId));
+
+          // Check if all actions are completed to update plan status
+          const [{ count: remainingCount }] = await tx.select({ count: count() })
+            .from(warehouseOptimizationActions)
+            .where(and(
+              eq(warehouseOptimizationActions.plan_id, planId),
+              eq(warehouseOptimizationActions.status, "pending")
+            ));
+
+          const [{ count: inProgressCount }] = await tx.select({ count: count() })
+            .from(warehouseOptimizationActions)
+            .where(and(
+              eq(warehouseOptimizationActions.plan_id, planId),
+              eq(warehouseOptimizationActions.status, "in_progress")
+            ));
+
+          if (remainingCount === 0 && inProgressCount === 0) {
+            await tx.update(warehouseOptimizationPlans)
+              .set({ status: "completed", updated_at: new Date() })
+              .where(eq(warehouseOptimizationPlans.id, planId));
+          }
+        }
+
+        // Create an event for the status change
+        await tx.insert(warehouseOptimizationEvents).values({
+          plan_id: planId,
+          user_id: req.user!.id,
+          event_type: `action_${status}`,
+          payload: { action_id: actionId, status, notes },
+        });
+
+        return updatedAction;
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("[Warehouse Optimization Plans] Failed to update action:", error);
+      res.status(500).json({ error: "Failed to update action" });
     }
   });
 

@@ -660,3 +660,220 @@ export async function generateWarehouseInsights(
     cached: data.fromCache || data.cached || false
   };
 }
+
+/** Summary metrics for optimization plan */
+export interface OptimizationPlanSummary {
+  slotsFreed: number;
+  consolidationWins: string;
+  zonesOptimized: number;
+  pickEfficiencyGain: string;
+  itemsAffected: number;
+  actionsGenerated: number;
+}
+
+/** Individual action within an optimization plan */
+export interface OptimizationPlanAction {
+  id: number;
+  plan_id: number;
+  item_id: number;
+  action_type: string;
+  from_location: string | null;
+  to_location: string | null;
+  quantity: number;
+  status: 'pending' | 'in_progress' | 'completed' | 'skipped';
+  completed_by: number | null;
+  completed_at: string | null;
+  movement_notes: string | null;
+  sequence: number;
+}
+
+/** Full optimization plan with optional actions */
+export interface OptimizationPlan {
+  id: number;
+  site_id: number;
+  user_id: number;
+  parent_plan_id: number | null;
+  name: string;
+  algorithm: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  version: number;
+  diff_patch: any[];
+  summary: OptimizationPlanSummary;
+  total_actions: number;
+  completed_actions: number;
+  comparison_context: any;
+  executed_at: string | null;
+  executed_by: number | null;
+  cancelled_at: string | null;
+  cancelled_by: number | null;
+  created_at: string;
+  updated_at: string;
+  actions?: OptimizationPlanAction[];
+}
+
+/** Data for creating a new optimization plan */
+export interface CreatePlanData {
+  name: string;
+  algorithm: string;
+  diff_patch: any[];
+  summary: OptimizationPlanSummary;
+  actions: Array<{
+    item_id: number;
+    action_type: string;
+    from_location: string | null;
+    to_location: string | null;
+    quantity: number;
+    sequence: number;
+  }>;
+}
+
+/**
+ * Fetch optimization plans for a site
+ * @param siteId - Site ID
+ * @param statuses - Optional array of status filters
+ * @returns Array of optimization plans
+ */
+export async function getOptimizationPlans(
+  siteId: number,
+  statuses?: string[]
+): Promise<OptimizationPlan[]> {
+  const params = new URLSearchParams();
+  if (statuses && statuses.length > 0) {
+    params.set("status", statuses.join(","));
+  }
+  const queryString = params.toString();
+  const url = `${API_BASE}/sites/${siteId}/optimization-plans${queryString ? `?${queryString}` : ""}`;
+  
+  const response = await fetch(url, {
+    credentials: "include",
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to fetch optimization plans");
+  }
+  return response.json();
+}
+
+/**
+ * Create a new optimization plan
+ * @param siteId - Site ID
+ * @param data - Plan creation data
+ * @returns Created optimization plan
+ */
+export async function createOptimizationPlan(
+  siteId: number,
+  data: CreatePlanData
+): Promise<OptimizationPlan> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/optimization-plans`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to create optimization plan");
+  }
+  return response.json();
+}
+
+/**
+ * Fetch a single optimization plan by ID
+ * @param planId - Plan ID
+ * @returns Optimization plan with actions
+ */
+export async function getOptimizationPlan(planId: number): Promise<OptimizationPlan> {
+  const response = await fetch(`${API_BASE}/optimization-plans/${planId}`, {
+    credentials: "include",
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to fetch optimization plan");
+  }
+  return response.json();
+}
+
+/**
+ * Execute an optimization plan
+ * @param planId - Plan ID
+ * @returns Updated optimization plan
+ */
+export async function executeOptimizationPlan(planId: number): Promise<OptimizationPlan> {
+  const response = await fetch(`${API_BASE}/optimization-plans/${planId}/execute`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to execute optimization plan");
+  }
+  return response.json();
+}
+
+/**
+ * Cancel an optimization plan
+ * @param planId - Plan ID
+ * @returns Updated optimization plan
+ */
+export async function cancelOptimizationPlan(planId: number): Promise<OptimizationPlan> {
+  const response = await fetch(`${API_BASE}/optimization-plans/${planId}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to cancel optimization plan");
+  }
+  return response.json();
+}
+
+/**
+ * Delete an optimization plan
+ * @param planId - Plan ID
+ * @returns Success response
+ */
+export async function deleteOptimizationPlan(planId: number): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/optimization-plans/${planId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to delete optimization plan");
+  }
+  return response.json();
+}
+
+/**
+ * Update an optimization action status
+ * @param planId - Plan ID
+ * @param actionId - Action ID
+ * @param data - Update data with status and optional notes
+ * @returns Updated action
+ */
+export async function updateOptimizationAction(
+  planId: number,
+  actionId: number,
+  data: { status: string; notes?: string }
+): Promise<OptimizationPlanAction> {
+  const response = await fetch(`${API_BASE}/optimization-plans/${planId}/actions/${actionId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to update optimization action");
+  }
+  return response.json();
+}
