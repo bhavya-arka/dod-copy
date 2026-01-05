@@ -2,6 +2,7 @@
  * AWS Bedrock Service for AI Insights
  * Uses Nova Lite model with Knowledge Base retrieval for regulation-aware insights
  * Optimized for low TTFT with structured prompts and concise system messages
+ * Includes S3 trace logging for all AI operations
  */
 
 import {
@@ -14,7 +15,68 @@ import {
   RetrieveCommand
 } from "@aws-sdk/client-bedrock-agent-runtime";
 
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+
 import crypto from "crypto";
+
+// S3 Trace Logging Configuration (from environment variables)
+const S3_TRACE_BUCKET = process.env.BEDROCK_TRACE_S3_BUCKET || "dodpdfchunking";
+const S3_TRACE_PREFIX = process.env.BEDROCK_TRACE_S3_PREFIX || "kb_output/";
+const S3_TRACE_REGION = process.env.BEDROCK_TRACE_S3_REGION || "us-east-2";
+
+console.log(`[Bedrock:S3] Trace logging configured: s3://${S3_TRACE_BUCKET}/${S3_TRACE_PREFIX} (region: ${S3_TRACE_REGION})`);
+
+// S3 Client for trace logging
+let s3Client: S3Client | null = null;
+
+function getS3Client(): S3Client {
+  if (!s3Client) {
+    const creds = getAwsCredentials();
+    s3Client = new S3Client({
+      region: S3_TRACE_REGION,
+      credentials: {
+        accessKeyId: creds.accessKeyId,
+        secretAccessKey: creds.secretAccessKey
+      }
+    });
+  }
+  return s3Client;
+}
+
+// Trace data interface
+interface BedrockTrace {
+  trace_id: string;
+  timestamp: string;
+  model: string;
+  input: string;
+  retrieved_docs: string[];
+  latency_ms: number;
+  token_input: number;
+  token_output: number;
+  session_id: string;
+}
+
+// Log trace to S3
+async function logTraceToS3(trace: BedrockTrace): Promise<void> {
+  try {
+    const client = getS3Client();
+    const datePrefix = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const key = `${S3_TRACE_PREFIX}${datePrefix}/${trace.trace_id}.json`;
+    
+    const command = new PutObjectCommand({
+      Bucket: S3_TRACE_BUCKET,
+      Key: key,
+      Body: JSON.stringify(trace, null, 2),
+      ContentType: "application/json"
+    });
+
+    await client.send(command);
+    console.log("[Bedrock:S3] Trace logged successfully", { trace_id: trace.trace_id, key });
+  } catch (error) {
+    // Non-blocking - log error but don't fail the main operation
+    console.error("[Bedrock:S3] Failed to log trace", { trace_id: trace.trace_id, error });
+  }
+}
 import type { AiInsightType } from "../../../packages/shared/schema";
 
 // Configuration - all configurable via environment variables
@@ -283,11 +345,11 @@ Output ONLY the JSON object. No other text.`;
   return { system, user };
 }
 
-// Retrieve context from Knowledge Base
-async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 3): Promise<string> {
+// Retrieve context from Knowledge Base (returns context text and document names for tracing)
+async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 3): Promise<{ context: string; documentNames: string[] }> {
   if (!KNOWLEDGE_BASE_ID) {
     console.log("[Bedrock] No Knowledge Base ID configured, skipping retrieval");
-    return "";
+    return { context: "", documentNames: [] };
   }
 
   const kbStartTime = Date.now();
@@ -310,7 +372,21 @@ async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 
     
     if (!response.retrievalResults || response.retrievalResults.length === 0) {
       console.log("[Bedrock:TIMING] KB retrieval completed", { durationMs: kbDuration, contextLength: 0 });
-      return "";
+      return { context: "", documentNames: [] };
+    }
+
+    // Extract document names from location URIs
+    const documentNames: string[] = [];
+    for (const result of response.retrievalResults) {
+      const uri = result.location?.s3Location?.uri || result.location?.webLocation?.url || "";
+      if (uri) {
+        // Extract filename from URI
+        const parts = uri.split('/');
+        const filename = parts[parts.length - 1] || uri;
+        if (filename && !documentNames.includes(filename)) {
+          documentNames.push(filename);
+        }
+      }
     }
 
     const context = response.retrievalResults
@@ -318,12 +394,12 @@ async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 
       .filter(text => text.length > 0)
       .join("\n\n---\n\n");
 
-    console.log("[Bedrock:TIMING] KB retrieval completed", { durationMs: kbDuration, contextLength: context.length });
-    return context;
+    console.log("[Bedrock:TIMING] KB retrieval completed", { durationMs: kbDuration, contextLength: context.length, docs: documentNames });
+    return { context, documentNames };
   } catch (error) {
     const kbDuration = Date.now() - kbStartTime;
     console.error("[Bedrock:ERROR] KB retrieval failed", { durationMs: kbDuration, error });
-    return "";
+    return { context: "", documentNames: [] };
   }
 }
 
@@ -445,11 +521,12 @@ export async function generateInsight(
 ): Promise<InsightResult> {
   const { type, inputData, userId, flightPlanId, forceRegenerate = false } = options;
   const totalStartTime = Date.now();
+  const traceId = crypto.randomUUID();
 
   // Include flightPlanId in hash to ensure proper cache isolation per flight plan
   const inputHash = generateInputHash({ type, ...inputData }, flightPlanId);
   
-  console.log("[Bedrock:TIMING] Insight generation started", { type, flightPlanId, inputHash });
+  console.log("[Bedrock:TIMING] Insight generation started", { type, flightPlanId, inputHash, traceId });
 
   try {
     // Rate limit check
@@ -463,10 +540,10 @@ export async function generateInsight(
       throw new Error(`Unknown insight type: ${type}`);
     }
 
-    // Retrieve knowledge base context
+    // Retrieve knowledge base context (returns context and document names)
     const kbStartTime = Date.now();
     const kbQuery = KB_QUERIES[type] || `military logistics ${type}`;
-    const kbContext = await retrieveKnowledgeBaseContext(kbQuery);
+    const { context: kbContext, documentNames: retrievedDocs } = await retrieveKnowledgeBaseContext(kbQuery);
     const kbDuration = Date.now() - kbStartTime;
 
     // Build structured prompt
@@ -497,6 +574,20 @@ export async function generateInsight(
       totalMs: totalDuration,
       valid: validation.valid
     });
+
+    // Log trace to S3 (non-blocking)
+    const trace: BedrockTrace = {
+      trace_id: traceId,
+      timestamp: new Date().toISOString(),
+      model: MODEL_ID,
+      input: `${type}: ${kbQuery}`,
+      retrieved_docs: retrievedDocs,
+      latency_ms: totalDuration,
+      token_input: tokenUsage.inputTokens,
+      token_output: tokenUsage.outputTokens,
+      session_id: userId
+    };
+    logTraceToS3(trace).catch(() => {}); // Fire and forget
 
     return {
       insight: result,
