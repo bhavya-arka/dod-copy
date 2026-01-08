@@ -137,35 +137,53 @@ interface SiteForecast {
   daysUntilCritical: number | null;
 }
 
-interface ForecastSummary {
-  totalExpectedFlights: number;
-  totalExpectedConvoys: number;
-  totalExpectedVoyages: number;
-  totalAirCargoLbs: number;
-  totalLandCargoLbs: number;
-  avgWarehouseUtilization: number;
-  daysWithWarnings: number;
-}
-
 interface PredictiveForecast {
   generatedAt: string;
   forecastPeriodDays: number;
-  historicalDataPoints: {
-    flights: number;
-    convoys: number;
-    voyages: number;
-  };
-  dailyAverages: {
-    flights: number;
-    convoys: number;
-    voyages: number;
-    flightWeightLbs: number;
-    convoyWeightLbs: number;
+  scheduledActivities: {
+    upcomingFlights: Array<{
+      id: number;
+      name: string;
+      scheduledDeparture?: string;
+      scheduledArrival?: string;
+      status: string;
+      weightLbs: number;
+    }>;
+    upcomingConvoys: Array<{
+      id: number;
+      name: string;
+      scheduledDeparture?: string;
+      scheduledArrival?: string;
+      status: string;
+      weightLbs: number;
+    }>;
+    upcomingVoyages: Array<{
+      id: number;
+      name: string;
+      scheduledDeparture?: string;
+      scheduledArrival?: string;
+      status: string;
+      origin: string;
+      destination: string;
+    }>;
   };
   summaries: {
-    thirtyDay: ForecastSummary;
-    sixtyDay: ForecastSummary;
-    ninetyDay: ForecastSummary;
+    air: {
+      expectedFlights: number;
+      totalCargoLbs: number;
+      totalCargoTons: number;
+    };
+    land: {
+      expectedConvoys: number;
+      totalCargoLbs: number;
+    };
+    sea: {
+      expectedVoyages: number;
+    };
+    warehouse: {
+      avgUtilization: number;
+      sitesWithWarnings: number;
+    };
   };
   siteForecasts: SiteForecast[];
 }
@@ -175,7 +193,7 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
   const [forecast, setForecast] = useState<PredictiveForecast | null>(null);
   const [loading, setLoading] = useState(true);
   const [forecastLoading, setForecastLoading] = useState(true);
-  const [selectedForecastPeriod, setSelectedForecastPeriod] = useState<'thirtyDay' | 'sixtyDay' | 'ninetyDay'>('ninetyDay');
+  const [selectedForecastDays, setSelectedForecastDays] = useState<30 | 60 | 90>(30);
 
   useEffect(() => {
     fetchSummary();
@@ -195,9 +213,10 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
     }
   };
 
-  const fetchForecast = async () => {
+  const fetchForecast = async (days: number = 30) => {
+    setForecastLoading(true);
     try {
-      const res = await fetch('/api/operations/predictive-forecast', { credentials: 'include' });
+      const res = await fetch(`/api/operations/predictive-forecast?days=${days}`, { credentials: 'include' });
       if (res.ok) {
         setForecast(await res.json());
       }
@@ -206,6 +225,11 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
     } finally {
       setForecastLoading(false);
     }
+  };
+
+  const handleForecastPeriodChange = (days: 30 | 60 | 90) => {
+    setSelectedForecastDays(days);
+    fetchForecast(days);
   };
 
   const formatWeight = (lbs: number) => {
@@ -296,7 +320,7 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
     },
   ];
 
-  const selectedSummary = forecast?.summaries[selectedForecastPeriod];
+  const summaries = forecast?.summaries;
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
@@ -561,23 +585,23 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                     90-Day Forecast
                   </h3>
                   <div className="flex gap-2">
-                    {(['thirtyDay', 'sixtyDay', 'ninetyDay'] as const).map((period) => (
+                    {([30, 60, 90] as const).map((days) => (
                       <button
-                        key={period}
-                        onClick={() => setSelectedForecastPeriod(period)}
+                        key={days}
+                        onClick={() => handleForecastPeriodChange(days)}
                         className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                          selectedForecastPeriod === period
+                          selectedForecastDays === days
                             ? 'bg-[#2563EB] text-white'
                             : 'bg-[#FAFAFA] text-[#6B7280] hover:bg-[#E5E7EB]'
                         }`}
                       >
-                        {period === 'thirtyDay' ? '30 Days' : period === 'sixtyDay' ? '60 Days' : '90 Days'}
+                        {days} Days
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {selectedSummary && (
+                {summaries && (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                       <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200">
@@ -586,10 +610,10 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                           <span className="text-sm text-blue-700">Air Operations</span>
                         </div>
                         <div className="text-2xl font-bold text-[#111827] mb-1">
-                          {selectedSummary.totalExpectedFlights}
+                          {summaries.air.expectedFlights}
                         </div>
                         <div className="text-xs text-[#6B7280]">
-                          Expected flights • {formatWeight(selectedSummary.totalAirCargoLbs)} cargo
+                          Expected flights • {summaries.air.totalCargoTons} tons cargo
                         </div>
                       </div>
 
@@ -599,10 +623,10 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                           <span className="text-sm text-amber-700">Land Logistics</span>
                         </div>
                         <div className="text-2xl font-bold text-[#111827] mb-1">
-                          {selectedSummary.totalExpectedConvoys}
+                          {summaries.land.expectedConvoys}
                         </div>
                         <div className="text-xs text-[#6B7280]">
-                          Expected convoys • {formatWeight(selectedSummary.totalLandCargoLbs)} cargo
+                          Expected convoys • {formatWeight(summaries.land.totalCargoLbs)} cargo
                         </div>
                       </div>
 
@@ -612,7 +636,7 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                           <span className="text-sm text-teal-700">Sea Freight</span>
                         </div>
                         <div className="text-2xl font-bold text-[#111827] mb-1">
-                          {selectedSummary.totalExpectedVoyages}
+                          {summaries.sea.expectedVoyages}
                         </div>
                         <div className="text-xs text-[#6B7280]">
                           Expected voyages
@@ -628,18 +652,18 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                         </div>
                         <div className="flex items-baseline gap-2">
                           <span className={`text-3xl font-bold ${
-                            selectedSummary.avgWarehouseUtilization >= 85 ? 'text-[#DC2626]' :
-                            selectedSummary.avgWarehouseUtilization >= 60 ? 'text-[#D97706]' :
+                            summaries.warehouse.avgUtilization >= 85 ? 'text-[#DC2626]' :
+                            summaries.warehouse.avgUtilization >= 60 ? 'text-[#D97706]' :
                             'text-[#16A34A]'
                           }`}>
-                            {selectedSummary.avgWarehouseUtilization}%
+                            {summaries.warehouse.avgUtilization}%
                           </span>
                           <span className="text-[#6B7280] text-sm">average</span>
                         </div>
                         <div className="mt-3 h-2 rounded-full bg-[#E5E7EB] overflow-hidden">
                           <div 
-                            className={`h-full transition-all ${getUtilizationBg(selectedSummary.avgWarehouseUtilization)}`}
-                            style={{ width: `${Math.min(100, selectedSummary.avgWarehouseUtilization)}%` }}
+                            className={`h-full transition-all ${getUtilizationBg(summaries.warehouse.avgUtilization)}`}
+                            style={{ width: `${Math.min(100, summaries.warehouse.avgUtilization)}%` }}
                           />
                         </div>
                       </div>
@@ -651,18 +675,18 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                         </div>
                         <div className="flex items-baseline gap-2">
                           <span className={`text-3xl font-bold ${
-                            selectedSummary.daysWithWarnings > 30 ? 'text-[#DC2626]' :
-                            selectedSummary.daysWithWarnings > 10 ? 'text-[#D97706]' :
+                            summaries.warehouse.sitesWithWarnings > 3 ? 'text-[#DC2626]' :
+                            summaries.warehouse.sitesWithWarnings > 0 ? 'text-[#D97706]' :
                             'text-[#16A34A]'
                           }`}>
-                            {selectedSummary.daysWithWarnings}
+                            {summaries.warehouse.sitesWithWarnings}
                           </span>
-                          <span className="text-[#6B7280] text-sm">days with warnings</span>
+                          <span className="text-[#6B7280] text-sm">sites with warnings</span>
                         </div>
                         <p className="text-xs text-[#6B7280] mt-2">
-                          {selectedSummary.daysWithWarnings === 0 
+                          {summaries.warehouse.sitesWithWarnings === 0 
                             ? 'No capacity issues expected in forecast period'
-                            : `${selectedSummary.daysWithWarnings} days may require capacity attention`
+                            : `${summaries.warehouse.sitesWithWarnings} sites may require capacity attention`
                           }
                         </p>
                       </div>
@@ -670,7 +694,7 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
 
                     <div className="mt-4 pt-4 border-t border-[#E5E7EB]">
                       <div className="flex items-center justify-between text-xs text-[#6B7280]">
-                        <span>Based on {forecast.historicalDataPoints.flights} flights, {forecast.historicalDataPoints.convoys} convoys, {forecast.historicalDataPoints.voyages} voyages</span>
+                        <span>Showing {selectedForecastDays}-day forecast for scheduled future transports</span>
                         <span>Generated {new Date(forecast.generatedAt).toLocaleString()}</span>
                       </div>
                     </div>

@@ -53,6 +53,7 @@ import {
   findAvailableLocation 
 } from "./services/capacityService";
 import * as transportService from "./services/transportService";
+import * as transportStatsService from "./services/transportStatsService";
 import type { TransportMode, TransportStatus } from "../../packages/shared/transportTypes";
 
 // Weather API cache with 10-minute TTL
@@ -6892,7 +6893,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/operations/predictive-forecast", authMiddleware, async (req: AuthRequest, res) => {
     try {
       const userId = req.user!.id;
-      const FORECAST_DAYS = 90;
+      const daysParam = parseInt(req.query.days as string) || 30;
+      const FORECAST_DAYS = Math.min(Math.max(daysParam, 1), 90);
+      
+      const now = new Date();
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const futureDate = new Date(now.getTime() + FORECAST_DAYS * msPerDay);
       
       // Get user's warehouse sites for capacity data
       const userSites = await db.query.warehouseSites.findMany({ 
@@ -6900,151 +6906,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const userSiteIds = userSites.map(s => s.id);
       
-      // Fetch all historical data in parallel
+      // Fetch future scheduled transports and capacity data in parallel
       const [
         flightPlansData,
         landConvoysData,
         seaVoyagesData,
         siteCapacities,
-        inventoryItems,
+        futureStats,
       ] = await Promise.all([
-        db.query.flightPlans.findMany({ where: eq(flightPlans.user_id, userId) }),
-        db.query.landConvoys.findMany({ where: eq(landConvoys.user_id, userId) }),
-        db.query.seaVoyages.findMany({ where: eq(seaVoyages.user_id, userId) }),
+        db.query.flightPlans.findMany({ 
+          where: and(
+            eq(flightPlans.user_id, userId),
+            gte(flightPlans.scheduled_departure, now)
+          )
+        }),
+        db.query.landConvoys.findMany({ 
+          where: and(
+            eq(landConvoys.user_id, userId),
+            gte(landConvoys.scheduled_departure, now)
+          )
+        }),
+        db.query.seaVoyages.findMany({ 
+          where: and(
+            eq(seaVoyages.user_id, userId),
+            gte(seaVoyages.scheduled_departure, now)
+          )
+        }),
         getAllSiteCapacities(),
-        userSiteIds.length > 0 
-          ? db.query.warehouseInventoryItems.findMany({ 
-              where: inArray(warehouseInventoryItems.site_id, userSiteIds) 
-            })
-          : Promise.resolve([]),
+        transportStatsService.getFutureStats(userId, FORECAST_DAYS),
       ]);
       
-      const now = new Date();
-      const msPerDay = 24 * 60 * 60 * 1000;
-      
-      // Calculate historical patterns (last 90 days activity)
-      const historicalDays = 90;
-      const historicalStart = new Date(now.getTime() - historicalDays * msPerDay);
-      
-      // Count activities in historical period - use scheduled_departure when available
-      const getActivityDate = (scheduled: Date | null | undefined, created: Date) => scheduled ? new Date(scheduled) : new Date(created);
-      
-      const airActivities = flightPlansData.filter(p => 
-        getActivityDate(p.scheduled_departure, p.created_at) >= historicalStart
-      );
-      const landActivities = landConvoysData.filter(c => 
-        getActivityDate(c.scheduled_departure, c.created_at) >= historicalStart
-      );
-      const seaActivities = seaVoyagesData.filter(v => 
-        getActivityDate(v.scheduled_departure, v.created_at) >= historicalStart
-      );
-      
-      // Count upcoming scheduled activities (future dates)
+      // Filter to only scheduled activities within forecast window
       const upcomingAir = flightPlansData.filter(p => 
-        p.scheduled_departure && new Date(p.scheduled_departure) > now
+        p.scheduled_departure && new Date(p.scheduled_departure) <= futureDate
       );
       const upcomingLand = landConvoysData.filter(c => 
-        c.scheduled_departure && new Date(c.scheduled_departure) > now
+        c.scheduled_departure && new Date(c.scheduled_departure) <= futureDate
       );
       const upcomingSea = seaVoyagesData.filter(v => 
-        v.scheduled_departure && new Date(v.scheduled_departure) > now
+        v.scheduled_departure && new Date(v.scheduled_departure) <= futureDate
       );
       
-      // Calculate daily averages
-      const avgDailyFlights = airActivities.length / historicalDays;
-      const avgDailyConvoys = landActivities.length / historicalDays;
-      const avgDailyVoyages = seaActivities.length / historicalDays;
-      
-      // Calculate average cargo weights per activity
-      const avgFlightWeight = airActivities.length > 0 
-        ? airActivities.reduce((sum, p) => sum + (p.total_weight_lb || 0), 0) / airActivities.length
-        : 10000; // default estimate
-      const avgConvoyWeight = landActivities.length > 0
-        ? landActivities.reduce((sum, c) => sum + (c.total_cargo_weight_lbs || 0), 0) / landActivities.length
-        : 5000;
-      
-      // Build 90-day forecast
-      const dailyForecasts: Array<{
-        date: string;
-        day: number;
-        air: { expectedFlights: number; expectedWeightLbs: number; confidence: number };
-        land: { expectedConvoys: number; expectedWeightLbs: number; confidence: number };
-        sea: { expectedVoyages: number; confidence: number };
-        warehouseUtilization: number;
-        warnings: string[];
-      }> = [];
+      // Calculate totals from actual scheduled data
+      const totalAirCargoLbs = upcomingAir.reduce((sum, p) => sum + (p.total_weight_lb || 0), 0);
+      const totalLandCargoLbs = upcomingLand.reduce((sum, c) => sum + (c.total_cargo_weight_lbs || 0), 0);
       
       // Calculate current average utilization
       const currentUtilization = siteCapacities.length > 0
         ? siteCapacities.reduce((sum, c) => sum + c.utilizationPercent, 0) / siteCapacities.length
         : 0;
       
-      // Estimate utilization growth rate (simple linear model)
-      const utilizationGrowthPerDay = 0.05; // 0.05% per day default growth estimate
-      
-      for (let day = 1; day <= FORECAST_DAYS; day++) {
-        const forecastDate = new Date(now.getTime() + day * msPerDay);
-        const dateStr = forecastDate.toISOString().split('T')[0];
-        
-        // Apply slight randomness for realistic projections (weekday/weekend variance)
-        const dayOfWeek = forecastDate.getDay();
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        const weekdayMultiplier = isWeekend ? 0.6 : 1.1;
-        
-        // Confidence decreases as we look further ahead
-        const baseConfidence = Math.max(0.5, 1 - (day / FORECAST_DAYS) * 0.5);
-        
-        const expectedFlights = avgDailyFlights * weekdayMultiplier;
-        const expectedConvoys = avgDailyConvoys * weekdayMultiplier;
-        const expectedVoyages = avgDailyVoyages;
-        
-        // Project warehouse utilization
-        const projectedUtilization = Math.min(100, currentUtilization + (day * utilizationGrowthPerDay));
-        
-        const warnings: string[] = [];
-        if (projectedUtilization >= 85) {
-          warnings.push('Warehouse capacity critical');
-        } else if (projectedUtilization >= 60) {
-          warnings.push('Warehouse capacity warning');
-        }
-        
-        dailyForecasts.push({
-          date: dateStr,
-          day,
-          air: {
-            expectedFlights: Math.round(expectedFlights * 100) / 100,
-            expectedWeightLbs: Math.round(expectedFlights * avgFlightWeight),
-            confidence: Math.round(baseConfidence * 100) / 100,
-          },
-          land: {
-            expectedConvoys: Math.round(expectedConvoys * 100) / 100,
-            expectedWeightLbs: Math.round(expectedConvoys * avgConvoyWeight),
-            confidence: Math.round(baseConfidence * 100) / 100,
-          },
-          sea: {
-            expectedVoyages: Math.round(expectedVoyages * 100) / 100,
-            confidence: Math.round(baseConfidence * 100) / 100,
-          },
-          warehouseUtilization: Math.round(projectedUtilization * 10) / 10,
-          warnings,
-        });
-      }
-      
-      // Calculate 30/60/90 day summaries
-      const summarize = (days: number) => {
-        const subset = dailyForecasts.slice(0, days);
-        return {
-          totalExpectedFlights: Math.round(subset.reduce((sum, d) => sum + d.air.expectedFlights, 0)),
-          totalExpectedConvoys: Math.round(subset.reduce((sum, d) => sum + d.land.expectedConvoys, 0)),
-          totalExpectedVoyages: Math.round(subset.reduce((sum, d) => sum + d.sea.expectedVoyages, 0)),
-          totalAirCargoLbs: Math.round(subset.reduce((sum, d) => sum + d.air.expectedWeightLbs, 0)),
-          totalLandCargoLbs: Math.round(subset.reduce((sum, d) => sum + d.land.expectedWeightLbs, 0)),
-          avgWarehouseUtilization: Math.round(subset.reduce((sum, d) => sum + d.warehouseUtilization, 0) / days * 10) / 10,
-          daysWithWarnings: subset.filter(d => d.warnings.length > 0).length,
-        };
-      };
+      // Count warnings based on site statuses
+      const sitesWithWarnings = siteCapacities.filter(s => s.status === 'yellow' || s.status === 'red').length;
       
       // Site-specific capacity forecasts
+      const utilizationGrowthPerDay = 0.05;
       const siteForecasts = siteCapacities.map(site => {
         const projectedUtilization90 = Math.min(100, site.utilizationPercent + (90 * utilizationGrowthPerDay));
         const daysUntilWarning = site.utilizationPercent < 60 
@@ -7054,7 +6970,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? Math.round((85 - site.utilizationPercent) / utilizationGrowthPerDay)
           : 0;
         
-        // Determine trend based on recent activity
         const trend = utilizationGrowthPerDay > 0.03 ? 'increasing' 
           : utilizationGrowthPerDay < -0.01 ? 'decreasing' 
           : 'stable';
@@ -7082,11 +6997,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         generatedAt: now.toISOString(),
         forecastPeriodDays: FORECAST_DAYS,
-        historicalDataPoints: {
-          flights: airActivities.length,
-          convoys: landActivities.length,
-          voyages: seaActivities.length,
-        },
         scheduledActivities: {
           upcomingFlights: upcomingAir.map(p => ({
             id: p.id,
@@ -7114,20 +7024,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
             destination: v.destination_port,
           })),
         },
-        dailyAverages: {
-          flights: Math.round(avgDailyFlights * 100) / 100,
-          convoys: Math.round(avgDailyConvoys * 100) / 100,
-          voyages: Math.round(avgDailyVoyages * 100) / 100,
-          flightWeightLbs: Math.round(avgFlightWeight),
-          convoyWeightLbs: Math.round(avgConvoyWeight),
-        },
         summaries: {
-          thirtyDay: summarize(30),
-          sixtyDay: summarize(60),
-          ninetyDay: summarize(90),
+          air: {
+            expectedFlights: upcomingAir.length,
+            totalCargoLbs: totalAirCargoLbs,
+            totalCargoTons: Math.round(totalAirCargoLbs / 2000 * 10) / 10,
+          },
+          land: {
+            expectedConvoys: upcomingLand.length,
+            totalCargoLbs: totalLandCargoLbs,
+          },
+          sea: {
+            expectedVoyages: upcomingSea.length,
+          },
+          warehouse: {
+            avgUtilization: Math.round(currentUtilization * 10) / 10,
+            sitesWithWarnings,
+          },
         },
         siteForecasts,
-        dailyForecasts,
       });
     } catch (error) {
       console.error("[Operations] Error generating predictive forecast:", error);
