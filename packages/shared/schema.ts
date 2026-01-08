@@ -760,6 +760,65 @@ export const insertLandConvoySchema = createInsertSchema(landConvoys).omit({
 export type InsertLandConvoy = z.infer<typeof insertLandConvoySchema>;
 export type LandConvoy = typeof landConvoys.$inferSelect;
 
+// Land Vehicle Types - registry of military ground vehicles
+export const landVehicleTypes = pgTable("land_vehicle_types", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  category: text("category").notNull(), // light_tactical, medium_tactical, heavy_tactical, transport
+  payload_lbs: integer("payload_lbs").notNull(),
+  curb_weight_lbs: integer("curb_weight_lbs"),
+  gross_weight_lbs: integer("gross_weight_lbs"),
+  length_in: text("length_in"),
+  width_in: text("width_in"),
+  height_in: text("height_in"),
+  bed_length_in: text("bed_length_in"),
+  bed_width_in: text("bed_width_in"),
+  max_speed_mph: integer("max_speed_mph"),
+  range_miles: integer("range_miles"),
+  fuel_capacity_gal: text("fuel_capacity_gal"),
+  fuel_consumption_mpg: text("fuel_consumption_mpg"),
+  fuel_type: text("fuel_type"),
+  axle_config: text("axle_config"),
+  can_tow_trailer: boolean("can_tow_trailer").default(false),
+  max_tow_weight_lbs: integer("max_tow_weight_lbs"),
+  pallet_capacity_463l: integer("pallet_capacity_463l").default(0),
+  pallet_capacity_40x48: integer("pallet_capacity_40x48").default(0),
+  passenger_capacity: integer("passenger_capacity").default(0),
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertLandVehicleTypeSchema = createInsertSchema(landVehicleTypes).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertLandVehicleType = z.infer<typeof insertLandVehicleTypeSchema>;
+export type LandVehicleType = typeof landVehicleTypes.$inferSelect;
+
+// Land Convoy Vehicles - vehicles assigned to convoys
+export const landConvoyVehicles = pgTable("land_convoy_vehicles", {
+  id: serial("id").primaryKey(),
+  convoy_id: integer("convoy_id").notNull(), // FK to landConvoys
+  vehicle_type_id: integer("vehicle_type_id").notNull(), // FK to landVehicleTypes
+  position_in_convoy: integer("position_in_convoy").notNull().default(0),
+  callsign: text("callsign"),
+  cargo_weight_lbs: integer("cargo_weight_lbs").default(0),
+  cargo_description: text("cargo_description"),
+  status: text("status").notNull().default("ready"), // ready, loaded, in_transit, arrived
+  metadata: jsonb("metadata").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertLandConvoyVehicleSchema = createInsertSchema(landConvoyVehicles).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertLandConvoyVehicle = z.infer<typeof insertLandConvoyVehicleSchema>;
+export type LandConvoyVehicle = typeof landConvoyVehicles.$inferSelect;
+
 // ============================================================================
 // SEA FREIGHT TABLES
 // ============================================================================

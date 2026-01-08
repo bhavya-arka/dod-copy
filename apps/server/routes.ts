@@ -18,7 +18,18 @@ import {
   warehouseOptimizationRuns,
   warehouseOptimizationPlans,
   warehouseOptimizationActions,
-  warehouseOptimizationEvents
+  warehouseOptimizationEvents,
+  landRoutes,
+  landConvoys,
+  landVehicleTypes,
+  landConvoyVehicles,
+  insertLandRouteSchema,
+  insertLandConvoySchema,
+  insertLandConvoyVehicleSchema,
+  crossModalManifests,
+  manifestItems,
+  insertCrossModalManifestSchema,
+  insertManifestItemSchema
 } from "@shared/schema";
 import { eq, and, or, like, ilike, sql, gt, lt, isNull, isNotNull, asc, desc, count, inArray } from "drizzle-orm";
 import {
@@ -5540,6 +5551,617 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Land] Failed to seed vehicle types:", error);
       res.status(500).json({ error: "Failed to seed land vehicle types" });
+    }
+  });
+
+  // ============================================================================
+  // LAND LOGISTICS API - Routes, Convoys, Vehicles
+  // ============================================================================
+
+  // Get all land vehicle types
+  app.get("/api/land/vehicle-types", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const vehicles = await db.select().from(landVehicleTypes).orderBy(asc(landVehicleTypes.category), asc(landVehicleTypes.code));
+      res.json(vehicles);
+    } catch (error) {
+      console.error("[Land] Error fetching vehicle types:", error);
+      res.status(500).json({ error: "Failed to fetch vehicle types" });
+    }
+  });
+
+  // Get single vehicle type
+  app.get("/api/land/vehicle-types/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const [vehicle] = await db.select().from(landVehicleTypes).where(eq(landVehicleTypes.id, parseInt(id)));
+      if (!vehicle) {
+        return res.status(404).json({ error: "Vehicle type not found" });
+      }
+      res.json(vehicle);
+    } catch (error) {
+      console.error("[Land] Error fetching vehicle type:", error);
+      res.status(500).json({ error: "Failed to fetch vehicle type" });
+    }
+  });
+
+  // --- LAND ROUTES ---
+
+  // Get all routes for user
+  app.get("/api/land/routes", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const routes = await db.select().from(landRoutes)
+        .where(eq(landRoutes.user_id, req.user!.id))
+        .orderBy(desc(landRoutes.created_at));
+      res.json(routes);
+    } catch (error) {
+      console.error("[Land] Error fetching routes:", error);
+      res.status(500).json({ error: "Failed to fetch routes" });
+    }
+  });
+
+  // Create new route
+  app.post("/api/land/routes", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const routeData = {
+        ...req.body,
+        user_id: req.user!.id,
+      };
+      const [route] = await db.insert(landRoutes).values(routeData).returning();
+      res.status(201).json(route);
+    } catch (error) {
+      console.error("[Land] Error creating route:", error);
+      res.status(500).json({ error: "Failed to create route" });
+    }
+  });
+
+  // Update route
+  app.put("/api/land/routes/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const [route] = await db.update(landRoutes)
+        .set({ ...req.body, updated_at: new Date() })
+        .where(and(eq(landRoutes.id, parseInt(id)), eq(landRoutes.user_id, req.user!.id)))
+        .returning();
+      if (!route) {
+        return res.status(404).json({ error: "Route not found" });
+      }
+      res.json(route);
+    } catch (error) {
+      console.error("[Land] Error updating route:", error);
+      res.status(500).json({ error: "Failed to update route" });
+    }
+  });
+
+  // Delete route
+  app.delete("/api/land/routes/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const [route] = await db.delete(landRoutes)
+        .where(and(eq(landRoutes.id, parseInt(id)), eq(landRoutes.user_id, req.user!.id)))
+        .returning();
+      if (!route) {
+        return res.status(404).json({ error: "Route not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Land] Error deleting route:", error);
+      res.status(500).json({ error: "Failed to delete route" });
+    }
+  });
+
+  // --- LAND CONVOYS ---
+
+  // Get all convoys for user
+  app.get("/api/land/convoys", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const convoys = await db.select().from(landConvoys)
+        .where(eq(landConvoys.user_id, req.user!.id))
+        .orderBy(desc(landConvoys.created_at));
+      res.json(convoys);
+    } catch (error) {
+      console.error("[Land] Error fetching convoys:", error);
+      res.status(500).json({ error: "Failed to fetch convoys" });
+    }
+  });
+
+  // Get single convoy with vehicles
+  app.get("/api/land/convoys/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const [convoy] = await db.select().from(landConvoys)
+        .where(and(eq(landConvoys.id, parseInt(id)), eq(landConvoys.user_id, req.user!.id)));
+      if (!convoy) {
+        return res.status(404).json({ error: "Convoy not found" });
+      }
+      
+      // Get vehicles in convoy
+      const vehicles = await db.select().from(landConvoyVehicles)
+        .where(eq(landConvoyVehicles.convoy_id, parseInt(id)))
+        .orderBy(asc(landConvoyVehicles.position_in_convoy));
+      
+      res.json({ ...convoy, vehicles });
+    } catch (error) {
+      console.error("[Land] Error fetching convoy:", error);
+      res.status(500).json({ error: "Failed to fetch convoy" });
+    }
+  });
+
+  // Create new convoy
+  app.post("/api/land/convoys", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const convoyData = {
+        ...req.body,
+        user_id: req.user!.id,
+      };
+      const [convoy] = await db.insert(landConvoys).values(convoyData).returning();
+      res.status(201).json(convoy);
+    } catch (error) {
+      console.error("[Land] Error creating convoy:", error);
+      res.status(500).json({ error: "Failed to create convoy" });
+    }
+  });
+
+  // Update convoy
+  app.put("/api/land/convoys/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const [convoy] = await db.update(landConvoys)
+        .set({ ...req.body, updated_at: new Date() })
+        .where(and(eq(landConvoys.id, parseInt(id)), eq(landConvoys.user_id, req.user!.id)))
+        .returning();
+      if (!convoy) {
+        return res.status(404).json({ error: "Convoy not found" });
+      }
+      res.json(convoy);
+    } catch (error) {
+      console.error("[Land] Error updating convoy:", error);
+      res.status(500).json({ error: "Failed to update convoy" });
+    }
+  });
+
+  // Delete convoy
+  app.delete("/api/land/convoys/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      // Delete convoy vehicles first
+      await db.delete(landConvoyVehicles).where(eq(landConvoyVehicles.convoy_id, parseInt(id)));
+      // Then delete convoy
+      const [convoy] = await db.delete(landConvoys)
+        .where(and(eq(landConvoys.id, parseInt(id)), eq(landConvoys.user_id, req.user!.id)))
+        .returning();
+      if (!convoy) {
+        return res.status(404).json({ error: "Convoy not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Land] Error deleting convoy:", error);
+      res.status(500).json({ error: "Failed to delete convoy" });
+    }
+  });
+
+  // --- CONVOY VEHICLES ---
+
+  // Add vehicle to convoy
+  app.post("/api/land/convoys/:convoyId/vehicles", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { convoyId } = req.params;
+      
+      // Verify convoy belongs to user
+      const [convoy] = await db.select().from(landConvoys)
+        .where(and(eq(landConvoys.id, parseInt(convoyId)), eq(landConvoys.user_id, req.user!.id)));
+      if (!convoy) {
+        return res.status(404).json({ error: "Convoy not found" });
+      }
+      
+      const vehicleData = {
+        ...req.body,
+        convoy_id: parseInt(convoyId),
+      };
+      const [vehicle] = await db.insert(landConvoyVehicles).values(vehicleData).returning();
+      res.status(201).json(vehicle);
+    } catch (error) {
+      console.error("[Land] Error adding convoy vehicle:", error);
+      res.status(500).json({ error: "Failed to add vehicle to convoy" });
+    }
+  });
+
+  // Update convoy vehicle
+  app.put("/api/land/convoys/:convoyId/vehicles/:vehicleId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { convoyId, vehicleId } = req.params;
+      
+      const [vehicle] = await db.update(landConvoyVehicles)
+        .set({ ...req.body, updated_at: new Date() })
+        .where(and(
+          eq(landConvoyVehicles.id, parseInt(vehicleId)),
+          eq(landConvoyVehicles.convoy_id, parseInt(convoyId))
+        ))
+        .returning();
+      if (!vehicle) {
+        return res.status(404).json({ error: "Vehicle not found" });
+      }
+      res.json(vehicle);
+    } catch (error) {
+      console.error("[Land] Error updating convoy vehicle:", error);
+      res.status(500).json({ error: "Failed to update vehicle" });
+    }
+  });
+
+  // Remove vehicle from convoy
+  app.delete("/api/land/convoys/:convoyId/vehicles/:vehicleId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { convoyId, vehicleId } = req.params;
+      
+      const [vehicle] = await db.delete(landConvoyVehicles)
+        .where(and(
+          eq(landConvoyVehicles.id, parseInt(vehicleId)),
+          eq(landConvoyVehicles.convoy_id, parseInt(convoyId))
+        ))
+        .returning();
+      if (!vehicle) {
+        return res.status(404).json({ error: "Vehicle not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Land] Error removing convoy vehicle:", error);
+      res.status(500).json({ error: "Failed to remove vehicle" });
+    }
+  });
+
+  // --- LAND STATISTICS ---
+
+  // Get land logistics statistics
+  app.get("/api/land/statistics", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const routes = await db.select().from(landRoutes)
+        .where(eq(landRoutes.user_id, req.user!.id));
+      
+      const convoys = await db.select().from(landConvoys)
+        .where(eq(landConvoys.user_id, req.user!.id));
+      
+      const activeConvoys = convoys.filter(c => c.status === 'en_route').length;
+      const completedToday = convoys.filter(c => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return c.status === 'completed' && c.arrival_time && new Date(c.arrival_time) >= today;
+      }).length;
+      
+      res.json({
+        totalRoutes: routes.length,
+        activeRoutes: routes.filter(r => r.status === 'active').length,
+        totalConvoys: convoys.length,
+        activeConvoys,
+        inTransit: convoys.filter(c => c.status === 'en_route').length,
+        pendingConvoys: convoys.filter(c => c.status === 'planning').length,
+        completedToday,
+        totalPayloadLbs: convoys.reduce((sum, c) => sum + (c.total_cargo_weight_lbs || 0), 0),
+      });
+    } catch (error) {
+      console.error("[Land] Error fetching statistics:", error);
+      res.status(500).json({ error: "Failed to fetch statistics" });
+    }
+  });
+
+  // ============================================================================
+  // CROSS-MODAL MANIFESTS API
+  // ============================================================================
+
+  // Get all manifests for user
+  app.get("/api/manifests", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const manifests = await db.query.crossModalManifests.findMany({
+        where: eq(crossModalManifests.user_id, req.user!.id),
+        orderBy: (m, { desc }) => [desc(m.created_at)],
+      });
+      res.json(manifests);
+    } catch (error) {
+      console.error("[Manifest] Error fetching manifests:", error);
+      res.status(500).json({ error: "Failed to fetch manifests" });
+    }
+  });
+
+  // Get manifest by ID with items
+  app.get("/api/manifests/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const manifest = await db.query.crossModalManifests.findFirst({
+        where: and(eq(crossModalManifests.id, parseInt(id)), eq(crossModalManifests.user_id, req.user!.id)),
+      });
+      if (!manifest) {
+        return res.status(404).json({ error: "Manifest not found" });
+      }
+      
+      const items = await db.query.manifestItems.findMany({
+        where: eq(manifestItems.manifest_id, parseInt(id)),
+      });
+      
+      res.json({ ...manifest, items });
+    } catch (error) {
+      console.error("[Manifest] Error fetching manifest:", error);
+      res.status(500).json({ error: "Failed to fetch manifest" });
+    }
+  });
+
+  // Create manifest from WMS inventory selection
+  app.post("/api/manifests", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { manifest, items: selectedItems } = req.body;
+      
+      // Generate manifest number if not provided
+      const manifestNumber = manifest.manifest_number || `MAN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+      
+      // Calculate totals from selected items
+      let totalWeightLbs = 0;
+      let totalCubeFt = 0;
+      
+      if (selectedItems && selectedItems.length > 0) {
+        for (const item of selectedItems) {
+          totalWeightLbs += (item.weight_lbs || 0) * (item.quantity || 1);
+          totalCubeFt += (item.cube_ft || 0) * (item.quantity || 1);
+        }
+      }
+      
+      // Create manifest
+      const [newManifest] = await db.insert(crossModalManifests).values({
+        ...manifest,
+        manifest_number: manifestNumber,
+        user_id: req.user!.id,
+        total_weight_lbs: totalWeightLbs,
+        total_cube_ft: String(totalCubeFt),
+        total_items: selectedItems?.length || 0,
+      }).returning();
+      
+      // Create manifest items if provided
+      if (selectedItems && selectedItems.length > 0) {
+        for (const item of selectedItems) {
+          await db.insert(manifestItems).values({
+            manifest_id: newManifest.id,
+            inventory_item_id: item.inventory_item_id || null,
+            nsn: item.nsn,
+            part_number: item.part_number,
+            nomenclature: item.nomenclature || 'Unknown Item',
+            quantity: item.quantity || 1,
+            unit_of_issue: item.unit_of_issue || 'EA',
+            weight_lbs: item.weight_lbs,
+            length_in: item.length_in,
+            width_in: item.width_in,
+            height_in: item.height_in,
+            cube_ft: item.cube_ft,
+            hazmat_class: item.hazmat_class,
+            is_hazmat: item.is_hazmat || false,
+            is_sensitive: item.is_sensitive || false,
+          });
+        }
+      }
+      
+      res.status(201).json(newManifest);
+    } catch (error) {
+      console.error("[Manifest] Error creating manifest:", error);
+      res.status(500).json({ error: "Failed to create manifest" });
+    }
+  });
+
+  // Assign transport mode to manifest
+  app.put("/api/manifests/:id/assign-transport", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const { transport_mode, flight_plan_id, convoy_id, voyage_id, estimated_cost_usd, estimated_duration_hours, estimated_distance_miles } = req.body;
+      
+      const updateData: any = {
+        transport_mode,
+        status: 'assigned',
+        updated_at: new Date(),
+      };
+      
+      if (transport_mode === 'air' && flight_plan_id) {
+        updateData.flight_plan_id = flight_plan_id;
+      } else if (transport_mode === 'land' && convoy_id) {
+        updateData.convoy_id = convoy_id;
+      } else if (transport_mode === 'sea' && voyage_id) {
+        updateData.voyage_id = voyage_id;
+      }
+      
+      if (estimated_cost_usd) updateData.estimated_cost_usd = String(estimated_cost_usd);
+      if (estimated_duration_hours) updateData.estimated_duration_hours = String(estimated_duration_hours);
+      if (estimated_distance_miles) updateData.estimated_distance_miles = String(estimated_distance_miles);
+      
+      const [manifest] = await db.update(crossModalManifests)
+        .set(updateData)
+        .where(and(eq(crossModalManifests.id, parseInt(id)), eq(crossModalManifests.user_id, req.user!.id)))
+        .returning();
+      
+      if (!manifest) {
+        return res.status(404).json({ error: "Manifest not found" });
+      }
+      res.json(manifest);
+    } catch (error) {
+      console.error("[Manifest] Error assigning transport:", error);
+      res.status(500).json({ error: "Failed to assign transport" });
+    }
+  });
+
+  // Update manifest status
+  app.put("/api/manifests/:id/status", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const { status, actual_departure, actual_arrival } = req.body;
+      
+      const updateData: any = { status, updated_at: new Date() };
+      if (actual_departure) updateData.actual_departure = new Date(actual_departure);
+      if (actual_arrival) updateData.actual_arrival = new Date(actual_arrival);
+      
+      const [manifest] = await db.update(crossModalManifests)
+        .set(updateData)
+        .where(and(eq(crossModalManifests.id, parseInt(id)), eq(crossModalManifests.user_id, req.user!.id)))
+        .returning();
+      
+      if (!manifest) {
+        return res.status(404).json({ error: "Manifest not found" });
+      }
+      res.json(manifest);
+    } catch (error) {
+      console.error("[Manifest] Error updating status:", error);
+      res.status(500).json({ error: "Failed to update status" });
+    }
+  });
+
+  // Delete manifest
+  app.delete("/api/manifests/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Delete items first
+      await db.delete(manifestItems).where(eq(manifestItems.manifest_id, parseInt(id)));
+      
+      const [manifest] = await db.delete(crossModalManifests)
+        .where(and(eq(crossModalManifests.id, parseInt(id)), eq(crossModalManifests.user_id, req.user!.id)))
+        .returning();
+      
+      if (!manifest) {
+        return res.status(404).json({ error: "Manifest not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Manifest] Error deleting manifest:", error);
+      res.status(500).json({ error: "Failed to delete manifest" });
+    }
+  });
+
+  // ============================================================================
+  // INVENTORY AGING ALERTS API
+  // ============================================================================
+
+  // Get aging items (>7 years = 2555 days)
+  app.get("/api/warehouse/aging-items", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { minDays = 2555, siteId } = req.query; // Default to 7 years
+      
+      let items = await db.query.warehouseInventoryItems.findMany({
+        where: eq(warehouseInventoryItems.user_id, req.user!.id),
+      });
+      
+      // Calculate aging and filter
+      const now = new Date();
+      const agingItems = items
+        .map(item => {
+          const receivedDate = item.last_received_date || item.created_at;
+          const agingDays = Math.floor((now.getTime() - new Date(receivedDate).getTime()) / (1000 * 60 * 60 * 24));
+          return { ...item, aging_days: agingDays };
+        })
+        .filter(item => item.aging_days >= parseInt(String(minDays)));
+      
+      // Sort by aging (oldest first)
+      agingItems.sort((a, b) => b.aging_days - a.aging_days);
+      
+      res.json({
+        total: agingItems.length,
+        threshold_days: parseInt(String(minDays)),
+        items: agingItems.map(item => ({
+          id: item.id,
+          nsn: item.nsn,
+          nomenclature: item.nomenclature,
+          quantity: item.quantity,
+          location_id: item.location_id,
+          aging_days: item.aging_days,
+          aging_years: Math.round(item.aging_days / 365 * 10) / 10,
+          last_received_date: item.last_received_date,
+          condition: item.condition,
+          unit_price: item.unit_price,
+        })),
+      });
+    } catch (error) {
+      console.error("[Aging] Error fetching aging items:", error);
+      res.status(500).json({ error: "Failed to fetch aging items" });
+    }
+  });
+
+  // Get aging summary by threshold brackets
+  app.get("/api/warehouse/aging-summary", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const items = await db.query.warehouseInventoryItems.findMany({
+        where: eq(warehouseInventoryItems.user_id, req.user!.id),
+      });
+      
+      const now = new Date();
+      
+      // Define aging brackets
+      const brackets = [
+        { label: '>10 years', minDays: 3650, count: 0, value: 0 },
+        { label: '7-10 years', minDays: 2555, maxDays: 3650, count: 0, value: 0 },
+        { label: '5-7 years', minDays: 1825, maxDays: 2555, count: 0, value: 0 },
+        { label: '3-5 years', minDays: 1095, maxDays: 1825, count: 0, value: 0 },
+        { label: '1-3 years', minDays: 365, maxDays: 1095, count: 0, value: 0 },
+        { label: '<1 year', minDays: 0, maxDays: 365, count: 0, value: 0 },
+      ];
+      
+      for (const item of items) {
+        const receivedDate = item.last_received_date || item.created_at;
+        const agingDays = Math.floor((now.getTime() - new Date(receivedDate).getTime()) / (1000 * 60 * 60 * 24));
+        const itemValue = (parseFloat(String(item.unit_price)) || 0) * (item.quantity || 1);
+        
+        for (const bracket of brackets) {
+          if (agingDays >= bracket.minDays && (!bracket.maxDays || agingDays < bracket.maxDays)) {
+            bracket.count++;
+            bracket.value += itemValue;
+            break;
+          }
+        }
+      }
+      
+      const criticalCount = brackets[0].count + brackets[1].count; // >7 years
+      
+      res.json({
+        total_items: items.length,
+        critical_count: criticalCount,
+        critical_threshold_days: 2555,
+        brackets,
+      });
+    } catch (error) {
+      console.error("[Aging] Error fetching aging summary:", error);
+      res.status(500).json({ error: "Failed to fetch aging summary" });
+    }
+  });
+
+  // Export aging report (CSV format)
+  app.get("/api/warehouse/aging-export", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { minDays = 2555 } = req.query;
+      
+      const items = await db.query.warehouseInventoryItems.findMany({
+        where: eq(warehouseInventoryItems.user_id, req.user!.id),
+      });
+      
+      const now = new Date();
+      const agingItems = items
+        .map(item => {
+          const receivedDate = item.last_received_date || item.created_at;
+          const agingDays = Math.floor((now.getTime() - new Date(receivedDate).getTime()) / (1000 * 60 * 60 * 24));
+          return { ...item, aging_days: agingDays };
+        })
+        .filter(item => item.aging_days >= parseInt(String(minDays)))
+        .sort((a, b) => b.aging_days - a.aging_days);
+      
+      // Generate CSV
+      const headers = ['NSN', 'Nomenclature', 'Quantity', 'Aging Days', 'Aging Years', 'Last Received', 'Condition', 'Unit Price'];
+      const rows = agingItems.map(item => [
+        item.nsn || '',
+        item.nomenclature || '',
+        item.quantity || 0,
+        item.aging_days,
+        Math.round(item.aging_days / 365 * 10) / 10,
+        item.last_received_date ? new Date(item.last_received_date).toISOString().split('T')[0] : '',
+        item.condition || '',
+        item.unit_price || 0,
+      ]);
+      
+      const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=aging_report_${new Date().toISOString().split('T')[0]}.csv`);
+      res.send(csv);
+    } catch (error) {
+      console.error("[Aging] Error exporting aging report:", error);
+      res.status(500).json({ error: "Failed to export aging report" });
     }
   });
 
