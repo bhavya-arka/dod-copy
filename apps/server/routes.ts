@@ -6484,7 +6484,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get capacity for all sites
   app.get("/api/warehouse/capacity", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const capacities = await getAllSiteCapacities();
+      const userId = req.user?.id;
+      const capacities = await getAllSiteCapacities(userId);
       res.json(capacities);
     } catch (error) {
       console.error("[Capacity] Error fetching capacities:", error);

@@ -5,7 +5,7 @@
 
 import { db } from "../db";
 import { warehouseSites, warehouseLocations, warehouseInventoryItems } from "../../../shared/schema";
-import { eq, sql, and, sum } from "drizzle-orm";
+import { eq, sql, and, sum, inArray } from "drizzle-orm";
 
 // DLA Standard pallet block dimensions
 export const PALLET_BLOCK_LENGTH_FT = 4;
@@ -120,13 +120,20 @@ export async function getSiteCapacity(siteId: number): Promise<CapacityMetrics |
  * Get capacity metrics for all sites (optimized batch query)
  */
 export async function getAllSiteCapacities(userId?: number): Promise<CapacityMetrics[]> {
-  // Fetch sites and all locations in parallel to avoid N+1 queries
-  const [sites, allLocations] = await Promise.all([
-    userId 
-      ? db.query.warehouseSites.findMany({ where: eq(warehouseSites.user_id, userId) })
-      : db.query.warehouseSites.findMany(),
-    db.query.warehouseLocations.findMany(),
-  ]);
+  // First fetch sites to get the IDs for location filtering
+  const sites = userId 
+    ? await db.query.warehouseSites.findMany({ where: eq(warehouseSites.user_id, userId) })
+    : await db.query.warehouseSites.findMany();
+  
+  if (sites.length === 0) {
+    return [];
+  }
+  
+  // Fetch only locations for the user's sites (avoids loading unrelated data)
+  const siteIds = sites.map(s => s.id);
+  const allLocations = await db.query.warehouseLocations.findMany({
+    where: inArray(warehouseLocations.site_id, siteIds)
+  });
   
   // Group locations by site_id for efficient lookup
   const locationsBySite = new Map<number, typeof allLocations>();
