@@ -97,14 +97,14 @@ export const loginSchema = z.object({
 
 export type LoginInput = z.infer<typeof loginSchema>;
 
-// Signup schema with access code
+// Signup schema with access code (access_code is optional for superadmin)
 export const signupWithCodeSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   username: z.string().min(2),
   first_name: z.string().optional(),
   last_name: z.string().optional(),
-  access_code: z.string().min(6),
+  access_code: z.string().optional(), // Optional - superadmin doesn't need it
 });
 
 export type SignupWithCodeInput = z.infer<typeof signupWithCodeSchema>;

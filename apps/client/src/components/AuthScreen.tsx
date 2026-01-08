@@ -38,7 +38,8 @@ export default function AuthScreen({ onLogin, onRegister }: AuthScreenProps) {
           setIsLoading(false);
           return;
         }
-        if (!accessCode && !email.toLowerCase().includes('bhavya091213')) {
+        const isSuperadmin = email.toLowerCase() === 'bhavya091213@gmail.com';
+        if (!accessCode && !isSuperadmin) {
           setError('Department Access Code is required');
           setIsLoading(false);
           return;
