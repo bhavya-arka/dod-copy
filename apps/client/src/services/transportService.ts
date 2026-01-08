@@ -72,34 +72,38 @@ async function transportFetch<T>(url: string, options: RequestInit = {}): Promis
  * List all transport plans for a specific mode
  */
 export async function getTransportPlans(mode: TransportMode): Promise<TransportPlan[]> {
-  return transportFetch<TransportPlan[]>(`${API_BASE}/${mode}/plans`);
+  const response = await transportFetch<{ plans: TransportPlan[] }>(`${API_BASE}/${mode}/plans`);
+  return response.plans;
 }
 
 /**
  * Get a single transport plan by ID and mode
  */
 export async function getTransportPlan(mode: TransportMode, id: number): Promise<TransportPlan> {
-  return transportFetch<TransportPlan>(`${API_BASE}/${mode}/plans/${id}`);
+  const response = await transportFetch<{ plan: TransportPlan }>(`${API_BASE}/${mode}/plans/${id}`);
+  return response.plan;
 }
 
 /**
  * Create a new transport plan
  */
 export async function createTransportPlan(mode: TransportMode, data: Partial<TransportPlan>): Promise<TransportPlan> {
-  return transportFetch<TransportPlan>(`${API_BASE}/${mode}/plans`, {
+  const response = await transportFetch<{ plan: TransportPlan }>(`${API_BASE}/${mode}/plans`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
+  return response.plan;
 }
 
 /**
  * Update an existing transport plan
  */
 export async function updateTransportPlan(mode: TransportMode, id: number, data: Partial<TransportPlan>): Promise<TransportPlan> {
-  return transportFetch<TransportPlan>(`${API_BASE}/${mode}/plans/${id}`, {
+  const response = await transportFetch<{ plan: TransportPlan }>(`${API_BASE}/${mode}/plans/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
+  return response.plan;
 }
 
 /**
@@ -120,12 +124,14 @@ export async function transitionTransportStatus(
  * Get statistics for a specific transport mode
  */
 export async function getModeStatistics(mode: TransportMode): Promise<TransportStatistics> {
-  return transportFetch<TransportStatistics>(`${API_BASE}/${mode}/statistics`);
+  const response = await transportFetch<{ mode: string; statistics: TransportStatistics }>(`${API_BASE}/${mode}/statistics`);
+  return response.statistics;
 }
 
 /**
  * Get cross-modal statistics for all transport modes
  */
 export async function getCrossModalStatistics(): Promise<CrossModalStatistics> {
-  return transportFetch<CrossModalStatistics>(`${API_BASE}/statistics`);
+  const response = await transportFetch<{ statistics: CrossModalStatistics }>(`${API_BASE}/statistics`);
+  return response.statistics;
 }
