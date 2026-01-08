@@ -39,7 +39,7 @@ import {
   seaVoyages,
   militaryInstallations
 } from "@shared/schema";
-import { eq, and, or, like, ilike, sql, gt, lt, isNull, isNotNull, asc, desc, count, inArray } from "drizzle-orm";
+import { eq, and, or, like, ilike, sql, gt, lt, gte, lte, isNull, isNotNull, asc, desc, count, inArray } from "drizzle-orm";
 import {
   dagNodeService,
   dagEdgeService,
@@ -1969,7 +1969,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const manifest = await storage.createManifest({
         user_id: req.user!.id,
         name,
-        items,
+        manifest_data: items,
         flight_plan_id: flight_plan_id || null
       });
       res.status(201).json(manifest);
@@ -4125,7 +4125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let consolidatedItems = 0;
         let consolidatedValue = 0;
         
-        for (const [shipClass, shipItems] of shipGroups.entries()) {
+        for (const [shipClass, shipItems] of Array.from(shipGroups.entries())) {
           // Skip if fewer items than threshold
           if (shipItems.length < minItemsToConsolidate) continue;
           
@@ -4138,7 +4138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Find zone with most items
           let targetZone = '';
           let maxCount = 0;
-          for (const [zone, count] of zoneCounts.entries()) {
+          for (const [zone, count] of Array.from(zoneCounts.entries())) {
             if (count > maxCount) {
               maxCount = count;
               targetZone = zone;
@@ -4206,13 +4206,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Determine the primary zone for each program (only for programs with enough items)
         const programPrimaryZone: Map<string, string> = new Map();
-        for (const [program, zones] of programZones.entries()) {
+        for (const [program, zones] of Array.from(programZones.entries())) {
           const itemCount = programItemCounts.get(program) || 0;
           if (itemCount < minProgramItems) continue; // Skip small programs
           
           let primaryZone = '';
           let maxCount = 0;
-          for (const [zone, count] of zones.entries()) {
+          for (const [zone, count] of Array.from(zones.entries())) {
             if (count > maxCount) {
               maxCount = count;
               primaryZone = zone;
@@ -4341,7 +4341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let totalStaged = 0;
         let totalValue = 0;
         
-        for (const [disposition, dispItems] of dispositionGroups.entries()) {
+        for (const [disposition, dispItems] of Array.from(dispositionGroups.entries())) {
           if (dispItems.length < 2) continue;
           
           const stagingArea = stagingAreas[disposition] || `${disposition}-STAGING`;
@@ -4533,7 +4533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const sourceZonesSet = new Set<string>();
         const targetZonesSet = new Set<string>();
 
-        for (const [shipClass, shipItems] of shipGroups.entries()) {
+        for (const [shipClass, shipItems] of Array.from(shipGroups.entries())) {
           if (shipItems.length < minItemsToConsolidate) continue;
           
           const zoneCounts: Map<string, number> = new Map();
@@ -4543,7 +4543,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           let targetZone = '';
           let maxCount = 0;
-          for (const [zone, count] of zoneCounts.entries()) {
+          for (const [zone, count] of Array.from(zoneCounts.entries())) {
             if (count > maxCount) {
               maxCount = count;
               targetZone = zone;
@@ -4601,7 +4601,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let phaseSlotsFreed = 0;
         const programsStandardized = new Set<string>();
 
-        for (const [programCode, programItems] of programGroups.entries()) {
+        for (const [programCode, programItems] of Array.from(programGroups.entries())) {
           if (programItems.length < minProgramItems) continue;
           
           const zones = new Set(programItems.map(i => i.location_zone));
@@ -4749,7 +4749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let phaseSlotsFreed = 0;
         const palletLocationsSet = new Set<string>();
 
-        for (const [disposition, dispositionItems] of dispositionGroups.entries()) {
+        for (const [disposition, dispositionItems] of Array.from(dispositionGroups.entries())) {
           if (dispositionItems.length < 3) continue;
           
           const sorted = prioritizeByValue 
@@ -4973,18 +4973,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         requisition_no: item.requisition_no,
         description: item.description,
         quantity: item.quantity,
-        weight_lb: item.weight_lb,
+        weight_lbs: item.weight_lbs,
         unit_price: item.unit_price,
-        length_in: item.length_in,
-        width_in: item.width_in,
-        height_in: item.height_in,
       }));
 
       // Calculate totals
       const totals = {
         item_count: transferItems.length,
         total_weight_lb: transferItems.reduce((sum, item) => {
-          const weight = parseFloat(String(item.weight_lb || 0)) || 0;
+          const weight = parseFloat(String(item.weight_lbs || 0)) || 0;
           return sum + (weight * (item.quantity || 1));
         }, 0),
         total_value: transferItems.reduce((sum, item) => {
@@ -5033,12 +5030,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             requisition_no: item.requisition_no,
             description: item.description,
             quantity: item.quantity,
-            weight_lb: parseFloat(String(item.weight_lb || 0)) || 0,
-            dimensions: {
-              length_in: parseFloat(String(item.length_in || 0)) || 0,
-              width_in: parseFloat(String(item.width_in || 0)) || 0,
-              height_in: parseFloat(String(item.height_in || 0)) || 0,
-            },
+            weight_lbs: parseFloat(String(item.weight_lbs || 0)) || 0,
           })),
           totals,
           created_at: new Date().toISOString(),
@@ -5620,13 +5612,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { new_state, notes } = req.body;
       
-      // Get current item
-      const item = await db.query.warehouseInventoryItems.findFirst({
-        where: and(
-          eq(warehouseInventoryItems.id, parseInt(id)),
-          eq(warehouseInventoryItems.user_id, req.user!.id)
-        ),
+      // Get user's site IDs first
+      const userSites = await db.query.warehouseSites.findMany({
+        where: eq(warehouseSites.user_id, req.user!.id),
       });
+      const userSiteIds = userSites.map(s => s.id);
+      
+      // Get current item
+      const item = userSiteIds.length > 0 
+        ? await db.query.warehouseInventoryItems.findFirst({
+            where: and(
+              eq(warehouseInventoryItems.id, parseInt(id)),
+              inArray(warehouseInventoryItems.site_id, userSiteIds)
+            ),
+          })
+        : null;
       
       if (!item) {
         return res.status(404).json({ error: "Item not found" });
@@ -5677,13 +5677,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         failed: [] as { id: number; reason: string }[],
       };
       
+      // Get user's site IDs first
+      const userSites = await db.query.warehouseSites.findMany({
+        where: eq(warehouseSites.user_id, req.user!.id),
+      });
+      const userSiteIds = userSites.map(s => s.id);
+      
       for (const itemId of item_ids) {
-        const item = await db.query.warehouseInventoryItems.findFirst({
-          where: and(
-            eq(warehouseInventoryItems.id, itemId),
-            eq(warehouseInventoryItems.user_id, req.user!.id)
-          ),
-        });
+        const item = userSiteIds.length > 0 
+          ? await db.query.warehouseInventoryItems.findFirst({
+              where: and(
+                eq(warehouseInventoryItems.id, itemId),
+                inArray(warehouseInventoryItems.site_id, userSiteIds)
+              ),
+            })
+          : null;
         
         if (!item) {
           results.failed.push({ id: itemId, reason: 'Item not found' });
@@ -5723,9 +5731,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get workflow statistics
   app.get("/api/warehouse/workflow/statistics", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const items = await db.query.warehouseInventoryItems.findMany({
-        where: eq(warehouseInventoryItems.user_id, req.user!.id),
+      // Get user's site IDs first
+      const userSites = await db.query.warehouseSites.findMany({
+        where: eq(warehouseSites.user_id, req.user!.id),
       });
+      const userSiteIds = userSites.map(s => s.id);
+      
+      const items = userSiteIds.length > 0 
+        ? await db.query.warehouseInventoryItems.findMany({
+            where: inArray(warehouseInventoryItems.site_id, userSiteIds),
+          })
+        : [];
       
       const stateCounts: Record<string, number> = {
         received: 0,
@@ -6832,9 +6848,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { minDays = 2555, siteId } = req.query; // Default to 7 years
       
-      let items = await db.query.warehouseInventoryItems.findMany({
-        where: eq(warehouseInventoryItems.user_id, req.user!.id),
+      // Get user's site IDs first
+      const userSites = await db.query.warehouseSites.findMany({
+        where: eq(warehouseSites.user_id, req.user!.id),
       });
+      const userSiteIds = userSites.map(s => s.id);
+      
+      let items = userSiteIds.length > 0 
+        ? await db.query.warehouseInventoryItems.findMany({
+            where: inArray(warehouseInventoryItems.site_id, userSiteIds),
+          })
+        : [];
       
       // Calculate aging and filter
       const now = new Date();
@@ -6855,7 +6879,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         items: agingItems.map(item => ({
           id: item.id,
           nsn: item.nsn,
-          nomenclature: item.nomenclature,
+          description: item.description,
           quantity: item.quantity,
           location_id: item.location_id,
           aging_days: item.aging_days,
@@ -6874,9 +6898,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get aging summary by threshold brackets
   app.get("/api/warehouse/aging-summary", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const items = await db.query.warehouseInventoryItems.findMany({
-        where: eq(warehouseInventoryItems.user_id, req.user!.id),
+      // Get user's site IDs first
+      const userSites = await db.query.warehouseSites.findMany({
+        where: eq(warehouseSites.user_id, req.user!.id),
       });
+      const userSiteIds = userSites.map(s => s.id);
+      
+      const items = userSiteIds.length > 0 
+        ? await db.query.warehouseInventoryItems.findMany({
+            where: inArray(warehouseInventoryItems.site_id, userSiteIds),
+          })
+        : [];
       
       const now = new Date();
       
@@ -6923,9 +6955,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { minDays = 2555 } = req.query;
       
-      const items = await db.query.warehouseInventoryItems.findMany({
-        where: eq(warehouseInventoryItems.user_id, req.user!.id),
+      // Get user's site IDs first
+      const userSites = await db.query.warehouseSites.findMany({
+        where: eq(warehouseSites.user_id, req.user!.id),
       });
+      const userSiteIds = userSites.map(s => s.id);
+      
+      const items = userSiteIds.length > 0 
+        ? await db.query.warehouseInventoryItems.findMany({
+            where: inArray(warehouseInventoryItems.site_id, userSiteIds),
+          })
+        : [];
       
       const now = new Date();
       const agingItems = items
@@ -6941,7 +6981,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const headers = ['NSN', 'Nomenclature', 'Quantity', 'Aging Days', 'Aging Years', 'Last Received', 'Condition', 'Unit Price'];
       const rows = agingItems.map(item => [
         item.nsn || '',
-        item.nomenclature || '',
+        item.description || '',
         item.quantity || 0,
         item.aging_days,
         Math.round(item.aging_days / 365 * 10) / 10,
@@ -7199,8 +7239,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }),
           db.query.warehouseTransfers.findMany({
             where: or(
-              inArray(warehouseTransfers.from_site_id, userSiteIds),
-              inArray(warehouseTransfers.to_site_id, userSiteIds)
+              inArray(warehouseTransfers.source_site_id, userSiteIds),
+              inArray(warehouseTransfers.destination_site_id, userSiteIds)
             )
           }),
         ]);
@@ -7237,10 +7277,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .reduce((sum, p) => sum + (p.total_weight_lb || 0), 0),
         land_lbs: landConvoysData
           .filter(c => c.status === 'in_transit')
-          .reduce((sum, c) => sum + (c.total_weight_lbs || 0), 0),
+          .reduce((sum, c) => sum + (c.total_cargo_weight_lbs || 0), 0),
         sea_lbs: seaVoyagesData
           .filter(v => v.status === 'in_transit')
-          .reduce((sum, v) => sum + (v.container_count || 0) * 45000, 0), // ~45k lbs per TEU avg
+          .reduce((sum, v) => sum + ((v.metadata as any)?.container_count || 0) * 45000, 0), // ~45k lbs per TEU avg
         total_lbs: 0,
       };
       cargoInTransport.total_lbs = cargoInTransport.air_lbs + cargoInTransport.land_lbs + cargoInTransport.sea_lbs;
@@ -7278,14 +7318,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pending_dispatch: landConvoysData.filter(c => c.status === 'planned' || c.status === 'loading').length,
         completed_missions: landCompleted.length,
         avg_convoy_weight_lbs: landCompleted.length > 0
-          ? Math.round(landCompleted.reduce((sum, c) => sum + (c.total_weight_lbs || 0), 0) / landCompleted.length)
+          ? Math.round(landCompleted.reduce((sum, c) => sum + (c.total_cargo_weight_lbs || 0), 0) / landCompleted.length)
           : 0,
         this_month: landThisMonth.length,
         last_month: landLastMonth.length,
         month_change: landLastMonth.length > 0 
           ? Math.round(((landThisMonth.length - landLastMonth.length) / landLastMonth.length) * 100)
           : landThisMonth.length > 0 ? 100 : 0,
-        total_weight_lbs: landConvoysData.reduce((sum, c) => sum + (c.total_weight_lbs || 0), 0),
+        total_weight_lbs: landConvoysData.reduce((sum, c) => sum + (c.total_cargo_weight_lbs || 0), 0),
       };
       
       // Sea Operations enhanced summary - use scheduled_departure for classification when available
@@ -7293,11 +7333,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const seaLastMonth = seaVoyagesData.filter(v => isLastMonth(getEffectiveDate(v.scheduled_departure, v.created_at)));
       const seaInTransit = seaVoyagesData.filter(v => v.status === 'in_transit');
       const seaCompleted = seaVoyagesData.filter(v => v.status === 'completed');
-      const totalContainers = seaVoyagesData.reduce((sum, v) => sum + (v.container_count || 0), 0);
+      const totalContainers = seaVoyagesData.reduce((sum, v) => sum + ((v.metadata as any)?.container_count || 0), 0);
       const seaSummary = {
         active_voyages: seaInTransit.length,
         total_voyages: seaVoyagesData.length,
-        containers_at_sea: seaInTransit.reduce((sum, v) => sum + (v.container_count || 0), 0),
+        containers_at_sea: seaInTransit.reduce((sum, v) => sum + ((v.metadata as any)?.container_count || 0), 0),
         total_teu: totalContainers,
         planned_departures: seaVoyagesData.filter(v => v.status === 'planned').length,
         completed_voyages: seaCompleted.length,
@@ -7314,7 +7354,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const capacities = await getAllSiteCapacities(userId);
       timings['phase3_site_capacities'] = Date.now() - t3;
       
-      const totalWeight = inventoryItems.reduce((sum, i) => sum + ((i.weight_lbs || 0) * (i.quantity || 1)), 0);
+      const totalWeight = inventoryItems.reduce((sum, i) => sum + (Number(i.weight_lbs || 0) * (i.quantity || 1)), 0);
       const itemsThisMonth = inventoryItems.filter(i => isThisMonth(i.created_at));
       const itemsLastMonth = inventoryItems.filter(i => isLastMonth(i.created_at));
       const pendingTransfers = transfersData.filter(t => t.status === 'pending');
@@ -7716,8 +7756,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             mode: 'land',
             code: v.code,
             name: v.name,
-            capacity_lbs: v.max_cargo_weight_lbs,
-            dimensions: { length_ft: v.cargo_length_ft, width_ft: v.cargo_width_ft, height_ft: v.cargo_height_ft },
+            capacity_lbs: v.payload_lbs,
+            dimensions: { length_ft: Number(v.length_in || 0) / 12, width_ft: Number(v.width_in || 0) / 12, height_ft: Number(v.height_in || 0) / 12 },
           }));
           break;
         case 'sea':
