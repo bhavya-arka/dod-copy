@@ -1193,3 +1193,31 @@ export const insertWarehouseOptimizationEventSchema = createInsertSchema(warehou
 });
 export type InsertWarehouseOptimizationEvent = z.infer<typeof insertWarehouseOptimizationEventSchema>;
 export type WarehouseOptimizationEvent = typeof warehouseOptimizationEvents.$inferSelect;
+
+// Transport Operational Stats - Pre-calculated statistics updated on transport plan mutations
+// This table stores aggregated stats to avoid expensive recalculations on each page load
+export const transportOperationalStats = pgTable("transport_operational_stats", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  transport_mode: text("transport_mode").notNull(), // 'air', 'land', 'sea'
+  schedule_date: date("schedule_date").notNull(), // The date of scheduled departure (date bucket)
+  
+  // Counts
+  plan_count: integer("plan_count").notNull().default(0),
+  
+  // Cargo weights
+  total_cargo_lbs: integer("total_cargo_lbs").notNull().default(0),
+  
+  // Item counts for air operations
+  total_items: integer("total_items").notNull().default(0),
+  
+  // Timestamps
+  last_updated_at: timestamp("last_updated_at").defaultNow().notNull(),
+});
+
+export const insertTransportOperationalStatsSchema = createInsertSchema(transportOperationalStats).omit({
+  id: true,
+  last_updated_at: true,
+});
+export type InsertTransportOperationalStats = z.infer<typeof insertTransportOperationalStatsSchema>;
+export type TransportOperationalStats = typeof transportOperationalStats.$inferSelect;
