@@ -51,6 +51,8 @@ import {
   canAcceptItems, 
   findAvailableLocation 
 } from "./services/capacityService";
+import * as transportService from "./services/transportService";
+import type { TransportMode, TransportStatus } from "../../packages/shared/transportTypes";
 
 // Weather API cache with 10-minute TTL
 interface WeatherCacheEntry {
@@ -6857,6 +6859,194 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Operations] Error generating predictive forecast:", error);
       res.status(500).json({ error: "Failed to generate predictive forecast" });
+    }
+  });
+
+  // ============================================================================
+  // UNIFIED TRANSPORT API (Mode-Agnostic)
+  // ============================================================================
+
+  const VALID_TRANSPORT_MODES: TransportMode[] = ['air', 'land', 'sea'];
+
+  function validateTransportMode(mode: string): mode is TransportMode {
+    return VALID_TRANSPORT_MODES.includes(mode as TransportMode);
+  }
+
+  // GET /api/transport/:mode/plans - Get all plans for a mode
+  app.get("/api/transport/:mode/plans", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { mode } = req.params;
+      if (!validateTransportMode(mode)) {
+        return res.status(400).json({ error: `Invalid transport mode. Must be one of: ${VALID_TRANSPORT_MODES.join(', ')}` });
+      }
+      const plans = await transportService.getPlans(mode, req.user!.id);
+      res.json({ plans });
+    } catch (error) {
+      console.error("[Transport API] Error fetching plans:", error);
+      res.status(500).json({ error: "Failed to fetch transport plans" });
+    }
+  });
+
+  // GET /api/transport/:mode/plans/:id - Get single plan
+  app.get("/api/transport/:mode/plans/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { mode, id } = req.params;
+      if (!validateTransportMode(mode)) {
+        return res.status(400).json({ error: `Invalid transport mode. Must be one of: ${VALID_TRANSPORT_MODES.join(', ')}` });
+      }
+      const planId = parseInt(id);
+      if (isNaN(planId)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+      const plan = await transportService.getPlan(mode, planId, req.user!.id);
+      if (!plan) {
+        return res.status(404).json({ error: "Plan not found" });
+      }
+      res.json({ plan });
+    } catch (error) {
+      console.error("[Transport API] Error fetching plan:", error);
+      res.status(500).json({ error: "Failed to fetch transport plan" });
+    }
+  });
+
+  // POST /api/transport/:mode/plans - Create plan
+  app.post("/api/transport/:mode/plans", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { mode } = req.params;
+      if (!validateTransportMode(mode)) {
+        return res.status(400).json({ error: `Invalid transport mode. Must be one of: ${VALID_TRANSPORT_MODES.join(', ')}` });
+      }
+      const plan = await transportService.createPlan(mode, req.body, req.user!.id);
+      if (!plan) {
+        return res.status(500).json({ error: "Failed to create transport plan" });
+      }
+      res.status(201).json({ plan });
+    } catch (error) {
+      console.error("[Transport API] Error creating plan:", error);
+      res.status(500).json({ error: "Failed to create transport plan" });
+    }
+  });
+
+  // PUT /api/transport/:mode/plans/:id - Update plan
+  app.put("/api/transport/:mode/plans/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { mode, id } = req.params;
+      if (!validateTransportMode(mode)) {
+        return res.status(400).json({ error: `Invalid transport mode. Must be one of: ${VALID_TRANSPORT_MODES.join(', ')}` });
+      }
+      const planId = parseInt(id);
+      if (isNaN(planId)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+      const plan = await transportService.updatePlan(mode, planId, req.body, req.user!.id);
+      if (!plan) {
+        return res.status(404).json({ error: "Plan not found" });
+      }
+      res.json({ plan });
+    } catch (error) {
+      console.error("[Transport API] Error updating plan:", error);
+      res.status(500).json({ error: "Failed to update transport plan" });
+    }
+  });
+
+  // POST /api/transport/:mode/plans/:id/transition - Transition status
+  app.post("/api/transport/:mode/plans/:id/transition", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { mode, id } = req.params;
+      if (!validateTransportMode(mode)) {
+        return res.status(400).json({ error: `Invalid transport mode. Must be one of: ${VALID_TRANSPORT_MODES.join(', ')}` });
+      }
+      const planId = parseInt(id);
+      if (isNaN(planId)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+      const { status } = req.body as { status?: TransportStatus };
+      if (!status) {
+        return res.status(400).json({ error: "Status is required in request body" });
+      }
+      const validStatuses: TransportStatus[] = ['draft', 'planned', 'loading', 'underway', 'completed', 'cancelled'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+      }
+      const result = await transportService.transitionStatus(mode, planId, status, req.user!.id);
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+      res.json({ success: true, plan: result.plan, message: `Successfully transitioned to ${status}` });
+    } catch (error) {
+      console.error("[Transport API] Error transitioning plan status:", error);
+      res.status(500).json({ error: "Failed to transition plan status" });
+    }
+  });
+
+  // GET /api/transport/:mode/statistics - Get mode statistics
+  app.get("/api/transport/:mode/statistics", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { mode } = req.params;
+      if (!validateTransportMode(mode)) {
+        return res.status(400).json({ error: `Invalid transport mode. Must be one of: ${VALID_TRANSPORT_MODES.join(', ')}` });
+      }
+      const statistics = await transportService.getStatistics(mode, req.user!.id);
+      res.json({ mode, statistics });
+    } catch (error) {
+      console.error("[Transport API] Error fetching statistics:", error);
+      res.status(500).json({ error: "Failed to fetch transport statistics" });
+    }
+  });
+
+  // GET /api/transport/statistics - Get all modes statistics
+  app.get("/api/transport/statistics", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const allStats = await transportService.getStatisticsAll(req.user!.id);
+      res.json({ statistics: allStats });
+    } catch (error) {
+      console.error("[Transport API] Error fetching all statistics:", error);
+      res.status(500).json({ error: "Failed to fetch transport statistics" });
+    }
+  });
+
+  // GET /api/transport/assets/:mode - Get available assets for mode
+  app.get("/api/transport/assets/:mode", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { mode } = req.params;
+      if (!validateTransportMode(mode)) {
+        return res.status(400).json({ error: `Invalid transport mode. Must be one of: ${VALID_TRANSPORT_MODES.join(', ')}` });
+      }
+      
+      let assets: any[] = [];
+      switch (mode) {
+        case 'air':
+          const aircraftTypes = await db.select().from(flightPlans).limit(0);
+          assets = [
+            { id: 1, mode: 'air', code: 'C-17', name: 'C-17 Globemaster III', capacity_lbs: 170900, dimensions: { length_ft: 88, width_ft: 18, height_ft: 12.3 } },
+            { id: 2, mode: 'air', code: 'C-130J', name: 'C-130J Super Hercules', capacity_lbs: 42000, dimensions: { length_ft: 40, width_ft: 10.3, height_ft: 9 } },
+            { id: 3, mode: 'air', code: 'C-5M', name: 'C-5M Super Galaxy', capacity_lbs: 281000, dimensions: { length_ft: 121, width_ft: 19, height_ft: 13.5 } },
+          ];
+          break;
+        case 'land':
+          const vehicleTypes = await db.select().from(landVehicleTypes);
+          assets = vehicleTypes.map(v => ({
+            id: v.id,
+            mode: 'land',
+            code: v.code,
+            name: v.name,
+            capacity_lbs: v.max_cargo_weight_lbs,
+            dimensions: { length_ft: v.cargo_length_ft, width_ft: v.cargo_width_ft, height_ft: v.cargo_height_ft },
+          }));
+          break;
+        case 'sea':
+          assets = [
+            { id: 1, mode: 'sea', code: 'MSC-CONTAINER', name: 'Container Ship (MSC)', capacity_lbs: 100000000, dimensions: { length_ft: 1200, width_ft: 160, height_ft: 60 } },
+            { id: 2, mode: 'sea', code: 'MSC-RORO', name: 'Roll-on/Roll-off Ship', capacity_lbs: 50000000, dimensions: { length_ft: 800, width_ft: 130, height_ft: 40 } },
+            { id: 3, mode: 'sea', code: 'MSC-BREAK', name: 'Breakbulk Carrier', capacity_lbs: 30000000, dimensions: { length_ft: 600, width_ft: 100, height_ft: 50 } },
+          ];
+          break;
+      }
+      
+      res.json({ mode, assets });
+    } catch (error) {
+      console.error("[Transport API] Error fetching assets:", error);
+      res.status(500).json({ error: "Failed to fetch transport assets" });
     }
   });
 
