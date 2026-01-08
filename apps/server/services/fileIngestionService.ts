@@ -8,6 +8,11 @@ import {
   ParsedInventoryRow,
   ColumnSpec 
 } from './inventoryValidator';
+import { 
+  matchLocationsToZones, 
+  type ZoneMatchStats 
+} from './zoneMatchingService';
+import type { WarehouseZone } from '@shared/schema';
 
 export interface UploadSession {
   uploadId: string;
@@ -22,6 +27,7 @@ export interface UploadSession {
   canCommit: boolean;
   createdAt: Date;
   expiresAt: Date;
+  zoneMatchStats?: ZoneMatchStats;
 }
 
 export interface ParseResult {
@@ -33,6 +39,7 @@ export interface ParseResult {
   canCommit: boolean;
   totalRows: number;
   filename: string;
+  zoneMatchStats?: ZoneMatchStats;
 }
 
 const uploadSessions = new Map<string, UploadSession>();
@@ -69,6 +76,56 @@ export function getUploadSession(uploadId: string): UploadSession | null {
 
 export function deleteUploadSession(uploadId: string): boolean {
   return uploadSessions.delete(uploadId);
+}
+
+export function applyZoneMatching(
+  rows: ParsedInventoryRow[],
+  zones: WarehouseZone[]
+): { rows: ParsedInventoryRow[]; stats: ZoneMatchStats; warnings: ValidationMessage[] } {
+  const warnings: ValidationMessage[] = [];
+  
+  if (zones.length === 0) {
+    console.log('[FileIngestion] No zones available for matching');
+    return {
+      rows,
+      stats: {
+        total: rows.length,
+        matched: 0,
+        unmatched: rows.length,
+        unmatchedLocations: [],
+        matchesByZone: {},
+        matchesByType: { exact: 0, pattern: 0, fallback: 0, none: rows.length }
+      },
+      warnings
+    };
+  }
+  
+  const locations = rows.map(r => r.location);
+  const { results, stats } = matchLocationsToZones(locations, zones);
+  
+  const updatedRows = rows.map((row, index) => {
+    const result = results[index];
+    if (result) {
+      row.matched_zone_id = result.zoneId;
+      row.matched_zone_name = result.zoneName;
+      row.zone_match_confidence = result.confidence;
+    }
+    return row;
+  });
+  
+  if (stats.unmatchedLocations.length > 0) {
+    const first10 = stats.unmatchedLocations.slice(0, 10);
+    warnings.push({
+      level: 'warning',
+      scope: 'file',
+      target: 'zone_matching',
+      message: `${stats.unmatched} locations could not be matched to zones. Examples: ${first10.join(', ')}${stats.unmatchedLocations.length > 10 ? ` (and ${stats.unmatchedLocations.length - 10} more)` : ''}`
+    });
+  }
+  
+  console.log(`[FileIngestion] Zone matching complete: ${stats.matched}/${stats.total} matched`);
+  
+  return { rows: updatedRows, stats, warnings };
 }
 
 export async function parseCSV(

@@ -655,13 +655,25 @@ export const insertWarehouseBuildingSchema = createInsertSchema(warehouseBuildin
 export type InsertWarehouseBuilding = z.infer<typeof insertWarehouseBuildingSchema>;
 export type WarehouseBuilding = typeof warehouseBuildings.$inferSelect;
 
-// Warehouse Zones - logical areas within buildings
+// Zone usage type enum
+export const zoneUsageTypeEnum = ['small_material', 'mixed_material', 'large_material', 'uncrated', 'crated', 'hazmat', 'long_pipes', 'general'] as const;
+export type ZoneUsageType = typeof zoneUsageTypeEnum[number];
+
+// Warehouse Zones - logical areas within a site (zones are the primary organizational structure)
 export const warehouseZones = pgTable("warehouse_zones", {
   id: serial("id").primaryKey(),
-  building_id: integer("building_id").notNull(),
+  site_id: integer("site_id").notNull(),
+  building_id: integer("building_id"),
   code: text("code").notNull(),
   name: text("name").notNull(),
   zone_type: text("zone_type").notNull().default("rack"),
+  is_outdoor: boolean("is_outdoor").notNull().default(false),
+  usage_type: text("usage_type").notNull().default("general"),
+  bulk_available: integer("bulk_available").default(0),
+  bulk_open: integer("bulk_open").default(0),
+  rack_available: integer("rack_available").default(0),
+  rack_open: integer("rack_open").default(0),
+  location_pattern: text("location_pattern"),
   weight_limit_lbs: integer("weight_limit_lbs").default(2000),
   capacity_pallets: integer("capacity_pallets"),
   metadata: jsonb("metadata").notNull().default({}),

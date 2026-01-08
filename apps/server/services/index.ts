@@ -8,3 +8,4 @@ export * as fileIngestionService from './fileIngestionService';
 export * as inventoryValidator from './inventoryValidator';
 export * as transportService from './transportService';
 export * as googleMapsService from './googleMapsService';
+export * as zoneMatchingService from './zoneMatchingService';

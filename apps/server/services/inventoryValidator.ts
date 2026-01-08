@@ -63,6 +63,9 @@ export interface ParsedInventoryRow {
   remarks: string | null;
   in_service_date: string | null;
   warranty_item: string | null;
+  matched_zone_id: number | null;
+  matched_zone_name: string | null;
+  zone_match_confidence: number | null;
   _rawRow: Record<string, any>;
   _rowIndex: number;
 }
@@ -294,6 +297,9 @@ export function validateRow(row: Record<string, any>, rowIndex: number, columnMa
     remarks: getStringValue('remarks'),
     in_service_date: getStringValue('in_service_date'),
     warranty_item: getStringValue('warranty_item'),
+    matched_zone_id: null,
+    matched_zone_name: null,
+    zone_match_confidence: null,
     
     _rawRow: row,
     _rowIndex: rowIndex,

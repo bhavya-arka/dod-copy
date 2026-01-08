@@ -2886,10 +2886,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If capacity_pallets is provided, create a default zone for this building
       if (capacity_pallets && parseInt(capacity_pallets) > 0) {
         await db.insert(warehouseZones).values({
+          site_id: siteId,
           building_id: building.id,
           code: `${code}-MAIN`,
           name: `${name} Main Storage`,
           zone_type: 'rack',
+          is_outdoor: false,
+          usage_type: 'general',
           weight_limit_lbs: 2000,
           capacity_pallets: parseInt(capacity_pallets),
         });
@@ -3030,6 +3033,212 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Warehouse] Failed to delete building:", error);
       res.status(500).json({ error: "Failed to delete building" });
+    }
+  });
+
+  // ============================================================================
+  // WAREHOUSE ZONES ROUTES
+  // ============================================================================
+
+  // GET /api/warehouse/sites/:siteId/zones - List zones for a site
+  app.get("/api/warehouse/sites/:siteId/zones", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const zones = await db.select()
+        .from(warehouseZones)
+        .where(eq(warehouseZones.site_id, siteId));
+
+      res.json(zones);
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch zones:", error);
+      res.status(500).json({ error: "Failed to fetch zones" });
+    }
+  });
+
+  // POST /api/warehouse/sites/:siteId/zones - Create a new zone
+  app.post("/api/warehouse/sites/:siteId/zones", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const { 
+        code, 
+        name, 
+        building_id,
+        zone_type,
+        is_outdoor,
+        usage_type,
+        bulk_available,
+        bulk_open,
+        rack_available,
+        rack_open,
+        location_pattern,
+        weight_limit_lbs,
+        capacity_pallets
+      } = req.body;
+
+      if (!code || !name) {
+        return res.status(400).json({ error: "Zone code and name are required" });
+      }
+
+      const [zone] = await db.insert(warehouseZones).values({
+        site_id: siteId,
+        building_id: building_id || null,
+        code: code.trim(),
+        name: name.trim(),
+        zone_type: zone_type || 'rack',
+        is_outdoor: is_outdoor || false,
+        usage_type: usage_type || 'general',
+        bulk_available: bulk_available || 0,
+        bulk_open: bulk_open || 0,
+        rack_available: rack_available || 0,
+        rack_open: rack_open || 0,
+        location_pattern: location_pattern || null,
+        weight_limit_lbs: weight_limit_lbs || 2000,
+        capacity_pallets: capacity_pallets || null,
+        metadata: {},
+      }).returning();
+
+      console.log(`[Warehouse] Created zone ${code} for site ${siteId}`);
+      res.status(201).json(zone);
+    } catch (error) {
+      console.error("[Warehouse] Failed to create zone:", error);
+      res.status(500).json({ error: "Failed to create zone" });
+    }
+  });
+
+  // POST /api/warehouse/sites/:siteId/zones/seed - Seed default zones for the site
+  app.post("/api/warehouse/sites/:siteId/zones/seed", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const existingZones = await db.select()
+        .from(warehouseZones)
+        .where(eq(warehouseZones.site_id, siteId));
+
+      if (existingZones.length > 0) {
+        return res.status(400).json({ 
+          error: "Site already has zones defined",
+          existingZoneCount: existingZones.length
+        });
+      }
+
+      const { zoneMatchingService } = await import('./services');
+      const zonePatterns = zoneMatchingService.createDefaultZonePatterns();
+
+      const zonesData = zonePatterns.map(pattern => ({
+        site_id: siteId,
+        building_id: null,
+        code: pattern.code,
+        name: pattern.name,
+        zone_type: pattern.is_outdoor ? 'outdoor' : 'indoor',
+        is_outdoor: pattern.is_outdoor,
+        usage_type: pattern.usage_type,
+        bulk_available: pattern.is_outdoor ? 50 : 0,
+        bulk_open: pattern.is_outdoor ? 50 : 0,
+        rack_available: pattern.is_outdoor ? 0 : 100,
+        rack_open: pattern.is_outdoor ? 0 : 100,
+        location_pattern: pattern.location_pattern,
+        weight_limit_lbs: 2000,
+        capacity_pallets: pattern.is_outdoor ? 50 : 100,
+        metadata: {},
+      }));
+
+      const insertedZones = await db.insert(warehouseZones).values(zonesData).returning();
+
+      console.log(`[Warehouse] Seeded ${insertedZones.length} zones for site ${siteId}`);
+      res.status(201).json({
+        success: true,
+        message: `Created ${insertedZones.length} default zones`,
+        zones: insertedZones
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to seed zones:", error);
+      res.status(500).json({ error: "Failed to seed zones" });
+    }
+  });
+
+  // DELETE /api/warehouse/sites/:siteId/zones/:zoneId - Delete a zone
+  app.delete("/api/warehouse/sites/:siteId/zones/:zoneId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      const zoneId = parseInt(req.params.zoneId);
+      if (isNaN(siteId) || isNaN(zoneId)) {
+        return res.status(400).json({ error: "Invalid site or zone ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const [existingZone] = await db.select()
+        .from(warehouseZones)
+        .where(and(
+          eq(warehouseZones.id, zoneId),
+          eq(warehouseZones.site_id, siteId)
+        ));
+
+      if (!existingZone) {
+        return res.status(404).json({ error: "Zone not found" });
+      }
+
+      await db.delete(warehouseZones)
+        .where(eq(warehouseZones.id, zoneId));
+
+      console.log(`[Warehouse] Deleted zone ${zoneId}`);
+      res.json({ success: true, message: "Zone deleted successfully" });
+    } catch (error) {
+      console.error("[Warehouse] Failed to delete zone:", error);
+      res.status(500).json({ error: "Failed to delete zone" });
     }
   });
 
