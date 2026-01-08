@@ -39,7 +39,8 @@ import {
   dagEdgeService,
   cargoService,
   cargoAssignmentService,
-  aircraftService
+  aircraftService,
+  googleMapsService
 } from "./services";
 import { runOptimization, OptimizationInput, AvailabilityConstraint, CargoRequirement, MixedFleetMode } from "./services/fleetOptimizer";
 import { parseFile, getUploadSession, deleteUploadSession, getSessionStats } from "./services/fileIngestionService";
@@ -6022,6 +6023,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Land] Error fetching statistics:", error);
       res.status(500).json({ error: "Failed to fetch statistics" });
+    }
+  });
+
+  // --- LAND GOOGLE MAPS INTEGRATION ---
+
+  // POST /api/land/routes/calculate - Calculate route between two locations
+  app.post("/api/land/routes/calculate", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { origin, destination, waypoints, avoidTolls, avoidHighways } = req.body;
+      
+      if (!origin || !destination) {
+        return res.status(400).json({ error: "Origin and destination are required" });
+      }
+
+      const route = await googleMapsService.calculateRoute(origin, destination, {
+        waypoints,
+        avoidTolls,
+        avoidHighways,
+        vehicleType: 'truck',
+      });
+
+      if (!route) {
+        return res.status(404).json({ error: "Could not calculate route" });
+      }
+
+      res.json(route);
+    } catch (error) {
+      console.error("[Land] Error calculating route:", error);
+      res.status(500).json({ error: "Failed to calculate route" });
+    }
+  });
+
+  // GET /api/land/places/autocomplete - Location autocomplete
+  app.get("/api/land/places/autocomplete", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { input, sessionToken } = req.query;
+      
+      if (!input || typeof input !== 'string') {
+        return res.status(400).json({ error: "Input query is required" });
+      }
+
+      const predictions = await googleMapsService.placeAutocomplete(
+        input,
+        typeof sessionToken === 'string' ? sessionToken : undefined
+      );
+
+      if (!predictions) {
+        return res.status(500).json({ error: "Could not fetch autocomplete results" });
+      }
+
+      res.json({ predictions });
+    } catch (error) {
+      console.error("[Land] Error fetching autocomplete:", error);
+      res.status(500).json({ error: "Failed to fetch autocomplete results" });
+    }
+  });
+
+  // GET /api/land/places/:placeId - Get place details
+  app.get("/api/land/places/:placeId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { placeId } = req.params;
+      
+      if (!placeId) {
+        return res.status(400).json({ error: "Place ID is required" });
+      }
+
+      const place = await googleMapsService.getPlaceDetails(placeId);
+
+      if (!place) {
+        return res.status(404).json({ error: "Place not found" });
+      }
+
+      res.json(place);
+    } catch (error) {
+      console.error("[Land] Error fetching place details:", error);
+      res.status(500).json({ error: "Failed to fetch place details" });
+    }
+  });
+
+  // POST /api/land/routes/optimize - Get distance matrix for multiple stops
+  app.post("/api/land/routes/optimize", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { locations } = req.body;
+      
+      if (!locations || !Array.isArray(locations) || locations.length < 2) {
+        return res.status(400).json({ error: "At least 2 locations are required" });
+      }
+
+      const matrix = await googleMapsService.getDistanceMatrix(locations, locations);
+
+      if (!matrix) {
+        return res.status(500).json({ error: "Could not calculate distance matrix" });
+      }
+
+      res.json(matrix);
+    } catch (error) {
+      console.error("[Land] Error calculating distance matrix:", error);
+      res.status(500).json({ error: "Failed to calculate distance matrix" });
     }
   });
 
