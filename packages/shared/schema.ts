@@ -39,6 +39,10 @@ export const flightPlans = pgTable("flight_plans", {
   user_id: integer("user_id").notNull(),
   name: text("name").notNull(),
   status: text("status").notNull().default('draft'), // 'draft', 'complete', 'archived'
+  scheduled_departure: timestamp("scheduled_departure"),
+  scheduled_arrival: timestamp("scheduled_arrival"),
+  actual_departure: timestamp("actual_departure"),
+  actual_arrival: timestamp("actual_arrival"),
   created_at: timestamp("created_at").defaultNow().notNull(),
   updated_at: timestamp("updated_at").defaultNow().notNull(),
   allocation_data: jsonb("allocation_data").notNull(), // AllocationResult JSON
@@ -772,6 +776,10 @@ export const landConvoys = pgTable("land_convoys", {
   total_cargo_weight_lbs: integer("total_cargo_weight_lbs").default(0),
   departure_time: timestamp("departure_time"),
   arrival_time: timestamp("arrival_time"),
+  scheduled_departure: timestamp("scheduled_departure"),
+  scheduled_arrival: timestamp("scheduled_arrival"),
+  actual_departure: timestamp("actual_departure"),
+  actual_arrival: timestamp("actual_arrival"),
   status: text("status").notNull().default("planning"), // planning, en_route, arrived, completed
   cargo_manifest: jsonb("cargo_manifest").notNull().default([]),
   created_at: timestamp("created_at").defaultNow().notNull(),
@@ -861,6 +869,10 @@ export const seaVoyages = pgTable("sea_voyages", {
   port_calls: jsonb("port_calls").notNull().default([]),
   departure_time: timestamp("departure_time"),
   arrival_time: timestamp("arrival_time"),
+  scheduled_departure: timestamp("scheduled_departure"),
+  scheduled_arrival: timestamp("scheduled_arrival"),
+  actual_departure: timestamp("actual_departure"),
+  actual_arrival: timestamp("actual_arrival"),
   status: text("status").notNull().default("planned"), // planned, at_sea, in_port, completed
   metadata: jsonb("metadata").notNull().default({}),
   created_at: timestamp("created_at").defaultNow().notNull(),
@@ -1072,3 +1084,22 @@ export const insertWarehouseOptimizationEventSchema = createInsertSchema(warehou
 });
 export type InsertWarehouseOptimizationEvent = z.infer<typeof insertWarehouseOptimizationEventSchema>;
 export type WarehouseOptimizationEvent = typeof warehouseOptimizationEvents.$inferSelect;
+
+// Transport Operational Stats - Pre-calculated statistics updated on transport plan mutations
+export const transportOperationalStats = pgTable("transport_operational_stats", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  transport_mode: text("transport_mode").notNull(),
+  schedule_date: date("schedule_date").notNull(),
+  plan_count: integer("plan_count").notNull().default(0),
+  total_cargo_lbs: integer("total_cargo_lbs").notNull().default(0),
+  total_items: integer("total_items").notNull().default(0),
+  last_updated_at: timestamp("last_updated_at").defaultNow().notNull(),
+});
+
+export const insertTransportOperationalStatsSchema = createInsertSchema(transportOperationalStats).omit({
+  id: true,
+  last_updated_at: true,
+});
+export type InsertTransportOperationalStats = z.infer<typeof insertTransportOperationalStatsSchema>;
+export type TransportOperationalStats = typeof transportOperationalStats.$inferSelect;
