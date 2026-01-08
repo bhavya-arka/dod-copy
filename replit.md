@@ -38,10 +38,13 @@ The Air module features a multi-stage pipeline:
 
 The system supports C-17 Globemaster III and C-130H/J Hercules aircraft, adhering to standardized 463L pallet specifications. Cargo loading/unloading is simulated with a forward-to-aft sequence based on destination and cargo type.
 
-## Warehouse Management System (WMS)
+## DLA-Compliant Warehouse Management System (WMS)
 The WMS is modular, featuring a 7-section navigation (Dashboard, Inventory, Operations, Sites & Storage, Analytics, AI Insights, Admin). Key features include:
 - Multi-site inventory tracking and pallet-level location management.
-- NSN validation, aging alerts, and weight constraints.
+- NSN validation (####-##-###-####), aging alerts (>7 years), and weight constraints.
+- **DLA Pallet Standards**: 4×4×4 ft pallet blocks, ≤2,000 lbs per pallet, with real-time capacity tracking.
+- **Site Assignment Logic**: Scoring algorithm considers AOR match (+25), capacity utilization, shipyard avoidance (-20), and weight capacity.
+- **Manifest Parsers**: CSV, MILSTRIP (fixed-width with document identifiers), and FEDLOG (tab/pipe/comma-delimited) auto-detection.
 - PDF/CSV/XLSX file import with comprehensive validation (50+ BATS columns supported).
 - **Dynamic Column System**: Inventory columns are defined in `packages/shared/inventoryColumns.ts` as a single source of truth, fetched via API, and automatically merged with saved user preferences.
 - **Optimization Wizard** with 4 algorithms:
@@ -51,6 +54,8 @@ The WMS is modular, featuring a 7-section navigation (Dashboard, Inventory, Oper
   - **Bin-Packing Order**: Calculates optimal placement for maximum container utilization.
 - **AI-Powered Analysis**: Uses AWS Bedrock (Nova Lite model) for warehouse-specific insights including placement optimization, load balancing recommendations, and aging alerts.
 - Inter-warehouse transfers linked to Air, Land, or Sea transport modes.
+- **90-Day Predictive Load Planning**: Forecasts capacity needs based on historical convoy/voyage/flight patterns with confidence levels.
+- **Capacity Visualization**: Color-coded status indicators (green <60%, yellow 60-85%, red >85%) with trend arrows.
 
 ## Data Models
 Key data models include `MovementItem`, `Pallet463L`, `AircraftLoadPlan`, `AllocationResult` for air operations, and `warehouse_sites`, `warehouse_buildings`, `warehouse_zones`, `warehouse_locations`, `warehouse_inventory_items`, `warehouse_transfers` for WMS. Land and Sea modules have `land_routes`, `land_convoys`, `sea_voyages`, and `sea_containers`.
