@@ -61,6 +61,7 @@ import {
 import * as transportService from "./services/transportService";
 import * as transportStatsService from "./services/transportStatsService";
 import type { TransportMode, TransportStatus } from "../../packages/shared/transportTypes";
+import { matchLocationToZone, type ZoneMatchResult } from "./services/zoneMatchingService";
 
 // Weather API cache with 10-minute TTL
 interface WeatherCacheEntry {
@@ -4255,12 +4256,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Warehouse site not found" });
       }
 
+      // Fetch warehouse zones for zone-based organization
+      const zones = await db.select()
+        .from(warehouseZones)
+        .where(eq(warehouseZones.site_id, siteId));
+
+      // Validate zones exist before running optimization
+      if (zones.length === 0) {
+        return res.status(400).json({ 
+          error: "No zones defined for this warehouse. Please configure zones before running optimization." 
+        });
+      }
+
       // Fetch inventory items for analysis
       const items = await db.select()
         .from(warehouseInventoryItems)
         .where(eq(warehouseInventoryItems.site_id, siteId));
 
-      // Parse item data from raw_row and database fields
+      // Parse item data from raw_row and database fields with zone matching
       const itemsWithData = items.map(item => {
         const rawRow = item.raw_row as Record<string, any> || {};
         const qty = item.quantity || parseInt(rawRow?.qty) || 1;
@@ -4270,8 +4283,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Extract location info - location field in raw_row contains rack location like "2069-B"
         const location = rawRow?.location || item.location || 'Unassigned';
-        // Extract zone prefix (e.g., "2069" from "2069-B")
-        const locationZone = location.split('-')[0] || location.substring(0, 4) || 'UNK';
+        // Use zone matching service to get actual zone
+        const zoneMatch = matchLocationToZone(location, zones);
+        const matchedZone = zones.find(z => z.id === zoneMatch.zoneId);
         
         return {
           id: item.id,
@@ -4281,7 +4295,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           value,
           weight,
           rack_location: location,
-          location_zone: locationZone,
+          location_zone: location.split('-')[0] || location.substring(0, 4) || 'UNK',
+          matched_zone_id: zoneMatch.zoneId,
+          matched_zone_name: zoneMatch.zoneName,
+          matched_zone: matchedZone,
+          zone_match_confidence: zoneMatch.confidence,
           ship_class: item.ship_class || rawRow?.ship_class || '',
           inventory_type: item.inventory_type || rawRow?.inventory_type || '',
           condition_code: item.condition_code || item.condition || rawRow?.condition_code || 'A',
@@ -4298,6 +4316,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         itemDescription: string;
         from: string;
         to: string;
+        targetZoneId: number | null;
+        targetZoneName: string | null;
         priority: 'high' | 'medium' | 'low';
         estimatedBenefit: string;
         quantity: number;
@@ -4316,8 +4336,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Run algorithm-specific optimization
       if (algorithm === 'cardstack') {
-        // CardStack: Find items for the same ship scattered across different racks
-        // Consolidate them to reduce picking time and travel distance
+        // CardStack: Find items for the same ship scattered across different zones
+        // Consolidate them to reduce picking time and travel distance using actual zone data
         const { minItemsToConsolidate = 2, maxActionsToGenerate = 50 } = params || {};
         
         // Group items by ship_class (items for the same ship should be together)
@@ -4333,33 +4353,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let actionId = 1;
         let consolidatedItems = 0;
         let consolidatedValue = 0;
+        const affectedZoneIds = new Set<number>();
         
         for (const [shipClass, shipItems] of Array.from(shipGroups.entries())) {
           // Skip if fewer items than threshold
           if (shipItems.length < minItemsToConsolidate) continue;
           
-          // Find the most common zone for this ship's items (consolidation target)
-          const zoneCounts: Map<string, number> = new Map();
+          // Find the most common zone for this ship's items using matched_zone_id
+          const zoneCounts: Map<number, number> = new Map();
           for (const item of shipItems) {
-            zoneCounts.set(item.location_zone, (zoneCounts.get(item.location_zone) || 0) + 1);
-          }
-          
-          // Find zone with most items
-          let targetZone = '';
-          let maxCount = 0;
-          for (const [zone, count] of Array.from(zoneCounts.entries())) {
-            if (count > maxCount) {
-              maxCount = count;
-              targetZone = zone;
+            if (item.matched_zone_id !== null) {
+              zoneCounts.set(item.matched_zone_id, (zoneCounts.get(item.matched_zone_id) || 0) + 1);
             }
           }
           
-          // Get a specific target rack in that zone
-          const targetRack = `${targetZone}-SHIP`;
+          // Find zone with most items
+          let targetZoneId: number | null = null;
+          let maxCount = 0;
+          for (const [zoneId, count] of Array.from(zoneCounts.entries())) {
+            if (count > maxCount) {
+              maxCount = count;
+              targetZoneId = zoneId;
+            }
+          }
+          
+          // Get the target zone object for naming
+          const targetZone = zones.find(z => z.id === targetZoneId);
+          if (!targetZone) continue;
+          
+          // Create target location using actual zone code
+          const targetRack = `${targetZone.code}-${shipClass.replace(/\s+/g, '')}`;
           
           // Move items from other zones to the target zone
           for (const item of shipItems) {
-            if (item.location_zone === targetZone) continue; // Already in target zone
+            if (item.matched_zone_id === targetZoneId) continue; // Already in target zone
+            
+            if (item.matched_zone_id !== null) {
+              affectedZoneIds.add(item.matched_zone_id);
+            }
             
             actions.push({
               id: `CS-${actionId++}`,
@@ -4368,11 +4399,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               itemDescription: item.description.substring(0, 50),
               from: item.rack_location,
               to: targetRack,
+              targetZoneId: targetZone.id,
+              targetZoneName: targetZone.name,
               priority: item.value > 5000 ? 'high' : 'medium',
               estimatedBenefit: `Reduces pick time for ${shipClass} by ~${Math.round(5 + Math.random() * 10)}min`,
               quantity: item.quantity,
               value: item.value,
-              reason: `Item for ${shipClass} scattered from main storage area (${targetZone})`,
+              reason: `Item for ${shipClass} scattered from main storage - consolidate to ${targetZone.name}`,
             });
             consolidatedItems++;
             consolidatedValue += item.value;
@@ -4382,152 +4415,219 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (actions.length >= maxActionsToGenerate) break;
         }
         
-        // Calculate unique source zones being freed up
-        const sourceZones = new Set(actions.map(a => a.from.split('-')[0]));
-        const targetZones = new Set(actions.map(a => a.to.split('-')[0]));
+        // Calculate unique target zones
+        const targetZoneNames = new Set(actions.filter(a => a.targetZoneName).map(a => a.targetZoneName));
         
         summary = {
           slotsFreed: consolidatedItems,
-          consolidationWins: `${consolidatedItems} items → ${targetZones.size} locations`,
-          zonesOptimized: sourceZones.size,
+          consolidationWins: `${consolidatedItems} items → ${targetZoneNames.size} zones`,
+          zonesOptimized: affectedZoneIds.size,
           pickEfficiencyGain: `+${Math.min(consolidatedItems * 2, 25)}% pick time reduction`,
           itemsAffected: consolidatedItems,
           actionsGenerated: actions.length,
         };
       } 
       else if (algorithm === 'size_standardization') {
-        // Size Standardization: Organize items by program code into dedicated zones
-        // Items for PM1, PM3, etc. should be in their program's designated area
-        const { minProgramItems = 3, maxActionsToGenerate = 50 } = params || {};
+        // Size Standardization: Move items to appropriate zones based on usage_type
+        // Small items go to small_material zones, large items go to large_material zones
+        const { maxActionsToGenerate = 50 } = params || {};
         
-        // Find the dominant zone for each program
-        const programZones: Map<string, Map<string, number>> = new Map();
-        const programItemCounts: Map<string, number> = new Map();
-        for (const item of itemsWithData) {
-          if (!item.program_code) continue;
-          programItemCounts.set(item.program_code, (programItemCounts.get(item.program_code) || 0) + 1);
-          if (!programZones.has(item.program_code)) {
-            programZones.set(item.program_code, new Map());
-          }
-          const zones = programZones.get(item.program_code)!;
-          zones.set(item.location_zone, (zones.get(item.location_zone) || 0) + 1);
-        }
+        // Find zones by usage type
+        const smallMaterialZones = zones.filter(z => z.usage_type === 'small_material');
+        const largeMaterialZones = zones.filter(z => z.usage_type === 'large_material');
+        const mixedMaterialZones = zones.filter(z => z.usage_type === 'mixed_material');
         
-        // Determine the primary zone for each program (only for programs with enough items)
-        const programPrimaryZone: Map<string, string> = new Map();
-        for (const [program, zones] of Array.from(programZones.entries())) {
-          const itemCount = programItemCounts.get(program) || 0;
-          if (itemCount < minProgramItems) continue; // Skip small programs
-          
-          let primaryZone = '';
-          let maxCount = 0;
-          for (const [zone, count] of Array.from(zones.entries())) {
-            if (count > maxCount) {
-              maxCount = count;
-              primaryZone = zone;
-            }
-          }
-          programPrimaryZone.set(program, primaryZone);
-        }
+        // Determine ideal zone for each item based on weight/dimensions
+        const smallWeightThreshold = 50; // lbs
+        const largeWeightThreshold = 500; // lbs
         
         let actionId = 1;
         let standardizedCount = 0;
         let standardizedValue = 0;
+        const affectedZoneIds = new Set<number>();
         
         for (const item of itemsWithData) {
-          if (!item.program_code) continue;
-          const primaryZone = programPrimaryZone.get(item.program_code);
-          if (!primaryZone || item.location_zone === primaryZone) continue;
+          if (item.matched_zone_id === null) continue;
           
-          actions.push({
-            id: `SS-${actionId++}`,
-            action: `Move to ${item.program_code} program area`,
-            item: item.requisition_no,
-            itemDescription: item.description.substring(0, 50),
-            from: item.rack_location,
-            to: `${primaryZone}-${item.program_code}`,
-            priority: item.condition_code === 'A' ? 'medium' : 'low',
-            estimatedBenefit: `Standardizes ${item.program_code} inventory layout`,
-            quantity: item.quantity,
-            value: item.value,
-            reason: `${item.program_code} items should be grouped in zone ${primaryZone}`,
-          });
-          standardizedCount++;
-          standardizedValue += item.value;
+          const currentZone = item.matched_zone;
+          if (!currentZone) continue;
           
-          if (actions.length >= maxActionsToGenerate) break;
+          let idealZone: typeof zones[0] | null = null;
+          let reason = '';
+          
+          // Determine item size category
+          if (item.weight < smallWeightThreshold && smallMaterialZones.length > 0) {
+            // Small item - should be in small_material zone
+            if (currentZone.usage_type !== 'small_material') {
+              idealZone = smallMaterialZones[0];
+              reason = `Small item (${item.weight} lbs) should be in small material zone`;
+            }
+          } else if (item.weight > largeWeightThreshold && largeMaterialZones.length > 0) {
+            // Large item - should be in large_material zone
+            if (currentZone.usage_type !== 'large_material') {
+              idealZone = largeMaterialZones[0];
+              reason = `Large item (${item.weight} lbs) should be in large material zone`;
+            }
+          } else if (mixedMaterialZones.length > 0) {
+            // Medium item - mixed zone is fine, but could standardize
+            // Only move if in wrong zone type (outdoor bulk for indoor items)
+            if (currentZone.is_outdoor && !currentZone.usage_type?.includes('bulk')) {
+              idealZone = mixedMaterialZones[0];
+              reason = `Medium item better suited for indoor mixed material zone`;
+            }
+          }
+          
+          if (idealZone && idealZone.id !== item.matched_zone_id) {
+            affectedZoneIds.add(item.matched_zone_id);
+            
+            actions.push({
+              id: `SS-${actionId++}`,
+              action: `Move to appropriate size zone`,
+              item: item.requisition_no,
+              itemDescription: item.description.substring(0, 50),
+              from: item.rack_location,
+              to: `${idealZone.code}-${item.program_code || 'GEN'}`,
+              targetZoneId: idealZone.id,
+              targetZoneName: idealZone.name,
+              priority: item.condition_code === 'A' ? 'medium' : 'low',
+              estimatedBenefit: `Optimizes storage efficiency for ${item.weight} lb item`,
+              quantity: item.quantity,
+              value: item.value,
+              reason: reason,
+            });
+            standardizedCount++;
+            standardizedValue += item.value;
+            
+            if (actions.length >= maxActionsToGenerate) break;
+          }
         }
+        
+        const targetZoneNames = new Set(actions.filter(a => a.targetZoneName).map(a => a.targetZoneName));
         
         summary = {
           slotsFreed: standardizedCount,
-          consolidationWins: `${standardizedCount} items → ${programPrimaryZone.size} program zones`,
-          zonesOptimized: programPrimaryZone.size,
-          pickEfficiencyGain: `+${Math.min(programPrimaryZone.size * 5, 20)}% program grouping efficiency`,
+          consolidationWins: `${standardizedCount} items → ${targetZoneNames.size} size-appropriate zones`,
+          zonesOptimized: affectedZoneIds.size,
+          pickEfficiencyGain: `+${Math.min(standardizedCount * 2, 20)}% size-based organization efficiency`,
           itemsAffected: standardizedCount,
           actionsGenerated: actions.length,
         };
       }
       else if (algorithm === 'value_density') {
         // Value Density: Move high-value items to more accessible, secure locations
-        // Lower zone numbers = closer to dock/entrance = more accessible
-        const { highValueThreshold = 1000, zoneDistanceMultiplier = 1.5 } = params || {};
+        // Indoor zones are more accessible/secure than outdoor; lower zone codes = more accessible
+        const { highValueThreshold = 1000, maxActionsToGenerate = 50 } = params || {};
         
-        // Sort items by value descending
-        const sortedByValue = [...itemsWithData]
-          .filter(i => i.value > 0)
-          .sort((a, b) => b.value - a.value);
+        // Rank zones by accessibility: indoor first, then by code (2000 < 3000 < 4000 < 7000)
+        const rankedZones = [...zones]
+          .filter(z => !z.is_outdoor && z.usage_type !== 'hazmat')
+          .sort((a, b) => {
+            const codeA = parseInt(a.code.replace(/\D/g, '')) || 9999;
+            const codeB = parseInt(b.code.replace(/\D/g, '')) || 9999;
+            return codeA - codeB;
+          });
         
-        // Find the lowest zone number (most accessible) in the warehouse
-        const allZones = new Set(itemsWithData.map(i => parseInt(i.location_zone) || 9999));
-        const sortedZones = Array.from(allZones).sort((a, b) => a - b);
-        const accessibleZoneNum = sortedZones[0] || 1000;
-        const accessibleZone = accessibleZoneNum.toString();
-        
-        let actionId = 1;
-        let movedValue = 0;
-        let movedCount = 0;
-        
-        for (const item of sortedByValue) {
-          if (item.value < highValueThreshold) continue;
+        const priorityZone = rankedZones[0];
+        if (!priorityZone) {
+          // No suitable indoor zone, skip this algorithm
+          summary = {
+            slotsFreed: 0,
+            consolidationWins: 'No suitable priority zone available',
+            zonesOptimized: 0,
+            pickEfficiencyGain: 'N/A',
+            itemsAffected: 0,
+            actionsGenerated: 0,
+          };
+        } else {
+          // Sort items by value descending
+          const sortedByValue = [...itemsWithData]
+            .filter(i => i.value > 0)
+            .sort((a, b) => b.value - a.value);
           
-          const currentZoneNum = parseInt(item.location_zone) || 9999;
-          // Apply user-configurable zone distance multiplier
-          if (currentZoneNum > accessibleZoneNum * zoneDistanceMultiplier) {
-            const targetRack = `${accessibleZone}-HV-${String(actionId).padStart(2, '0')}`;
+          let actionId = 1;
+          let movedValue = 0;
+          let movedCount = 0;
+          const affectedZoneIds = new Set<number>();
+          
+          for (const item of sortedByValue) {
+            if (item.value < highValueThreshold) continue;
+            if (item.matched_zone_id === priorityZone.id) continue; // Already in best zone
             
-            actions.push({
-              id: `VD-${actionId++}`,
-              action: `Relocate high-value item to priority area`,
-              item: item.requisition_no,
-              itemDescription: item.description.substring(0, 50),
-              from: item.rack_location,
-              to: targetRack,
-              priority: 'high',
-              estimatedBenefit: `$${item.value.toLocaleString()} value - faster picking & better security`,
-              quantity: item.quantity,
-              value: item.value,
-              reason: `High-value item ($${item.value.toLocaleString()}) in zone ${item.location_zone} exceeds ${zoneDistanceMultiplier}x accessible zone (${accessibleZone})`,
-            });
-            movedValue += item.value;
-            movedCount++;
+            // Check if current zone is less accessible (outdoor or higher numbered)
+            const currentZone = item.matched_zone;
+            const shouldMove = !currentZone || 
+              currentZone.is_outdoor || 
+              (parseInt(currentZone.code.replace(/\D/g, '')) || 0) > (parseInt(priorityZone.code.replace(/\D/g, '')) || 0) * 1.5;
             
-            if (actions.length >= 50) break;
+            if (shouldMove) {
+              if (item.matched_zone_id !== null) {
+                affectedZoneIds.add(item.matched_zone_id);
+              }
+              
+              const targetRack = `${priorityZone.code}-HV-${String(actionId).padStart(2, '0')}`;
+              
+              actions.push({
+                id: `VD-${actionId++}`,
+                action: `Relocate high-value item to priority area`,
+                item: item.requisition_no,
+                itemDescription: item.description.substring(0, 50),
+                from: item.rack_location,
+                to: targetRack,
+                targetZoneId: priorityZone.id,
+                targetZoneName: priorityZone.name,
+                priority: 'high',
+                estimatedBenefit: `$${item.value.toLocaleString()} value - faster picking & better security`,
+                quantity: item.quantity,
+                value: item.value,
+                reason: `High-value item ($${item.value.toLocaleString()}) in ${currentZone?.name || 'unassigned zone'} - move to secure ${priorityZone.name}`,
+              });
+              movedValue += item.value;
+              movedCount++;
+              
+              if (actions.length >= maxActionsToGenerate) break;
+            }
           }
+          
+          summary = {
+            slotsFreed: movedCount,
+            consolidationWins: `${movedCount} high-value items → ${priorityZone.name}`,
+            zonesOptimized: affectedZoneIds.size,
+            pickEfficiencyGain: `+${Math.min(movedCount * 3, 30)}% accessibility for top items`,
+            itemsAffected: movedCount,
+            actionsGenerated: actions.length,
+          };
         }
-        
-        summary = {
-          slotsFreed: movedCount,
-          consolidationWins: `${movedCount} high-value items → priority zone`,
-          zonesOptimized: 1,
-          pickEfficiencyGain: `+${Math.min(movedCount * 3, 30)}% accessibility for top items`,
-          itemsAffected: movedCount,
-          actionsGenerated: actions.length,
-        };
       }
       else if (algorithm === 'bin_packing') {
-        // Bin Packing: Stage items by disposition for upcoming shipments
-        // SHORESIDE items need staging near dock, RESIDUAL needs different area
-        const { maxItemsPerPallet = 15, prioritizeByValue = true } = params || {};
+        // Bin Packing: Stage items by disposition for upcoming shipments using actual zones
+        // SHORESIDE items go to outdoor BULK zones, RESIDUAL to holding areas
+        const { maxItemsPerPallet = 15, prioritizeByValue = true, maxActionsToGenerate = 50 } = params || {};
+        
+        // Find staging zones by type - prefer outdoor bulk zones for staging
+        const bulkZones = zones.filter(z => 
+          z.is_outdoor && 
+          (z.usage_type?.includes('bulk') || z.usage_type === 'uncrated' || z.usage_type === 'crated') &&
+          (z.bulk_available || 0) > 0
+        );
+        const indoorZones = zones.filter(z => !z.is_outdoor);
+        const hazmatZone = zones.find(z => z.usage_type === 'hazmat');
+        
+        // Map dispositions to appropriate zone types
+        const getZoneForDisposition = (disposition: string): typeof zones[0] | null => {
+          switch (disposition.toUpperCase()) {
+            case 'SHORESIDE':
+              // SHORESIDE goes to outdoor bulk zones for easy dock access
+              return bulkZones.find(z => z.usage_type === 'uncrated') || bulkZones[0] || null;
+            case 'RESIDUAL':
+              // RESIDUAL stays in indoor zones
+              return indoorZones.find(z => z.usage_type === 'mixed_material') || indoorZones[0] || null;
+            case 'HAZMAT':
+              return hazmatZone || null;
+            default:
+              // Default to first available bulk zone
+              return bulkZones[0] || indoorZones[0] || null;
+          }
+        };
         
         // Group items by mat_disposition
         const dispositionGroups: Map<string, typeof itemsWithData> = new Map();
@@ -4539,21 +4639,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           dispositionGroups.get(disposition)!.push(item);
         }
         
-        // Define staging areas for each disposition
-        const stagingAreas: Record<string, string> = {
-          'SHORESIDE': 'DOCK-STAGING',
-          'RESIDUAL': 'RESIDUAL-HOLD',
-          'UNASSIGNED': 'INTAKE-AREA',
-        };
-        
         let actionId = 1;
         let totalStaged = 0;
         let totalValue = 0;
+        const affectedZoneIds = new Set<number>();
+        const targetZonesUsed = new Set<string>();
         
         for (const [disposition, dispItems] of Array.from(dispositionGroups.entries())) {
           if (dispItems.length < 2) continue;
           
-          const stagingArea = stagingAreas[disposition] || `${disposition}-STAGING`;
+          const stagingZone = getZoneForDisposition(disposition);
+          if (!stagingZone) continue;
+          
+          targetZonesUsed.add(stagingZone.name);
+          
           // Sort by value if prioritizeByValue, otherwise by ship_class
           const sortedItems = [...dispItems].sort((a, b) => {
             if (prioritizeByValue) {
@@ -4561,6 +4660,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             return (a.ship_class || '').localeCompare(b.ship_class || '');
           });
+          
+          // Check zone capacity
+          const availableCapacity = (stagingZone.bulk_available || 0) + (stagingZone.rack_available || 0);
           
           let palletNum = 1;
           let itemsOnPallet = 0;
@@ -4571,7 +4673,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               itemsOnPallet = 0;
             }
             
-            const targetLocation = `${stagingArea}-P${String(palletNum).padStart(2, '0')}`;
+            // Track affected source zones
+            if (item.matched_zone_id !== null && item.matched_zone_id !== stagingZone.id) {
+              affectedZoneIds.add(item.matched_zone_id);
+            }
+            
+            const targetLocation = `${stagingZone.code}-P${String(palletNum).padStart(2, '0')}`;
             
             actions.push({
               id: `BP-${actionId++}`,
@@ -4580,20 +4687,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
               itemDescription: item.description.substring(0, 50),
               from: item.rack_location,
               to: targetLocation,
+              targetZoneId: stagingZone.id,
+              targetZoneName: stagingZone.name,
               priority: itemsOnPallet === 0 ? 'high' : 'medium',
-              estimatedBenefit: `Ready for ${item.ship_class || 'pending'} shipment`,
+              estimatedBenefit: `Ready for ${item.ship_class || 'pending'} shipment at ${stagingZone.name}`,
               quantity: item.quantity,
               value: item.value,
-              reason: `${disposition} item for ${item.ship_class || 'TBD'} - stage on pallet ${palletNum}`,
+              reason: `${disposition} item for ${item.ship_class || 'TBD'} - stage in ${stagingZone.name} (${availableCapacity > 0 ? 'capacity available' : 'near capacity'})`,
             });
             
             itemsOnPallet++;
             totalStaged++;
             totalValue += item.value;
             
-            if (actions.length >= 50) break;
+            if (actions.length >= maxActionsToGenerate) break;
           }
-          if (actions.length >= 50) break;
+          if (actions.length >= maxActionsToGenerate) break;
         }
         
         // Count pallets created
@@ -4601,8 +4710,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         summary = {
           slotsFreed: totalStaged,
-          consolidationWins: `${totalStaged} items → ${palletLocations.size} pallets staged`,
-          zonesOptimized: dispositionGroups.size,
+          consolidationWins: `${totalStaged} items → ${palletLocations.size} pallets in ${targetZonesUsed.size} staging zones`,
+          zonesOptimized: affectedZoneIds.size,
           pickEfficiencyGain: `${palletLocations.size} pallets ready for shipment`,
           itemsAffected: totalStaged,
           actionsGenerated: actions.length,
