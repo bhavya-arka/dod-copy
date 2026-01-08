@@ -475,14 +475,27 @@ export const warehouseSites = pgTable("warehouse_sites", {
   code: text("code").notNull(),
   name: text("name").notNull(),
   address: text("address"),
-  city: text("city"),
-  country: text("country"),
   timezone: text("timezone").default("UTC"),
-  latitude: numeric("latitude", { precision: 10, scale: 6 }),
-  longitude: numeric("longitude", { precision: 10, scale: 6 }),
   active: boolean("active").notNull().default(true),
   created_at: timestamp("created_at").defaultNow().notNull(),
   updated_at: timestamp("updated_at").defaultNow().notNull(),
+  address_line_1: text("address_line_1"),
+  address_line_2: text("address_line_2"),
+  city: text("city"),
+  state: text("state"),
+  zip_code: text("zip_code"),
+  country: text("country").default("USA"),
+  latitude: numeric("latitude", { precision: 10, scale: 6 }),
+  longitude: numeric("longitude", { precision: 10, scale: 6 }),
+  aor: text("aor"),
+  shipyard_code: text("shipyard_code"),
+  dodaac: text("dodaac"),
+  total_pallet_positions: integer("total_pallet_positions").default(0),
+  open_pallet_positions: integer("open_pallet_positions").default(0),
+  total_cubic_feet: numeric("total_cubic_feet", { precision: 12, scale: 2 }).default("0"),
+  used_cubic_feet: numeric("used_cubic_feet", { precision: 12, scale: 2 }).default("0"),
+  max_weight_lbs: integer("max_weight_lbs"),
+  current_weight_lbs: integer("current_weight_lbs").default(0),
 });
 
 export const insertWarehouseSiteSchema = createInsertSchema(warehouseSites).omit({
@@ -549,6 +562,12 @@ export const warehouseLocations = pgTable("warehouse_locations", {
   occupied: boolean("occupied").notNull().default(false),
   metadata: jsonb("metadata").notNull().default({}),
   created_at: timestamp("created_at").defaultNow().notNull(),
+  block_length_ft: numeric("block_length_ft", { precision: 5, scale: 2 }).default("4"),
+  block_width_ft: numeric("block_width_ft", { precision: 5, scale: 2 }).default("4"),
+  block_height_ft: numeric("block_height_ft", { precision: 5, scale: 2 }).default("4"),
+  max_weight_lbs: integer("max_weight_lbs").default(2000),
+  current_weight_lbs: integer("current_weight_lbs").default(0),
+  is_occupied: boolean("is_occupied").default(false),
 });
 
 export const insertWarehouseLocationSchema = createInsertSchema(warehouseLocations).omit({
@@ -619,6 +638,12 @@ export const warehouseInventoryItems = pgTable("warehouse_inventory_items", {
   raw_row: jsonb("raw_row").notNull().default({}),
   created_at: timestamp("created_at").defaultNow().notNull(),
   updated_at: timestamp("updated_at").defaultNow().notNull(),
+  milstrip_number: text("milstrip_number"),
+  fedlog_code: text("fedlog_code"),
+  last_received_date: timestamp("last_received_date"),
+  aging_days: integer("aging_days").default(0),
+  workflow_status: text("workflow_status").default("received"),
+  workflow_updated_at: timestamp("workflow_updated_at"),
 });
 
 export const insertWarehouseInventoryItemSchema = createInsertSchema(warehouseInventoryItems).omit({
@@ -684,6 +709,84 @@ export const insertLandConvoySchema = createInsertSchema(landConvoys).omit({
 });
 export type InsertLandConvoy = z.infer<typeof insertLandConvoySchema>;
 export type LandConvoy = typeof landConvoys.$inferSelect;
+
+// ============================================================================
+// LAND VEHICLE TYPES TABLE
+// ============================================================================
+
+// Standard military ground vehicles with specifications from DoD manuals
+export const landVehicleTypes = pgTable("land_vehicle_types", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(), // e.g., "LMTV", "HEMTT", "HET", "MTVR"
+  name: text("name").notNull(), // e.g., "M1078 Light Medium Tactical Vehicle"
+  category: text("category").notNull(), // light_tactical, medium_tactical, heavy_tactical, transport
+  
+  // Physical specifications
+  payload_lbs: integer("payload_lbs").notNull(), // Max cargo weight
+  curb_weight_lbs: integer("curb_weight_lbs"), // Empty vehicle weight
+  gross_weight_lbs: integer("gross_weight_lbs"), // Max loaded weight
+  
+  // Dimensions (inches)
+  length_in: numeric("length_in", { precision: 8, scale: 2 }),
+  width_in: numeric("width_in", { precision: 8, scale: 2 }),
+  height_in: numeric("height_in", { precision: 8, scale: 2 }),
+  
+  // Cargo bed dimensions (inches)
+  bed_length_in: numeric("bed_length_in", { precision: 8, scale: 2 }),
+  bed_width_in: numeric("bed_width_in", { precision: 8, scale: 2 }),
+  
+  // Performance
+  max_speed_mph: integer("max_speed_mph"),
+  range_miles: integer("range_miles"),
+  fuel_capacity_gal: numeric("fuel_capacity_gal", { precision: 6, scale: 2 }),
+  fuel_consumption_mpg: numeric("fuel_consumption_mpg", { precision: 4, scale: 2 }),
+  fuel_type: text("fuel_type").default("diesel"), // diesel, jp8
+  
+  // Capabilities
+  axle_config: text("axle_config"), // e.g., "4x4", "6x6", "8x8", "10x10"
+  can_tow_trailer: boolean("can_tow_trailer").default(false),
+  max_tow_weight_lbs: integer("max_tow_weight_lbs"),
+  pallet_capacity_463l: integer("pallet_capacity_463l").default(0), // How many 463L pallets fit
+  pallet_capacity_40x48: integer("pallet_capacity_40x48").default(0), // Standard pallets
+  passenger_capacity: integer("passenger_capacity").default(0),
+  
+  // 3D model reference for visualization
+  model_file: text("model_file"), // Path to GLB file
+  
+  // Metadata
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertLandVehicleTypeSchema = createInsertSchema(landVehicleTypes).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertLandVehicleType = z.infer<typeof insertLandVehicleTypeSchema>;
+export type LandVehicleType = typeof landVehicleTypes.$inferSelect;
+
+// Land Convoy Vehicles - individual vehicles in a convoy
+export const landConvoyVehicles = pgTable("land_convoy_vehicles", {
+  id: serial("id").primaryKey(),
+  convoy_id: integer("convoy_id").notNull(), // FK to landConvoys
+  vehicle_type_id: integer("vehicle_type_id").notNull(), // FK to landVehicleTypes
+  position_in_convoy: integer("position_in_convoy").notNull().default(1),
+  callsign: text("callsign"),
+  driver_name: text("driver_name"),
+  cargo_manifest: jsonb("cargo_manifest").notNull().default([]),
+  current_weight_lbs: integer("current_weight_lbs").default(0),
+  status: text("status").notNull().default("ready"), // ready, loading, in_transit, unloading, maintenance
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertLandConvoyVehicleSchema = createInsertSchema(landConvoyVehicles).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertLandConvoyVehicle = z.infer<typeof insertLandConvoyVehicleSchema>;
+export type LandConvoyVehicle = typeof landConvoyVehicles.$inferSelect;
 
 // ============================================================================
 // SEA FREIGHT TABLES
@@ -772,6 +875,109 @@ export const insertWarehouseTransferSchema = createInsertSchema(warehouseTransfe
 });
 export type InsertWarehouseTransfer = z.infer<typeof insertWarehouseTransferSchema>;
 export type WarehouseTransfer = typeof warehouseTransfers.$inferSelect;
+
+// ============================================================================
+// CROSS-MODAL MANIFESTS TABLE
+// ============================================================================
+
+// Unified manifests that can be used across Air, Land, and Sea operations
+// Created from WMS inventory selection
+export const crossModalManifests = pgTable("cross_modal_manifests", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  
+  // Source
+  source_site_id: integer("source_site_id").notNull(), // Origin warehouse
+  destination_site_id: integer("destination_site_id"), // Destination warehouse (if known)
+  destination_address: text("destination_address"), // Or free-form destination
+  
+  // Manifest details
+  manifest_number: text("manifest_number").notNull(), // Auto-generated or MILSTRIP
+  name: text("name").notNull(),
+  priority: text("priority").notNull().default("routine"), // routine, priority, immediate, flash
+  classification: text("classification").notNull().default("unclassified"),
+  
+  // Transport mode assignment
+  transport_mode: text("transport_mode"), // air, land, sea, or null if not yet assigned
+  
+  // Link to specific transport (only one will be set based on mode)
+  flight_plan_id: integer("flight_plan_id"), // FK to flightPlans for air
+  convoy_id: integer("convoy_id"), // FK to landConvoys for land
+  voyage_id: integer("voyage_id"), // FK to seaVoyages for sea
+  
+  // Cost estimation
+  estimated_cost_usd: numeric("estimated_cost_usd", { precision: 12, scale: 2 }),
+  estimated_duration_hours: numeric("estimated_duration_hours", { precision: 8, scale: 2 }),
+  estimated_distance_miles: numeric("estimated_distance_miles", { precision: 10, scale: 2 }),
+  
+  // Weight/volume totals
+  total_weight_lbs: integer("total_weight_lbs").default(0),
+  total_cube_ft: numeric("total_cube_ft", { precision: 10, scale: 2 }).default("0"),
+  total_items: integer("total_items").default(0),
+  
+  // Status tracking
+  status: text("status").notNull().default("draft"), // draft, pending_transport, assigned, in_transit, delivered, cancelled
+  
+  // Dates
+  required_delivery_date: timestamp("required_delivery_date"),
+  estimated_departure: timestamp("estimated_departure"),
+  estimated_arrival: timestamp("estimated_arrival"),
+  actual_departure: timestamp("actual_departure"),
+  actual_arrival: timestamp("actual_arrival"),
+  
+  // Metadata
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCrossModalManifestSchema = createInsertSchema(crossModalManifests).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertCrossModalManifest = z.infer<typeof insertCrossModalManifestSchema>;
+export type CrossModalManifest = typeof crossModalManifests.$inferSelect;
+
+// Manifest Items - links inventory items to manifests
+export const manifestItems = pgTable("manifest_items", {
+  id: serial("id").primaryKey(),
+  manifest_id: integer("manifest_id").notNull(), // FK to crossModalManifests
+  inventory_item_id: integer("inventory_item_id"), // FK to warehouseInventoryItems (nullable for external items)
+  
+  // Item details (copied or entered manually)
+  nsn: text("nsn"),
+  part_number: text("part_number"),
+  nomenclature: text("nomenclature").notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  unit_of_issue: text("unit_of_issue").default("EA"),
+  
+  // Weight/dimensions
+  weight_lbs: integer("weight_lbs"),
+  length_in: numeric("length_in", { precision: 8, scale: 2 }),
+  width_in: numeric("width_in", { precision: 8, scale: 2 }),
+  height_in: numeric("height_in", { precision: 8, scale: 2 }),
+  cube_ft: numeric("cube_ft", { precision: 8, scale: 2 }),
+  
+  // Classification
+  hazmat_class: text("hazmat_class"),
+  is_hazmat: boolean("is_hazmat").default(false),
+  is_sensitive: boolean("is_sensitive").default(false),
+  
+  // Status
+  picked: boolean("picked").default(false),
+  packed: boolean("packed").default(false),
+  loaded: boolean("loaded").default(false),
+  
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertManifestItemSchema = createInsertSchema(manifestItems).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertManifestItem = z.infer<typeof insertManifestItemSchema>;
+export type ManifestItem = typeof manifestItems.$inferSelect;
 
 // ============================================================================
 // WMS CONFIGURATION TABLES
