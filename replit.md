@@ -153,7 +153,23 @@ The system supports four military organizations:
 - `POST /api/admin/seed-organizations` - Seed default orgs (superadmin)
 
 ## AI Insights Configuration
-AI insights are powered by AWS Bedrock with the Nova Lite model.
+AI insights are powered by AWS Bedrock with the Nova Lite model and structured prompts.
+
+### Insight Types
+- **Air Operations**: allocation_summary, cob_analysis, pallet_review, route_planning, compliance, mission_briefing, mission_analytics, flight_allocation_analysis
+- **Land Logistics**: land_convoy_analysis, land_route_optimization
+- **Sea Freight**: sea_voyage_analysis, sea_container_optimization
+- **Cross-Modal**: cross_modal_manifest_analysis
+- **Warehouse**: warehouse_capacity_forecast
+
+### Key Components
+- **`apps/server/services/bedrockService.ts`**: AWS Bedrock integration with structured JSON schemas and guardrails
+- **`apps/client/src/components/transport/TransportAiInsights.tsx`**: Shared AI insights panel for Land and Sea modules
+- **`apps/client/src/components/warehouse/WMSAiInsights.tsx`**: Warehouse-specific AI optimization wizard
+- **`apps/client/src/hooks/useAiInsights.ts`**: React hook for AI insight generation with caching
+
+### API Endpoint
+- `POST /api/insights/generate` - Generate AI insights with type, inputData, and optional planId
 
 # External Dependencies
 
