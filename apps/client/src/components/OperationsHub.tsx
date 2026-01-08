@@ -7,11 +7,17 @@ import {
   Warehouse,
   AlertTriangle,
   TrendingUp,
+  TrendingDown,
+  Minus,
   Package,
   Clock,
   Activity,
   Loader2,
   ChevronRight,
+  Calendar,
+  BarChart3,
+  Weight,
+  Box,
 } from "lucide-react";
 import { User } from "../hooks/useAuth";
 
@@ -67,12 +73,68 @@ interface OperationsSummary {
   };
 }
 
+interface SiteForecast {
+  siteId: number;
+  siteName: string;
+  currentUtilization: number;
+  projectedUtilization90: number;
+  totalPalletPositions: number;
+  usedPalletPositions: number;
+  openPalletPositions: number;
+  totalCubicFeet: number;
+  usedCubicFeet: number;
+  totalWeightCapacityLbs: number;
+  currentWeightLbs: number;
+  weightUtilizationPercent: number;
+  status: 'green' | 'yellow' | 'red';
+  trend: 'increasing' | 'decreasing' | 'stable';
+  daysUntilWarning: number | null;
+  daysUntilCritical: number | null;
+}
+
+interface ForecastSummary {
+  totalExpectedFlights: number;
+  totalExpectedConvoys: number;
+  totalExpectedVoyages: number;
+  totalAirCargoLbs: number;
+  totalLandCargoLbs: number;
+  avgWarehouseUtilization: number;
+  daysWithWarnings: number;
+}
+
+interface PredictiveForecast {
+  generatedAt: string;
+  forecastPeriodDays: number;
+  historicalDataPoints: {
+    flights: number;
+    convoys: number;
+    voyages: number;
+  };
+  dailyAverages: {
+    flights: number;
+    convoys: number;
+    voyages: number;
+    flightWeightLbs: number;
+    convoyWeightLbs: number;
+  };
+  summaries: {
+    thirtyDay: ForecastSummary;
+    sixtyDay: ForecastSummary;
+    ninetyDay: ForecastSummary;
+  };
+  siteForecasts: SiteForecast[];
+}
+
 export default function OperationsHub({ user, onSelectModule, onLogout }: OperationsHubProps) {
   const [summary, setSummary] = useState<OperationsSummary | null>(null);
+  const [forecast, setForecast] = useState<PredictiveForecast | null>(null);
   const [loading, setLoading] = useState(true);
+  const [forecastLoading, setForecastLoading] = useState(true);
+  const [selectedForecastPeriod, setSelectedForecastPeriod] = useState<'thirtyDay' | 'sixtyDay' | 'ninetyDay'>('ninetyDay');
 
   useEffect(() => {
     fetchSummary();
+    fetchForecast();
   }, []);
 
   const fetchSummary = async () => {
@@ -88,11 +150,48 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
     }
   };
 
+  const fetchForecast = async () => {
+    try {
+      const res = await fetch('/api/operations/predictive-forecast', { credentials: 'include' });
+      if (res.ok) {
+        setForecast(await res.json());
+      }
+    } catch (error) {
+      console.error('Error fetching predictive forecast:', error);
+    } finally {
+      setForecastLoading(false);
+    }
+  };
+
   const formatWeight = (lbs: number) => {
     if (lbs >= 2000) {
       return `${(lbs / 2000).toFixed(1)} tons`;
     }
     return `${lbs.toLocaleString()} lbs`;
+  };
+
+  const getUtilizationColor = (utilization: number) => {
+    if (utilization >= 85) return 'red';
+    if (utilization >= 60) return 'yellow';
+    return 'green';
+  };
+
+  const getUtilizationBg = (utilization: number) => {
+    if (utilization >= 85) return 'bg-red-500';
+    if (utilization >= 60) return 'bg-amber-500';
+    return 'bg-green-500';
+  };
+
+  const getUtilizationBorder = (utilization: number) => {
+    if (utilization >= 85) return 'border-red-500/30';
+    if (utilization >= 60) return 'border-amber-500/30';
+    return 'border-green-500/30';
+  };
+
+  const TrendIcon = ({ trend }: { trend: 'increasing' | 'decreasing' | 'stable' }) => {
+    if (trend === 'increasing') return <TrendingUp className="w-4 h-4 text-red-400" />;
+    if (trend === 'decreasing') return <TrendingDown className="w-4 h-4 text-green-400" />;
+    return <Minus className="w-4 h-4 text-slate-400" />;
   };
 
   const totalAlerts = summary 
@@ -149,6 +248,8 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
       ] : [],
     },
   ];
+
+  const selectedSummary = forecast?.summaries[selectedForecastPeriod];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -249,7 +350,7 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-6 rounded-2xl bg-red-500/10 border border-red-500/20"
+                className="p-6 rounded-2xl bg-red-500/10 border border-red-500/20 mb-8"
               >
                 <h3 className="text-lg font-semibold text-red-400 mb-4 flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5" />
@@ -278,37 +379,263 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
               </motion.div>
             )}
 
-            {summary && summary.warehouse.total_sites > 0 && (
+            {forecast && forecast.siteForecasts.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="p-6 rounded-2xl bg-[#0f172a] border border-purple-500/20 mb-8"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <Warehouse className="w-5 h-5 text-purple-400" />
+                    Capacity Overview
+                  </h3>
+                  <div className="flex items-center gap-4 text-xs">
+                    <span className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                      <span className="text-slate-400">&lt;60%</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                      <span className="text-slate-400">60-85%</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                      <span className="text-slate-400">&gt;85%</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {forecast.siteForecasts.map((site) => (
+                    <div 
+                      key={site.siteId} 
+                      className={`p-4 rounded-xl bg-white/5 border ${getUtilizationBorder(site.currentUtilization)}`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h4 className="font-medium text-white flex items-center gap-2">
+                            {site.siteName}
+                            <TrendIcon trend={site.trend} />
+                          </h4>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {site.trend === 'increasing' && 'Capacity trending up'}
+                            {site.trend === 'decreasing' && 'Capacity trending down'}
+                            {site.trend === 'stable' && 'Capacity stable'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`text-lg font-bold ${
+                            getUtilizationColor(site.currentUtilization) === 'red' ? 'text-red-400' :
+                            getUtilizationColor(site.currentUtilization) === 'yellow' ? 'text-amber-400' :
+                            'text-green-400'
+                          }`}>
+                            {site.currentUtilization}%
+                          </span>
+                          <p className="text-xs text-slate-500">utilization</p>
+                        </div>
+                      </div>
+
+                      <div className="h-2 rounded-full bg-slate-700 overflow-hidden mb-3">
+                        <div 
+                          className={`h-full transition-all ${getUtilizationBg(site.currentUtilization)}`}
+                          style={{ width: `${Math.min(100, site.currentUtilization)}%` }}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div className="p-2 rounded-lg bg-white/5">
+                          <div className="flex items-center justify-center gap-1 mb-1">
+                            <Box className="w-3.5 h-3.5 text-purple-400" />
+                          </div>
+                          <div className="text-sm font-medium text-white">
+                            {site.usedPalletPositions}/{site.totalPalletPositions}
+                          </div>
+                          <div className="text-xs text-slate-500">Pallet Positions</div>
+                        </div>
+                        <div className="p-2 rounded-lg bg-white/5">
+                          <div className="flex items-center justify-center gap-1 mb-1">
+                            <Weight className="w-3.5 h-3.5 text-purple-400" />
+                          </div>
+                          <div className="text-sm font-medium text-white">
+                            {site.weightUtilizationPercent}%
+                          </div>
+                          <div className="text-xs text-slate-500">Weight Used</div>
+                        </div>
+                        <div className="p-2 rounded-lg bg-white/5">
+                          <div className="flex items-center justify-center gap-1 mb-1">
+                            <BarChart3 className="w-3.5 h-3.5 text-purple-400" />
+                          </div>
+                          <div className="text-sm font-medium text-white">
+                            {Math.round(site.usedCubicFeet).toLocaleString()}
+                          </div>
+                          <div className="text-xs text-slate-500">Cu. Ft. Used</div>
+                        </div>
+                      </div>
+
+                      {(site.daysUntilWarning || site.daysUntilCritical) && (
+                        <div className="mt-3 pt-3 border-t border-white/10">
+                          <div className="flex items-center gap-2 text-xs">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                            {site.daysUntilCritical && (
+                              <span className="text-amber-400">
+                                Critical in ~{site.daysUntilCritical} days
+                              </span>
+                            )}
+                            {!site.daysUntilCritical && site.daysUntilWarning && (
+                              <span className="text-amber-400">
+                                Warning threshold in ~{site.daysUntilWarning} days
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {!forecastLoading && forecast && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="mt-6 p-6 rounded-2xl bg-white/5 border border-white/10"
+                className="p-6 rounded-2xl bg-[#0f172a] border border-blue-500/20"
               >
-                <h3 className="text-lg font-semibold text-white mb-4">Warehouse Capacity Status</h3>
-                <div className="flex items-center gap-8">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-green-500" />
-                    <span className="text-sm text-slate-400">{summary.warehouse.sites_healthy} Healthy</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-amber-500" />
-                    <span className="text-sm text-slate-400">{summary.warehouse.sites_warning} Warning</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-red-500" />
-                    <span className="text-sm text-slate-400">{summary.warehouse.sites_at_capacity} Critical</span>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-blue-400" />
+                    90-Day Forecast
+                  </h3>
+                  <div className="flex gap-2">
+                    {(['thirtyDay', 'sixtyDay', 'ninetyDay'] as const).map((period) => (
+                      <button
+                        key={period}
+                        onClick={() => setSelectedForecastPeriod(period)}
+                        className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                          selectedForecastPeriod === period
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                        }`}
+                      >
+                        {period === 'thirtyDay' ? '30 Days' : period === 'sixtyDay' ? '60 Days' : '90 Days'}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <div className="mt-4 h-3 rounded-full bg-slate-700 overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-green-500 via-amber-500 to-red-500"
-                    style={{ width: `${summary.warehouse.average_utilization}%` }}
-                  />
-                </div>
-                <div className="mt-2 text-sm text-slate-400">
-                  Average utilization: {summary.warehouse.average_utilization}%
-                </div>
+
+                {selectedSummary && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Plane className="w-4 h-4 text-blue-400" />
+                          <span className="text-sm text-blue-300">Air Operations</span>
+                        </div>
+                        <div className="text-2xl font-bold text-white mb-1">
+                          {selectedSummary.totalExpectedFlights}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          Expected flights • {formatWeight(selectedSummary.totalAirCargoLbs)} cargo
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Truck className="w-4 h-4 text-amber-400" />
+                          <span className="text-sm text-amber-300">Land Logistics</span>
+                        </div>
+                        <div className="text-2xl font-bold text-white mb-1">
+                          {selectedSummary.totalExpectedConvoys}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          Expected convoys • {formatWeight(selectedSummary.totalLandCargoLbs)} cargo
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-teal-500/10 to-emerald-500/10 border border-teal-500/20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Ship className="w-4 h-4 text-teal-400" />
+                          <span className="text-sm text-teal-300">Sea Freight</span>
+                        </div>
+                        <div className="text-2xl font-bold text-white mb-1">
+                          {selectedSummary.totalExpectedVoyages}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          Expected voyages
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Warehouse className="w-4 h-4 text-purple-400" />
+                          <span className="text-sm text-slate-300">Projected Warehouse Utilization</span>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                          <span className={`text-3xl font-bold ${
+                            selectedSummary.avgWarehouseUtilization >= 85 ? 'text-red-400' :
+                            selectedSummary.avgWarehouseUtilization >= 60 ? 'text-amber-400' :
+                            'text-green-400'
+                          }`}>
+                            {selectedSummary.avgWarehouseUtilization}%
+                          </span>
+                          <span className="text-slate-500 text-sm">average</span>
+                        </div>
+                        <div className="mt-3 h-2 rounded-full bg-slate-700 overflow-hidden">
+                          <div 
+                            className={`h-full transition-all ${getUtilizationBg(selectedSummary.avgWarehouseUtilization)}`}
+                            style={{ width: `${Math.min(100, selectedSummary.avgWarehouseUtilization)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                        <div className="flex items-center gap-2 mb-3">
+                          <AlertTriangle className="w-4 h-4 text-amber-400" />
+                          <span className="text-sm text-slate-300">Capacity Warnings</span>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                          <span className={`text-3xl font-bold ${
+                            selectedSummary.daysWithWarnings > 30 ? 'text-red-400' :
+                            selectedSummary.daysWithWarnings > 10 ? 'text-amber-400' :
+                            'text-green-400'
+                          }`}>
+                            {selectedSummary.daysWithWarnings}
+                          </span>
+                          <span className="text-slate-500 text-sm">days with warnings</span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-2">
+                          {selectedSummary.daysWithWarnings === 0 
+                            ? 'No capacity issues expected in forecast period'
+                            : `${selectedSummary.daysWithWarnings} days may require capacity attention`
+                          }
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-white/10">
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <span>Based on {forecast.historicalDataPoints.flights} flights, {forecast.historicalDataPoints.convoys} convoys, {forecast.historicalDataPoints.voyages} voyages</span>
+                        <span>Generated {new Date(forecast.generatedAt).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            )}
+
+            {forecastLoading && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="p-6 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center"
+              >
+                <Loader2 className="w-6 h-6 text-blue-500 animate-spin mr-3" />
+                <span className="text-slate-400">Loading forecast data...</span>
               </motion.div>
             )}
           </>

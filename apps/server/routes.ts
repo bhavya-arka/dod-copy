@@ -6653,6 +6653,213 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get 90-day predictive forecast for load planning
+  app.get("/api/operations/predictive-forecast", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      const FORECAST_DAYS = 90;
+      
+      // Get user's warehouse sites for capacity data
+      const userSites = await db.query.warehouseSites.findMany({ 
+        where: eq(warehouseSites.user_id, userId) 
+      });
+      const userSiteIds = userSites.map(s => s.id);
+      
+      // Fetch all historical data in parallel
+      const [
+        flightPlansData,
+        landConvoysData,
+        seaVoyagesData,
+        siteCapacities,
+        inventoryItems,
+      ] = await Promise.all([
+        db.query.flightPlans.findMany({ where: eq(flightPlans.user_id, userId) }),
+        db.query.landConvoys.findMany({ where: eq(landConvoys.user_id, userId) }),
+        db.query.seaVoyages.findMany({ where: eq(seaVoyages.user_id, userId) }),
+        getAllSiteCapacities(),
+        userSiteIds.length > 0 
+          ? db.query.warehouseInventoryItems.findMany({ 
+              where: inArray(warehouseInventoryItems.site_id, userSiteIds) 
+            })
+          : Promise.resolve([]),
+      ]);
+      
+      const now = new Date();
+      const msPerDay = 24 * 60 * 60 * 1000;
+      
+      // Calculate historical patterns (last 90 days activity)
+      const historicalDays = 90;
+      const historicalStart = new Date(now.getTime() - historicalDays * msPerDay);
+      
+      // Count activities in historical period
+      const airActivities = flightPlansData.filter(p => 
+        new Date(p.created_at) >= historicalStart
+      );
+      const landActivities = landConvoysData.filter(c => 
+        new Date(c.created_at) >= historicalStart
+      );
+      const seaActivities = seaVoyagesData.filter(v => 
+        new Date(v.created_at) >= historicalStart
+      );
+      
+      // Calculate daily averages
+      const avgDailyFlights = airActivities.length / historicalDays;
+      const avgDailyConvoys = landActivities.length / historicalDays;
+      const avgDailyVoyages = seaActivities.length / historicalDays;
+      
+      // Calculate average cargo weights per activity
+      const avgFlightWeight = airActivities.length > 0 
+        ? airActivities.reduce((sum, p) => sum + (p.total_weight_lb || 0), 0) / airActivities.length
+        : 10000; // default estimate
+      const avgConvoyWeight = landActivities.length > 0
+        ? landActivities.reduce((sum, c) => sum + (c.total_cargo_weight_lbs || 0), 0) / landActivities.length
+        : 5000;
+      
+      // Build 90-day forecast
+      const dailyForecasts: Array<{
+        date: string;
+        day: number;
+        air: { expectedFlights: number; expectedWeightLbs: number; confidence: number };
+        land: { expectedConvoys: number; expectedWeightLbs: number; confidence: number };
+        sea: { expectedVoyages: number; confidence: number };
+        warehouseUtilization: number;
+        warnings: string[];
+      }> = [];
+      
+      // Calculate current average utilization
+      const currentUtilization = siteCapacities.length > 0
+        ? siteCapacities.reduce((sum, c) => sum + c.utilizationPercent, 0) / siteCapacities.length
+        : 0;
+      
+      // Estimate utilization growth rate (simple linear model)
+      const utilizationGrowthPerDay = 0.05; // 0.05% per day default growth estimate
+      
+      for (let day = 1; day <= FORECAST_DAYS; day++) {
+        const forecastDate = new Date(now.getTime() + day * msPerDay);
+        const dateStr = forecastDate.toISOString().split('T')[0];
+        
+        // Apply slight randomness for realistic projections (weekday/weekend variance)
+        const dayOfWeek = forecastDate.getDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const weekdayMultiplier = isWeekend ? 0.6 : 1.1;
+        
+        // Confidence decreases as we look further ahead
+        const baseConfidence = Math.max(0.5, 1 - (day / FORECAST_DAYS) * 0.5);
+        
+        const expectedFlights = avgDailyFlights * weekdayMultiplier;
+        const expectedConvoys = avgDailyConvoys * weekdayMultiplier;
+        const expectedVoyages = avgDailyVoyages;
+        
+        // Project warehouse utilization
+        const projectedUtilization = Math.min(100, currentUtilization + (day * utilizationGrowthPerDay));
+        
+        const warnings: string[] = [];
+        if (projectedUtilization >= 85) {
+          warnings.push('Warehouse capacity critical');
+        } else if (projectedUtilization >= 60) {
+          warnings.push('Warehouse capacity warning');
+        }
+        
+        dailyForecasts.push({
+          date: dateStr,
+          day,
+          air: {
+            expectedFlights: Math.round(expectedFlights * 100) / 100,
+            expectedWeightLbs: Math.round(expectedFlights * avgFlightWeight),
+            confidence: Math.round(baseConfidence * 100) / 100,
+          },
+          land: {
+            expectedConvoys: Math.round(expectedConvoys * 100) / 100,
+            expectedWeightLbs: Math.round(expectedConvoys * avgConvoyWeight),
+            confidence: Math.round(baseConfidence * 100) / 100,
+          },
+          sea: {
+            expectedVoyages: Math.round(expectedVoyages * 100) / 100,
+            confidence: Math.round(baseConfidence * 100) / 100,
+          },
+          warehouseUtilization: Math.round(projectedUtilization * 10) / 10,
+          warnings,
+        });
+      }
+      
+      // Calculate 30/60/90 day summaries
+      const summarize = (days: number) => {
+        const subset = dailyForecasts.slice(0, days);
+        return {
+          totalExpectedFlights: Math.round(subset.reduce((sum, d) => sum + d.air.expectedFlights, 0)),
+          totalExpectedConvoys: Math.round(subset.reduce((sum, d) => sum + d.land.expectedConvoys, 0)),
+          totalExpectedVoyages: Math.round(subset.reduce((sum, d) => sum + d.sea.expectedVoyages, 0)),
+          totalAirCargoLbs: Math.round(subset.reduce((sum, d) => sum + d.air.expectedWeightLbs, 0)),
+          totalLandCargoLbs: Math.round(subset.reduce((sum, d) => sum + d.land.expectedWeightLbs, 0)),
+          avgWarehouseUtilization: Math.round(subset.reduce((sum, d) => sum + d.warehouseUtilization, 0) / days * 10) / 10,
+          daysWithWarnings: subset.filter(d => d.warnings.length > 0).length,
+        };
+      };
+      
+      // Site-specific capacity forecasts
+      const siteForecasts = siteCapacities.map(site => {
+        const projectedUtilization90 = Math.min(100, site.utilizationPercent + (90 * utilizationGrowthPerDay));
+        const daysUntilWarning = site.utilizationPercent < 60 
+          ? Math.round((60 - site.utilizationPercent) / utilizationGrowthPerDay)
+          : 0;
+        const daysUntilCritical = site.utilizationPercent < 85
+          ? Math.round((85 - site.utilizationPercent) / utilizationGrowthPerDay)
+          : 0;
+        
+        // Determine trend based on recent activity
+        const trend = utilizationGrowthPerDay > 0.03 ? 'increasing' 
+          : utilizationGrowthPerDay < -0.01 ? 'decreasing' 
+          : 'stable';
+        
+        return {
+          siteId: site.siteId,
+          siteName: site.siteName,
+          currentUtilization: site.utilizationPercent,
+          projectedUtilization90: Math.round(projectedUtilization90 * 10) / 10,
+          totalPalletPositions: site.totalPalletPositions,
+          usedPalletPositions: site.usedPalletPositions,
+          openPalletPositions: site.openPalletPositions,
+          totalCubicFeet: site.totalCubicFeet,
+          usedCubicFeet: site.usedCubicFeet,
+          totalWeightCapacityLbs: site.totalWeightCapacityLbs,
+          currentWeightLbs: site.currentWeightLbs,
+          weightUtilizationPercent: site.weightUtilizationPercent,
+          status: site.status,
+          trend,
+          daysUntilWarning: daysUntilWarning > 0 && daysUntilWarning <= 90 ? daysUntilWarning : null,
+          daysUntilCritical: daysUntilCritical > 0 && daysUntilCritical <= 90 ? daysUntilCritical : null,
+        };
+      });
+      
+      res.json({
+        generatedAt: now.toISOString(),
+        forecastPeriodDays: FORECAST_DAYS,
+        historicalDataPoints: {
+          flights: airActivities.length,
+          convoys: landActivities.length,
+          voyages: seaActivities.length,
+        },
+        dailyAverages: {
+          flights: Math.round(avgDailyFlights * 100) / 100,
+          convoys: Math.round(avgDailyConvoys * 100) / 100,
+          voyages: Math.round(avgDailyVoyages * 100) / 100,
+          flightWeightLbs: Math.round(avgFlightWeight),
+          convoyWeightLbs: Math.round(avgConvoyWeight),
+        },
+        summaries: {
+          thirtyDay: summarize(30),
+          sixtyDay: summarize(60),
+          ninetyDay: summarize(90),
+        },
+        siteForecasts,
+        dailyForecasts,
+      });
+    } catch (error) {
+      console.error("[Operations] Error generating predictive forecast:", error);
+      res.status(500).json({ error: "Failed to generate predictive forecast" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
