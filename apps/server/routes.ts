@@ -1996,10 +1996,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/warehouse/sites - Create a new warehouse site
   app.post("/api/warehouse/sites", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const { code, name, address, city, country, timezone, latitude, longitude, active } = req.body;
+      const { 
+        code, name, address, address_line_1, address_line_2, 
+        city, state, zip_code, country, timezone, 
+        latitude, longitude, active, aor, shipyard_code, dodaac 
+      } = req.body;
       
       if (!code || !name) {
         return res.status(400).json({ error: "Code and name are required" });
+      }
+
+      // If coordinates not provided but we have address info, try to geocode
+      let finalLat = latitude;
+      let finalLng = longitude;
+      
+      if (!latitude && !longitude && (address_line_1 || city)) {
+        const { geocodeAddress } = await import("./services/googleMapsService");
+        const addressParts = [address_line_1, address_line_2, city, state, zip_code, country].filter(Boolean);
+        const fullAddress = addressParts.join(", ");
+        
+        if (fullAddress) {
+          const geocodeResult = await geocodeAddress(fullAddress);
+          if (geocodeResult) {
+            finalLat = geocodeResult.lat.toString();
+            finalLng = geocodeResult.lng.toString();
+          }
+        }
       }
 
       const [site] = await db.insert(warehouseSites).values({
@@ -2007,12 +2029,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         code,
         name,
         address: address || null,
+        address_line_1: address_line_1 || null,
+        address_line_2: address_line_2 || null,
         city: city || null,
-        country: country || null,
+        state: state || null,
+        zip_code: zip_code || null,
+        country: country || "USA",
         timezone: timezone || "UTC",
-        latitude: latitude || null,
-        longitude: longitude || null,
+        latitude: finalLat || null,
+        longitude: finalLng || null,
         active: active !== undefined ? active : true,
+        aor: aor || null,
+        shipyard_code: shipyard_code || null,
+        dodaac: dodaac || null,
       }).returning();
 
       res.status(201).json(site);

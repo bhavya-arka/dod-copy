@@ -100,14 +100,23 @@ export async function deleteBuilding(siteId: number, buildingId: number): Promis
 
 /**
  * Create a new warehouse site
- * @param data - Site creation data
+ * @param data - Site creation data with full address fields for Google Maps geocoding
  * @returns Created site
  */
 export async function createSite(data: {
   code: string;
   name: string;
+  address_line_1?: string;
+  address_line_2?: string;
   city?: string;
+  state?: string;
+  zip_code?: string;
   country?: string;
+  latitude?: number;
+  longitude?: number;
+  aor?: string;
+  shipyard_code?: string;
+  dodaac?: string;
 }): Promise<WarehouseSite> {
   const response = await fetch(`${API_BASE}/sites`, {
     method: "POST",
