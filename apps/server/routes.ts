@@ -4256,24 +4256,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Warehouse site not found" });
       }
 
-      // Fetch warehouse zones for zone-based organization
+      // Fetch warehouse zones for zone-based organization (optional - graceful fallback if none exist)
       const zones = await db.select()
         .from(warehouseZones)
         .where(eq(warehouseZones.site_id, siteId));
 
-      // Validate zones exist before running optimization
-      if (zones.length === 0) {
-        return res.status(400).json({ 
-          error: "No zones defined for this warehouse. Please configure zones before running optimization." 
-        });
-      }
+      // Zone-based optimization is optional - if no zones exist, use legacy location-based approach
+      const hasZones = zones.length > 0;
 
       // Fetch inventory items for analysis
       const items = await db.select()
         .from(warehouseInventoryItems)
         .where(eq(warehouseInventoryItems.site_id, siteId));
 
-      // Parse item data from raw_row and database fields with zone matching
+      // Parse item data from raw_row and database fields with optional zone matching
       const itemsWithData = items.map(item => {
         const rawRow = item.raw_row as Record<string, any> || {};
         const qty = item.quantity || parseInt(rawRow?.qty) || 1;
@@ -4283,9 +4279,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Extract location info - location field in raw_row contains rack location like "2069-B"
         const location = rawRow?.location || item.location || 'Unassigned';
-        // Use zone matching service to get actual zone
-        const zoneMatch = matchLocationToZone(location, zones);
-        const matchedZone = zones.find(z => z.id === zoneMatch.zoneId);
+        // Extract zone prefix for legacy mode (e.g., "2069" from "2069-B")
+        const locationZone = location.split('-')[0] || location.substring(0, 4) || 'UNK';
+        
+        // Use zone matching if zones exist, otherwise use legacy location parsing
+        let matched_zone_id: number | null = null;
+        let matched_zone_name: string | null = null;
+        let matchedZone: typeof zones[0] | undefined = undefined;
+        let zone_match_confidence = 0;
+        
+        if (hasZones) {
+          const zoneMatch = matchLocationToZone(location, zones);
+          matched_zone_id = zoneMatch.zoneId;
+          matched_zone_name = zoneMatch.zoneName;
+          matchedZone = zones.find(z => z.id === zoneMatch.zoneId);
+          zone_match_confidence = zoneMatch.confidence;
+        }
         
         return {
           id: item.id,
@@ -4295,11 +4304,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           value,
           weight,
           rack_location: location,
-          location_zone: location.split('-')[0] || location.substring(0, 4) || 'UNK',
-          matched_zone_id: zoneMatch.zoneId,
-          matched_zone_name: zoneMatch.zoneName,
+          location_zone: locationZone,
+          matched_zone_id,
+          matched_zone_name,
           matched_zone: matchedZone,
-          zone_match_confidence: zoneMatch.confidence,
+          zone_match_confidence,
           ship_class: item.ship_class || rawRow?.ship_class || '',
           inventory_type: item.inventory_type || rawRow?.inventory_type || '',
           condition_code: item.condition_code || item.condition || rawRow?.condition_code || 'A',

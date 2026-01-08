@@ -6,6 +6,7 @@
 import type { 
   WarehouseSite, 
   WarehouseBuilding,
+  WarehouseZone,
   InventoryItem, 
   Transfer, 
   OptimizationResult, 
@@ -96,6 +97,80 @@ export async function deleteBuilding(siteId: number, buildingId: number): Promis
     const error = await response.json();
     throw new Error(error.error || "Failed to delete building");
   }
+}
+
+/**
+ * Fetch zones for a specific site
+ * @param siteId - Site ID
+ * @returns Array of zones
+ */
+export async function fetchSiteZones(siteId: number): Promise<WarehouseZone[]> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/zones`, {
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Failed to fetch zones");
+  return response.json();
+}
+
+/**
+ * Create a new zone
+ * @param data - Zone creation data
+ * @returns Created zone
+ */
+export async function createZone(data: {
+  site_id: number;
+  code: string;
+  name: string;
+  is_outdoor?: boolean;
+  usage_type?: string;
+  location_pattern?: string;
+  bulk_available?: number;
+  rack_available?: number;
+}): Promise<WarehouseZone> {
+  const response = await fetch(`${API_BASE}/zones`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to create zone");
+  }
+  return response.json();
+}
+
+/**
+ * Delete a zone
+ * @param zoneId - Zone ID to delete
+ */
+export async function deleteZone(zoneId: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/zones/${zoneId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to delete zone");
+  }
+}
+
+/**
+ * Seed default zones for a site (San Diego template)
+ * @param siteId - Site ID
+ * @returns Count of seeded zones
+ */
+export async function seedDefaultZones(siteId: number): Promise<{ count: number }> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/zones/seed`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to seed zones");
+  }
+  return response.json();
 }
 
 /**

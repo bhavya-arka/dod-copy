@@ -26,6 +26,35 @@ export interface WarehouseBuilding {
   active: boolean;
 }
 
+/** Zone within a warehouse site (primary organizational structure) */
+export interface WarehouseZone {
+  id: number;
+  site_id: number;
+  building_id?: number | null;
+  code: string;
+  name: string;
+  is_outdoor: boolean;
+  usage_type: string;
+  bulk_available: number;
+  bulk_open: number;
+  rack_available: number;
+  rack_open: number;
+  location_pattern?: string;
+  weight_limit_lbs?: number;
+  capacity_pallets?: number;
+}
+
+/** Zone usage types */
+export type ZoneUsageType = 
+  | "small_material" 
+  | "mixed_material" 
+  | "large_material" 
+  | "uncrated" 
+  | "crated" 
+  | "hazmat" 
+  | "long_pipes" 
+  | "general";
+
 /** Inventory item in a warehouse - includes all BATS fields */
 export interface InventoryItem {
   id: number;

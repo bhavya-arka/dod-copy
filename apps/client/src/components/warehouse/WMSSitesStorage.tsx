@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Building2, ChevronRight, ChevronDown, Move, Zap, Loader2, Trash2, Pencil } from "lucide-react";
-import type { WarehouseSite, WarehouseBuilding, ToastMessage } from "./types";
-import { deleteSite, getSiteBuildings, deleteBuilding, getWarehouseDeletionPreview } from "../../services/warehouseService";
+import { Plus, Building2, ChevronRight, ChevronDown, Move, Zap, Loader2, Trash2, Pencil, Grid3X3, Sprout, Sun, Home } from "lucide-react";
+import type { WarehouseSite, WarehouseBuilding, WarehouseZone, ToastMessage } from "./types";
+import { deleteSite, getSiteBuildings, deleteBuilding, getWarehouseDeletionPreview, fetchSiteZones, deleteZone, seedDefaultZones } from "../../services/warehouseService";
 import ConfirmDestructiveModal from "./modals/ConfirmDestructiveModal";
 import TextConfirmationDialog from "../ui/TextConfirmationDialog";
 import MoveItemModal from "./modals/MoveItemModal";
 import OptimizationWizardModal from "./modals/OptimizationWizardModal";
 import AddBuildingModal from "./modals/AddBuildingModal";
+import AddZoneModal from "./modals/AddZoneModal";
 
 interface WMSSitesStorageProps {
   sites: WarehouseSite[];
@@ -16,6 +17,19 @@ interface WMSSitesStorageProps {
   onRefresh: () => void;
   onShowToast: (message: string, type?: ToastMessage["type"]) => void;
 }
+
+type SiteTab = "zones" | "buildings";
+
+const USAGE_TYPE_LABELS: Record<string, string> = {
+  small_material: "Small Material",
+  mixed_material: "Mixed Material",
+  large_material: "Large Material",
+  uncrated: "Uncrated",
+  crated: "Crated",
+  hazmat: "Hazmat",
+  long_pipes: "Long Pipes",
+  general: "General",
+};
 
 export default function WMSSitesStorage({
   sites,
@@ -26,7 +40,10 @@ export default function WMSSitesStorage({
 }: WMSSitesStorageProps) {
   const [expandedSites, setExpandedSites] = useState<Set<number>>(new Set());
   const [siteBuildings, setSiteBuildings] = useState<Record<number, WarehouseBuilding[]>>({});
+  const [siteZones, setSiteZones] = useState<Record<number, WarehouseZone[]>>({});
   const [loadingBuildings, setLoadingBuildings] = useState<Set<number>>(new Set());
+  const [loadingZones, setLoadingZones] = useState<Set<number>>(new Set());
+  const [siteTabs, setSiteTabs] = useState<Record<number, SiteTab>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [siteToDelete, setSiteToDelete] = useState<number | null>(null);
   const [deletePreview, setDeletePreview] = useState<{
@@ -51,6 +68,12 @@ export default function WMSSitesStorage({
   const [buildingToDelete, setBuildingToDelete] = useState<{ building: WarehouseBuilding; siteId: number } | null>(null);
   const [deleteBuildingDialogOpen, setDeleteBuildingDialogOpen] = useState(false);
   const [isDeletingBuilding, setIsDeletingBuilding] = useState(false);
+  const [addZoneModalOpen, setAddZoneModalOpen] = useState(false);
+  const [addZoneModalSite, setAddZoneModalSite] = useState<{ id: number; name: string } | null>(null);
+  const [zoneToDelete, setZoneToDelete] = useState<{ zone: WarehouseZone; siteId: number } | null>(null);
+  const [deleteZoneDialogOpen, setDeleteZoneDialogOpen] = useState(false);
+  const [isDeletingZone, setIsDeletingZone] = useState(false);
+  const [seedingZones, setSeedingZones] = useState<Set<number>>(new Set());
 
   const fetchBuildingsForSite = useCallback(async (siteId: number) => {
     if (siteBuildings[siteId] || loadingBuildings.has(siteId)) {
@@ -73,13 +96,37 @@ export default function WMSSitesStorage({
     }
   }, [siteBuildings, loadingBuildings]);
 
+  const fetchZonesForSite = useCallback(async (siteId: number) => {
+    if (siteZones[siteId] || loadingZones.has(siteId)) {
+      return;
+    }
+
+    setLoadingZones(prev => new Set(prev).add(siteId));
+    try {
+      const zones = await fetchSiteZones(siteId);
+      setSiteZones(prev => ({ ...prev, [siteId]: zones }));
+    } catch (error) {
+      console.error("Failed to fetch zones:", error);
+      setSiteZones(prev => ({ ...prev, [siteId]: [] }));
+    } finally {
+      setLoadingZones(prev => {
+        const next = new Set(prev);
+        next.delete(siteId);
+        return next;
+      });
+    }
+  }, [siteZones, loadingZones]);
+
   useEffect(() => {
     expandedSites.forEach(siteId => {
       if (!siteBuildings[siteId] && !loadingBuildings.has(siteId)) {
         fetchBuildingsForSite(siteId);
       }
+      if (!siteZones[siteId] && !loadingZones.has(siteId)) {
+        fetchZonesForSite(siteId);
+      }
     });
-  }, [expandedSites, fetchBuildingsForSite, siteBuildings, loadingBuildings]);
+  }, [expandedSites, fetchBuildingsForSite, fetchZonesForSite, siteBuildings, siteZones, loadingBuildings, loadingZones]);
 
   const handleMoveClick = (e: React.MouseEvent, siteId: number) => {
     e.stopPropagation();
@@ -137,6 +184,9 @@ export default function WMSSitesStorage({
       newExpanded.delete(siteId);
     } else {
       newExpanded.add(siteId);
+      if (!siteTabs[siteId]) {
+        setSiteTabs(prev => ({ ...prev, [siteId]: "zones" }));
+      }
     }
     setExpandedSites(newExpanded);
   };
@@ -199,6 +249,236 @@ export default function WMSSitesStorage({
       return prev;
     });
     onRefresh();
+  };
+
+  const handleAddZoneClick = (e: React.MouseEvent, site: WarehouseSite) => {
+    e.stopPropagation();
+    setAddZoneModalSite({ id: site.id, name: site.name });
+    setAddZoneModalOpen(true);
+  };
+
+  const handleDeleteZoneClick = (e: React.MouseEvent, zone: WarehouseZone, siteId: number) => {
+    e.stopPropagation();
+    setZoneToDelete({ zone, siteId });
+    setDeleteZoneDialogOpen(true);
+  };
+
+  const handleConfirmDeleteZone = async () => {
+    if (!zoneToDelete) return;
+    
+    setIsDeletingZone(true);
+    try {
+      await deleteZone(zoneToDelete.zone.id);
+      onShowToast(`Zone "${zoneToDelete.zone.code}" deleted successfully`, "success");
+      setSiteZones(prev => {
+        const newZones = { ...prev };
+        delete newZones[zoneToDelete.siteId];
+        return newZones;
+      });
+      setDeleteZoneDialogOpen(false);
+      setZoneToDelete(null);
+      onRefresh();
+    } catch (error) {
+      onShowToast(
+        error instanceof Error ? error.message : "Failed to delete zone",
+        "error"
+      );
+    } finally {
+      setIsDeletingZone(false);
+    }
+  };
+
+  const handleZoneModalSuccess = () => {
+    setAddZoneModalOpen(false);
+    setAddZoneModalSite(null);
+    setSiteZones(prev => {
+      if (addZoneModalSite) {
+        const newZones = { ...prev };
+        delete newZones[addZoneModalSite.id];
+        return newZones;
+      }
+      return prev;
+    });
+    onRefresh();
+  };
+
+  const handleSeedZones = async (e: React.MouseEvent, siteId: number) => {
+    e.stopPropagation();
+    setSeedingZones(prev => new Set(prev).add(siteId));
+    try {
+      const result = await seedDefaultZones(siteId);
+      onShowToast(`${result.count} default zones created`, "success");
+      setSiteZones(prev => {
+        const newZones = { ...prev };
+        delete newZones[siteId];
+        return newZones;
+      });
+      fetchZonesForSite(siteId);
+    } catch (error) {
+      onShowToast(
+        error instanceof Error ? error.message : "Failed to seed zones",
+        "error"
+      );
+    } finally {
+      setSeedingZones(prev => {
+        const next = new Set(prev);
+        next.delete(siteId);
+        return next;
+      });
+    }
+  };
+
+  const getCapacityPercent = (available: number, open: number): number => {
+    if (available === 0) return 0;
+    const used = available - open;
+    return Math.round((used / available) * 100);
+  };
+
+  const renderZones = (siteId: number, site: WarehouseSite) => {
+    const isLoading = loadingZones.has(siteId);
+    const zones = siteZones[siteId] || [];
+    const isSeeding = seedingZones.has(siteId);
+
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-5 h-5 animate-spin text-purple-500" />
+          <span className="ml-2 text-sm text-muted-foreground">Loading zones...</span>
+        </div>
+      );
+    }
+
+    if (zones.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+          <Grid3X3 className="w-10 h-10 mb-2 opacity-50" />
+          <p className="text-sm mb-1">No zones configured</p>
+          <p className="text-xs text-muted-foreground/70 mb-4">Zones are the primary organizational structure</p>
+          <div className="flex gap-2">
+            <button
+              onClick={(e) => handleSeedZones(e, siteId)}
+              disabled={isSeeding}
+              className="text-sm px-3 py-2 rounded-lg border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              {isSeeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sprout className="w-4 h-4" />}
+              Seed Default Zones
+            </button>
+            <button
+              onClick={(e) => handleAddZoneClick(e, site)}
+              className="text-sm px-3 py-2 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Zone
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {zones.map((zone) => {
+            const bulkPercent = getCapacityPercent(zone.bulk_available, zone.bulk_open);
+            const rackPercent = getCapacityPercent(zone.rack_available, zone.rack_open);
+            
+            return (
+              <div
+                key={zone.id}
+                className="p-4 rounded-xl bg-gradient-to-br from-purple-50/50 to-white border border-purple-200/50 hover:border-purple-300 transition-colors"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-purple-100">
+                      <Grid3X3 className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground text-sm">{zone.code}</p>
+                      <p className="text-xs text-muted-foreground">{zone.name}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={(e) => handleDeleteZoneClick(e, zone, siteId)}
+                      className="p-1.5 rounded-lg hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
+                      title="Delete zone"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mb-3">
+                  {zone.is_outdoor ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                      <Sun className="w-3 h-3" />
+                      Outdoor
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                      <Home className="w-3 h-3" />
+                      Indoor
+                    </span>
+                  )}
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                    {USAGE_TYPE_LABELS[zone.usage_type] || zone.usage_type}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">Bulk</span>
+                      <span className="font-medium">{zone.bulk_open}/{zone.bulk_available}</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          bulkPercent > 80 ? "bg-red-500" : bulkPercent > 60 ? "bg-amber-500" : "bg-emerald-500"
+                        }`}
+                        style={{ width: `${Math.min(bulkPercent, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">Rack</span>
+                      <span className="font-medium">{zone.rack_open}/{zone.rack_available}</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          rackPercent > 80 ? "bg-red-500" : rackPercent > 60 ? "bg-amber-500" : "bg-emerald-500"
+                        }`}
+                        style={{ width: `${Math.min(rackPercent, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex gap-2 pt-2">
+          <button
+            onClick={(e) => handleSeedZones(e, siteId)}
+            disabled={isSeeding}
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-dashed border-purple-300 hover:border-purple-400 hover:bg-purple-50 text-purple-600 transition-colors text-sm disabled:opacity-50"
+          >
+            {isSeeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sprout className="w-4 h-4" />}
+            <span>Seed Default Zones</span>
+          </button>
+          <button
+            onClick={(e) => handleAddZoneClick(e, site)}
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border-2 border-dashed border-border hover:border-purple-400 hover:bg-purple-50/50 text-muted-foreground hover:text-purple-600 transition-colors text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Zone</span>
+          </button>
+        </div>
+      </div>
+    );
   };
 
   const renderBuildings = (siteId: number) => {
@@ -332,6 +612,57 @@ export default function WMSSitesStorage({
     );
   };
 
+  const renderSiteContent = (site: WarehouseSite) => {
+    const currentTab = siteTabs[site.id] || "zones";
+
+    return (
+      <div className="space-y-4">
+        <div className="flex gap-1 p-1 bg-muted/50 rounded-lg w-fit">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSiteTabs(prev => ({ ...prev, [site.id]: "zones" }));
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              currentTab === "zones"
+                ? "bg-white text-purple-600 shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Grid3X3 className="w-4 h-4" />
+            Zones
+            {siteZones[site.id] && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-purple-100 text-purple-700">
+                {siteZones[site.id].length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSiteTabs(prev => ({ ...prev, [site.id]: "buildings" }));
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              currentTab === "buildings"
+                ? "bg-white text-blue-600 shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            Buildings
+            {siteBuildings[site.id] && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">
+                {siteBuildings[site.id].length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {currentTab === "zones" ? renderZones(site.id, site) : renderBuildingsWithAddButton(site)}
+      </div>
+    );
+  };
+
   return (
     <>
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
@@ -424,8 +755,8 @@ export default function WMSSitesStorage({
                       exit={{ height: 0, opacity: 0 }}
                       className="border-t border-border"
                     >
-                      <div className="p-4 pl-12 space-y-3">
-                        {renderBuildingsWithAddButton(site)}
+                      <div className="p-4 pl-8 space-y-3">
+                        {renderSiteContent(site)}
                       </div>
                     </motion.div>
                   )}
@@ -510,6 +841,19 @@ export default function WMSSitesStorage({
         />
       )}
 
+      {addZoneModalOpen && addZoneModalSite !== null && (
+        <AddZoneModal
+          siteId={addZoneModalSite.id}
+          siteName={addZoneModalSite.name}
+          onClose={() => {
+            setAddZoneModalOpen(false);
+            setAddZoneModalSite(null);
+          }}
+          onSuccess={handleZoneModalSuccess}
+          onShowToast={onShowToast}
+        />
+      )}
+
       <ConfirmDestructiveModal
         isOpen={deleteBuildingDialogOpen}
         onClose={() => {
@@ -527,6 +871,25 @@ export default function WMSSitesStorage({
         }
         confirmText="delete building"
         isLoading={isDeletingBuilding}
+      />
+
+      <ConfirmDestructiveModal
+        isOpen={deleteZoneDialogOpen}
+        onClose={() => {
+          if (!isDeletingZone) {
+            setDeleteZoneDialogOpen(false);
+            setZoneToDelete(null);
+          }
+        }}
+        onConfirm={handleConfirmDeleteZone}
+        title="Delete Zone"
+        description={
+          <>
+            Are you sure you want to delete zone <strong>{zoneToDelete?.zone.code}</strong>? This action cannot be undone and will permanently delete all locations within this zone.
+          </>
+        }
+        confirmText="delete zone"
+        isLoading={isDeletingZone}
       />
     </>
   );
