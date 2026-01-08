@@ -1,23 +1,29 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import type { RegisterData } from '../hooks/useAuth';
 
 interface AuthScreenProps {
   onLogin: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  onRegister: (email: string, username: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  onRegister: (data: RegisterData) => Promise<{ success: boolean; error?: string; pendingApproval?: boolean }>;
 }
 
 export default function AuthScreen({ onLogin, onRegister }: AuthScreenProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [accessCode, setAccessCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
     setIsLoading(true);
 
     try {
@@ -32,9 +38,31 @@ export default function AuthScreen({ onLogin, onRegister }: AuthScreenProps) {
           setIsLoading(false);
           return;
         }
-        const result = await onRegister(email, username, password);
+        if (!accessCode && !email.toLowerCase().includes('bhavya091213')) {
+          setError('Department Access Code is required');
+          setIsLoading(false);
+          return;
+        }
+        const result = await onRegister({
+          email,
+          username,
+          password,
+          first_name: firstName || undefined,
+          last_name: lastName || undefined,
+          access_code: accessCode,
+        });
         if (!result.success) {
           setError(result.error || 'Registration failed');
+        } else if (result.pendingApproval) {
+          setSuccessMessage('Registration successful! Your account is pending admin approval. You will be notified when approved.');
+          setMode('login');
+          setEmail('');
+          setUsername('');
+          setFirstName('');
+          setLastName('');
+          setAccessCode('');
+          setPassword('');
+          setConfirmPassword('');
         }
       } else {
         const result = await onLogin(email, password);
@@ -104,17 +132,53 @@ export default function AuthScreen({ onLogin, onRegister }: AuthScreenProps) {
             </div>
 
             {mode === 'register' && (
-              <div>
-                <label className="block text-neutral-700 text-sm font-medium mb-1.5">Username</label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="glass-input w-full"
-                  placeholder="Your display name"
-                  required
-                />
-              </div>
+              <>
+                <div>
+                  <label className="block text-neutral-700 text-sm font-medium mb-1.5">Department Access Code</label>
+                  <input
+                    type="text"
+                    value={accessCode}
+                    onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
+                    className="glass-input w-full font-mono tracking-wider"
+                    placeholder="Enter your access code"
+                    required
+                  />
+                  <p className="text-xs text-neutral-400 mt-1">Contact your branch admin for an access code</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-neutral-700 text-sm font-medium mb-1.5">First Name</label>
+                    <input
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      className="glass-input w-full"
+                      placeholder="John"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-neutral-700 text-sm font-medium mb-1.5">Last Name</label>
+                    <input
+                      type="text"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      className="glass-input w-full"
+                      placeholder="Doe"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-neutral-700 text-sm font-medium mb-1.5">Username</label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="glass-input w-full"
+                    placeholder="Your display name"
+                    required
+                  />
+                </div>
+              </>
             )}
 
             <div>
@@ -140,6 +204,12 @@ export default function AuthScreen({ onLogin, onRegister }: AuthScreenProps) {
                   placeholder="••••••••"
                   required
                 />
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm">
+                {successMessage}
               </div>
             )}
 

@@ -109,6 +109,49 @@ The system supports National Stock Numbers (NSN) format (FSC and NIIN components
 ## UI/UX Design
 The platform uses a responsive, mobile-first design with a consistent navigation. A dark theme with gradient accents is applied per section: Air (Blue/Cyan), Land (Amber/Orange), Sea (Teal/Emerald), and Warehouse (Purple/Pink).
 
+## Military Organization & Role-Based Access Control
+
+### Organizations
+The system supports four military organizations:
+- **PACAF** - Pacific Air Forces
+- **DLA** - Defense Logistics Agency  
+- **MSC** - Military Sealift Command
+- **TRANSCOM** - United States Transportation Command
+
+### Roles & Permissions
+| Role         | Scope                        | Capabilities                                                    |
+|--------------|------------------------------|-----------------------------------------------------------------|
+| Superadmin   | Global                       | Full system access; create/edit/delete admins and users        |
+| Admin        | PACAF / DLA / MSC / TRANSCOM | Approve members, manage accounts within branch, generate DACs  |
+| User         | Assigned branch              | Standard access based on branch and privileges                  |
+
+### Database Tables
+- `organizations` - Stores PACAF, DLA, MSC, TRANSCOM
+- `access_codes` - Department Access Codes (DAC) for signup
+- `users` - Extended with organization_id, role, is_active, first_name, last_name
+
+### Authentication Flow
+1. User signs up with valid Department Access Code (DAC)
+2. Branch Admin notified and approves user
+3. User becomes active and can access the system
+4. Superadmin (bhavya091213@gmail.com) has full access and bypasses restrictions
+
+### API Endpoints
+**Organizations:**
+- `GET /api/organizations` - List all orgs (authenticated users)
+- `POST /api/organizations` - Create org (superadmin only)
+
+**Access Codes:**
+- `GET /api/accesscodes` - List access codes (org-scoped for admins)
+- `POST /api/accesscodes` - Generate DAC (admins/superadmin)
+
+**Admin User Management:**
+- `GET /api/admin/users` - List users (org-scoped)
+- `PUT /api/admin/users/:id` - Update user
+- `POST /api/admin/users/:id/approve` - Approve pending user
+- `DELETE /api/admin/users/:id` - Delete user
+- `POST /api/admin/seed-organizations` - Seed default orgs (superadmin)
+
 ## AI Insights Configuration
 AI insights are powered by AWS Bedrock with the Nova Lite model.
 

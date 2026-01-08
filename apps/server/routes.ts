@@ -6,6 +6,11 @@ import { db } from "./db";
 import { 
   loginSchema, 
   insertUserSchema,
+  signupWithCodeSchema,
+  organizations,
+  accessCodes,
+  users,
+  type UserRole,
   warehouseSites,
   warehouseInventoryItems,
   warehouseTransfers,
@@ -195,10 +200,21 @@ const MILITARY_BASES_DATA = [
 
 // Extended request type with user info
 interface AuthRequest extends Request {
-  user?: { id: number; email: string };
+  user?: { 
+    id: number; 
+    email: string;
+    role: UserRole;
+    organization_id: number | null;
+    is_active: boolean;
+    first_name: string | null;
+    last_name: string | null;
+  };
 }
 
-// Auth middleware
+// Superadmin email that gets auto-activated
+const SUPERADMIN_EMAIL = 'bhavya091213@gmail.com';
+
+// Auth middleware - checks authentication and populates user fields
 async function authMiddleware(req: AuthRequest, res: ExpressResponse, next: NextFunction) {
   const token = req.cookies?.session || req.headers.authorization?.replace('Bearer ', '');
   
@@ -216,8 +232,56 @@ async function authMiddleware(req: AuthRequest, res: ExpressResponse, next: Next
     return res.status(401).json({ error: "User not found" });
   }
   
-  req.user = { id: user.id, email: user.email };
+  // Check if user is active (unless superadmin who bypasses this)
+  if (!user.is_active && user.role !== 'superadmin') {
+    return res.status(403).json({ error: "Account pending approval" });
+  }
+  
+  req.user = { 
+    id: user.id, 
+    email: user.email,
+    role: user.role as UserRole,
+    organization_id: user.organization_id,
+    is_active: user.is_active,
+    first_name: user.first_name,
+    last_name: user.last_name
+  };
   next();
+}
+
+// Role-based middleware: requires superadmin or admin role
+function requireAdmin(req: AuthRequest, res: ExpressResponse, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  if (req.user.role !== 'superadmin' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
+}
+
+// Role-based middleware: requires superadmin role only
+function requireSuperAdmin(req: AuthRequest, res: ExpressResponse, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  if (req.user.role !== 'superadmin') {
+    return res.status(403).json({ error: "Superadmin access required" });
+  }
+  next();
+}
+
+// Helper: check if user can access a resource from a specific organization
+function canAccessOrganization(user: AuthRequest['user'], targetOrgId: number | null): boolean {
+  if (!user) return false;
+  // Superadmin can access all organizations
+  if (user.role === 'superadmin') return true;
+  // Admin can only access their own organization
+  if (user.role === 'admin') {
+    return user.organization_id === targetOrgId;
+  }
+  // Regular users can only access their own organization
+  return user.organization_id === targetOrgId;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -227,26 +291,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const parsed = insertUserSchema.safeParse(req.body);
+      const parsed = signupWithCodeSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
       
-      const userData = parsed.data as { email: string; username: string; password: string };
+      const { email, password, username, first_name, last_name, access_code } = parsed.data;
       
       // Check for duplicate email
-      const existingEmail = await storage.getUserByEmail(userData.email);
+      const existingEmail = await storage.getUserByEmail(email);
       if (existingEmail) {
         return res.status(409).json({ error: "Email already registered" });
       }
       
       // Check for duplicate username
-      const existingUsername = await storage.getUserByUsername(userData.username);
+      const existingUsername = await storage.getUserByUsername(username);
       if (existingUsername) {
         return res.status(409).json({ error: "Username already taken" });
       }
       
-      const user = await storage.createUser(userData);
+      // Check if this is the superadmin email
+      const isSuperadmin = email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase();
+      
+      let organizationId: number | null = null;
+      
+      if (!isSuperadmin) {
+        // Validate access code for non-superadmin users
+        const codeRecord = await storage.getAccessCodeByCode(access_code);
+        if (!codeRecord) {
+          return res.status(400).json({ error: "Invalid access code" });
+        }
+        
+        if (codeRecord.is_used) {
+          return res.status(400).json({ error: "Access code has already been used" });
+        }
+        
+        if (new Date(codeRecord.expires_at) < new Date()) {
+          return res.status(400).json({ error: "Access code has expired" });
+        }
+        
+        organizationId = codeRecord.organization_id;
+        
+        // Mark access code as used
+        await storage.markAccessCodeUsed(codeRecord.id, 0); // Will update with user ID after creation
+      }
+      
+      // Create user with appropriate role and status
+      const user = await storage.createUser({
+        email,
+        password,
+        username,
+        first_name: first_name || null,
+        last_name: last_name || null,
+        organization_id: organizationId,
+        role: isSuperadmin ? 'superadmin' : 'user',
+        is_active: isSuperadmin // Superadmin auto-activates, others need approval
+      });
+      
+      // Update access code with the user ID who used it
+      if (!isSuperadmin && organizationId !== null) {
+        const codeRecord = await storage.getAccessCodeByCode(access_code);
+        if (codeRecord) {
+          await storage.markAccessCodeUsed(codeRecord.id, user.id);
+        }
+      }
+      
       const session = await storage.createSession(user.id);
       
       res.cookie('session', session.token, {
@@ -257,7 +366,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       res.status(201).json({ 
-        user: { id: user.id, email: user.email, username: user.username }
+        user: { 
+          id: user.id, 
+          email: user.email, 
+          username: user.username,
+          role: user.role,
+          is_active: user.is_active,
+          organization_id: user.organization_id
+        }
       });
     } catch (error) {
       console.error('Registration error:', error);
@@ -287,8 +403,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sameSite: 'strict'
       });
       
+      // Check if user account is active
+      if (!user.is_active && user.role !== 'superadmin') {
+        return res.status(403).json({ error: "Account pending approval. Please wait for admin approval." });
+      }
+      
       res.json({ 
-        user: { id: user.id, email: user.email, username: user.username }
+        user: { 
+          id: user.id, 
+          email: user.email, 
+          username: user.username,
+          role: user.role,
+          is_active: user.is_active,
+          organization_id: user.organization_id,
+          first_name: user.first_name,
+          last_name: user.last_name
+        }
       });
     } catch (error) {
       console.error('Login error:', error);
@@ -313,7 +443,354 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-    res.json({ id: user.id, email: user.email, username: user.username });
+    
+    // Get organization info if user belongs to one
+    let organization = null;
+    if (user.organization_id) {
+      organization = await storage.getOrganization(user.organization_id);
+    }
+    
+    res.json({ 
+      id: user.id, 
+      email: user.email, 
+      username: user.username,
+      role: user.role,
+      is_active: user.is_active,
+      organization_id: user.organization_id,
+      organization: organization ? { id: organization.id, name: organization.name } : null,
+      first_name: user.first_name,
+      last_name: user.last_name
+    });
+  });
+
+  // ============================================================================
+  // ORGANIZATIONS API (PROTECTED)
+  // ============================================================================
+
+  // GET /api/organizations - List all organizations (any authenticated user)
+  app.get("/api/organizations", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const orgs = await storage.getAllOrganizations();
+      res.json(orgs);
+    } catch (error) {
+      console.error('Failed to list organizations:', error);
+      res.status(500).json({ error: "Failed to list organizations" });
+    }
+  });
+
+  // POST /api/organizations - Create organization (superadmin only)
+  app.post("/api/organizations", authMiddleware, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const { name, description } = req.body;
+      if (!name) {
+        return res.status(400).json({ error: "Organization name is required" });
+      }
+      
+      const existing = await storage.getOrganizationByName(name);
+      if (existing) {
+        return res.status(409).json({ error: "Organization already exists" });
+      }
+      
+      const org = await storage.createOrganization({ name, description });
+      res.status(201).json(org);
+    } catch (error) {
+      console.error('Failed to create organization:', error);
+      res.status(500).json({ error: "Failed to create organization" });
+    }
+  });
+
+  // ============================================================================
+  // ACCESS CODES API (PROTECTED - ADMINS)
+  // ============================================================================
+
+  // GET /api/accesscodes - List access codes (admin sees own org, superadmin sees all)
+  app.get("/api/accesscodes", authMiddleware, requireAdmin, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.query.organization_id ? parseInt(req.query.organization_id as string) : undefined;
+      
+      // Superadmin can see all or filter by org
+      if (req.user!.role === 'superadmin') {
+        const codes = orgId 
+          ? await storage.getAccessCodesByOrganization(orgId)
+          : await storage.getAllAccessCodes();
+        return res.json(codes);
+      }
+      
+      // Admin can only see their own org's codes
+      if (!req.user!.organization_id) {
+        return res.status(403).json({ error: "No organization assigned" });
+      }
+      
+      const codes = await storage.getAccessCodesByOrganization(req.user!.organization_id);
+      res.json(codes);
+    } catch (error) {
+      console.error('Failed to list access codes:', error);
+      res.status(500).json({ error: "Failed to list access codes" });
+    }
+  });
+
+  // POST /api/accesscodes - Generate new access code (admins for their org, superadmin for any)
+  app.post("/api/accesscodes", authMiddleware, requireAdmin, async (req: AuthRequest, res) => {
+    try {
+      const { organization_id, expires_in_days = 7 } = req.body;
+      
+      let targetOrgId: number;
+      
+      if (req.user!.role === 'superadmin') {
+        // Superadmin must specify organization
+        if (!organization_id) {
+          return res.status(400).json({ error: "organization_id is required for superadmin" });
+        }
+        targetOrgId = organization_id;
+      } else {
+        // Admin uses their own org
+        if (!req.user!.organization_id) {
+          return res.status(403).json({ error: "No organization assigned" });
+        }
+        targetOrgId = req.user!.organization_id;
+      }
+      
+      // Verify organization exists
+      const org = await storage.getOrganization(targetOrgId);
+      if (!org) {
+        return res.status(404).json({ error: "Organization not found" });
+      }
+      
+      // Generate code
+      const code = await storage.createAccessCode({
+        organization_id: targetOrgId,
+        created_by_user_id: req.user!.id,
+        expires_at: new Date(Date.now() + expires_in_days * 24 * 60 * 60 * 1000)
+      });
+      
+      res.status(201).json(code);
+    } catch (error) {
+      console.error('Failed to create access code:', error);
+      res.status(500).json({ error: "Failed to create access code" });
+    }
+  });
+
+  // ============================================================================
+  // ADMIN USER MANAGEMENT API (PROTECTED - ADMINS)
+  // ============================================================================
+
+  // GET /api/admin/users - List users (admin sees own org, superadmin sees all)
+  app.get("/api/admin/users", authMiddleware, requireAdmin, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.query.organization_id ? parseInt(req.query.organization_id as string) : undefined;
+      const includeInactive = req.query.include_inactive === 'true';
+      
+      // Superadmin can see all or filter
+      if (req.user!.role === 'superadmin') {
+        const users = orgId 
+          ? await storage.getUsersByOrganization(orgId, includeInactive)
+          : await storage.getAllUsers(includeInactive);
+        
+        // Don't return passwords
+        const safeUsers = users.map(u => ({
+          id: u.id,
+          email: u.email,
+          username: u.username,
+          first_name: u.first_name,
+          last_name: u.last_name,
+          role: u.role,
+          organization_id: u.organization_id,
+          is_active: u.is_active,
+          created_at: u.created_at,
+          last_login_at: u.last_login_at
+        }));
+        return res.json(safeUsers);
+      }
+      
+      // Admin can only see their own org's users
+      if (!req.user!.organization_id) {
+        return res.status(403).json({ error: "No organization assigned" });
+      }
+      
+      const users = await storage.getUsersByOrganization(req.user!.organization_id, includeInactive);
+      const safeUsers = users.map(u => ({
+        id: u.id,
+        email: u.email,
+        username: u.username,
+        first_name: u.first_name,
+        last_name: u.last_name,
+        role: u.role,
+        organization_id: u.organization_id,
+        is_active: u.is_active,
+        created_at: u.created_at,
+        last_login_at: u.last_login_at
+      }));
+      res.json(safeUsers);
+    } catch (error) {
+      console.error('Failed to list users:', error);
+      res.status(500).json({ error: "Failed to list users" });
+    }
+  });
+
+  // PUT /api/admin/users/:id - Update user (with org restrictions)
+  app.put("/api/admin/users/:id", authMiddleware, requireAdmin, async (req: AuthRequest, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const targetUser = await storage.getUser(userId);
+      
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // Check org access
+      if (!canAccessOrganization(req.user, targetUser.organization_id)) {
+        return res.status(403).json({ error: "Cannot modify users from other organizations" });
+      }
+      
+      // Prevent modifying superadmin unless you are superadmin
+      if (targetUser.role === 'superadmin' && req.user!.role !== 'superadmin') {
+        return res.status(403).json({ error: "Cannot modify superadmin" });
+      }
+      
+      const { first_name, last_name, role, is_active, organization_id } = req.body;
+      
+      // Only superadmin can change roles to superadmin or change organization
+      if (role === 'superadmin' && req.user!.role !== 'superadmin') {
+        return res.status(403).json({ error: "Only superadmin can assign superadmin role" });
+      }
+      
+      if (organization_id !== undefined && req.user!.role !== 'superadmin') {
+        return res.status(403).json({ error: "Only superadmin can change user organization" });
+      }
+      
+      const updateData: any = {};
+      if (first_name !== undefined) updateData.first_name = first_name;
+      if (last_name !== undefined) updateData.last_name = last_name;
+      if (role !== undefined) updateData.role = role;
+      if (is_active !== undefined) updateData.is_active = is_active;
+      if (organization_id !== undefined) updateData.organization_id = organization_id;
+      
+      const updated = await storage.updateUser(userId, updateData);
+      if (!updated) {
+        return res.status(500).json({ error: "Failed to update user" });
+      }
+      
+      res.json({
+        id: updated.id,
+        email: updated.email,
+        username: updated.username,
+        first_name: updated.first_name,
+        last_name: updated.last_name,
+        role: updated.role,
+        organization_id: updated.organization_id,
+        is_active: updated.is_active
+      });
+    } catch (error) {
+      console.error('Failed to update user:', error);
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+
+  // POST /api/admin/users/:id/approve - Approve pending user
+  app.post("/api/admin/users/:id/approve", authMiddleware, requireAdmin, async (req: AuthRequest, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const targetUser = await storage.getUser(userId);
+      
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // Check org access
+      if (!canAccessOrganization(req.user, targetUser.organization_id)) {
+        return res.status(403).json({ error: "Cannot approve users from other organizations" });
+      }
+      
+      if (targetUser.is_active) {
+        return res.status(400).json({ error: "User is already active" });
+      }
+      
+      const updated = await storage.updateUser(userId, { is_active: true });
+      if (!updated) {
+        return res.status(500).json({ error: "Failed to approve user" });
+      }
+      
+      res.json({
+        id: updated.id,
+        email: updated.email,
+        username: updated.username,
+        is_active: updated.is_active,
+        message: "User approved successfully"
+      });
+    } catch (error) {
+      console.error('Failed to approve user:', error);
+      res.status(500).json({ error: "Failed to approve user" });
+    }
+  });
+
+  // DELETE /api/admin/users/:id - Delete user (with org restrictions)
+  app.delete("/api/admin/users/:id", authMiddleware, requireAdmin, async (req: AuthRequest, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const targetUser = await storage.getUser(userId);
+      
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // Cannot delete yourself
+      if (userId === req.user!.id) {
+        return res.status(400).json({ error: "Cannot delete your own account" });
+      }
+      
+      // Check org access
+      if (!canAccessOrganization(req.user, targetUser.organization_id)) {
+        return res.status(403).json({ error: "Cannot delete users from other organizations" });
+      }
+      
+      // Prevent deleting superadmin unless you are superadmin
+      if (targetUser.role === 'superadmin' && req.user!.role !== 'superadmin') {
+        return res.status(403).json({ error: "Cannot delete superadmin" });
+      }
+      
+      await storage.deleteUser(userId);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Failed to delete user:', error);
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
+  // ============================================================================
+  // SEED ORGANIZATIONS (for initial setup)
+  // ============================================================================
+  
+  app.post("/api/admin/seed-organizations", authMiddleware, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const defaultOrgs = [
+        { name: 'PACAF', description: 'Pacific Air Forces' },
+        { name: 'DLA', description: 'Defense Logistics Agency' },
+        { name: 'MSC', description: 'Military Sealift Command' },
+        { name: 'TRANSCOM', description: 'United States Transportation Command' }
+      ];
+      
+      const created = [];
+      const existing = [];
+      
+      for (const org of defaultOrgs) {
+        const existingOrg = await storage.getOrganizationByName(org.name);
+        if (existingOrg) {
+          existing.push(org.name);
+        } else {
+          const newOrg = await storage.createOrganization(org);
+          created.push(newOrg);
+        }
+      }
+      
+      res.json({
+        message: "Seed complete",
+        created: created.map(o => o.name),
+        already_existed: existing
+      });
+    } catch (error) {
+      console.error('Failed to seed organizations:', error);
+      res.status(500).json({ error: "Failed to seed organizations" });
+    }
   });
 
   // ============================================================================

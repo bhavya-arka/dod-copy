@@ -1,5 +1,7 @@
 import { 
   users, type User, type InsertUser,
+  organizations, type Organization, type InsertOrganization,
+  accessCodes, type AccessCode, type InsertAccessCode,
   flightPlans, type FlightPlan, type InsertFlightPlan,
   flightSchedules, type FlightSchedule, type InsertFlightSchedule,
   splitSessions, type SplitSession, type InsertSplitSession,
@@ -11,7 +13,7 @@ import {
   aiInsights, type AiInsight, type InsertAiInsight, type AiInsightType
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gt } from "drizzle-orm";
+import { eq, desc, and, gt, or, isNull } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 
@@ -24,10 +26,28 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, data: Partial<InsertUser>): Promise<User | undefined>;
+  deleteUser(id: number): Promise<void>;
+  getAllUsers(includeInactive?: boolean): Promise<User[]>;
+  getUsersByOrganization(organizationId: number, includeInactive?: boolean): Promise<User[]>;
   validatePassword(email: string, password: string): Promise<User | null>;
   createSession(userId: number): Promise<Session>;
   getSession(token: string): Promise<Session | undefined>;
   deleteSession(token: string): Promise<void>;
+  
+  // Organization methods
+  getOrganization(id: number): Promise<Organization | undefined>;
+  getOrganizationByName(name: string): Promise<Organization | undefined>;
+  getAllOrganizations(): Promise<Organization[]>;
+  createOrganization(org: InsertOrganization): Promise<Organization>;
+  
+  // Access code methods
+  getAccessCode(id: number): Promise<AccessCode | undefined>;
+  getAccessCodeByCode(code: string): Promise<AccessCode | undefined>;
+  getAllAccessCodes(): Promise<AccessCode[]>;
+  getAccessCodesByOrganization(organizationId: number): Promise<AccessCode[]>;
+  createAccessCode(data: { organization_id: number; created_by_user_id: number; expires_at: Date }): Promise<AccessCode>;
+  markAccessCodeUsed(id: number, usedByUserId: number): Promise<void>;
   
   // Flight plan methods (user-scoped)
   getFlightPlans(userId: number): Promise<FlightPlan[]>;
@@ -108,14 +128,57 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const userData = insertUser as { email: string; username: string; password: string };
+    const userData = insertUser as { 
+      email: string; 
+      username: string; 
+      password: string;
+      first_name?: string | null;
+      last_name?: string | null;
+      organization_id?: number | null;
+      role?: string;
+      is_active?: boolean;
+    };
     const hashedPassword = await bcrypt.hash(userData.password, SALT_ROUNDS);
     const [user] = await db.insert(users).values({
       email: userData.email,
       username: userData.username,
-      password: hashedPassword
+      password: hashedPassword,
+      first_name: userData.first_name || null,
+      last_name: userData.last_name || null,
+      organization_id: userData.organization_id || null,
+      role: userData.role || 'user',
+      is_active: userData.is_active ?? false
     }).returning();
     return user;
+  }
+
+  async updateUser(id: number, data: Partial<InsertUser>): Promise<User | undefined> {
+    const [updated] = await db
+      .update(users)
+      .set({ ...data, updated_at: new Date() } as any)
+      .where(eq(users.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  async getAllUsers(includeInactive: boolean = true): Promise<User[]> {
+    if (includeInactive) {
+      return db.select().from(users).orderBy(desc(users.created_at));
+    }
+    return db.select().from(users).where(eq(users.is_active, true)).orderBy(desc(users.created_at));
+  }
+
+  async getUsersByOrganization(organizationId: number, includeInactive: boolean = true): Promise<User[]> {
+    if (includeInactive) {
+      return db.select().from(users).where(eq(users.organization_id, organizationId)).orderBy(desc(users.created_at));
+    }
+    return db.select().from(users)
+      .where(and(eq(users.organization_id, organizationId), eq(users.is_active, true)))
+      .orderBy(desc(users.created_at));
   }
 
   async validatePassword(email: string, password: string): Promise<User | null> {
@@ -158,6 +221,80 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSession(token: string): Promise<void> {
     await db.delete(sessions).where(eq(sessions.token, token));
+  }
+
+  // ============================================================================
+  // ORGANIZATION METHODS
+  // ============================================================================
+
+  async getOrganization(id: number): Promise<Organization | undefined> {
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, id));
+    return org;
+  }
+
+  async getOrganizationByName(name: string): Promise<Organization | undefined> {
+    const [org] = await db.select().from(organizations).where(eq(organizations.name, name));
+    return org;
+  }
+
+  async getAllOrganizations(): Promise<Organization[]> {
+    return db.select().from(organizations).orderBy(organizations.name);
+  }
+
+  async createOrganization(org: InsertOrganization): Promise<Organization> {
+    const [created] = await db.insert(organizations).values(org).returning();
+    return created;
+  }
+
+  // ============================================================================
+  // ACCESS CODE METHODS
+  // ============================================================================
+
+  async getAccessCode(id: number): Promise<AccessCode | undefined> {
+    const [code] = await db.select().from(accessCodes).where(eq(accessCodes.id, id));
+    return code;
+  }
+
+  async getAccessCodeByCode(code: string): Promise<AccessCode | undefined> {
+    const [result] = await db.select().from(accessCodes).where(eq(accessCodes.code, code));
+    return result;
+  }
+
+  async getAllAccessCodes(): Promise<AccessCode[]> {
+    return db.select().from(accessCodes).orderBy(desc(accessCodes.created_at));
+  }
+
+  async getAccessCodesByOrganization(organizationId: number): Promise<AccessCode[]> {
+    return db.select()
+      .from(accessCodes)
+      .where(eq(accessCodes.organization_id, organizationId))
+      .orderBy(desc(accessCodes.created_at));
+  }
+
+  async createAccessCode(data: { organization_id: number; created_by_user_id: number; expires_at: Date }): Promise<AccessCode> {
+    const code = this.generateAccessCode();
+    const [created] = await db.insert(accessCodes).values({
+      code,
+      organization_id: data.organization_id,
+      created_by_user_id: data.created_by_user_id,
+      expires_at: data.expires_at
+    }).returning();
+    return created;
+  }
+
+  async markAccessCodeUsed(id: number, usedByUserId: number): Promise<void> {
+    await db.update(accessCodes)
+      .set({ is_used: true, used_by_user_id: usedByUserId })
+      .where(eq(accessCodes.id, id));
+  }
+
+  private generateAccessCode(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
   }
 
   // ============================================================================

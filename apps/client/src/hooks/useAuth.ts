@@ -4,6 +4,20 @@ export interface User {
   id: number;
   email: string;
   username: string;
+  first_name?: string;
+  last_name?: string;
+  role?: string;
+  organization_id?: number;
+  is_active?: boolean;
+}
+
+export interface RegisterData {
+  email: string;
+  username: string;
+  password: string;
+  first_name?: string;
+  last_name?: string;
+  access_code: string;
 }
 
 interface AuthContextType {
@@ -12,7 +26,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   authError: string | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, username: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (data: RegisterData) => Promise<{ success: boolean; error?: string; pendingApproval?: boolean }>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   clearAuthError: () => void;
@@ -83,22 +97,26 @@ export function useAuthProvider(): AuthContextType {
     }
   }, []);
 
-  const register = useCallback(async (email: string, username: string, password: string) => {
+  const register = useCallback(async (data: RegisterData) => {
     try {
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, username, password })
+        body: JSON.stringify(data)
       });
       
-      const data = await response.json();
+      const result = await response.json();
       
       if (response.ok) {
-        setUser(data.user);
+        // If user is pending approval, don't set user yet
+        if (result.pendingApproval) {
+          return { success: true, pendingApproval: true };
+        }
+        setUser(result.user);
         return { success: true };
       } else {
-        return { success: false, error: data.error || 'Registration failed' };
+        return { success: false, error: result.error || 'Registration failed' };
       }
     } catch {
       return { success: false, error: 'Network error' };
