@@ -6754,9 +6754,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       cargoInTransport.total_lbs = cargoInTransport.air_lbs + cargoInTransport.land_lbs + cargoInTransport.sea_lbs;
       
-      // Air Operations enhanced summary
-      const airThisMonth = flightPlansData.filter(p => isThisMonth(p.created_at));
-      const airLastMonth = flightPlansData.filter(p => isLastMonth(p.created_at));
+      // Air Operations enhanced summary - use scheduled_departure for classification when available
+      const getEffectiveDate = (scheduled: Date | null, created: Date) => scheduled || created;
+      const airThisMonth = flightPlansData.filter(p => isThisMonth(getEffectiveDate(p.scheduled_departure, p.created_at)));
+      const airLastMonth = flightPlansData.filter(p => isLastMonth(getEffectiveDate(p.scheduled_departure, p.created_at)));
       const airCompleted = flightPlansData.filter(p => p.status === 'complete');
       const airSummary = {
         active_sorties: flightPlansData.filter(p => p.status === 'complete').length,
@@ -6774,9 +6775,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         total_weight_lbs: flightPlansData.reduce((sum, p) => sum + (p.total_weight_lb || 0), 0),
       };
       
-      // Land Operations enhanced summary
-      const landThisMonth = landConvoysData.filter(c => isThisMonth(c.created_at));
-      const landLastMonth = landConvoysData.filter(c => isLastMonth(c.created_at));
+      // Land Operations enhanced summary - use scheduled_departure for classification when available
+      const landThisMonth = landConvoysData.filter(c => isThisMonth(getEffectiveDate(c.scheduled_departure, c.created_at)));
+      const landLastMonth = landConvoysData.filter(c => isLastMonth(getEffectiveDate(c.scheduled_departure, c.created_at)));
       const landInTransit = landConvoysData.filter(c => c.status === 'in_transit');
       const landCompleted = landConvoysData.filter(c => c.status === 'completed');
       const landSummary = {
@@ -6796,9 +6797,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         total_weight_lbs: landConvoysData.reduce((sum, c) => sum + (c.total_weight_lbs || 0), 0),
       };
       
-      // Sea Operations enhanced summary
-      const seaThisMonth = seaVoyagesData.filter(v => isThisMonth(v.created_at));
-      const seaLastMonth = seaVoyagesData.filter(v => isLastMonth(v.created_at));
+      // Sea Operations enhanced summary - use scheduled_departure for classification when available
+      const seaThisMonth = seaVoyagesData.filter(v => isThisMonth(getEffectiveDate(v.scheduled_departure, v.created_at)));
+      const seaLastMonth = seaVoyagesData.filter(v => isLastMonth(getEffectiveDate(v.scheduled_departure, v.created_at)));
       const seaInTransit = seaVoyagesData.filter(v => v.status === 'in_transit');
       const seaCompleted = seaVoyagesData.filter(v => v.status === 'completed');
       const totalContainers = seaVoyagesData.reduce((sum, v) => sum + (v.container_count || 0), 0);
@@ -6925,15 +6926,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const historicalDays = 90;
       const historicalStart = new Date(now.getTime() - historicalDays * msPerDay);
       
-      // Count activities in historical period
+      // Count activities in historical period - use scheduled_departure when available
+      const getActivityDate = (scheduled: Date | null | undefined, created: Date) => scheduled ? new Date(scheduled) : new Date(created);
+      
       const airActivities = flightPlansData.filter(p => 
-        new Date(p.created_at) >= historicalStart
+        getActivityDate(p.scheduled_departure, p.created_at) >= historicalStart
       );
       const landActivities = landConvoysData.filter(c => 
-        new Date(c.created_at) >= historicalStart
+        getActivityDate(c.scheduled_departure, c.created_at) >= historicalStart
       );
       const seaActivities = seaVoyagesData.filter(v => 
-        new Date(v.created_at) >= historicalStart
+        getActivityDate(v.scheduled_departure, v.created_at) >= historicalStart
+      );
+      
+      // Count upcoming scheduled activities (future dates)
+      const upcomingAir = flightPlansData.filter(p => 
+        p.scheduled_departure && new Date(p.scheduled_departure) > now
+      );
+      const upcomingLand = landConvoysData.filter(c => 
+        c.scheduled_departure && new Date(c.scheduled_departure) > now
+      );
+      const upcomingSea = seaVoyagesData.filter(v => 
+        v.scheduled_departure && new Date(v.scheduled_departure) > now
       );
       
       // Calculate daily averages
@@ -7072,6 +7086,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           flights: airActivities.length,
           convoys: landActivities.length,
           voyages: seaActivities.length,
+        },
+        scheduledActivities: {
+          upcomingFlights: upcomingAir.map(p => ({
+            id: p.id,
+            name: p.name,
+            scheduledDeparture: p.scheduled_departure?.toISOString(),
+            scheduledArrival: p.scheduled_arrival?.toISOString(),
+            status: p.status,
+            weightLbs: p.total_weight_lb || 0,
+          })),
+          upcomingConvoys: upcomingLand.map(c => ({
+            id: c.id,
+            name: c.name,
+            scheduledDeparture: c.scheduled_departure?.toISOString(),
+            scheduledArrival: c.scheduled_arrival?.toISOString(),
+            status: c.status,
+            weightLbs: c.total_cargo_weight_lbs || 0,
+          })),
+          upcomingVoyages: upcomingSea.map(v => ({
+            id: v.id,
+            name: v.name,
+            scheduledDeparture: v.scheduled_departure?.toISOString(),
+            scheduledArrival: v.scheduled_arrival?.toISOString(),
+            status: v.status,
+            origin: v.origin_port,
+            destination: v.destination_port,
+          })),
         },
         dailyAverages: {
           flights: Math.round(avgDailyFlights * 100) / 100,

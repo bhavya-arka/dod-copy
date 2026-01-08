@@ -48,6 +48,10 @@ export interface Convoy {
   total_weight_lbs: number;
   departure_time?: string;
   arrival_time?: string;
+  scheduled_departure?: string;
+  scheduled_arrival?: string;
+  actual_departure?: string;
+  actual_arrival?: string;
   vehicles?: ConvoyVehicle[];
 }
 
@@ -96,7 +100,8 @@ export interface CreateConvoyData {
   origin_coords?: LocationCoords & { formattedAddress: string };
   destination_coords?: LocationCoords & { formattedAddress: string };
   route_id?: number;
-  departure_time?: string;
+  scheduled_departure?: string;
+  scheduled_arrival?: string;
   status?: string;
   vehicle_count?: number;
   total_weight_lbs?: number;
@@ -109,8 +114,10 @@ export interface UpdateConvoyData {
   status?: string;
   vehicle_count?: number;
   total_weight_lbs?: number;
-  departure_time?: string;
-  arrival_time?: string;
+  scheduled_departure?: string;
+  scheduled_arrival?: string;
+  actual_departure?: string;
+  actual_arrival?: string;
   vehicles?: ConvoyVehicle[];
 }
 

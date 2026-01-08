@@ -61,7 +61,8 @@ interface ConvoyFormData {
   origin_coords?: LocationCoords;
   destination_coords?: LocationCoords;
   route_id?: number;
-  departure_time: string;
+  scheduled_departure: string;
+  scheduled_arrival: string;
 }
 
 type Tab = 'overview' | 'routes' | 'convoys' | 'vehicles' | 'planning';
@@ -138,7 +139,8 @@ function LandLogistics({
     name: '',
     origin: '',
     destination: '',
-    departure_time: '',
+    scheduled_departure: '',
+    scheduled_arrival: '',
   });
   
   const [convoyRouteInfo, setConvoyRouteInfo] = useState<RouteInfo | null>(null);
@@ -175,10 +177,14 @@ function LandLogistics({
     
     setIsCreating(true);
     try {
-      await landService.createConvoy(formData);
+      await landService.createConvoy({
+        ...formData,
+        scheduled_departure: formData.scheduled_departure ? new Date(formData.scheduled_departure).toISOString() : undefined,
+        scheduled_arrival: formData.scheduled_arrival ? new Date(formData.scheduled_arrival).toISOString() : undefined,
+      });
       await fetchData();
       setShowCreateModal(false);
-      setFormData({ name: '', origin: '', destination: '', departure_time: '' });
+      setFormData({ name: '', origin: '', destination: '', scheduled_departure: '', scheduled_arrival: '' });
       setConvoyRouteInfo(null);
     } catch (error) {
       console.error('Error creating convoy:', error);
@@ -875,14 +881,25 @@ function LandLogistics({
               </select>
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-[#111827] mb-1">Departure Time</label>
-              <input
-                type="datetime-local"
-                value={formData.departure_time}
-                onChange={(e) => setFormData(prev => ({ ...prev, departure_time: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#111827] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/30 outline-none transition-all"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-[#111827] mb-1">Scheduled Departure</label>
+                <input
+                  type="datetime-local"
+                  value={formData.scheduled_departure}
+                  onChange={(e) => setFormData(prev => ({ ...prev, scheduled_departure: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#111827] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/30 outline-none transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#111827] mb-1">Scheduled Arrival</label>
+                <input
+                  type="datetime-local"
+                  value={formData.scheduled_arrival}
+                  onChange={(e) => setFormData(prev => ({ ...prev, scheduled_arrival: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#111827] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/30 outline-none transition-all"
+                />
+              </div>
             </div>
           </div>
           

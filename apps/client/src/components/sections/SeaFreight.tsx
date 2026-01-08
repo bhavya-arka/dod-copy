@@ -93,8 +93,8 @@ export default function SeaFreight({
         origin: formData.origin,
         destination: formData.destination,
         status: 'draft',
-        departure_time: formData.scheduled_departure ? new Date(formData.scheduled_departure).toISOString() : undefined,
-        arrival_time: formData.scheduled_arrival ? new Date(formData.scheduled_arrival).toISOString() : undefined,
+        scheduled_departure: formData.scheduled_departure ? new Date(formData.scheduled_departure).toISOString() : undefined,
+        scheduled_arrival: formData.scheduled_arrival ? new Date(formData.scheduled_arrival).toISOString() : undefined,
       });
       await fetchData();
       setShowCreateModal(false);
