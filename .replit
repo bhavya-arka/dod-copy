@@ -67,3 +67,4 @@ expertMode = true
 
 [userenv.shared]
 AWS_REGION = "us-east-2"
+BEDROCK_TRACE_LAMBDA_ENDPOINT = "https://20cpg3pggh.execute-api.us-east-2.amazonaws.com/Prod"

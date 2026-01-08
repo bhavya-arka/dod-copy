@@ -2,7 +2,7 @@
  * AWS Bedrock Service for AI Insights
  * Uses Nova Lite model with Knowledge Base retrieval for regulation-aware insights
  * Optimized for low TTFT with structured prompts and concise system messages
- * Includes S3 trace logging for all AI operations
+ * Includes Lambda trace logging for all AI operations (fire-and-forget)
  */
 
 import {
@@ -15,32 +15,15 @@ import {
   RetrieveCommand
 } from "@aws-sdk/client-bedrock-agent-runtime";
 
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-
 import crypto from "crypto";
 
-// S3 Trace Logging Configuration (from environment variables)
-const S3_TRACE_BUCKET = process.env.BEDROCK_TRACE_S3_BUCKET || "dodpdfchunking";
-const S3_TRACE_PREFIX = process.env.BEDROCK_TRACE_S3_PREFIX || "kb_output/";
-const S3_TRACE_REGION = process.env.BEDROCK_TRACE_S3_REGION || "us-east-2";
+// Lambda Trace Logging Configuration (from environment variable)
+const TRACE_LAMBDA_ENDPOINT = process.env.BEDROCK_TRACE_LAMBDA_ENDPOINT || "";
 
-console.log(`[Bedrock:S3] Trace logging configured: s3://${S3_TRACE_BUCKET}/${S3_TRACE_PREFIX} (region: ${S3_TRACE_REGION})`);
-
-// S3 Client for trace logging
-let s3Client: S3Client | null = null;
-
-function getS3Client(): S3Client {
-  if (!s3Client) {
-    const creds = getAwsCredentials();
-    s3Client = new S3Client({
-      region: S3_TRACE_REGION,
-      credentials: {
-        accessKeyId: creds.accessKeyId,
-        secretAccessKey: creds.secretAccessKey
-      }
-    });
-  }
-  return s3Client;
+if (TRACE_LAMBDA_ENDPOINT) {
+  console.log(`[Bedrock:Lambda] Trace logging configured: ${TRACE_LAMBDA_ENDPOINT}`);
+} else {
+  console.log("[Bedrock:Lambda] Trace logging not configured (BEDROCK_TRACE_LAMBDA_ENDPOINT not set)");
 }
 
 // Trace data interface
@@ -56,25 +39,31 @@ interface BedrockTrace {
   session_id: string;
 }
 
-// Log trace to S3
-async function logTraceToS3(trace: BedrockTrace): Promise<void> {
+// Log trace to Lambda via API Gateway (fire and forget)
+async function logTraceToLambda(trace: BedrockTrace): Promise<void> {
+  if (!TRACE_LAMBDA_ENDPOINT) {
+    return; // Skip if not configured
+  }
+  
   try {
-    const client = getS3Client();
-    const datePrefix = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const key = `${S3_TRACE_PREFIX}${datePrefix}/${trace.trace_id}.json`;
+    // Fire and forget - don't await, use AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
     
-    const command = new PutObjectCommand({
-      Bucket: S3_TRACE_BUCKET,
-      Key: key,
-      Body: JSON.stringify(trace, null, 2),
-      ContentType: "application/json"
+    fetch(TRACE_LAMBDA_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(trace),
+      signal: controller.signal
+    }).then(() => {
+      clearTimeout(timeoutId);
+      console.log("[Bedrock:Lambda] Trace sent", { trace_id: trace.trace_id });
+    }).catch(() => {
+      clearTimeout(timeoutId);
+      // Silent failure - fire and forget
     });
-
-    await client.send(command);
-    console.log("[Bedrock:S3] Trace logged successfully", { trace_id: trace.trace_id, key });
-  } catch (error) {
-    // Non-blocking - log error but don't fail the main operation
-    console.error("[Bedrock:S3] Failed to log trace", { trace_id: trace.trace_id, error });
+  } catch {
+    // Non-blocking - silent failure
   }
 }
 import type { AiInsightType } from "../../../packages/shared/schema";
@@ -656,7 +645,7 @@ export async function generateInsight(
       token_output: tokenUsage.outputTokens,
       session_id: userId
     };
-    logTraceToS3(trace).catch(() => {}); // Fire and forget
+    logTraceToLambda(trace); // Fire and forget to Lambda
 
     return {
       insight: result,
