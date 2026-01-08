@@ -30,6 +30,7 @@ import {
 } from "./services";
 import { runOptimization, OptimizationInput, AvailabilityConstraint, CargoRequirement, MixedFleetMode } from "./services/fleetOptimizer";
 import { parseFile, getUploadSession, deleteUploadSession, getSessionStats } from "./services/fileIngestionService";
+import { seedLandVehicles } from "./seeds/landVehicles";
 
 // Weather API cache with 10-minute TTL
 interface WeatherCacheEntry {
@@ -5523,6 +5524,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Warehouse Optimization Plans] Failed to update action:", error);
       res.status(500).json({ error: "Failed to update action" });
+    }
+  });
+
+  // ============================================================================
+  // LAND LOGISTICS API (PROTECTED)
+  // ============================================================================
+
+  // POST /api/land/seed-vehicles - Seed land vehicle types
+  app.post("/api/land/seed-vehicles", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      console.log("[Land] Seeding land vehicle types...");
+      await seedLandVehicles();
+      res.json({ success: true, message: "Land vehicle types seeded successfully" });
+    } catch (error) {
+      console.error("[Land] Failed to seed vehicle types:", error);
+      res.status(500).json({ error: "Failed to seed land vehicle types" });
     }
   });
 
