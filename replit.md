@@ -22,9 +22,34 @@ The system provides an Operations Hub with distinct modules for Air, Land, Sea, 
 The project is structured as a Turborepo monorepo:
 - **`apps/client/`**: React 18+ frontend with TypeScript and Vite.
 - **`apps/server/`**: Express.js backend providing RESTful API endpoints.
-- **`packages/shared/`**: Shared schemas and types.
+- **`packages/shared/`**: Shared schemas, types, and transport definitions.
 - **`packages/config/`**: Shared configurations.
 - **`shared/`**: Drizzle schema for database definitions.
+
+## Modular Transport Architecture
+The system uses a unified, mode-agnostic transport layer for Air, Land, and Sea operations:
+
+### Shared Components
+- **`packages/shared/transportTypes.ts`**: Unified TypeScript types (TransportMode, TransportStatus, TransportPlan, TransportAsset) and state machine transitions.
+- **`apps/server/services/transportService.ts`**: Mode-agnostic CRUD operations that map to flightPlans, landConvoys, and seaVoyages tables.
+- **`apps/client/src/components/transport/`**: Reusable React components (StatusBadge, TransportTable, TransportForm, CapacityWidget).
+
+### Unified API Endpoints
+- `GET/POST /api/transport/:mode/plans` - List/create transport plans
+- `GET/PUT /api/transport/:mode/plans/:id` - Get/update single plan
+- `POST /api/transport/:mode/plans/:id/transition` - Status transitions with WMS integration
+- `GET /api/transport/:mode/statistics` - Mode-specific statistics
+- `GET /api/transport/statistics` - Cross-modal statistics
+
+### Transport State Machine
+All transport modes follow unified lifecycle: `draft → planned → loading → underway → completed`
+- Status transitions are validated before execution
+- Completing transport automatically updates related WMS manifests
+
+### 3D Visualization Infrastructure
+- **`apps/client/src/lib/vehicleDimensions.ts`**: Military vehicle dimensions (LMTV, HEMTT, HET, MTVR, PLS, C-17, C-130, ships) with scaling utilities.
+- **`apps/client/src/components/3d/VehicleMesh.tsx`**: Reusable Three.js vehicle component with accurate proportions.
+- **`apps/client/src/components/3d/ConvoyVisualization.tsx`**: 3D convoy scene with formation spacing, status-based animation, and dust particles.
 
 ## PACAF Air Operations Pipeline
 The Air module features a multi-stage pipeline:
