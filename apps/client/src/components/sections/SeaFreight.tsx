@@ -15,10 +15,19 @@ import {
   Waves,
   Loader2,
   AlertCircle,
+  X,
 } from "lucide-react";
 import { User } from "../../hooks/useAuth";
 import * as transportService from "../../services/transportService";
 import { StatusBadge } from "../transport/StatusBadge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "../ui/dialog";
 
 interface SeaFreightProps {
   user: User;
@@ -35,6 +44,19 @@ export default function SeaFreight({
   const [voyages, setVoyages] = useState<transportService.TransportPlan[]>([]);
   const [statistics, setStatistics] = useState<transportService.TransportStatistics | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    origin: '',
+    destination: '',
+    vessel_name: '',
+    container_count: 1,
+  });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -57,6 +79,38 @@ export default function SeaFreight({
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleCreateVoyage = useCallback(async () => {
+    if (!formData.name || !formData.origin || !formData.destination) return;
+    
+    setIsCreating(true);
+    setCreateError(null);
+    try {
+      await transportService.createTransportPlan('sea', {
+        name: formData.name,
+        origin: formData.origin,
+        destination: formData.destination,
+        status: 'draft',
+      });
+      await fetchData();
+      setShowCreateModal(false);
+      setFormData({ name: '', origin: '', destination: '', vessel_name: '', container_count: 1 });
+    } catch (err) {
+      console.error('Error creating voyage:', err);
+      setCreateError(err instanceof Error ? err.message : 'Failed to create voyage');
+    } finally {
+      setIsCreating(false);
+    }
+  }, [formData, fetchData]);
+
+  const filteredVoyages = voyages.filter(voyage => {
+    const matchesSearch = !searchQuery || 
+      voyage.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      voyage.origin?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      voyage.destination?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = !statusFilter || voyage.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const statsConfig = [
     { label: "Active Vessels", value: statistics?.activePlans ?? 0, icon: Ship, color: "text-teal-600" },
@@ -165,7 +219,10 @@ export default function SeaFreight({
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-[#111827]">Active Shipments</h2>
-              <button className="bg-[#2563EB] text-white hover:bg-[#1D4ED8] text-sm px-3 py-1.5 rounded-xl flex items-center gap-2 transition-colors">
+              <button 
+                onClick={() => setShowCreateModal(true)}
+                className="bg-[#2563EB] text-white hover:bg-[#1D4ED8] text-sm px-3 py-1.5 rounded-xl flex items-center gap-2 transition-colors"
+              >
                 <Plus className="w-4 h-4" />
                 New Shipment
               </button>
@@ -176,13 +233,30 @@ export default function SeaFreight({
                 <input
                   type="text"
                   placeholder="Search shipments..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#111827] placeholder:text-[#9CA3AF] text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/30"
                 />
               </div>
-              <button className="bg-white border border-[#E5E7EB] text-[#111827] hover:bg-[#FAFAFA] text-sm px-3 py-2 rounded-xl flex items-center gap-2 transition-colors">
-                <Filter className="w-4 h-4" />
-                Filter
-              </button>
+              <div className="relative">
+                <button 
+                  onClick={() => setShowFilterMenu(!showFilterMenu)}
+                  className={`bg-white border text-[#111827] hover:bg-[#FAFAFA] text-sm px-3 py-2 rounded-xl flex items-center gap-2 transition-colors ${statusFilter ? 'border-[#2563EB] bg-blue-50' : 'border-[#E5E7EB]'}`}
+                >
+                  <Filter className="w-4 h-4" />
+                  {statusFilter || 'Filter'}
+                </button>
+                {showFilterMenu && (
+                  <div className="absolute right-0 mt-2 w-40 bg-white border border-[#E5E7EB] rounded-xl shadow-lg z-10">
+                    <button onClick={() => { setStatusFilter(null); setShowFilterMenu(false); }} className="w-full text-left px-3 py-2 text-sm hover:bg-[#FAFAFA] rounded-t-xl">All</button>
+                    <button onClick={() => { setStatusFilter('draft'); setShowFilterMenu(false); }} className="w-full text-left px-3 py-2 text-sm hover:bg-[#FAFAFA]">Draft</button>
+                    <button onClick={() => { setStatusFilter('planned'); setShowFilterMenu(false); }} className="w-full text-left px-3 py-2 text-sm hover:bg-[#FAFAFA]">Planned</button>
+                    <button onClick={() => { setStatusFilter('loading'); setShowFilterMenu(false); }} className="w-full text-left px-3 py-2 text-sm hover:bg-[#FAFAFA]">Loading</button>
+                    <button onClick={() => { setStatusFilter('underway'); setShowFilterMenu(false); }} className="w-full text-left px-3 py-2 text-sm hover:bg-[#FAFAFA]">Underway</button>
+                    <button onClick={() => { setStatusFilter('completed'); setShowFilterMenu(false); }} className="w-full text-left px-3 py-2 text-sm hover:bg-[#FAFAFA] rounded-b-xl">Completed</button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {loading ? (
@@ -190,17 +264,17 @@ export default function SeaFreight({
                 <Loader2 className="w-8 h-8 animate-spin text-teal-600 mb-4" />
                 <p className="text-[#6B7280]">Loading shipments...</p>
               </div>
-            ) : voyages.length === 0 ? (
+            ) : filteredVoyages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-[#6B7280]">
                 <Ship className="w-12 h-12 mb-4 opacity-50" />
-                <p className="text-center">No active shipments</p>
+                <p className="text-center">{voyages.length === 0 ? 'No active shipments' : 'No shipments match your search'}</p>
                 <p className="text-sm text-[#9CA3AF]">
-                  Create your first maritime shipment to get started
+                  {voyages.length === 0 ? 'Create your first maritime shipment to get started' : 'Try adjusting your search or filter'}
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
-                {voyages.map((voyage) => (
+                {filteredVoyages.map((voyage) => (
                   <div
                     key={voyage.id}
                     className="p-4 rounded-xl border border-[#E5E7EB] hover:border-teal-200 hover:bg-teal-50/30 transition-all cursor-pointer"
@@ -245,25 +319,54 @@ export default function SeaFreight({
           >
             <h2 className="text-lg font-semibold text-[#111827] mb-4">Quick Actions</h2>
             <div className="space-y-2">
-              {[
-                { icon: Ship, label: "Plan Voyage", desc: "Create shipping route" },
-                { icon: Container, label: "Container Load", desc: "Manage containers" },
-                { icon: MapPin, label: "Track Vessels", desc: "Live tracking" },
-                { icon: FileText, label: "Generate BOL", desc: "Bill of Lading" },
-              ].map((action) => (
-                <button
-                  key={action.label}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#FAFAFA] transition-colors text-left group"
-                >
-                  <div className="p-2 rounded-lg bg-[#FAFAFA] group-hover:bg-teal-50">
-                    <action.icon className="w-4 h-4 text-[#6B7280] group-hover:text-teal-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-[#111827]">{action.label}</p>
-                    <p className="text-xs text-[#6B7280]">{action.desc}</p>
-                  </div>
-                </button>
-              ))}
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#FAFAFA] transition-colors text-left group"
+              >
+                <div className="p-2 rounded-lg bg-[#FAFAFA] group-hover:bg-teal-50">
+                  <Ship className="w-4 h-4 text-[#6B7280] group-hover:text-teal-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#111827]">Plan Voyage</p>
+                  <p className="text-xs text-[#6B7280]">Create shipping route</p>
+                </div>
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#FAFAFA] transition-colors text-left group"
+              >
+                <div className="p-2 rounded-lg bg-[#FAFAFA] group-hover:bg-teal-50">
+                  <Container className="w-4 h-4 text-[#6B7280] group-hover:text-teal-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#111827]">Container Load</p>
+                  <p className="text-xs text-[#6B7280]">Manage containers</p>
+                </div>
+              </button>
+              <button
+                onClick={() => alert('Vessel tracking coming soon')}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#FAFAFA] transition-colors text-left group"
+              >
+                <div className="p-2 rounded-lg bg-[#FAFAFA] group-hover:bg-teal-50">
+                  <MapPin className="w-4 h-4 text-[#6B7280] group-hover:text-teal-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#111827]">Track Vessels</p>
+                  <p className="text-xs text-[#6B7280]">Live tracking</p>
+                </div>
+              </button>
+              <button
+                onClick={() => alert('Bill of Lading generation coming soon')}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#FAFAFA] transition-colors text-left group"
+              >
+                <div className="p-2 rounded-lg bg-[#FAFAFA] group-hover:bg-teal-50">
+                  <FileText className="w-4 h-4 text-[#6B7280] group-hover:text-teal-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#111827]">Generate BOL</p>
+                  <p className="text-xs text-[#6B7280]">Bill of Lading</p>
+                </div>
+              </button>
             </div>
           </motion.div>
         </div>
@@ -283,6 +386,81 @@ export default function SeaFreight({
           </div>
         </motion.div>
       </main>
+
+      <Dialog open={showCreateModal} onOpenChange={(open) => { setShowCreateModal(open); if (!open) setCreateError(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Voyage</DialogTitle>
+            <DialogDescription>
+              Plan a new maritime shipment route
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {createError && (
+              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {createError}
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-[#111827] mb-1">Voyage Name</label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="e.g., Pacific Run 2026-01"
+                className="w-full px-3 py-2 rounded-lg border border-[#E5E7EB] text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#111827] mb-1">Origin Port</label>
+              <input
+                type="text"
+                value={formData.origin}
+                onChange={(e) => setFormData(prev => ({ ...prev, origin: e.target.value }))}
+                placeholder="e.g., Los Angeles, CA"
+                className="w-full px-3 py-2 rounded-lg border border-[#E5E7EB] text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#111827] mb-1">Destination Port</label>
+              <input
+                type="text"
+                value={formData.destination}
+                onChange={(e) => setFormData(prev => ({ ...prev, destination: e.target.value }))}
+                placeholder="e.g., Yokohama, Japan"
+                className="w-full px-3 py-2 rounded-lg border border-[#E5E7EB] text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#111827] mb-1">Container Count</label>
+              <input
+                type="number"
+                min="1"
+                value={formData.container_count}
+                onChange={(e) => setFormData(prev => ({ ...prev, container_count: parseInt(e.target.value) || 1 }))}
+                className="w-full px-3 py-2 rounded-lg border border-[#E5E7EB] text-[#111827] focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="px-4 py-2 text-sm text-[#6B7280] hover:text-[#111827] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateVoyage}
+              disabled={isCreating || !formData.name || !formData.origin || !formData.destination}
+              className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
+              Create Voyage
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

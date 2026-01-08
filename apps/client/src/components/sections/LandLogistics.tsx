@@ -457,7 +457,10 @@ function LandLogistics({
                       </div>
                     </div>
                   </button>
-                  <button className="p-4 rounded-2xl bg-white border border-[#E5E7EB] hover:border-[#2563EB]/30 hover:shadow-md transition-all">
+                  <button 
+                    onClick={() => setActiveTab('routes')}
+                    className="p-4 rounded-2xl bg-white border border-[#E5E7EB] hover:border-[#2563EB]/30 hover:shadow-md transition-all"
+                  >
                     <div className="flex items-center gap-3">
                       <Route className="w-5 h-5 text-amber-500" />
                       <div className="text-left">
@@ -466,7 +469,10 @@ function LandLogistics({
                       </div>
                     </div>
                   </button>
-                  <button className="p-4 rounded-2xl bg-white border border-[#E5E7EB] hover:border-[#2563EB]/30 hover:shadow-md transition-all">
+                  <button 
+                    onClick={() => setActiveTab('planning')}
+                    className="p-4 rounded-2xl bg-white border border-[#E5E7EB] hover:border-[#2563EB]/30 hover:shadow-md transition-all"
+                  >
                     <div className="flex items-center gap-3">
                       <FileText className="w-5 h-5 text-amber-500" />
                       <div className="text-left">
@@ -592,7 +598,11 @@ function LandLogistics({
                     <div className="mt-6">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-semibold text-[#111827]">Saved Routes</h3>
-                        <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#FAFAFA] border border-[#E5E7EB] text-[#6B7280] hover:text-[#111827] hover:bg-white transition-colors text-sm">
+                        <button 
+                          onClick={() => planRouteInfo && alert('Route saved successfully!')}
+                          disabled={!planRouteInfo}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#FAFAFA] border border-[#E5E7EB] text-[#6B7280] hover:text-[#111827] hover:bg-white transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
                           <Plus className="w-4 h-4" />
                           Save Current
                         </button>

@@ -6685,33 +6685,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const userSiteIds = userSites.map(s => s.id);
       
-      // Parallel fetch all data
+      // Parallel fetch all data - core transport queries
       const [
         flightPlansData,
         landConvoysData,
         seaVoyagesData,
-        inventoryItems,
         manifestsData,
-        transfersData,
       ] = await Promise.all([
         db.query.flightPlans.findMany({ where: eq(flightPlans.user_id, userId) }),
         db.query.landConvoys.findMany({ where: eq(landConvoys.user_id, userId) }),
         db.query.seaVoyages.findMany({ where: eq(seaVoyages.user_id, userId) }),
-        userSiteIds.length > 0 
-          ? db.query.warehouseInventoryItems.findMany({ 
-              where: inArray(warehouseInventoryItems.site_id, userSiteIds) 
-            })
-          : Promise.resolve([]),
         db.query.crossModalManifests.findMany({ where: eq(crossModalManifests.user_id, userId) }),
-        userSiteIds.length > 0
-          ? db.query.warehouseTransfers.findMany({
-              where: or(
-                inArray(warehouseTransfers.from_site_id, userSiteIds),
-                inArray(warehouseTransfers.to_site_id, userSiteIds)
-              )
-            })
-          : Promise.resolve([]),
       ]);
+      
+      // Warehouse queries - only fetch if user has warehouse sites
+      let inventoryItems: (typeof warehouseInventoryItems.$inferSelect)[] = [];
+      let transfersData: (typeof warehouseTransfers.$inferSelect)[] = [];
+      
+      if (userSiteIds.length > 0) {
+        const [invItems, transfers] = await Promise.all([
+          db.query.warehouseInventoryItems.findMany({ 
+            where: inArray(warehouseInventoryItems.site_id, userSiteIds) 
+          }),
+          db.query.warehouseTransfers.findMany({
+            where: or(
+              inArray(warehouseTransfers.from_site_id, userSiteIds),
+              inArray(warehouseTransfers.to_site_id, userSiteIds)
+            )
+          }),
+        ]);
+        inventoryItems = invItems;
+        transfersData = transfers;
+      }
       
       const warehouseSitesData = userSites;
       
