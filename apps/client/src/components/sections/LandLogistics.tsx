@@ -14,9 +14,11 @@ import {
   Fuel,
   Weight,
   Box,
+  Clock,
+  Navigation,
 } from "lucide-react";
 import { User } from "../../hooks/useAuth";
-import { StatusBadge, TransportTable, CapacityWidget } from '../transport';
+import { StatusBadge, TransportTable, CapacityWidget, LocationAutocomplete, RouteMap, PlaceDetails } from '../transport';
 import { ConvoyVisualization } from '../3d/ConvoyVisualization';
 import {
   Dialog,
@@ -90,10 +92,24 @@ interface Statistics {
   totalPayloadLbs: number;
 }
 
+interface LocationCoords {
+  lat: number;
+  lng: number;
+  formattedAddress: string;
+}
+
+interface RouteInfo {
+  distance_miles: number;
+  duration_hours: number;
+  polyline?: string;
+}
+
 interface ConvoyFormData {
   name: string;
   origin: string;
   destination: string;
+  origin_coords?: LocationCoords;
+  destination_coords?: LocationCoords;
   route_id?: number;
   departure_time: string;
 }
@@ -174,6 +190,16 @@ function LandLogistics({
     destination: '',
     departure_time: '',
   });
+  
+  const [convoyRouteInfo, setConvoyRouteInfo] = useState<RouteInfo | null>(null);
+  const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+  
+  const [planOrigin, setPlanOrigin] = useState('');
+  const [planOriginCoords, setPlanOriginCoords] = useState<LocationCoords | null>(null);
+  const [planDestination, setPlanDestination] = useState('');
+  const [planDestinationCoords, setPlanDestinationCoords] = useState<LocationCoords | null>(null);
+  const [planRouteInfo, setPlanRouteInfo] = useState<RouteInfo | null>(null);
+  const [isPlanningRoute, setIsPlanningRoute] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -221,6 +247,7 @@ function LandLogistics({
         await fetchData();
         setShowCreateModal(false);
         setFormData({ name: '', origin: '', destination: '', departure_time: '' });
+        setConvoyRouteInfo(null);
       }
     } catch (error) {
       console.error('Error creating convoy:', error);
@@ -293,6 +320,109 @@ function LandLogistics({
     
     setShowVehicleSelectModal(false);
   }, [selectedConvoy]);
+
+  const calculateRoute = useCallback(async (
+    originCoords: LocationCoords,
+    destCoords: LocationCoords,
+    setRouteInfo: (info: RouteInfo | null) => void,
+    setLoading: (loading: boolean) => void
+  ) => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/land/routes/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          origin: { lat: originCoords.lat, lng: originCoords.lng },
+          destination: { lat: destCoords.lat, lng: destCoords.lng },
+        }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setRouteInfo({
+          distance_miles: data.distance_miles || data.distanceMiles || 0,
+          duration_hours: data.duration_hours || data.durationHours || 0,
+          polyline: data.polyline || data.overview_polyline,
+        });
+      }
+    } catch (error) {
+      console.error('Error calculating route:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleOriginChange = useCallback((value: string, placeDetails?: PlaceDetails) => {
+    setFormData(prev => ({
+      ...prev,
+      origin: value,
+      origin_coords: placeDetails ? {
+        lat: placeDetails.lat,
+        lng: placeDetails.lng,
+        formattedAddress: placeDetails.formattedAddress,
+      } : undefined,
+    }));
+    
+    if (placeDetails && formData.destination_coords) {
+      calculateRoute(
+        { lat: placeDetails.lat, lng: placeDetails.lng, formattedAddress: placeDetails.formattedAddress },
+        formData.destination_coords,
+        setConvoyRouteInfo,
+        setIsCalculatingRoute
+      );
+    }
+  }, [formData.destination_coords, calculateRoute]);
+
+  const handleDestinationChange = useCallback((value: string, placeDetails?: PlaceDetails) => {
+    setFormData(prev => ({
+      ...prev,
+      destination: value,
+      destination_coords: placeDetails ? {
+        lat: placeDetails.lat,
+        lng: placeDetails.lng,
+        formattedAddress: placeDetails.formattedAddress,
+      } : undefined,
+    }));
+    
+    if (placeDetails && formData.origin_coords) {
+      calculateRoute(
+        formData.origin_coords,
+        { lat: placeDetails.lat, lng: placeDetails.lng, formattedAddress: placeDetails.formattedAddress },
+        setConvoyRouteInfo,
+        setIsCalculatingRoute
+      );
+    }
+  }, [formData.origin_coords, calculateRoute]);
+
+  const handlePlanOriginChange = useCallback((value: string, placeDetails?: PlaceDetails) => {
+    setPlanOrigin(value);
+    if (placeDetails) {
+      const coords = { lat: placeDetails.lat, lng: placeDetails.lng, formattedAddress: placeDetails.formattedAddress };
+      setPlanOriginCoords(coords);
+      
+      if (planDestinationCoords) {
+        calculateRoute(coords, planDestinationCoords, setPlanRouteInfo, setIsPlanningRoute);
+      }
+    } else {
+      setPlanOriginCoords(null);
+    }
+  }, [planDestinationCoords, calculateRoute]);
+
+  const handlePlanDestinationChange = useCallback((value: string, placeDetails?: PlaceDetails) => {
+    setPlanDestination(value);
+    if (placeDetails) {
+      const coords = { lat: placeDetails.lat, lng: placeDetails.lng, formattedAddress: placeDetails.formattedAddress };
+      setPlanDestinationCoords(coords);
+      
+      if (planOriginCoords) {
+        calculateRoute(planOriginCoords, coords, setPlanRouteInfo, setIsPlanningRoute);
+      }
+    } else {
+      setPlanDestinationCoords(null);
+    }
+  }, [planOriginCoords, calculateRoute]);
 
   const tabs = useMemo(() => [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
@@ -515,41 +645,121 @@ function LandLogistics({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
               >
-                <div className="flex items-center justify-between mb-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div>
-                    <h2 className="text-xl font-semibold text-amber-900">Transport Routes</h2>
-                    <p className="text-amber-600">Manage convoy routes and waypoints</p>
-                  </div>
-                  <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-colors">
-                    <Plus className="w-4 h-4" />
-                    New Route
-                  </button>
-                </div>
-
-                {routes.length === 0 ? (
-                  <div className="text-center py-12 bg-white rounded-2xl border border-amber-200/50">
-                    <Route className="w-12 h-12 text-amber-300 mx-auto mb-3" />
-                    <p className="text-amber-700 font-medium">No routes defined</p>
-                    <p className="text-amber-500 text-sm">Create your first route to plan convoy movements</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {routes.map((route) => (
-                      <div key={route.id} className="p-4 rounded-2xl bg-white border border-amber-200/50 hover:border-amber-400 transition-colors cursor-pointer">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium text-amber-900">{route.name}</div>
-                            <div className="text-sm text-amber-600">{route.origin} → {route.destination}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-medium text-amber-900">{route.distance_miles} miles</div>
-                            <div className="text-xs text-amber-600">{route.estimated_time_hours}h estimated</div>
+                    <div className="mb-4">
+                      <h2 className="text-xl font-semibold text-amber-900">Plan Route</h2>
+                      <p className="text-amber-600">Calculate route between locations</p>
+                    </div>
+                    
+                    <div className="p-4 rounded-2xl bg-white border border-amber-200/50 space-y-4">
+                      <LocationAutocomplete
+                        value={planOrigin}
+                        onChange={handlePlanOriginChange}
+                        placeholder="Search for origin..."
+                        label="Origin"
+                      />
+                      
+                      <LocationAutocomplete
+                        value={planDestination}
+                        onChange={handlePlanDestinationChange}
+                        placeholder="Search for destination..."
+                        label="Destination"
+                      />
+                      
+                      {isPlanningRoute && (
+                        <div className="flex items-center justify-center gap-2 py-4 text-amber-600">
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>Calculating route...</span>
+                        </div>
+                      )}
+                      
+                      {planRouteInfo && !isPlanningRoute && (
+                        <div className="p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="text-center">
+                              <div className="flex items-center justify-center gap-2 text-amber-600 mb-1">
+                                <Navigation className="w-5 h-5" />
+                                <span className="text-sm font-medium uppercase tracking-wide">Distance</span>
+                              </div>
+                              <div className="text-2xl font-bold text-amber-900">
+                                {planRouteInfo.distance_miles.toFixed(1)} mi
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <div className="flex items-center justify-center gap-2 text-amber-600 mb-1">
+                                <Clock className="w-5 h-5" />
+                                <span className="text-sm font-medium uppercase tracking-wide">Duration</span>
+                              </div>
+                              <div className="text-2xl font-bold text-amber-900">
+                                {planRouteInfo.duration_hours.toFixed(1)} hrs
+                              </div>
+                            </div>
                           </div>
                         </div>
+                      )}
+                    </div>
+                    
+                    <div className="mt-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-amber-900">Saved Routes</h3>
+                        <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors text-sm">
+                          <Plus className="w-4 h-4" />
+                          Save Current
+                        </button>
                       </div>
-                    ))}
+                      
+                      {routes.length === 0 ? (
+                        <div className="text-center py-8 bg-white rounded-xl border border-amber-200/50">
+                          <Route className="w-10 h-10 text-amber-300 mx-auto mb-2" />
+                          <p className="text-amber-600 text-sm">No saved routes yet</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {routes.map((route) => (
+                            <div key={route.id} className="p-3 rounded-xl bg-white border border-amber-200/50 hover:border-amber-400 transition-colors cursor-pointer">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="font-medium text-amber-900">{route.name}</div>
+                                  <div className="text-xs text-amber-600">{route.origin} → {route.destination}</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-medium text-amber-900">{route.distance_miles} mi</div>
+                                  <div className="text-xs text-amber-600">{route.estimated_time_hours}h</div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
+                  
+                  <div>
+                    <div className="mb-4">
+                      <h2 className="text-xl font-semibold text-amber-900">Route Map</h2>
+                      <p className="text-amber-600">Visual route preview</p>
+                    </div>
+                    
+                    {planOriginCoords && planDestinationCoords ? (
+                      <RouteMap
+                        origin={{ lat: planOriginCoords.lat, lng: planOriginCoords.lng, label: planOriginCoords.formattedAddress }}
+                        destination={{ lat: planDestinationCoords.lat, lng: planDestinationCoords.lng, label: planDestinationCoords.formattedAddress }}
+                        polyline={planRouteInfo?.polyline}
+                        height={500}
+                        className="shadow-lg"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center rounded-2xl bg-white border border-amber-200/50 shadow-sm" style={{ height: 500 }}>
+                        <div className="text-center p-8">
+                          <Map className="w-16 h-16 text-amber-300 mx-auto mb-4" />
+                          <p className="text-amber-700 font-medium">No Route Selected</p>
+                          <p className="text-amber-500 text-sm mt-1">Enter origin and destination to see route on map</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </motion.div>
             )}
 
@@ -678,7 +888,12 @@ function LandLogistics({
         )}
       </main>
 
-      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+      <Dialog open={showCreateModal} onOpenChange={(open) => {
+          setShowCreateModal(open);
+          if (!open) {
+            setConvoyRouteInfo(null);
+          }
+        }}>
         <DialogContent className="bg-white border-amber-200 max-w-md">
           <DialogHeader>
             <DialogTitle className="text-amber-900">Create New Convoy</DialogTitle>
@@ -699,27 +914,53 @@ function LandLogistics({
               />
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-amber-700 mb-1">Origin</label>
-              <input
-                type="text"
-                value={formData.origin}
-                onChange={(e) => setFormData(prev => ({ ...prev, origin: e.target.value }))}
-                placeholder="e.g., Camp Victory"
-                className="w-full px-3 py-2 rounded-xl border border-amber-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
-              />
-            </div>
+            <LocationAutocomplete
+              value={formData.origin}
+              onChange={handleOriginChange}
+              placeholder="Search for origin location..."
+              label="Origin"
+              required
+            />
             
-            <div>
-              <label className="block text-sm font-medium text-amber-700 mb-1">Destination</label>
-              <input
-                type="text"
-                value={formData.destination}
-                onChange={(e) => setFormData(prev => ({ ...prev, destination: e.target.value }))}
-                placeholder="e.g., Forward Base Echo"
-                className="w-full px-3 py-2 rounded-xl border border-amber-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
-              />
-            </div>
+            <LocationAutocomplete
+              value={formData.destination}
+              onChange={handleDestinationChange}
+              placeholder="Search for destination location..."
+              label="Destination"
+              required
+            />
+            
+            {(isCalculatingRoute || convoyRouteInfo) && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                {isCalculatingRoute ? (
+                  <div className="flex items-center justify-center gap-2 text-amber-600">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm">Calculating route...</span>
+                  </div>
+                ) : convoyRouteInfo && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-amber-700">
+                        <Navigation className="w-4 h-4" />
+                        <span className="text-sm font-medium">{convoyRouteInfo.distance_miles.toFixed(1)} miles</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-amber-700">
+                        <Clock className="w-4 h-4" />
+                        <span className="text-sm font-medium">{convoyRouteInfo.duration_hours.toFixed(1)} hours</span>
+                      </div>
+                    </div>
+                    {formData.origin_coords && formData.destination_coords && (
+                      <RouteMap
+                        origin={{ lat: formData.origin_coords.lat, lng: formData.origin_coords.lng, label: 'Origin' }}
+                        destination={{ lat: formData.destination_coords.lat, lng: formData.destination_coords.lng, label: 'Destination' }}
+                        polyline={convoyRouteInfo.polyline}
+                        height={150}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             
             <div>
               <label className="block text-sm font-medium text-amber-700 mb-1">Route (Optional)</label>

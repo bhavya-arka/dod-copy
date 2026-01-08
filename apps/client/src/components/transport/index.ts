@@ -9,3 +9,9 @@ export type { TransportFormProps } from './TransportForm';
 
 export { CapacityWidget } from './CapacityWidget';
 export type { CapacityWidgetProps } from './CapacityWidget';
+
+export { LocationAutocomplete } from './LocationAutocomplete';
+export type { LocationAutocompleteProps, PlaceDetails } from './LocationAutocomplete';
+
+export { RouteMap } from './RouteMap';
+export type { RouteMapProps } from './RouteMap';
