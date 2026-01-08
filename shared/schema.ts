@@ -3,13 +3,53 @@ import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Users table with email-based authentication
+// ============================================================================
+// MILITARY ORGANIZATIONS
+// ============================================================================
+
+// Role enum for users
+export const userRoleEnum = ['superadmin', 'admin', 'user'] as const;
+export type UserRole = typeof userRoleEnum[number];
+
+// Organization names
+export const organizationNameEnum = ['PACAF', 'DLA', 'MSC', 'TRANSCOM'] as const;
+export type OrganizationName = typeof organizationNameEnum[number];
+
+// Organizations table (PACAF, DLA, MSC, TRANSCOM)
+export const organizations = pgTable("organizations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(), // PACAF, DLA, MSC, TRANSCOM
+  description: text("description"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertOrganizationSchema = createInsertSchema(organizations).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+
+export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
+export type Organization = typeof organizations.$inferSelect;
+
+// ============================================================================
+// USERS & AUTHENTICATION
+// ============================================================================
+
+// Users table with email-based authentication and organization/role
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   email: text("email").notNull().unique(),
   username: text("username").notNull(),
   password: text("password").notNull(), // bcrypt hashed password
+  first_name: text("first_name"),
+  last_name: text("last_name"),
+  organization_id: integer("organization_id"), // FK to organizations (null for superadmin)
+  role: text("role").notNull().default('user'), // 'superadmin', 'admin', 'user'
+  is_active: boolean("is_active").notNull().default(false), // Pending approval by default
   created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
   last_login_at: timestamp("last_login_at"),
 });
 
@@ -17,10 +57,37 @@ export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   username: true,
   password: true,
+  first_name: true,
+  last_name: true,
+  organization_id: true,
+  role: true,
+  is_active: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// Access codes for signup (Department Access Codes - DAC)
+export const accessCodes = pgTable("access_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  organization_id: integer("organization_id").notNull(), // FK to organizations
+  created_by_user_id: integer("created_by_user_id").notNull(), // Admin who created it
+  expires_at: timestamp("expires_at").notNull(),
+  is_used: boolean("is_used").notNull().default(false),
+  used_by_user_id: integer("used_by_user_id"), // User who used the code
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertAccessCodeSchema = createInsertSchema(accessCodes).omit({
+  id: true,
+  created_at: true,
+  is_used: true,
+  used_by_user_id: true,
+});
+
+export type InsertAccessCode = z.infer<typeof insertAccessCodeSchema>;
+export type AccessCode = typeof accessCodes.$inferSelect;
 
 // Session validation schema for login
 export const loginSchema = z.object({
@@ -29,6 +96,18 @@ export const loginSchema = z.object({
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
+
+// Signup schema with access code
+export const signupWithCodeSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  username: z.string().min(2),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  access_code: z.string().min(6),
+});
+
+export type SignupWithCodeInput = z.infer<typeof signupWithCodeSchema>;
 
 // Flight plan status enum
 export const flightPlanStatusEnum = ['draft', 'complete', 'archived'] as const;
