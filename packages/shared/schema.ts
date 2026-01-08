@@ -704,6 +704,32 @@ export const insertWarehouseAgingThresholdSchema = createInsertSchema(warehouseA
 export type InsertWarehouseAgingThreshold = z.infer<typeof insertWarehouseAgingThresholdSchema>;
 export type WarehouseAgingThreshold = typeof warehouseAgingThresholds.$inferSelect;
 
+// Warehouse Transfers - inter-site transfers
+export const warehouseTransfers = pgTable("warehouse_transfers", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  source_site_id: integer("source_site_id").notNull(),
+  destination_site_id: integer("destination_site_id").notNull(),
+  status: text("status").notNull().default("pending"),
+  transport_mode: text("transport_mode").notNull().default("land"),
+  transfer_items: jsonb("transfer_items").notNull().default([]),
+  air_metadata: jsonb("air_metadata"),
+  pacaf_manifest: jsonb("pacaf_manifest"),
+  notes: text("notes"),
+  scheduled_date: timestamp("scheduled_date"),
+  completed_date: timestamp("completed_date"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseTransferSchema = createInsertSchema(warehouseTransfers).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertWarehouseTransfer = z.infer<typeof insertWarehouseTransferSchema>;
+export type WarehouseTransfer = typeof warehouseTransfers.$inferSelect;
+
 // ============================================================================
 // LAND LOGISTICS TABLES
 // ============================================================================
@@ -872,3 +898,177 @@ export const insertSeaContainerSchema = createInsertSchema(seaContainers).omit({
 });
 export type InsertSeaContainer = z.infer<typeof insertSeaContainerSchema>;
 export type SeaContainer = typeof seaContainers.$inferSelect;
+
+// Cross Modal Manifests - multi-modal shipment manifests
+export const crossModalManifests = pgTable("cross_modal_manifests", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  
+  source_site_id: integer("source_site_id").notNull(),
+  destination_site_id: integer("destination_site_id"),
+  destination_address: text("destination_address"),
+  
+  manifest_number: text("manifest_number").notNull(),
+  name: text("name").notNull(),
+  priority: text("priority").notNull().default("routine"),
+  classification: text("classification").notNull().default("unclassified"),
+  
+  transport_mode: text("transport_mode"),
+  
+  flight_plan_id: integer("flight_plan_id"),
+  convoy_id: integer("convoy_id"),
+  voyage_id: integer("voyage_id"),
+  
+  estimated_cost_usd: numeric("estimated_cost_usd", { precision: 12, scale: 2 }),
+  estimated_duration_hours: numeric("estimated_duration_hours", { precision: 8, scale: 2 }),
+  estimated_distance_miles: numeric("estimated_distance_miles", { precision: 10, scale: 2 }),
+  
+  total_weight_lbs: integer("total_weight_lbs").default(0),
+  total_cube_ft: numeric("total_cube_ft", { precision: 10, scale: 2 }).default("0"),
+  total_items: integer("total_items").default(0),
+  
+  status: text("status").notNull().default("draft"),
+  
+  required_delivery_date: timestamp("required_delivery_date"),
+  estimated_departure: timestamp("estimated_departure"),
+  estimated_arrival: timestamp("estimated_arrival"),
+  actual_departure: timestamp("actual_departure"),
+  actual_arrival: timestamp("actual_arrival"),
+  
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCrossModalManifestSchema = createInsertSchema(crossModalManifests).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertCrossModalManifest = z.infer<typeof insertCrossModalManifestSchema>;
+export type CrossModalManifest = typeof crossModalManifests.$inferSelect;
+
+// Manifest Items - individual items within a cross-modal manifest
+export const manifestItems = pgTable("manifest_items", {
+  id: serial("id").primaryKey(),
+  manifest_id: integer("manifest_id").notNull(),
+  inventory_item_id: integer("inventory_item_id"),
+  
+  nsn: text("nsn"),
+  part_number: text("part_number"),
+  nomenclature: text("nomenclature").notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  unit_of_issue: text("unit_of_issue").default("EA"),
+  
+  weight_lbs: integer("weight_lbs"),
+  length_in: numeric("length_in", { precision: 8, scale: 2 }),
+  width_in: numeric("width_in", { precision: 8, scale: 2 }),
+  height_in: numeric("height_in", { precision: 8, scale: 2 }),
+  cube_ft: numeric("cube_ft", { precision: 8, scale: 2 }),
+  
+  hazmat_class: text("hazmat_class"),
+  is_hazmat: boolean("is_hazmat").default(false),
+  is_sensitive: boolean("is_sensitive").default(false),
+  
+  picked: boolean("picked").default(false),
+  packed: boolean("packed").default(false),
+  loaded: boolean("loaded").default(false),
+  
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertManifestItemSchema = createInsertSchema(manifestItems).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertManifestItem = z.infer<typeof insertManifestItemSchema>;
+export type ManifestItem = typeof manifestItems.$inferSelect;
+
+// Warehouse Analytics Snapshots
+export const warehouseAnalyticsSnapshots = pgTable("warehouse_analytics_snapshots", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull(),
+  site_id: integer("site_id"),
+  snapshot_date: timestamp("snapshot_date").notNull(),
+  metrics: jsonb("metrics").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseAnalyticsSnapshotSchema = createInsertSchema(warehouseAnalyticsSnapshots).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseAnalyticsSnapshot = z.infer<typeof insertWarehouseAnalyticsSnapshotSchema>;
+export type WarehouseAnalyticsSnapshot = typeof warehouseAnalyticsSnapshots.$inferSelect;
+
+// Warehouse Optimization Plans
+export const warehouseOptimizationPlans = pgTable("warehouse_optimization_plans", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  user_id: integer("user_id").notNull(),
+  parent_plan_id: integer("parent_plan_id"),
+  name: text("name").notNull(),
+  algorithm: text("algorithm").notNull(),
+  status: text("status").notNull().default("pending"),
+  version: integer("version").notNull().default(1),
+  diff_patch: jsonb("diff_patch").notNull().default([]),
+  summary: jsonb("summary").notNull().default({}),
+  total_actions: integer("total_actions").notNull().default(0),
+  completed_actions: integer("completed_actions").notNull().default(0),
+  comparison_context: jsonb("comparison_context"),
+  executed_at: timestamp("executed_at"),
+  executed_by: integer("executed_by"),
+  cancelled_at: timestamp("cancelled_at"),
+  cancelled_by: integer("cancelled_by"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseOptimizationPlanSchema = createInsertSchema(warehouseOptimizationPlans).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertWarehouseOptimizationPlan = z.infer<typeof insertWarehouseOptimizationPlanSchema>;
+export type WarehouseOptimizationPlan = typeof warehouseOptimizationPlans.$inferSelect;
+
+// Warehouse Optimization Actions
+export const warehouseOptimizationActions = pgTable("warehouse_optimization_actions", {
+  id: serial("id").primaryKey(),
+  plan_id: integer("plan_id").notNull(),
+  item_id: integer("item_id").notNull(),
+  action_type: text("action_type").notNull(),
+  from_location: text("from_location"),
+  to_location: text("to_location"),
+  quantity: integer("quantity").notNull().default(1),
+  status: text("status").notNull().default("pending"),
+  completed_by: integer("completed_by"),
+  completed_at: timestamp("completed_at"),
+  movement_notes: text("movement_notes"),
+  sequence: integer("sequence").notNull().default(0),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseOptimizationActionSchema = createInsertSchema(warehouseOptimizationActions).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseOptimizationAction = z.infer<typeof insertWarehouseOptimizationActionSchema>;
+export type WarehouseOptimizationAction = typeof warehouseOptimizationActions.$inferSelect;
+
+// Warehouse Optimization Events
+export const warehouseOptimizationEvents = pgTable("warehouse_optimization_events", {
+  id: serial("id").primaryKey(),
+  plan_id: integer("plan_id").notNull(),
+  user_id: integer("user_id").notNull(),
+  event_type: text("event_type").notNull(),
+  payload: jsonb("payload").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseOptimizationEventSchema = createInsertSchema(warehouseOptimizationEvents).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseOptimizationEvent = z.infer<typeof insertWarehouseOptimizationEventSchema>;
+export type WarehouseOptimizationEvent = typeof warehouseOptimizationEvents.$inferSelect;

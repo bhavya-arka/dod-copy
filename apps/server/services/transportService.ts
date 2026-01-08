@@ -2,6 +2,7 @@ import { db } from "../db";
 import { 
   flightPlans, 
   landConvoys, 
+  landRoutes,
   seaVoyages, 
   crossModalManifests,
   manifestItems
@@ -21,7 +22,10 @@ const STATUS_MAP: Record<string, TransportStatus> = {
   archived: 'completed',
   planning: 'draft',
   planned: 'planned',
+  loading: 'loading',
+  in_transit: 'underway',
   en_route: 'underway',
+  underway: 'underway',
   at_sea: 'underway',
   in_port: 'loading',
   arrived: 'completed',
@@ -39,14 +43,13 @@ function denormalizeStatus(status: TransportStatus, mode: TransportMode): string
     return status;
   }
   if (mode === 'land') {
-    if (status === 'draft') return 'planning';
-    if (status === 'underway') return 'en_route';
-    if (status === 'completed') return 'arrived';
+    if (status === 'draft') return 'draft';
+    if (status === 'underway') return 'in_transit';
+    if (status === 'completed') return 'completed';
     return status;
   }
   if (mode === 'sea') {
-    if (status === 'underway') return 'at_sea';
-    if (status === 'loading') return 'in_port';
+    if (status === 'underway') return 'underway';
     return status;
   }
   return status;
@@ -70,13 +73,17 @@ function mapFlightPlanToTransportPlan(fp: typeof flightPlans.$inferSelect): Tran
   };
 }
 
-function mapLandConvoyToTransportPlan(lc: typeof landConvoys.$inferSelect): TransportPlan {
+type LandConvoyWithRoute = typeof landConvoys.$inferSelect & {
+  route?: typeof landRoutes.$inferSelect | null;
+};
+
+function mapLandConvoyToTransportPlan(lc: LandConvoyWithRoute): TransportPlan {
   return {
     id: lc.id,
     mode: 'land',
     name: lc.name,
-    origin: 'Land Origin',
-    destination: 'Land Destination',
+    origin: lc.route?.origin_name || 'Unknown Origin',
+    destination: lc.route?.destination_name || 'Unknown Destination',
     status: normalizeStatus(lc.status),
     departure_time: lc.departure_time?.toISOString(),
     arrival_time: lc.arrival_time?.toISOString(),
@@ -111,8 +118,18 @@ export async function getPlans(mode: TransportMode, userId: number): Promise<Tra
       return plans.map(mapFlightPlanToTransportPlan);
     }
     case 'land': {
-      const convoys = await db.select().from(landConvoys).where(eq(landConvoys.user_id, userId));
-      return convoys.map(mapLandConvoyToTransportPlan);
+      const results = await db
+        .select({
+          convoy: landConvoys,
+          route: landRoutes,
+        })
+        .from(landConvoys)
+        .leftJoin(landRoutes, eq(landConvoys.route_id, landRoutes.id))
+        .where(eq(landConvoys.user_id, userId));
+      
+      return results.map(({ convoy, route }) => 
+        mapLandConvoyToTransportPlan({ ...convoy, route })
+      );
     }
     case 'sea': {
       const voyages = await db.select().from(seaVoyages).where(eq(seaVoyages.user_id, userId));
@@ -131,9 +148,16 @@ export async function getPlan(mode: TransportMode, id: number, userId: number): 
       return plan ? mapFlightPlanToTransportPlan(plan) : null;
     }
     case 'land': {
-      const [convoy] = await db.select().from(landConvoys)
+      const [result] = await db
+        .select({
+          convoy: landConvoys,
+          route: landRoutes,
+        })
+        .from(landConvoys)
+        .leftJoin(landRoutes, eq(landConvoys.route_id, landRoutes.id))
         .where(and(eq(landConvoys.id, id), eq(landConvoys.user_id, userId)));
-      return convoy ? mapLandConvoyToTransportPlan(convoy) : null;
+      
+      return result ? mapLandConvoyToTransportPlan({ ...result.convoy, route: result.route }) : null;
     }
     case 'sea': {
       const [voyage] = await db.select().from(seaVoyages)
@@ -169,16 +193,34 @@ export async function createPlan(
       return plan ? mapFlightPlanToTransportPlan(plan) : null;
     }
     case 'land': {
+      let routeId: number | undefined;
+      let route: typeof landRoutes.$inferSelect | null = null;
+      
+      if (data.origin || data.destination) {
+        const [newRoute] = await db.insert(landRoutes).values({
+          user_id: userId,
+          name: `Route for ${data.name || 'New Convoy'}`,
+          origin_name: data.origin || 'Unknown Origin',
+          destination_name: data.destination || 'Unknown Destination',
+          status: 'planned',
+        }).returning();
+        if (newRoute) {
+          routeId = newRoute.id;
+          route = newRoute;
+        }
+      }
+      
       const [convoy] = await db.insert(landConvoys).values({
         user_id: userId,
         name: data.name || 'New Convoy',
+        route_id: routeId,
         status: dbStatus,
         vehicle_count: data.cargo_count || 0,
         total_cargo_weight_lbs: data.total_weight_lbs || 0,
         departure_time: data.departure_time ? new Date(data.departure_time) : undefined,
         arrival_time: data.arrival_time ? new Date(data.arrival_time) : undefined,
       }).returning();
-      return convoy ? mapLandConvoyToTransportPlan(convoy) : null;
+      return convoy ? mapLandConvoyToTransportPlan({ ...convoy, route }) : null;
     }
     case 'sea': {
       const [voyage] = await db.insert(seaVoyages).values({
@@ -232,7 +274,19 @@ export async function updatePlan(
         .set(updateData)
         .where(and(eq(landConvoys.id, id), eq(landConvoys.user_id, userId)))
         .returning();
-      return convoy ? mapLandConvoyToTransportPlan(convoy) : null;
+      
+      if (!convoy) return null;
+      
+      const [result] = await db
+        .select({
+          convoy: landConvoys,
+          route: landRoutes,
+        })
+        .from(landConvoys)
+        .leftJoin(landRoutes, eq(landConvoys.route_id, landRoutes.id))
+        .where(eq(landConvoys.id, convoy.id));
+      
+      return result ? mapLandConvoyToTransportPlan({ ...result.convoy, route: result.route }) : null;
     }
     case 'sea': {
       const updateData: Record<string, unknown> = { updated_at: now };

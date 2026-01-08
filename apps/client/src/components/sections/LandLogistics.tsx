@@ -1,32 +1,31 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   Truck,
-  MapPin,
   Route,
-  Package,
-  Clock,
-  Users,
   FileText,
-  Settings,
   Plus,
-  Search,
-  Filter,
-  ChevronRight,
   Play,
-  Pause,
   CheckCircle,
-  AlertTriangle,
   Loader2,
   BarChart3,
   Map,
-  List,
   Fuel,
   Weight,
   Box,
 } from "lucide-react";
 import { User } from "../../hooks/useAuth";
+import { StatusBadge, TransportTable, CapacityWidget } from '../transport';
+import { ConvoyVisualization } from '../3d/ConvoyVisualization';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "../ui/dialog";
 
 interface LandLogisticsProps {
   user: User;
@@ -59,17 +58,25 @@ interface RouteType {
   status: string;
 }
 
+interface ConvoyVehicle {
+  id: number;
+  vehicleCode: string;
+  position: number;
+  lane: number;
+}
+
 interface Convoy {
   id: number;
   name: string;
   route_id?: number;
   origin: string;
   destination: string;
-  status: string;
+  status: 'draft' | 'planned' | 'loading' | 'underway' | 'completed' | 'cancelled';
   vehicle_count: number;
   total_weight_lbs: number;
   departure_time?: string;
   arrival_time?: string;
+  vehicles?: ConvoyVehicle[];
 }
 
 interface Statistics {
@@ -83,9 +90,67 @@ interface Statistics {
   totalPayloadLbs: number;
 }
 
+interface ConvoyFormData {
+  name: string;
+  origin: string;
+  destination: string;
+  route_id?: number;
+  departure_time: string;
+}
+
 type Tab = 'overview' | 'routes' | 'convoys' | 'vehicles' | 'planning';
 
-export default function LandLogistics({
+const statusTransitions: Record<string, { nextStatus: string; buttonLabel: string }> = {
+  draft: { nextStatus: 'planned', buttonLabel: 'Start Planning' },
+  planned: { nextStatus: 'loading', buttonLabel: 'Begin Loading' },
+  loading: { nextStatus: 'underway', buttonLabel: 'Dispatch Convoy' },
+  underway: { nextStatus: 'completed', buttonLabel: 'Mark Complete' },
+};
+
+const VehicleCard = memo(({ vehicle, formatWeight }: { vehicle: VehicleType; formatWeight: (lbs: number) => string }) => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.95 }}
+    animate={{ opacity: 1, scale: 1 }}
+    className="p-4 rounded-2xl bg-white border border-amber-200/50 shadow-sm hover:shadow-md transition-shadow"
+  >
+    <div className="flex items-start justify-between mb-3">
+      <div>
+        <div className="font-bold text-amber-900">{vehicle.code}</div>
+        <div className="text-sm text-amber-600">{vehicle.name}</div>
+      </div>
+      <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+        {vehicle.category.replace('_', ' ')}
+      </span>
+    </div>
+    
+    <div className="grid grid-cols-2 gap-2 text-sm">
+      <div className="flex items-center gap-1 text-amber-700">
+        <Weight className="w-3 h-3" />
+        <span>{formatWeight(vehicle.payload_lbs)}</span>
+      </div>
+      <div className="flex items-center gap-1 text-amber-700">
+        <Route className="w-3 h-3" />
+        <span>{vehicle.range_miles} mi</span>
+      </div>
+      <div className="flex items-center gap-1 text-amber-700">
+        <Fuel className="w-3 h-3" />
+        <span>{vehicle.fuel_type}</span>
+      </div>
+      <div className="flex items-center gap-1 text-amber-700">
+        <Box className="w-3 h-3" />
+        <span>{vehicle.pallet_capacity_463l} 463L</span>
+      </div>
+    </div>
+    
+    <div className="mt-3 pt-3 border-t border-amber-100">
+      <div className="text-xs text-amber-600">{vehicle.axle_config} • {vehicle.max_speed_mph} mph max</div>
+    </div>
+  </motion.div>
+));
+
+VehicleCard.displayName = 'VehicleCard';
+
+function LandLogistics({
   user,
   onBack,
   onLogout,
@@ -96,13 +161,21 @@ export default function LandLogistics({
   const [routes, setRoutes] = useState<RouteType[]>([]);
   const [convoys, setConvoys] = useState<Convoy[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  
+  const [selectedConvoy, setSelectedConvoy] = useState<Convoy | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showVehicleSelectModal, setShowVehicleSelectModal] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  
+  const [formData, setFormData] = useState<ConvoyFormData>({
+    name: '',
+    origin: '',
+    destination: '',
+    departure_time: '',
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [statsRes, vehiclesRes, routesRes, convoysRes] = await Promise.all([
@@ -121,36 +194,145 @@ export default function LandLogistics({
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const tabs = [
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleCreateConvoy = useCallback(async () => {
+    if (!formData.name || !formData.origin || !formData.destination) return;
+    
+    setIsCreating(true);
+    try {
+      const res = await fetch('/api/land/convoys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          ...formData,
+          status: 'draft',
+          vehicle_count: 0,
+          total_weight_lbs: 0,
+        }),
+      });
+      
+      if (res.ok) {
+        await fetchData();
+        setShowCreateModal(false);
+        setFormData({ name: '', origin: '', destination: '', departure_time: '' });
+      }
+    } catch (error) {
+      console.error('Error creating convoy:', error);
+    } finally {
+      setIsCreating(false);
+    }
+  }, [formData, fetchData]);
+
+  const handleUpdateConvoyStatus = useCallback(async (convoyId: number, newStatus: string) => {
+    setIsUpdating(true);
+    try {
+      const res = await fetch(`/api/land/convoys/${convoyId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: newStatus }),
+      });
+      
+      if (res.ok) {
+        setConvoys(prev => prev.map(c => c.id === convoyId ? { ...c, status: newStatus as Convoy['status'] } : c));
+        if (selectedConvoy?.id === convoyId) {
+          setSelectedConvoy(prev => prev ? { ...prev, status: newStatus as Convoy['status'] } : null);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating convoy status:', error);
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [selectedConvoy]);
+
+  const handleAddVehicleToConvoy = useCallback(async (vehicleCode: string) => {
+    if (!selectedConvoy) return;
+    
+    const newVehicle: ConvoyVehicle = {
+      id: Date.now(),
+      vehicleCode,
+      position: (selectedConvoy.vehicles?.length || 0),
+      lane: 1,
+    };
+    
+    const updatedVehicles = [...(selectedConvoy.vehicles || []), newVehicle];
+    
+    try {
+      const res = await fetch(`/api/land/convoys/${selectedConvoy.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          vehicles: updatedVehicles,
+          vehicle_count: updatedVehicles.length,
+        }),
+      });
+      
+      if (res.ok) {
+        setSelectedConvoy(prev => prev ? { 
+          ...prev, 
+          vehicles: updatedVehicles,
+          vehicle_count: updatedVehicles.length,
+        } : null);
+        setConvoys(prev => prev.map(c => 
+          c.id === selectedConvoy.id 
+            ? { ...c, vehicles: updatedVehicles, vehicle_count: updatedVehicles.length }
+            : c
+        ));
+      }
+    } catch (error) {
+      console.error('Error adding vehicle to convoy:', error);
+    }
+    
+    setShowVehicleSelectModal(false);
+  }, [selectedConvoy]);
+
+  const tabs = useMemo(() => [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'routes', label: 'Routes', icon: Route },
     { id: 'convoys', label: 'Convoys', icon: Truck },
     { id: 'vehicles', label: 'Vehicle Fleet', icon: Box },
     { id: 'planning', label: 'Convoy Planning', icon: Map },
-  ];
+  ], []);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'in_transit': return 'text-blue-500 bg-blue-500/10';
-      case 'completed': return 'text-green-500 bg-green-500/10';
-      case 'loading': return 'text-amber-500 bg-amber-500/10';
-      case 'planned': return 'text-purple-500 bg-purple-500/10';
-      default: return 'text-gray-500 bg-gray-500/10';
-    }
-  };
-
-  const formatWeight = (lbs: number) => {
+  const formatWeight = useCallback((lbs: number) => {
     if (lbs >= 2000) {
       return `${(lbs / 2000).toFixed(1)} tons`;
     }
     return `${lbs.toLocaleString()} lbs`;
-  };
+  }, []);
+
+  const convoyColumns = useMemo(() => [
+    { id: 'name', header: 'Name', accessorKey: 'name' as const, sortable: true },
+    { id: 'route', header: 'Route', accessorFn: (row: Convoy) => `${row.origin} → ${row.destination}` },
+    { id: 'vehicles', header: 'Vehicles', accessorKey: 'vehicle_count' as const, sortable: true },
+    { id: 'weight', header: 'Weight', accessorFn: (row: Convoy) => formatWeight(row.total_weight_lbs || 0) },
+    { 
+      id: 'status', 
+      header: 'Status', 
+      accessorFn: (row: Convoy) => <StatusBadge status={row.status as any} size="sm" showIcon /> 
+    },
+  ], [formatWeight]);
+
+  const convoyVehiclesForVisualization = useMemo(() => {
+    if (!selectedConvoy?.vehicles) return [];
+    return selectedConvoy.vehicles.map(v => ({
+      id: v.id,
+      vehicleCode: v.vehicleCode,
+      position: v.position,
+      lane: v.lane,
+    }));
+  }, [selectedConvoy]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
-      {/* Header */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-amber-200/50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
@@ -185,7 +367,6 @@ export default function LandLogistics({
         </div>
       </header>
 
-      {/* Tabs */}
       <div className="border-b border-amber-200/50 bg-white/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex gap-1 -mb-px overflow-x-auto">
@@ -221,7 +402,6 @@ export default function LandLogistics({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
               >
-                {/* Statistics Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   {[
                     { label: 'Active Convoys', value: statistics?.activeConvoys || 0, icon: Truck, color: 'amber' },
@@ -245,9 +425,11 @@ export default function LandLogistics({
                   ))}
                 </div>
 
-                {/* Quick Actions */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <button className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg hover:shadow-xl transition-shadow">
+                  <button 
+                    onClick={() => setShowCreateModal(true)}
+                    className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg hover:shadow-xl transition-shadow"
+                  >
                     <div className="flex items-center gap-3">
                       <Plus className="w-5 h-5" />
                       <div className="text-left">
@@ -276,7 +458,6 @@ export default function LandLogistics({
                   </button>
                 </div>
 
-                {/* Recent Convoys */}
                 <div className="rounded-2xl bg-white border border-amber-200/50 shadow-sm p-6">
                   <h2 className="text-lg font-semibold text-amber-900 mb-4">Recent Convoys</h2>
                   {convoys.length === 0 ? (
@@ -284,7 +465,11 @@ export default function LandLogistics({
                   ) : (
                     <div className="space-y-3">
                       {convoys.slice(0, 5).map((convoy) => (
-                        <div key={convoy.id} className="flex items-center justify-between p-3 rounded-xl bg-amber-50 hover:bg-amber-100 transition-colors cursor-pointer">
+                        <div 
+                          key={convoy.id} 
+                          onClick={() => setSelectedConvoy(convoy)}
+                          className="flex items-center justify-between p-3 rounded-xl bg-amber-50 hover:bg-amber-100 transition-colors cursor-pointer"
+                        >
                           <div className="flex items-center gap-3">
                             <div className="p-2 rounded-lg bg-amber-200/50">
                               <Truck className="w-4 h-4 text-amber-700" />
@@ -294,9 +479,7 @@ export default function LandLogistics({
                               <div className="text-sm text-amber-600">{convoy.origin} → {convoy.destination}</div>
                             </div>
                           </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(convoy.status)}`}>
-                            {convoy.status.replace('_', ' ')}
-                          </span>
+                          <StatusBadge status={convoy.status as any} size="sm" showIcon />
                         </div>
                       ))}
                     </div>
@@ -319,45 +502,7 @@ export default function LandLogistics({
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {vehicleTypes.map((vehicle) => (
-                    <motion.div
-                      key={vehicle.id}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="p-4 rounded-2xl bg-white border border-amber-200/50 shadow-sm hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <div className="font-bold text-amber-900">{vehicle.code}</div>
-                          <div className="text-sm text-amber-600">{vehicle.name}</div>
-                        </div>
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                          {vehicle.category.replace('_', ' ')}
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div className="flex items-center gap-1 text-amber-700">
-                          <Weight className="w-3 h-3" />
-                          <span>{formatWeight(vehicle.payload_lbs)}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-amber-700">
-                          <Route className="w-3 h-3" />
-                          <span>{vehicle.range_miles} mi</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-amber-700">
-                          <Fuel className="w-3 h-3" />
-                          <span>{vehicle.fuel_type}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-amber-700">
-                          <Box className="w-3 h-3" />
-                          <span>{vehicle.pallet_capacity_463l} 463L</span>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-3 pt-3 border-t border-amber-100">
-                        <div className="text-xs text-amber-600">{vehicle.axle_config} • {vehicle.max_speed_mph} mph max</div>
-                      </div>
-                    </motion.div>
+                    <VehicleCard key={vehicle.id} vehicle={vehicle} formatWeight={formatWeight} />
                   ))}
                 </div>
               </motion.div>
@@ -420,7 +565,10 @@ export default function LandLogistics({
                     <h2 className="text-xl font-semibold text-amber-900">Convoy Operations</h2>
                     <p className="text-amber-600">Active and scheduled convoy missions</p>
                   </div>
-                  <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-colors">
+                  <button 
+                    onClick={() => setShowCreateModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                  >
                     <Plus className="w-4 h-4" />
                     New Convoy
                   </button>
@@ -433,33 +581,15 @@ export default function LandLogistics({
                     <p className="text-amber-500 text-sm">Create a convoy to start moving cargo</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {convoys.map((convoy) => (
-                      <div key={convoy.id} className="p-4 rounded-2xl bg-white border border-amber-200/50 hover:shadow-md transition-shadow cursor-pointer">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="p-3 rounded-xl bg-amber-100">
-                              <Truck className="w-6 h-6 text-amber-700" />
-                            </div>
-                            <div>
-                              <div className="font-semibold text-amber-900">{convoy.name}</div>
-                              <div className="text-sm text-amber-600">{convoy.origin} → {convoy.destination}</div>
-                              <div className="flex items-center gap-3 mt-1 text-xs text-amber-500">
-                                <span>{convoy.vehicle_count || 0} vehicles</span>
-                                <span>•</span>
-                                <span>{formatWeight(convoy.total_weight_lbs || 0)}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(convoy.status)}`}>
-                              {convoy.status.replace('_', ' ')}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <TransportTable
+                    data={convoys}
+                    columns={convoyColumns}
+                    mode="land"
+                    onRowClick={(convoy) => setSelectedConvoy(convoy)}
+                    searchable
+                    searchPlaceholder="Search convoys..."
+                    emptyMessage="No convoys match your search"
+                  />
                 )}
               </motion.div>
             )}
@@ -470,17 +600,303 @@ export default function LandLogistics({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="text-center py-12"
               >
-                <Map className="w-16 h-16 text-amber-300 mx-auto mb-4" />
-                <h2 className="text-xl font-semibold text-amber-900 mb-2">Convoy Planning</h2>
-                <p className="text-amber-600 mb-6">Interactive 3D convoy visualization coming soon</p>
-                <p className="text-sm text-amber-500">Plan routes, allocate vehicles, and visualize convoy formations</p>
+                <div className="mb-4">
+                  <h2 className="text-xl font-semibold text-amber-900">Convoy Planning</h2>
+                  <p className="text-amber-600">Select a convoy to view 3D visualization</p>
+                </div>
+                
+                {convoys.length > 0 ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-medium text-amber-700 uppercase tracking-wide">Select Convoy</h3>
+                      {convoys.map((convoy) => (
+                        <div
+                          key={convoy.id}
+                          onClick={() => setSelectedConvoy(convoy)}
+                          className={`p-3 rounded-xl cursor-pointer transition-all ${
+                            selectedConvoy?.id === convoy.id
+                              ? 'bg-amber-500 text-white shadow-lg'
+                              : 'bg-white border border-amber-200 hover:border-amber-400'
+                          }`}
+                        >
+                          <div className="font-medium">{convoy.name}</div>
+                          <div className={`text-sm ${selectedConvoy?.id === convoy.id ? 'text-amber-100' : 'text-amber-600'}`}>
+                            {convoy.vehicle_count || 0} vehicles
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="lg:col-span-2">
+                      {selectedConvoy ? (
+                        <div className="rounded-2xl overflow-hidden border border-amber-200/50 bg-white">
+                          <ConvoyVisualization
+                            vehicles={convoyVehiclesForVisualization}
+                            convoyStatus={selectedConvoy.status as any}
+                            onVehicleClick={(id) => console.log('Vehicle clicked:', id)}
+                            showGrid
+                            autoRotate={selectedConvoy.status !== 'underway'}
+                            height={400}
+                          />
+                          <div className="p-4 border-t border-amber-100">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h3 className="font-semibold text-amber-900">{selectedConvoy.name}</h3>
+                                <p className="text-sm text-amber-600">{selectedConvoy.origin} → {selectedConvoy.destination}</p>
+                              </div>
+                              <StatusBadge status={selectedConvoy.status as any} size="md" showIcon />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center h-96 rounded-2xl bg-white border border-amber-200/50">
+                          <div className="text-center">
+                            <Map className="w-12 h-12 text-amber-300 mx-auto mb-3" />
+                            <p className="text-amber-600">Select a convoy to view 3D visualization</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 bg-white rounded-2xl border border-amber-200/50">
+                    <Map className="w-16 h-16 text-amber-300 mx-auto mb-4" />
+                    <p className="text-amber-700 font-medium">No convoys to visualize</p>
+                    <p className="text-amber-500 text-sm mb-4">Create a convoy first to see 3D visualization</p>
+                    <button
+                      onClick={() => setShowCreateModal(true)}
+                      className="px-4 py-2 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                    >
+                      Create Convoy
+                    </button>
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
         )}
       </main>
+
+      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+        <DialogContent className="bg-white border-amber-200 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-amber-900">Create New Convoy</DialogTitle>
+            <DialogDescription className="text-amber-600">
+              Fill in the details to create a new convoy mission
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="block text-sm font-medium text-amber-700 mb-1">Convoy Name</label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="e.g., Alpha Convoy"
+                className="w-full px-3 py-2 rounded-xl border border-amber-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-amber-700 mb-1">Origin</label>
+              <input
+                type="text"
+                value={formData.origin}
+                onChange={(e) => setFormData(prev => ({ ...prev, origin: e.target.value }))}
+                placeholder="e.g., Camp Victory"
+                className="w-full px-3 py-2 rounded-xl border border-amber-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-amber-700 mb-1">Destination</label>
+              <input
+                type="text"
+                value={formData.destination}
+                onChange={(e) => setFormData(prev => ({ ...prev, destination: e.target.value }))}
+                placeholder="e.g., Forward Base Echo"
+                className="w-full px-3 py-2 rounded-xl border border-amber-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-amber-700 mb-1">Route (Optional)</label>
+              <select
+                value={formData.route_id || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, route_id: e.target.value ? Number(e.target.value) : undefined }))}
+                className="w-full px-3 py-2 rounded-xl border border-amber-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+              >
+                <option value="">Select a predefined route</option>
+                {routes.map(route => (
+                  <option key={route.id} value={route.id}>{route.name}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-amber-700 mb-1">Departure Time</label>
+              <input
+                type="datetime-local"
+                value={formData.departure_time}
+                onChange={(e) => setFormData(prev => ({ ...prev, departure_time: e.target.value }))}
+                className="w-full px-3 py-2 rounded-xl border border-amber-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="px-4 py-2 rounded-xl border border-amber-200 text-amber-700 hover:bg-amber-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateConvoy}
+              disabled={isCreating || !formData.name || !formData.origin || !formData.destination}
+              className="px-4 py-2 rounded-xl bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
+              Create Convoy
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedConvoy && activeTab !== 'planning'} onOpenChange={(open) => !open && setSelectedConvoy(null)}>
+        <DialogContent className="bg-white border-amber-200 max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="text-amber-900 flex items-center gap-3">
+              <Truck className="w-5 h-5 text-amber-600" />
+              {selectedConvoy?.name}
+            </DialogTitle>
+            <DialogDescription className="text-amber-600">
+              {selectedConvoy?.origin} → {selectedConvoy?.destination}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedConvoy && (
+            <div className="space-y-6 py-4">
+              <div className="rounded-xl overflow-hidden border border-amber-200">
+                <ConvoyVisualization
+                  vehicles={convoyVehiclesForVisualization}
+                  convoyStatus={selectedConvoy.status as any}
+                  onVehicleClick={(id) => console.log('Vehicle clicked:', id)}
+                  showGrid
+                  height={300}
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <CapacityWidget
+                  current={selectedConvoy.vehicle_count || 0}
+                  max={10}
+                  label="Vehicles"
+                  mode="land"
+                  showPercentage={false}
+                />
+                <CapacityWidget
+                  current={selectedConvoy.total_weight_lbs || 0}
+                  max={100000}
+                  label="Total Weight"
+                  unit="lbs"
+                  mode="land"
+                />
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200">
+                  <div className="text-xs text-amber-600 mb-1">Status</div>
+                  <StatusBadge status={selectedConvoy.status as any} size="md" showIcon />
+                </div>
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200">
+                  <div className="text-xs text-amber-600 mb-1">ETA</div>
+                  <div className="font-semibold text-amber-900">
+                    {selectedConvoy.arrival_time 
+                      ? new Date(selectedConvoy.arrival_time).toLocaleTimeString() 
+                      : 'Not scheduled'}
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-amber-900">Assigned Vehicles ({selectedConvoy.vehicles?.length || 0})</h3>
+                  <button
+                    onClick={() => setShowVehicleSelectModal(true)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors text-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Vehicle
+                  </button>
+                </div>
+                
+                {selectedConvoy.vehicles && selectedConvoy.vehicles.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {selectedConvoy.vehicles.map((v) => (
+                      <div key={v.id} className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                        <div className="font-medium text-amber-900">{v.vehicleCode}</div>
+                        <div className="text-xs text-amber-600">Position {v.position + 1}, Lane {v.lane}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 bg-amber-50 rounded-xl border border-amber-200">
+                    <Truck className="w-8 h-8 text-amber-300 mx-auto mb-2" />
+                    <p className="text-sm text-amber-600">No vehicles assigned yet</p>
+                  </div>
+                )}
+              </div>
+              
+              {statusTransitions[selectedConvoy.status] && (
+                <div className="pt-4 border-t border-amber-100">
+                  <button
+                    onClick={() => handleUpdateConvoyStatus(
+                      selectedConvoy.id, 
+                      statusTransitions[selectedConvoy.status].nextStatus
+                    )}
+                    disabled={isUpdating}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium hover:from-amber-600 hover:to-orange-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                  >
+                    {isUpdating ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Play className="w-5 h-5" />
+                    )}
+                    {statusTransitions[selectedConvoy.status].buttonLabel}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showVehicleSelectModal} onOpenChange={setShowVehicleSelectModal}>
+        <DialogContent className="bg-white border-amber-200 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-amber-900">Add Vehicle to Convoy</DialogTitle>
+            <DialogDescription className="text-amber-600">
+              Select a vehicle type to add to this convoy
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-2 gap-3 py-4 max-h-96 overflow-y-auto">
+            {vehicleTypes.map((vehicle) => (
+              <button
+                key={vehicle.id}
+                onClick={() => handleAddVehicleToConvoy(vehicle.code)}
+                className="p-4 rounded-xl border border-amber-200 hover:border-amber-500 hover:bg-amber-50 text-left transition-all"
+              >
+                <div className="font-bold text-amber-900">{vehicle.code}</div>
+                <div className="text-sm text-amber-600 truncate">{vehicle.name}</div>
+                <div className="text-xs text-amber-500 mt-1">{formatWeight(vehicle.payload_lbs)}</div>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+export default memo(LandLogistics);
