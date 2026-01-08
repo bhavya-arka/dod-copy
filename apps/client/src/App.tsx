@@ -43,8 +43,8 @@ function AppContent() {
     }
   }, [auth.isLoading, auth.isAuthenticated]);
 
-  const handleSelectMode = useCallback((mode: OperationMode) => {
-    setAppMode(mode);
+  const handleSelectModule = useCallback((module: OperationMode) => {
+    setAppMode(module);
   }, []);
 
   const handleBackToHub = useCallback(() => {
@@ -91,7 +91,7 @@ function AppContent() {
         <OperationsHub
           user={auth.user}
           onLogout={handleLogout}
-          onSelectMode={handleSelectMode}
+          onSelectModule={handleSelectModule}
         />
       )}
       {appMode === "air" && (

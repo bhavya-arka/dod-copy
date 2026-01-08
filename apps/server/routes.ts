@@ -29,7 +29,9 @@ import {
   crossModalManifests,
   manifestItems,
   insertCrossModalManifestSchema,
-  insertManifestItemSchema
+  insertManifestItemSchema,
+  flightPlans,
+  seaVoyages
 } from "@shared/schema";
 import { eq, and, or, like, ilike, sql, gt, lt, isNull, isNotNull, asc, desc, count, inArray } from "drizzle-orm";
 import {
@@ -42,6 +44,13 @@ import {
 import { runOptimization, OptimizationInput, AvailabilityConstraint, CargoRequirement, MixedFleetMode } from "./services/fleetOptimizer";
 import { parseFile, getUploadSession, deleteUploadSession, getSessionStats } from "./services/fileIngestionService";
 import { seedLandVehicles } from "./seeds/landVehicles";
+import { 
+  getSiteCapacity, 
+  getAllSiteCapacities, 
+  getLocationCapacities, 
+  canAcceptItems, 
+  findAvailableLocation 
+} from "./services/capacityService";
 
 // Weather API cache with 10-minute TTL
 interface WeatherCacheEntry {
@@ -6334,6 +6343,313 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Aging] Error exporting aging report:", error);
       res.status(500).json({ error: "Failed to export aging report" });
+    }
+  });
+
+  // ============================================================================
+  // SITE ASSIGNMENT & CAPACITY API
+  // ============================================================================
+
+  // Get capacity for all sites
+  app.get("/api/warehouse/capacity", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const capacities = await getAllSiteCapacities();
+      res.json(capacities);
+    } catch (error) {
+      console.error("[Capacity] Error fetching capacities:", error);
+      res.status(500).json({ error: "Failed to fetch site capacities" });
+    }
+  });
+
+  // Get capacity for specific site
+  app.get("/api/warehouse/capacity/:siteId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { siteId } = req.params;
+      const capacity = await getSiteCapacity(parseInt(siteId));
+      if (!capacity) {
+        return res.status(404).json({ error: "Site not found" });
+      }
+      res.json(capacity);
+    } catch (error) {
+      console.error("[Capacity] Error fetching site capacity:", error);
+      res.status(500).json({ error: "Failed to fetch site capacity" });
+    }
+  });
+
+  // Get location capacities for a site
+  app.get("/api/warehouse/capacity/:siteId/locations", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { siteId } = req.params;
+      const locations = await getLocationCapacities(parseInt(siteId));
+      res.json(locations);
+    } catch (error) {
+      console.error("[Capacity] Error fetching location capacities:", error);
+      res.status(500).json({ error: "Failed to fetch location capacities" });
+    }
+  });
+
+  // Check if site can accept items
+  app.post("/api/warehouse/capacity/:siteId/check", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { siteId } = req.params;
+      const { item_count, total_weight_lbs } = req.body;
+      
+      const result = await canAcceptItems(parseInt(siteId), item_count || 1, total_weight_lbs || 0);
+      res.json(result);
+    } catch (error) {
+      console.error("[Capacity] Error checking capacity:", error);
+      res.status(500).json({ error: "Failed to check capacity" });
+    }
+  });
+
+  // ============================================================================
+  // SITE ASSIGNMENT LOGIC
+  // ============================================================================
+
+  interface SiteScore {
+    siteId: number;
+    siteName: string;
+    score: number;
+    reasons: string[];
+    capacity: {
+      utilizationPercent: number;
+      openPalletPositions: number;
+      status: 'green' | 'yellow' | 'red';
+    };
+  }
+
+  // Recommend best site for incoming material
+  app.post("/api/warehouse/assign-site", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { 
+        item_count = 1,
+        total_weight_lbs = 0,
+        preferred_aor,
+        avoid_shipyard = false,
+        priority = 'routine' // routine, priority, immediate
+      } = req.body;
+      
+      // Get all sites with capacity data
+      const sites = await db.query.warehouseSites.findMany({
+        where: eq(warehouseSites.user_id, req.user!.id),
+      });
+      
+      if (sites.length === 0) {
+        return res.json({
+          recommendation: null,
+          message: "No warehouse sites available",
+          scored_sites: [],
+        });
+      }
+      
+      const scoredSites: SiteScore[] = [];
+      
+      for (const site of sites) {
+        const capacity = await getSiteCapacity(site.id);
+        if (!capacity) continue;
+        
+        let score = 100;
+        const reasons: string[] = [];
+        
+        // Check if site can physically accept the items
+        const canAccept = await canAcceptItems(site.id, item_count, total_weight_lbs);
+        if (!canAccept.canAccept) {
+          score = 0;
+          reasons.push(`Cannot accept: ${canAccept.reason}`);
+        } else {
+          // Score based on capacity utilization (prefer lower utilization)
+          const utilizationPenalty = capacity.utilizationPercent * 0.5;
+          score -= utilizationPenalty;
+          
+          if (capacity.status === 'red') {
+            score -= 30;
+            reasons.push('Site at critical capacity (>90%)');
+          } else if (capacity.status === 'yellow') {
+            score -= 15;
+            reasons.push('Site at high capacity (70-90%)');
+          } else {
+            reasons.push('Site has good capacity (<70%)');
+          }
+          
+          // AOR matching bonus
+          if (preferred_aor && site.aor === preferred_aor) {
+            score += 25;
+            reasons.push(`Matches preferred AOR: ${preferred_aor}`);
+          }
+          
+          // Shipyard avoidance
+          if (avoid_shipyard && site.shipyard_code) {
+            score -= 20;
+            reasons.push('Site is a shipyard location');
+          }
+          
+          // Weight capacity consideration
+          const weightUtilization = capacity.weightUtilizationPercent;
+          if (weightUtilization > 80) {
+            score -= 10;
+            reasons.push('Weight capacity limited');
+          }
+          
+          // Open positions bonus
+          if (capacity.openPalletPositions > item_count * 2) {
+            score += 10;
+            reasons.push('Has extra capacity for future items');
+          }
+        }
+        
+        scoredSites.push({
+          siteId: site.id,
+          siteName: site.name,
+          score: Math.max(0, Math.round(score)),
+          reasons,
+          capacity: {
+            utilizationPercent: capacity.utilizationPercent,
+            openPalletPositions: capacity.openPalletPositions,
+            status: capacity.status,
+          },
+        });
+      }
+      
+      // Sort by score descending
+      scoredSites.sort((a, b) => b.score - a.score);
+      
+      const recommendation = scoredSites.length > 0 && scoredSites[0].score > 0 
+        ? scoredSites[0] 
+        : null;
+      
+      res.json({
+        recommendation,
+        scored_sites: scoredSites,
+        criteria_used: {
+          item_count,
+          total_weight_lbs,
+          preferred_aor,
+          avoid_shipyard,
+          priority,
+        },
+      });
+    } catch (error) {
+      console.error("[Assignment] Error assigning site:", error);
+      res.status(500).json({ error: "Failed to assign site" });
+    }
+  });
+
+  // ============================================================================
+  // OPERATIONS HUB UNIFIED SUMMARY API
+  // ============================================================================
+
+  // Get unified operations summary for dashboard
+  app.get("/api/operations/summary", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      
+      // First get user's warehouse sites
+      const userSites = await db.query.warehouseSites.findMany({ 
+        where: eq(warehouseSites.user_id, userId) 
+      });
+      const userSiteIds = userSites.map(s => s.id);
+      
+      // Parallel fetch all data
+      const [
+        flightPlansData,
+        landConvoysData,
+        seaVoyagesData,
+        inventoryItems,
+        manifestsData,
+      ] = await Promise.all([
+        db.query.flightPlans.findMany({ where: eq(flightPlans.user_id, userId) }),
+        db.query.landConvoys.findMany({ where: eq(landConvoys.user_id, userId) }),
+        db.query.seaVoyages.findMany({ where: eq(seaVoyages.user_id, userId) }),
+        // Get inventory items for user's sites
+        userSiteIds.length > 0 
+          ? db.query.warehouseInventoryItems.findMany({ 
+              where: inArray(warehouseInventoryItems.site_id, userSiteIds) 
+            })
+          : Promise.resolve([]),
+        db.query.crossModalManifests.findMany({ where: eq(crossModalManifests.user_id, userId) }),
+      ]);
+      
+      const warehouseSitesData = userSites;
+      
+      // Air Operations summary
+      const airSummary = {
+        total_plans: flightPlansData.length,
+        active_plans: flightPlansData.filter(p => p.status === 'complete').length,
+        draft_plans: flightPlansData.filter(p => p.status === 'draft').length,
+        total_aircraft: flightPlansData.reduce((sum, p) => sum + (p.aircraft_count || 0), 0),
+        total_weight_lbs: flightPlansData.reduce((sum, p) => sum + (p.total_weight_lb || 0), 0),
+      };
+      
+      // Land Operations summary
+      const landSummary = {
+        total_convoys: landConvoysData.length,
+        active_convoys: landConvoysData.filter(c => c.status === 'in_transit').length,
+        pending_convoys: landConvoysData.filter(c => c.status === 'planned' || c.status === 'loading').length,
+        completed_convoys: landConvoysData.filter(c => c.status === 'completed').length,
+        total_weight_lbs: landConvoysData.reduce((sum, c) => sum + (c.total_weight_lbs || 0), 0),
+      };
+      
+      // Sea Operations summary
+      const seaSummary = {
+        total_voyages: seaVoyagesData.length,
+        active_voyages: seaVoyagesData.filter(v => v.status === 'in_transit').length,
+        planned_voyages: seaVoyagesData.filter(v => v.status === 'planned').length,
+        completed_voyages: seaVoyagesData.filter(v => v.status === 'completed').length,
+      };
+      
+      // Warehouse summary
+      const capacities = await getAllSiteCapacities();
+      const warehouseSummary = {
+        total_sites: warehouseSitesData.length,
+        total_items: inventoryItems.length,
+        total_quantity: inventoryItems.reduce((sum, i) => sum + (i.quantity || 0), 0),
+        sites_at_capacity: capacities.filter(c => c.status === 'red').length,
+        sites_warning: capacities.filter(c => c.status === 'yellow').length,
+        sites_healthy: capacities.filter(c => c.status === 'green').length,
+        average_utilization: capacities.length > 0 
+          ? Math.round(capacities.reduce((sum, c) => sum + c.utilizationPercent, 0) / capacities.length)
+          : 0,
+      };
+      
+      // Manifest summary
+      const manifestSummary = {
+        total_manifests: manifestsData.length,
+        draft_manifests: manifestsData.filter(m => m.status === 'draft').length,
+        in_transit: manifestsData.filter(m => m.status === 'in_transit').length,
+        delivered: manifestsData.filter(m => m.status === 'delivered').length,
+        by_mode: {
+          air: manifestsData.filter(m => m.transport_mode === 'air').length,
+          land: manifestsData.filter(m => m.transport_mode === 'land').length,
+          sea: manifestsData.filter(m => m.transport_mode === 'sea').length,
+          unassigned: manifestsData.filter(m => !m.transport_mode).length,
+        },
+      };
+      
+      // Aging alerts
+      const now = new Date();
+      const agingThreshold = 2555; // 7 years in days
+      const agingItems = inventoryItems.filter(item => {
+        const receivedDate = item.last_received_date || item.created_at;
+        const agingDays = Math.floor((now.getTime() - new Date(receivedDate).getTime()) / (1000 * 60 * 60 * 24));
+        return agingDays >= agingThreshold;
+      });
+      
+      res.json({
+        air: airSummary,
+        land: landSummary,
+        sea: seaSummary,
+        warehouse: warehouseSummary,
+        manifests: manifestSummary,
+        alerts: {
+          aging_items: agingItems.length,
+          critical_sites: capacities.filter(c => c.status === 'red').length,
+          pending_assignments: manifestsData.filter(m => !m.transport_mode).length,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("[Operations] Error fetching summary:", error);
+      res.status(500).json({ error: "Failed to fetch operations summary" });
     }
   });
 
