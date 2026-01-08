@@ -127,39 +127,39 @@ const VehicleCard = memo(({ vehicle, formatWeight }: { vehicle: VehicleType; for
   <motion.div
     initial={{ opacity: 0, scale: 0.95 }}
     animate={{ opacity: 1, scale: 1 }}
-    className="p-4 rounded-2xl bg-white border border-amber-200/50 shadow-sm hover:shadow-md transition-shadow"
+    className="p-4 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm hover:shadow-md hover:border-[#2563EB]/30 transition-all"
   >
     <div className="flex items-start justify-between mb-3">
       <div>
-        <div className="font-bold text-amber-900">{vehicle.code}</div>
-        <div className="text-sm text-amber-600">{vehicle.name}</div>
+        <div className="font-bold text-[#111827]">{vehicle.code}</div>
+        <div className="text-sm text-[#6B7280]">{vehicle.name}</div>
       </div>
-      <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+      <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
         {vehicle.category.replace('_', ' ')}
       </span>
     </div>
     
     <div className="grid grid-cols-2 gap-2 text-sm">
-      <div className="flex items-center gap-1 text-amber-700">
-        <Weight className="w-3 h-3" />
+      <div className="flex items-center gap-1 text-[#6B7280]">
+        <Weight className="w-3 h-3 text-amber-500" />
         <span>{formatWeight(vehicle.payload_lbs)}</span>
       </div>
-      <div className="flex items-center gap-1 text-amber-700">
-        <Route className="w-3 h-3" />
+      <div className="flex items-center gap-1 text-[#6B7280]">
+        <Route className="w-3 h-3 text-amber-500" />
         <span>{vehicle.range_miles} mi</span>
       </div>
-      <div className="flex items-center gap-1 text-amber-700">
-        <Fuel className="w-3 h-3" />
+      <div className="flex items-center gap-1 text-[#6B7280]">
+        <Fuel className="w-3 h-3 text-amber-500" />
         <span>{vehicle.fuel_type}</span>
       </div>
-      <div className="flex items-center gap-1 text-amber-700">
-        <Box className="w-3 h-3" />
+      <div className="flex items-center gap-1 text-[#6B7280]">
+        <Box className="w-3 h-3 text-amber-500" />
         <span>{vehicle.pallet_capacity_463l} 463L</span>
       </div>
     </div>
     
-    <div className="mt-3 pt-3 border-t border-amber-100">
-      <div className="text-xs text-amber-600">{vehicle.axle_config} • {vehicle.max_speed_mph} mph max</div>
+    <div className="mt-3 pt-3 border-t border-[#E5E7EB]">
+      <div className="text-xs text-[#6B7280]">{vehicle.axle_config} • {vehicle.max_speed_mph} mph max</div>
     </div>
   </motion.div>
 ));
@@ -462,33 +462,33 @@ function LandLogistics({
   }, [selectedConvoy]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-amber-200/50 shadow-sm">
+    <div className="min-h-screen bg-[#FAFAFA]">
+      <header className="sticky top-0 z-50 bg-white border-b border-[#E5E7EB] shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-4">
               <button
                 onClick={onBack}
-                className="flex items-center gap-2 text-sm text-amber-700 hover:text-amber-900 transition-colors"
+                className="flex items-center gap-2 text-sm text-[#6B7280] hover:text-[#111827] transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span className="hidden sm:inline">Back to Hub</span>
               </button>
-              <div className="h-6 w-px bg-amber-200" />
+              <div className="h-6 w-px bg-[#E5E7EB]" />
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500">
                   <Truck className="w-5 h-5 text-white" />
                 </div>
-                <span className="font-semibold text-amber-900">Land Logistics</span>
+                <span className="font-semibold text-[#111827]">Land Logistics</span>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-amber-700 hidden sm:block">
+              <span className="text-sm text-[#6B7280] hidden sm:block">
                 {user.username || user.email}
               </span>
               <button
                 onClick={onLogout}
-                className="text-sm text-amber-700 hover:text-amber-900 transition-colors"
+                className="text-sm text-[#6B7280] hover:text-[#111827] transition-colors"
               >
                 Logout
               </button>
@@ -497,7 +497,7 @@ function LandLogistics({
         </div>
       </header>
 
-      <div className="border-b border-amber-200/50 bg-white/50">
+      <div className="border-b border-[#E5E7EB] bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex gap-1 -mb-px overflow-x-auto">
             {tabs.map((tab) => (
@@ -506,8 +506,8 @@ function LandLogistics({
                 onClick={() => setActiveTab(tab.id as Tab)}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === tab.id
-                    ? 'border-amber-500 text-amber-700'
-                    : 'border-transparent text-amber-600/70 hover:text-amber-700 hover:border-amber-300'
+                    ? 'border-[#2563EB] text-[#2563EB]'
+                    : 'border-transparent text-[#6B7280] hover:text-[#111827] hover:border-[#E5E7EB]'
                 }`}
               >
                 <tab.icon className="w-4 h-4" />
@@ -521,7 +521,7 @@ function LandLogistics({
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+            <Loader2 className="w-8 h-8 text-[#2563EB] animate-spin" />
           </div>
         ) : (
           <AnimatePresence mode="wait">
@@ -544,13 +544,13 @@ function LandLogistics({
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.05 }}
-                      className="p-4 rounded-2xl bg-white border border-amber-200/50 shadow-sm"
+                      className="p-4 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm"
                     >
                       <div className="flex items-center gap-2 mb-2">
                         <stat.icon className={`w-4 h-4 text-${stat.color}-500`} />
-                        <span className="text-xs text-amber-700">{stat.label}</span>
+                        <span className="text-xs text-[#6B7280]">{stat.label}</span>
                       </div>
-                      <p className="text-2xl font-bold text-amber-900">{stat.value}</p>
+                      <p className="text-2xl font-bold text-[#111827]">{stat.value}</p>
                     </motion.div>
                   ))}
                 </div>
@@ -558,7 +558,7 @@ function LandLogistics({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <button 
                     onClick={() => setShowCreateModal(true)}
-                    className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg hover:shadow-xl transition-shadow"
+                    className="p-4 rounded-2xl bg-[#2563EB] text-white shadow-lg hover:bg-[#1D4ED8] hover:shadow-xl transition-all"
                   >
                     <div className="flex items-center gap-3">
                       <Plus className="w-5 h-5" />
@@ -568,45 +568,45 @@ function LandLogistics({
                       </div>
                     </div>
                   </button>
-                  <button className="p-4 rounded-2xl bg-white border border-amber-200 hover:border-amber-400 transition-colors">
+                  <button className="p-4 rounded-2xl bg-white border border-[#E5E7EB] hover:border-[#2563EB]/30 hover:shadow-md transition-all">
                     <div className="flex items-center gap-3">
-                      <Route className="w-5 h-5 text-amber-600" />
+                      <Route className="w-5 h-5 text-amber-500" />
                       <div className="text-left">
-                        <div className="font-medium text-amber-900">Plan Route</div>
-                        <div className="text-xs text-amber-600">Design convoy route</div>
+                        <div className="font-medium text-[#111827]">Plan Route</div>
+                        <div className="text-xs text-[#6B7280]">Design convoy route</div>
                       </div>
                     </div>
                   </button>
-                  <button className="p-4 rounded-2xl bg-white border border-amber-200 hover:border-amber-400 transition-colors">
+                  <button className="p-4 rounded-2xl bg-white border border-[#E5E7EB] hover:border-[#2563EB]/30 hover:shadow-md transition-all">
                     <div className="flex items-center gap-3">
-                      <FileText className="w-5 h-5 text-amber-600" />
+                      <FileText className="w-5 h-5 text-amber-500" />
                       <div className="text-left">
-                        <div className="font-medium text-amber-900">Load Manifest</div>
-                        <div className="text-xs text-amber-600">Import cargo manifest</div>
+                        <div className="font-medium text-[#111827]">Load Manifest</div>
+                        <div className="text-xs text-[#6B7280]">Import cargo manifest</div>
                       </div>
                     </div>
                   </button>
                 </div>
 
-                <div className="rounded-2xl bg-white border border-amber-200/50 shadow-sm p-6">
-                  <h2 className="text-lg font-semibold text-amber-900 mb-4">Recent Convoys</h2>
+                <div className="rounded-2xl bg-white border border-[#E5E7EB] shadow-sm p-6">
+                  <h2 className="text-lg font-semibold text-[#111827] mb-4">Recent Convoys</h2>
                   {convoys.length === 0 ? (
-                    <p className="text-amber-600 text-center py-8">No convoys yet. Create your first convoy to get started.</p>
+                    <p className="text-[#6B7280] text-center py-8">No convoys yet. Create your first convoy to get started.</p>
                   ) : (
                     <div className="space-y-3">
                       {convoys.slice(0, 5).map((convoy) => (
                         <div 
                           key={convoy.id} 
                           onClick={() => setSelectedConvoy(convoy)}
-                          className="flex items-center justify-between p-3 rounded-xl bg-amber-50 hover:bg-amber-100 transition-colors cursor-pointer"
+                          className="flex items-center justify-between p-3 rounded-xl bg-[#FAFAFA] hover:bg-white hover:shadow-sm border border-transparent hover:border-[#E5E7EB] transition-all cursor-pointer"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-amber-200/50">
-                              <Truck className="w-4 h-4 text-amber-700" />
+                            <div className="p-2 rounded-lg bg-amber-50">
+                              <Truck className="w-4 h-4 text-amber-500" />
                             </div>
                             <div>
-                              <div className="font-medium text-amber-900">{convoy.name}</div>
-                              <div className="text-sm text-amber-600">{convoy.origin} → {convoy.destination}</div>
+                              <div className="font-medium text-[#111827]">{convoy.name}</div>
+                              <div className="text-sm text-[#6B7280]">{convoy.origin} → {convoy.destination}</div>
                             </div>
                           </div>
                           <StatusBadge status={convoy.status as any} size="sm" showIcon />
@@ -626,8 +626,8 @@ function LandLogistics({
                 exit={{ opacity: 0, y: -10 }}
               >
                 <div className="mb-4">
-                  <h2 className="text-xl font-semibold text-amber-900 mb-2">Military Vehicle Fleet</h2>
-                  <p className="text-amber-600">Available vehicle types for convoy operations</p>
+                  <h2 className="text-xl font-semibold text-[#111827] mb-2">Military Vehicle Fleet</h2>
+                  <p className="text-[#6B7280]">Available vehicle types for convoy operations</p>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -648,11 +648,11 @@ function LandLogistics({
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div>
                     <div className="mb-4">
-                      <h2 className="text-xl font-semibold text-amber-900">Plan Route</h2>
-                      <p className="text-amber-600">Calculate route between locations</p>
+                      <h2 className="text-xl font-semibold text-[#111827]">Plan Route</h2>
+                      <p className="text-[#6B7280]">Calculate route between locations</p>
                     </div>
                     
-                    <div className="p-4 rounded-2xl bg-white border border-amber-200/50 space-y-4">
+                    <div className="p-4 rounded-2xl bg-white border border-[#E5E7EB] space-y-4">
                       <LocationAutocomplete
                         value={planOrigin}
                         onChange={handlePlanOriginChange}
@@ -668,30 +668,30 @@ function LandLogistics({
                       />
                       
                       {isPlanningRoute && (
-                        <div className="flex items-center justify-center gap-2 py-4 text-amber-600">
+                        <div className="flex items-center justify-center gap-2 py-4 text-[#6B7280]">
                           <Loader2 className="w-5 h-5 animate-spin" />
                           <span>Calculating route...</span>
                         </div>
                       )}
                       
                       {planRouteInfo && !isPlanningRoute && (
-                        <div className="p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
+                        <div className="p-4 rounded-xl bg-[#FAFAFA] border border-[#E5E7EB]">
                           <div className="grid grid-cols-2 gap-4">
                             <div className="text-center">
-                              <div className="flex items-center justify-center gap-2 text-amber-600 mb-1">
-                                <Navigation className="w-5 h-5" />
+                              <div className="flex items-center justify-center gap-2 text-[#6B7280] mb-1">
+                                <Navigation className="w-5 h-5 text-amber-500" />
                                 <span className="text-sm font-medium uppercase tracking-wide">Distance</span>
                               </div>
-                              <div className="text-2xl font-bold text-amber-900">
+                              <div className="text-2xl font-bold text-[#111827]">
                                 {planRouteInfo.distance_miles.toFixed(1)} mi
                               </div>
                             </div>
                             <div className="text-center">
-                              <div className="flex items-center justify-center gap-2 text-amber-600 mb-1">
-                                <Clock className="w-5 h-5" />
+                              <div className="flex items-center justify-center gap-2 text-[#6B7280] mb-1">
+                                <Clock className="w-5 h-5 text-amber-500" />
                                 <span className="text-sm font-medium uppercase tracking-wide">Duration</span>
                               </div>
-                              <div className="text-2xl font-bold text-amber-900">
+                              <div className="text-2xl font-bold text-[#111827]">
                                 {planRouteInfo.duration_hours.toFixed(1)} hrs
                               </div>
                             </div>
@@ -702,30 +702,30 @@ function LandLogistics({
                     
                     <div className="mt-6">
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-amber-900">Saved Routes</h3>
-                        <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors text-sm">
+                        <h3 className="text-lg font-semibold text-[#111827]">Saved Routes</h3>
+                        <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#FAFAFA] border border-[#E5E7EB] text-[#6B7280] hover:text-[#111827] hover:bg-white transition-colors text-sm">
                           <Plus className="w-4 h-4" />
                           Save Current
                         </button>
                       </div>
                       
                       {routes.length === 0 ? (
-                        <div className="text-center py-8 bg-white rounded-xl border border-amber-200/50">
-                          <Route className="w-10 h-10 text-amber-300 mx-auto mb-2" />
-                          <p className="text-amber-600 text-sm">No saved routes yet</p>
+                        <div className="text-center py-8 bg-white rounded-xl border border-[#E5E7EB]">
+                          <Route className="w-10 h-10 text-[#E5E7EB] mx-auto mb-2" />
+                          <p className="text-[#6B7280] text-sm">No saved routes yet</p>
                         </div>
                       ) : (
                         <div className="space-y-2">
                           {routes.map((route) => (
-                            <div key={route.id} className="p-3 rounded-xl bg-white border border-amber-200/50 hover:border-amber-400 transition-colors cursor-pointer">
+                            <div key={route.id} className="p-3 rounded-xl bg-white border border-[#E5E7EB] hover:border-[#2563EB]/30 hover:shadow-sm transition-all cursor-pointer">
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <div className="font-medium text-amber-900">{route.name}</div>
-                                  <div className="text-xs text-amber-600">{route.origin} → {route.destination}</div>
+                                  <div className="font-medium text-[#111827]">{route.name}</div>
+                                  <div className="text-xs text-[#6B7280]">{route.origin} → {route.destination}</div>
                                 </div>
                                 <div className="text-right">
-                                  <div className="text-sm font-medium text-amber-900">{route.distance_miles} mi</div>
-                                  <div className="text-xs text-amber-600">{route.estimated_time_hours}h</div>
+                                  <div className="text-sm font-medium text-[#111827]">{route.distance_miles} mi</div>
+                                  <div className="text-xs text-[#6B7280]">{route.estimated_time_hours}h</div>
                                 </div>
                               </div>
                             </div>
@@ -737,8 +737,8 @@ function LandLogistics({
                   
                   <div>
                     <div className="mb-4">
-                      <h2 className="text-xl font-semibold text-amber-900">Route Map</h2>
-                      <p className="text-amber-600">Visual route preview</p>
+                      <h2 className="text-xl font-semibold text-[#111827]">Route Map</h2>
+                      <p className="text-[#6B7280]">Visual route preview</p>
                     </div>
                     
                     {planOriginCoords && planDestinationCoords ? (
@@ -750,11 +750,11 @@ function LandLogistics({
                         className="shadow-lg"
                       />
                     ) : (
-                      <div className="flex items-center justify-center rounded-2xl bg-white border border-amber-200/50 shadow-sm" style={{ height: 500 }}>
+                      <div className="flex items-center justify-center rounded-2xl bg-white border border-[#E5E7EB] shadow-sm" style={{ height: 500 }}>
                         <div className="text-center p-8">
-                          <Map className="w-16 h-16 text-amber-300 mx-auto mb-4" />
-                          <p className="text-amber-700 font-medium">No Route Selected</p>
-                          <p className="text-amber-500 text-sm mt-1">Enter origin and destination to see route on map</p>
+                          <Map className="w-16 h-16 text-[#E5E7EB] mx-auto mb-4" />
+                          <p className="text-[#111827] font-medium">No Route Selected</p>
+                          <p className="text-[#6B7280] text-sm mt-1">Enter origin and destination to see route on map</p>
                         </div>
                       </div>
                     )}
@@ -772,12 +772,12 @@ function LandLogistics({
               >
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className="text-xl font-semibold text-amber-900">Convoy Operations</h2>
-                    <p className="text-amber-600">Active and scheduled convoy missions</p>
+                    <h2 className="text-xl font-semibold text-[#111827]">Convoy Operations</h2>
+                    <p className="text-[#6B7280]">Active and scheduled convoy missions</p>
                   </div>
                   <button 
                     onClick={() => setShowCreateModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2563EB] text-white hover:bg-[#1D4ED8] transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                     New Convoy
@@ -785,10 +785,10 @@ function LandLogistics({
                 </div>
 
                 {convoys.length === 0 ? (
-                  <div className="text-center py-12 bg-white rounded-2xl border border-amber-200/50">
-                    <Truck className="w-12 h-12 text-amber-300 mx-auto mb-3" />
-                    <p className="text-amber-700 font-medium">No convoys yet</p>
-                    <p className="text-amber-500 text-sm">Create a convoy to start moving cargo</p>
+                  <div className="text-center py-12 bg-white rounded-2xl border border-[#E5E7EB]">
+                    <Truck className="w-12 h-12 text-[#E5E7EB] mx-auto mb-3" />
+                    <p className="text-[#111827] font-medium">No convoys yet</p>
+                    <p className="text-[#6B7280] text-sm">Create a convoy to start moving cargo</p>
                   </div>
                 ) : (
                   <TransportTable
@@ -812,26 +812,26 @@ function LandLogistics({
                 exit={{ opacity: 0, y: -10 }}
               >
                 <div className="mb-4">
-                  <h2 className="text-xl font-semibold text-amber-900">Convoy Planning</h2>
-                  <p className="text-amber-600">Select a convoy to view 3D visualization</p>
+                  <h2 className="text-xl font-semibold text-[#111827]">Convoy Planning</h2>
+                  <p className="text-[#6B7280]">Select a convoy to view 3D visualization</p>
                 </div>
                 
                 {convoys.length > 0 ? (
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="space-y-3">
-                      <h3 className="text-sm font-medium text-amber-700 uppercase tracking-wide">Select Convoy</h3>
+                      <h3 className="text-sm font-medium text-[#6B7280] uppercase tracking-wide">Select Convoy</h3>
                       {convoys.map((convoy) => (
                         <div
                           key={convoy.id}
                           onClick={() => setSelectedConvoy(convoy)}
                           className={`p-3 rounded-xl cursor-pointer transition-all ${
                             selectedConvoy?.id === convoy.id
-                              ? 'bg-amber-500 text-white shadow-lg'
-                              : 'bg-white border border-amber-200 hover:border-amber-400'
+                              ? 'bg-[#2563EB] text-white shadow-lg'
+                              : 'bg-white border border-[#E5E7EB] hover:border-[#2563EB]/30 hover:shadow-sm'
                           }`}
                         >
                           <div className="font-medium">{convoy.name}</div>
-                          <div className={`text-sm ${selectedConvoy?.id === convoy.id ? 'text-amber-100' : 'text-amber-600'}`}>
+                          <div className={`text-sm ${selectedConvoy?.id === convoy.id ? 'text-blue-100' : 'text-[#6B7280]'}`}>
                             {convoy.vehicle_count || 0} vehicles
                           </div>
                         </div>
@@ -840,7 +840,7 @@ function LandLogistics({
                     
                     <div className="lg:col-span-2">
                       {selectedConvoy ? (
-                        <div className="rounded-2xl overflow-hidden border border-amber-200/50 bg-white">
+                        <div className="rounded-2xl overflow-hidden border border-[#E5E7EB] bg-white">
                           <ConvoyVisualization
                             vehicles={convoyVehiclesForVisualization}
                             convoyStatus={selectedConvoy.status as any}
@@ -849,34 +849,34 @@ function LandLogistics({
                             autoRotate={selectedConvoy.status !== 'underway'}
                             height={400}
                           />
-                          <div className="p-4 border-t border-amber-100">
+                          <div className="p-4 border-t border-[#E5E7EB]">
                             <div className="flex items-center justify-between">
                               <div>
-                                <h3 className="font-semibold text-amber-900">{selectedConvoy.name}</h3>
-                                <p className="text-sm text-amber-600">{selectedConvoy.origin} → {selectedConvoy.destination}</p>
+                                <h3 className="font-semibold text-[#111827]">{selectedConvoy.name}</h3>
+                                <p className="text-sm text-[#6B7280]">{selectedConvoy.origin} → {selectedConvoy.destination}</p>
                               </div>
                               <StatusBadge status={selectedConvoy.status as any} size="md" showIcon />
                             </div>
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center justify-center h-96 rounded-2xl bg-white border border-amber-200/50">
+                        <div className="flex items-center justify-center h-96 rounded-2xl bg-white border border-[#E5E7EB]">
                           <div className="text-center">
-                            <Map className="w-12 h-12 text-amber-300 mx-auto mb-3" />
-                            <p className="text-amber-600">Select a convoy to view 3D visualization</p>
+                            <Map className="w-12 h-12 text-[#E5E7EB] mx-auto mb-3" />
+                            <p className="text-[#6B7280]">Select a convoy to view 3D visualization</p>
                           </div>
                         </div>
                       )}
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-12 bg-white rounded-2xl border border-amber-200/50">
-                    <Map className="w-16 h-16 text-amber-300 mx-auto mb-4" />
-                    <p className="text-amber-700 font-medium">No convoys to visualize</p>
-                    <p className="text-amber-500 text-sm mb-4">Create a convoy first to see 3D visualization</p>
+                  <div className="text-center py-12 bg-white rounded-2xl border border-[#E5E7EB]">
+                    <Map className="w-16 h-16 text-[#E5E7EB] mx-auto mb-4" />
+                    <p className="text-[#111827] font-medium">No convoys to visualize</p>
+                    <p className="text-[#6B7280] text-sm mb-4">Create a convoy first to see 3D visualization</p>
                     <button
                       onClick={() => setShowCreateModal(true)}
-                      className="px-4 py-2 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                      className="px-4 py-2 rounded-xl bg-[#2563EB] text-white hover:bg-[#1D4ED8] transition-colors"
                     >
                       Create Convoy
                     </button>
@@ -894,23 +894,23 @@ function LandLogistics({
             setConvoyRouteInfo(null);
           }
         }}>
-        <DialogContent className="bg-white border-amber-200 max-w-md">
+        <DialogContent className="bg-white border-[#E5E7EB] max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-amber-900">Create New Convoy</DialogTitle>
-            <DialogDescription className="text-amber-600">
+            <DialogTitle className="text-[#111827]">Create New Convoy</DialogTitle>
+            <DialogDescription className="text-[#6B7280]">
               Fill in the details to create a new convoy mission
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
             <div>
-              <label className="block text-sm font-medium text-amber-700 mb-1">Convoy Name</label>
+              <label className="block text-sm font-medium text-[#111827] mb-1">Convoy Name</label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="e.g., Alpha Convoy"
-                className="w-full px-3 py-2 rounded-xl border border-amber-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                className="w-full px-3 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#111827] placeholder:text-[#9CA3AF] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/30 outline-none transition-all"
               />
             </div>
             
@@ -931,21 +931,21 @@ function LandLogistics({
             />
             
             {(isCalculatingRoute || convoyRouteInfo) && (
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+              <div className="p-3 rounded-xl bg-[#FAFAFA] border border-[#E5E7EB]">
                 {isCalculatingRoute ? (
-                  <div className="flex items-center justify-center gap-2 text-amber-600">
+                  <div className="flex items-center justify-center gap-2 text-[#6B7280]">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span className="text-sm">Calculating route...</span>
                   </div>
                 ) : convoyRouteInfo && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-amber-700">
-                        <Navigation className="w-4 h-4" />
+                      <div className="flex items-center gap-2 text-[#6B7280]">
+                        <Navigation className="w-4 h-4 text-amber-500" />
                         <span className="text-sm font-medium">{convoyRouteInfo.distance_miles.toFixed(1)} miles</span>
                       </div>
-                      <div className="flex items-center gap-2 text-amber-700">
-                        <Clock className="w-4 h-4" />
+                      <div className="flex items-center gap-2 text-[#6B7280]">
+                        <Clock className="w-4 h-4 text-amber-500" />
                         <span className="text-sm font-medium">{convoyRouteInfo.duration_hours.toFixed(1)} hours</span>
                       </div>
                     </div>
@@ -963,11 +963,11 @@ function LandLogistics({
             )}
             
             <div>
-              <label className="block text-sm font-medium text-amber-700 mb-1">Route (Optional)</label>
+              <label className="block text-sm font-medium text-[#111827] mb-1">Route (Optional)</label>
               <select
                 value={formData.route_id || ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, route_id: e.target.value ? Number(e.target.value) : undefined }))}
-                className="w-full px-3 py-2 rounded-xl border border-amber-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                className="w-full px-3 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#111827] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/30 outline-none transition-all"
               >
                 <option value="">Select a predefined route</option>
                 {routes.map(route => (
@@ -977,12 +977,12 @@ function LandLogistics({
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-amber-700 mb-1">Departure Time</label>
+              <label className="block text-sm font-medium text-[#111827] mb-1">Departure Time</label>
               <input
                 type="datetime-local"
                 value={formData.departure_time}
                 onChange={(e) => setFormData(prev => ({ ...prev, departure_time: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl border border-amber-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                className="w-full px-3 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#111827] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/30 outline-none transition-all"
               />
             </div>
           </div>
@@ -990,14 +990,14 @@ function LandLogistics({
           <DialogFooter>
             <button
               onClick={() => setShowCreateModal(false)}
-              className="px-4 py-2 rounded-xl border border-amber-200 text-amber-700 hover:bg-amber-50 transition-colors"
+              className="px-4 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#111827] hover:bg-[#FAFAFA] transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleCreateConvoy}
               disabled={isCreating || !formData.name || !formData.origin || !formData.destination}
-              className="px-4 py-2 rounded-xl bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              className="px-4 py-2 rounded-xl bg-[#2563EB] text-white hover:bg-[#1D4ED8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
             >
               {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
               Create Convoy
@@ -1007,20 +1007,20 @@ function LandLogistics({
       </Dialog>
 
       <Dialog open={!!selectedConvoy && activeTab !== 'planning'} onOpenChange={(open) => !open && setSelectedConvoy(null)}>
-        <DialogContent className="bg-white border-amber-200 max-w-4xl">
+        <DialogContent className="bg-white border-[#E5E7EB] max-w-4xl">
           <DialogHeader>
-            <DialogTitle className="text-amber-900 flex items-center gap-3">
-              <Truck className="w-5 h-5 text-amber-600" />
+            <DialogTitle className="text-[#111827] flex items-center gap-3">
+              <Truck className="w-5 h-5 text-amber-500" />
               {selectedConvoy?.name}
             </DialogTitle>
-            <DialogDescription className="text-amber-600">
+            <DialogDescription className="text-[#6B7280]">
               {selectedConvoy?.origin} → {selectedConvoy?.destination}
             </DialogDescription>
           </DialogHeader>
           
           {selectedConvoy && (
             <div className="space-y-6 py-4">
-              <div className="rounded-xl overflow-hidden border border-amber-200">
+              <div className="rounded-xl overflow-hidden border border-[#E5E7EB]">
                 <ConvoyVisualization
                   vehicles={convoyVehiclesForVisualization}
                   convoyStatus={selectedConvoy.status as any}
@@ -1045,13 +1045,13 @@ function LandLogistics({
                   unit="lbs"
                   mode="land"
                 />
-                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200">
-                  <div className="text-xs text-amber-600 mb-1">Status</div>
+                <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E5E7EB]">
+                  <div className="text-xs text-[#6B7280] mb-1">Status</div>
                   <StatusBadge status={selectedConvoy.status as any} size="md" showIcon />
                 </div>
-                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200">
-                  <div className="text-xs text-amber-600 mb-1">ETA</div>
-                  <div className="font-semibold text-amber-900">
+                <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E5E7EB]">
+                  <div className="text-xs text-[#6B7280] mb-1">ETA</div>
+                  <div className="font-semibold text-[#111827]">
                     {selectedConvoy.arrival_time 
                       ? new Date(selectedConvoy.arrival_time).toLocaleTimeString() 
                       : 'Not scheduled'}
@@ -1061,10 +1061,10 @@ function LandLogistics({
               
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-amber-900">Assigned Vehicles ({selectedConvoy.vehicles?.length || 0})</h3>
+                  <h3 className="font-semibold text-[#111827]">Assigned Vehicles ({selectedConvoy.vehicles?.length || 0})</h3>
                   <button
                     onClick={() => setShowVehicleSelectModal(true)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors text-sm"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#FAFAFA] border border-[#E5E7EB] text-[#6B7280] hover:text-[#111827] hover:bg-white transition-colors text-sm"
                   >
                     <Plus className="w-4 h-4" />
                     Add Vehicle
@@ -1074,29 +1074,29 @@ function LandLogistics({
                 {selectedConvoy.vehicles && selectedConvoy.vehicles.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     {selectedConvoy.vehicles.map((v) => (
-                      <div key={v.id} className="p-3 rounded-xl bg-amber-50 border border-amber-200">
-                        <div className="font-medium text-amber-900">{v.vehicleCode}</div>
-                        <div className="text-xs text-amber-600">Position {v.position + 1}, Lane {v.lane}</div>
+                      <div key={v.id} className="p-3 rounded-xl bg-[#FAFAFA] border border-[#E5E7EB]">
+                        <div className="font-medium text-[#111827]">{v.vehicleCode}</div>
+                        <div className="text-xs text-[#6B7280]">Position {v.position + 1}, Lane {v.lane}</div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-6 bg-amber-50 rounded-xl border border-amber-200">
-                    <Truck className="w-8 h-8 text-amber-300 mx-auto mb-2" />
-                    <p className="text-sm text-amber-600">No vehicles assigned yet</p>
+                  <div className="text-center py-6 bg-[#FAFAFA] rounded-xl border border-[#E5E7EB]">
+                    <Truck className="w-8 h-8 text-[#E5E7EB] mx-auto mb-2" />
+                    <p className="text-sm text-[#6B7280]">No vehicles assigned yet</p>
                   </div>
                 )}
               </div>
               
               {statusTransitions[selectedConvoy.status] && (
-                <div className="pt-4 border-t border-amber-100">
+                <div className="pt-4 border-t border-[#E5E7EB]">
                   <button
                     onClick={() => handleUpdateConvoyStatus(
                       selectedConvoy.id, 
                       statusTransitions[selectedConvoy.status].nextStatus
                     )}
                     disabled={isUpdating}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium hover:from-amber-600 hover:to-orange-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl bg-[#2563EB] text-white font-medium hover:bg-[#1D4ED8] disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                   >
                     {isUpdating ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -1113,10 +1113,10 @@ function LandLogistics({
       </Dialog>
 
       <Dialog open={showVehicleSelectModal} onOpenChange={setShowVehicleSelectModal}>
-        <DialogContent className="bg-white border-amber-200 max-w-lg">
+        <DialogContent className="bg-white border-[#E5E7EB] max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-amber-900">Add Vehicle to Convoy</DialogTitle>
-            <DialogDescription className="text-amber-600">
+            <DialogTitle className="text-[#111827]">Add Vehicle to Convoy</DialogTitle>
+            <DialogDescription className="text-[#6B7280]">
               Select a vehicle type to add to this convoy
             </DialogDescription>
           </DialogHeader>
@@ -1126,11 +1126,11 @@ function LandLogistics({
               <button
                 key={vehicle.id}
                 onClick={() => handleAddVehicleToConvoy(vehicle.code)}
-                className="p-4 rounded-xl border border-amber-200 hover:border-amber-500 hover:bg-amber-50 text-left transition-all"
+                className="p-4 rounded-xl bg-white border border-[#E5E7EB] hover:border-[#2563EB]/30 hover:shadow-sm text-left transition-all"
               >
-                <div className="font-bold text-amber-900">{vehicle.code}</div>
-                <div className="text-sm text-amber-600 truncate">{vehicle.name}</div>
-                <div className="text-xs text-amber-500 mt-1">{formatWeight(vehicle.payload_lbs)}</div>
+                <div className="font-bold text-[#111827]">{vehicle.code}</div>
+                <div className="text-sm text-[#6B7280] truncate">{vehicle.name}</div>
+                <div className="text-xs text-[#6B7280] mt-1">{formatWeight(vehicle.payload_lbs)}</div>
               </button>
             ))}
           </div>

@@ -147,33 +147,33 @@ export default function WarehouseManagement({
   }, [sites, selectedSiteId, showToast]);
 
   return (
-    <div className="min-h-screen wms-theme bg-[#F9FAFB] text-foreground">
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-border shadow-sm">
+    <div className="min-h-screen bg-[#FAFAFA] text-[#111827]">
+      <header className="sticky top-0 z-50 bg-white border-b border-[#E5E7EB] shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-4">
               <button
                 onClick={onBack}
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-2 text-sm text-[#6B7280] hover:text-[#111827] transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span className="hidden sm:inline">Back to Hub</span>
               </button>
-              <div className="h-6 w-px bg-border" />
+              <div className="h-6 w-px bg-[#E5E7EB]" />
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-[#004E89]">
+                <div className="p-1.5 rounded-lg bg-purple-600">
                   <Warehouse className="w-5 h-5 text-white" />
                 </div>
-                <span className="font-semibold text-foreground">MSC Warehouse Optimization</span>
+                <span className="font-semibold text-[#111827]">MSC Warehouse Optimization</span>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground hidden sm:block">
+              <span className="text-sm text-[#6B7280] hidden sm:block">
                 {user.username || user.email}
               </span>
               <button
                 onClick={onLogout}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="text-sm text-[#6B7280] hover:text-[#111827] transition-colors"
               >
                 Logout
               </button>
@@ -182,7 +182,7 @@ export default function WarehouseManagement({
         </div>
       </header>
 
-      <div className="border-b border-border bg-white/80 backdrop-blur-sm">
+      <div className="border-b border-[#E5E7EB] bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex gap-1 overflow-x-auto py-2 hide-scrollbar">
             {tabs.map((tab) => (
@@ -191,8 +191,8 @@ export default function WarehouseManagement({
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
                   activeTab === tab.id
-                    ? "bg-[#004E89] text-white shadow-sm"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    ? "bg-purple-600 text-white shadow-sm"
+                    : "text-[#6B7280] hover:text-[#111827] hover:bg-[#FAFAFA]"
                 }`}
               >
                 {tab.icon}
