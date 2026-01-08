@@ -6672,6 +6672,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/operations/summary", authMiddleware, async (req: AuthRequest, res) => {
     try {
       const userId = req.user!.id;
+      const now = new Date();
+      
+      // Calculate date ranges for monthly comparisons
+      const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
       
       // First get user's warehouse sites
       const userSites = await db.query.warehouseSites.findMany({ 
@@ -6686,77 +6692,167 @@ export async function registerRoutes(app: Express): Promise<Server> {
         seaVoyagesData,
         inventoryItems,
         manifestsData,
+        transfersData,
       ] = await Promise.all([
         db.query.flightPlans.findMany({ where: eq(flightPlans.user_id, userId) }),
         db.query.landConvoys.findMany({ where: eq(landConvoys.user_id, userId) }),
         db.query.seaVoyages.findMany({ where: eq(seaVoyages.user_id, userId) }),
-        // Get inventory items for user's sites
         userSiteIds.length > 0 
           ? db.query.warehouseInventoryItems.findMany({ 
               where: inArray(warehouseInventoryItems.site_id, userSiteIds) 
             })
           : Promise.resolve([]),
         db.query.crossModalManifests.findMany({ where: eq(crossModalManifests.user_id, userId) }),
+        userSiteIds.length > 0
+          ? db.query.warehouseTransfers.findMany({
+              where: or(
+                inArray(warehouseTransfers.from_site_id, userSiteIds),
+                inArray(warehouseTransfers.to_site_id, userSiteIds)
+              )
+            })
+          : Promise.resolve([]),
       ]);
       
       const warehouseSitesData = userSites;
       
-      // Air Operations summary
+      // Helper to check if date is in range
+      const isInRange = (dateStr: Date | string | null, start: Date, end: Date) => {
+        if (!dateStr) return false;
+        const date = new Date(dateStr);
+        return date >= start && date <= end;
+      };
+      
+      const isThisMonth = (dateStr: Date | string | null) => isInRange(dateStr, thisMonthStart, now);
+      const isLastMonth = (dateStr: Date | string | null) => isInRange(dateStr, lastMonthStart, lastMonthEnd);
+      
+      // Active missions = currently in motion or actively being worked
+      const activeMissions = {
+        air: flightPlansData.filter(p => ['complete', 'scheduled'].includes(p.status || '')).length,
+        land: landConvoysData.filter(c => ['in_transit', 'loading', 'planned'].includes(c.status || '')).length,
+        sea: seaVoyagesData.filter(v => ['in_transit', 'loading', 'planned'].includes(v.status || '')).length,
+        total: 0,
+      };
+      activeMissions.total = activeMissions.air + activeMissions.land + activeMissions.sea;
+      
+      // Cargo currently in transport (active/in-transit only)
+      const cargoInTransport = {
+        air_lbs: flightPlansData
+          .filter(p => p.status === 'complete')
+          .reduce((sum, p) => sum + (p.total_weight_lb || 0), 0),
+        land_lbs: landConvoysData
+          .filter(c => c.status === 'in_transit')
+          .reduce((sum, c) => sum + (c.total_weight_lbs || 0), 0),
+        sea_lbs: seaVoyagesData
+          .filter(v => v.status === 'in_transit')
+          .reduce((sum, v) => sum + (v.container_count || 0) * 45000, 0), // ~45k lbs per TEU avg
+        total_lbs: 0,
+      };
+      cargoInTransport.total_lbs = cargoInTransport.air_lbs + cargoInTransport.land_lbs + cargoInTransport.sea_lbs;
+      
+      // Air Operations enhanced summary
+      const airThisMonth = flightPlansData.filter(p => isThisMonth(p.created_at));
+      const airLastMonth = flightPlansData.filter(p => isLastMonth(p.created_at));
+      const airCompleted = flightPlansData.filter(p => p.status === 'complete');
       const airSummary = {
-        total_plans: flightPlansData.length,
-        active_plans: flightPlansData.filter(p => p.status === 'complete').length,
-        draft_plans: flightPlansData.filter(p => p.status === 'draft').length,
-        total_aircraft: flightPlansData.reduce((sum, p) => sum + (p.aircraft_count || 0), 0),
+        active_sorties: flightPlansData.filter(p => p.status === 'complete').length,
+        total_missions: flightPlansData.length,
+        cargo_in_flight_lbs: cargoInTransport.air_lbs,
+        total_aircraft_deployed: flightPlansData.reduce((sum, p) => sum + (p.aircraft_count || 0), 0),
+        avg_load_lbs: airCompleted.length > 0 
+          ? Math.round(airCompleted.reduce((sum, p) => sum + (p.total_weight_lb || 0), 0) / airCompleted.length)
+          : 0,
+        this_month: airThisMonth.length,
+        last_month: airLastMonth.length,
+        month_change: airLastMonth.length > 0 
+          ? Math.round(((airThisMonth.length - airLastMonth.length) / airLastMonth.length) * 100)
+          : airThisMonth.length > 0 ? 100 : 0,
         total_weight_lbs: flightPlansData.reduce((sum, p) => sum + (p.total_weight_lb || 0), 0),
       };
       
-      // Land Operations summary
+      // Land Operations enhanced summary
+      const landThisMonth = landConvoysData.filter(c => isThisMonth(c.created_at));
+      const landLastMonth = landConvoysData.filter(c => isLastMonth(c.created_at));
+      const landInTransit = landConvoysData.filter(c => c.status === 'in_transit');
+      const landCompleted = landConvoysData.filter(c => c.status === 'completed');
       const landSummary = {
+        active_convoys: landInTransit.length,
         total_convoys: landConvoysData.length,
-        active_convoys: landConvoysData.filter(c => c.status === 'in_transit').length,
-        pending_convoys: landConvoysData.filter(c => c.status === 'planned' || c.status === 'loading').length,
-        completed_convoys: landConvoysData.filter(c => c.status === 'completed').length,
+        cargo_in_transit_lbs: cargoInTransport.land_lbs,
+        pending_dispatch: landConvoysData.filter(c => c.status === 'planned' || c.status === 'loading').length,
+        completed_missions: landCompleted.length,
+        avg_convoy_weight_lbs: landCompleted.length > 0
+          ? Math.round(landCompleted.reduce((sum, c) => sum + (c.total_weight_lbs || 0), 0) / landCompleted.length)
+          : 0,
+        this_month: landThisMonth.length,
+        last_month: landLastMonth.length,
+        month_change: landLastMonth.length > 0 
+          ? Math.round(((landThisMonth.length - landLastMonth.length) / landLastMonth.length) * 100)
+          : landThisMonth.length > 0 ? 100 : 0,
         total_weight_lbs: landConvoysData.reduce((sum, c) => sum + (c.total_weight_lbs || 0), 0),
       };
       
-      // Sea Operations summary
+      // Sea Operations enhanced summary
+      const seaThisMonth = seaVoyagesData.filter(v => isThisMonth(v.created_at));
+      const seaLastMonth = seaVoyagesData.filter(v => isLastMonth(v.created_at));
+      const seaInTransit = seaVoyagesData.filter(v => v.status === 'in_transit');
+      const seaCompleted = seaVoyagesData.filter(v => v.status === 'completed');
+      const totalContainers = seaVoyagesData.reduce((sum, v) => sum + (v.container_count || 0), 0);
       const seaSummary = {
+        active_voyages: seaInTransit.length,
         total_voyages: seaVoyagesData.length,
-        active_voyages: seaVoyagesData.filter(v => v.status === 'in_transit').length,
-        planned_voyages: seaVoyagesData.filter(v => v.status === 'planned').length,
-        completed_voyages: seaVoyagesData.filter(v => v.status === 'completed').length,
+        containers_at_sea: seaInTransit.reduce((sum, v) => sum + (v.container_count || 0), 0),
+        total_teu: totalContainers,
+        planned_departures: seaVoyagesData.filter(v => v.status === 'planned').length,
+        completed_voyages: seaCompleted.length,
+        est_cargo_at_sea_lbs: cargoInTransport.sea_lbs,
+        this_month: seaThisMonth.length,
+        last_month: seaLastMonth.length,
+        month_change: seaLastMonth.length > 0 
+          ? Math.round(((seaThisMonth.length - seaLastMonth.length) / seaLastMonth.length) * 100)
+          : seaThisMonth.length > 0 ? 100 : 0,
       };
       
-      // Warehouse summary
+      // Warehouse enhanced summary
       const capacities = await getAllSiteCapacities();
+      const totalWeight = inventoryItems.reduce((sum, i) => sum + ((i.weight_lbs || 0) * (i.quantity || 1)), 0);
+      const itemsThisMonth = inventoryItems.filter(i => isThisMonth(i.created_at));
+      const itemsLastMonth = inventoryItems.filter(i => isLastMonth(i.created_at));
+      const pendingTransfers = transfersData.filter(t => t.status === 'pending');
       const warehouseSummary = {
         total_sites: warehouseSitesData.length,
         total_items: inventoryItems.length,
-        total_quantity: inventoryItems.reduce((sum, i) => sum + (i.quantity || 0), 0),
-        sites_at_capacity: capacities.filter(c => c.status === 'red').length,
+        total_units: inventoryItems.reduce((sum, i) => sum + (i.quantity || 0), 0),
+        total_weight_lbs: totalWeight,
+        sites_critical: capacities.filter(c => c.status === 'red').length,
         sites_warning: capacities.filter(c => c.status === 'yellow').length,
         sites_healthy: capacities.filter(c => c.status === 'green').length,
-        average_utilization: capacities.length > 0 
+        avg_utilization: capacities.length > 0 
           ? Math.round(capacities.reduce((sum, c) => sum + c.utilizationPercent, 0) / capacities.length)
           : 0,
+        pending_transfers: pendingTransfers.length,
+        items_this_month: itemsThisMonth.length,
+        items_last_month: itemsLastMonth.length,
+        month_change: itemsLastMonth.length > 0 
+          ? Math.round(((itemsThisMonth.length - itemsLastMonth.length) / itemsLastMonth.length) * 100)
+          : itemsThisMonth.length > 0 ? 100 : 0,
       };
       
-      // Manifest summary
+      // Manifest summary with cross-modal tracking
+      const manifestsInTransit = manifestsData.filter(m => m.status === 'in_transit');
       const manifestSummary = {
         total_manifests: manifestsData.length,
-        draft_manifests: manifestsData.filter(m => m.status === 'draft').length,
-        in_transit: manifestsData.filter(m => m.status === 'in_transit').length,
+        in_transit: manifestsInTransit.length,
+        awaiting_pickup: manifestsData.filter(m => m.status === 'draft').length,
         delivered: manifestsData.filter(m => m.status === 'delivered').length,
+        unassigned: manifestsData.filter(m => !m.transport_mode).length,
         by_mode: {
           air: manifestsData.filter(m => m.transport_mode === 'air').length,
           land: manifestsData.filter(m => m.transport_mode === 'land').length,
           sea: manifestsData.filter(m => m.transport_mode === 'sea').length,
-          unassigned: manifestsData.filter(m => !m.transport_mode).length,
         },
       };
       
-      // Aging alerts
-      const now = new Date();
+      // Aging and critical alerts
       const agingThreshold = 2555; // 7 years in days
       const agingItems = inventoryItems.filter(item => {
         const receivedDate = item.last_received_date || item.created_at;
@@ -6765,6 +6861,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       res.json({
+        activeMissions,
+        cargoInTransport,
         air: airSummary,
         land: landSummary,
         sea: seaSummary,
@@ -6774,8 +6872,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           aging_items: agingItems.length,
           critical_sites: capacities.filter(c => c.status === 'red').length,
           pending_assignments: manifestsData.filter(m => !m.transport_mode).length,
+          total: agingItems.length + capacities.filter(c => c.status === 'red').length + manifestsData.filter(m => !m.transport_mode).length,
         },
-        timestamp: new Date().toISOString(),
+        timestamp: now.toISOString(),
       });
     } catch (error) {
       console.error("[Operations] Error fetching summary:", error);

@@ -23,6 +23,17 @@ import { User } from "../hooks/useAuth";
 
 export type OperationMode = "air" | "land" | "sea" | "warehouse";
 
+const MonthTrendBadge = ({ change }: { change: number }) => {
+  if (change === 0) return <span className="text-xs text-[#6B7280]">-</span>;
+  const isPositive = change > 0;
+  return (
+    <span className={`text-xs flex items-center gap-0.5 ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
+      {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+      {isPositive ? '+' : ''}{change}%
+    </span>
+  );
+};
+
 interface OperationsHubProps {
   user: User;
   onSelectModule: (module: OperationMode) => void;
@@ -30,46 +41,80 @@ interface OperationsHubProps {
 }
 
 interface OperationsSummary {
+  activeMissions: {
+    air: number;
+    land: number;
+    sea: number;
+    total: number;
+  };
+  cargoInTransport: {
+    air_lbs: number;
+    land_lbs: number;
+    sea_lbs: number;
+    total_lbs: number;
+  };
   air: {
-    total_plans: number;
-    active_plans: number;
-    draft_plans: number;
-    total_aircraft: number;
+    active_sorties: number;
+    total_missions: number;
+    cargo_in_flight_lbs: number;
+    total_aircraft_deployed: number;
+    avg_load_lbs: number;
+    this_month: number;
+    last_month: number;
+    month_change: number;
     total_weight_lbs: number;
   };
   land: {
-    total_convoys: number;
     active_convoys: number;
-    pending_convoys: number;
-    completed_convoys: number;
+    total_convoys: number;
+    cargo_in_transit_lbs: number;
+    pending_dispatch: number;
+    completed_missions: number;
+    avg_convoy_weight_lbs: number;
+    this_month: number;
+    last_month: number;
+    month_change: number;
     total_weight_lbs: number;
   };
   sea: {
-    total_voyages: number;
     active_voyages: number;
-    planned_voyages: number;
+    total_voyages: number;
+    containers_at_sea: number;
+    total_teu: number;
+    planned_departures: number;
     completed_voyages: number;
+    est_cargo_at_sea_lbs: number;
+    this_month: number;
+    last_month: number;
+    month_change: number;
   };
   warehouse: {
     total_sites: number;
     total_items: number;
-    total_quantity: number;
-    sites_at_capacity: number;
+    total_units: number;
+    total_weight_lbs: number;
+    sites_critical: number;
     sites_warning: number;
     sites_healthy: number;
-    average_utilization: number;
+    avg_utilization: number;
+    pending_transfers: number;
+    items_this_month: number;
+    items_last_month: number;
+    month_change: number;
   };
   manifests: {
     total_manifests: number;
-    draft_manifests: number;
     in_transit: number;
+    awaiting_pickup: number;
     delivered: number;
-    by_mode: { air: number; land: number; sea: number; unassigned: number };
+    unassigned: number;
+    by_mode: { air: number; land: number; sea: number };
   };
   alerts: {
     aging_items: number;
     critical_sites: number;
     pending_assignments: number;
+    total: number;
   };
 }
 
@@ -194,9 +239,7 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
     return <Minus className="w-4 h-4 text-[#6B7280]" />;
   };
 
-  const totalAlerts = summary 
-    ? summary.alerts.aging_items + summary.alerts.critical_sites + summary.alerts.pending_assignments
-    : 0;
+  const totalAlerts = summary ? summary.alerts.total : 0;
 
   const modules = [
     {
@@ -206,9 +249,10 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
       icon: Plane,
       gradient: 'from-blue-500 to-cyan-500',
       stats: summary ? [
-        { label: 'Active Plans', value: summary.air.active_plans },
-        { label: 'Total Aircraft', value: summary.air.total_aircraft },
-        { label: 'Cargo Weight', value: formatWeight(summary.air.total_weight_lbs) },
+        { label: 'Active Sorties', value: summary.air.active_sorties, highlight: true },
+        { label: 'Cargo In-Flight', value: formatWeight(summary.air.cargo_in_flight_lbs) },
+        { label: 'This Month', value: summary.air.this_month, trend: summary.air.month_change },
+        { label: 'Total Missions', value: summary.air.total_missions },
       ] : [],
     },
     {
@@ -218,9 +262,10 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
       icon: Truck,
       gradient: 'from-amber-500 to-orange-500',
       stats: summary ? [
-        { label: 'Active Convoys', value: summary.land.active_convoys },
-        { label: 'Pending', value: summary.land.pending_convoys },
-        { label: 'Cargo Weight', value: formatWeight(summary.land.total_weight_lbs) },
+        { label: 'Active Convoys', value: summary.land.active_convoys, highlight: true },
+        { label: 'Cargo In-Transit', value: formatWeight(summary.land.cargo_in_transit_lbs) },
+        { label: 'This Month', value: summary.land.this_month, trend: summary.land.month_change },
+        { label: 'Pending Dispatch', value: summary.land.pending_dispatch },
       ] : [],
     },
     {
@@ -230,9 +275,10 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
       icon: Ship,
       gradient: 'from-teal-500 to-emerald-500',
       stats: summary ? [
-        { label: 'Active Voyages', value: summary.sea.active_voyages },
-        { label: 'Planned', value: summary.sea.planned_voyages },
-        { label: 'Total Voyages', value: summary.sea.total_voyages },
+        { label: 'Voyages At Sea', value: summary.sea.active_voyages, highlight: true },
+        { label: 'Containers', value: `${summary.sea.containers_at_sea} TEU` },
+        { label: 'This Month', value: summary.sea.this_month, trend: summary.sea.month_change },
+        { label: 'Planned Departures', value: summary.sea.planned_departures },
       ] : [],
     },
     {
@@ -242,9 +288,10 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
       icon: Warehouse,
       gradient: 'from-purple-500 to-pink-500',
       stats: summary ? [
-        { label: 'Sites', value: summary.warehouse.total_sites },
-        { label: 'Items', value: summary.warehouse.total_items.toLocaleString() },
-        { label: 'Utilization', value: `${summary.warehouse.average_utilization}%` },
+        { label: 'Total Sites', value: summary.warehouse.total_sites, highlight: true },
+        { label: 'Inventory Items', value: summary.warehouse.total_items.toLocaleString() },
+        { label: 'Avg Utilization', value: `${summary.warehouse.avg_utilization}%` },
+        { label: 'Pending Transfers', value: summary.warehouse.pending_transfers },
       ] : [],
     },
   ];
@@ -293,10 +340,10 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
               {[
-                { label: 'Active Missions', value: (summary?.air.active_plans || 0) + (summary?.land.active_convoys || 0) + (summary?.sea.active_voyages || 0), icon: Activity, color: 'blue' },
-                { label: 'In Transit', value: summary?.manifests.in_transit || 0, icon: TrendingUp, color: 'green' },
-                { label: 'Pending', value: summary?.manifests.by_mode.unassigned || 0, icon: Clock, color: 'amber' },
-                { label: 'Total Inventory', value: (summary?.warehouse.total_items || 0).toLocaleString(), icon: Package, color: 'purple' },
+                { label: 'Active Missions', value: summary?.activeMissions.total || 0, icon: Activity, color: 'text-blue-500', subtext: `${summary?.activeMissions.air || 0} air, ${summary?.activeMissions.land || 0} land, ${summary?.activeMissions.sea || 0} sea` },
+                { label: 'Cargo In Transit', value: formatWeight(summary?.cargoInTransport.total_lbs || 0), icon: Weight, color: 'text-green-500', subtext: 'Currently moving' },
+                { label: 'Manifests In Transit', value: summary?.manifests.in_transit || 0, icon: TrendingUp, color: 'text-cyan-500', subtext: `${summary?.manifests.unassigned || 0} awaiting assignment` },
+                { label: 'Warehouse Items', value: (summary?.warehouse.total_items || 0).toLocaleString(), icon: Package, color: 'text-purple-500', subtext: `${summary?.warehouse.avg_utilization || 0}% utilization` },
               ].map((stat, i) => (
                 <motion.div
                   key={stat.label}
@@ -306,10 +353,11 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                   className="p-4 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm"
                 >
                   <div className="flex items-center gap-2 mb-2">
-                    <stat.icon className={`w-4 h-4 text-${stat.color}-500`} />
+                    <stat.icon className={`w-4 h-4 ${stat.color}`} />
                     <span className="text-xs text-[#6B7280]">{stat.label}</span>
                   </div>
                   <p className="text-2xl font-bold text-[#111827]">{stat.value}</p>
+                  <p className="text-xs text-[#9CA3AF] mt-1">{stat.subtext}</p>
                 </motion.div>
               ))}
             </div>
@@ -334,10 +382,13 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                   <h3 className="text-lg font-semibold text-[#111827] mb-1">{module.name}</h3>
                   <p className="text-sm text-[#6B7280] mb-4">{module.subtitle}</p>
                   
-                  <div className="grid grid-cols-3 gap-2">
-                    {module.stats.map((stat) => (
-                      <div key={stat.label} className="text-center">
-                        <div className="text-lg font-bold text-[#111827]">{stat.value}</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {module.stats.map((stat: { label: string; value: string | number; highlight?: boolean; trend?: number }) => (
+                      <div key={stat.label} className={`p-2 rounded-lg ${stat.highlight ? 'bg-gradient-to-r ' + module.gradient + '/10' : 'bg-[#F9FAFB]'}`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`text-lg font-bold ${stat.highlight ? 'text-[#111827]' : 'text-[#374151]'}`}>{stat.value}</span>
+                          {stat.trend !== undefined && <MonthTrendBadge change={stat.trend} />}
+                        </div>
                         <div className="text-xs text-[#6B7280]">{stat.label}</div>
                       </div>
                     ))}
