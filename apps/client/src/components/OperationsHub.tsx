@@ -183,15 +183,15 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
   };
 
   const getUtilizationBorder = (utilization: number) => {
-    if (utilization >= 85) return 'border-red-500/30';
-    if (utilization >= 60) return 'border-amber-500/30';
-    return 'border-green-500/30';
+    if (utilization >= 85) return 'border-red-300';
+    if (utilization >= 60) return 'border-amber-300';
+    return 'border-green-300';
   };
 
   const TrendIcon = ({ trend }: { trend: 'increasing' | 'decreasing' | 'stable' }) => {
-    if (trend === 'increasing') return <TrendingUp className="w-4 h-4 text-red-400" />;
-    if (trend === 'decreasing') return <TrendingDown className="w-4 h-4 text-green-400" />;
-    return <Minus className="w-4 h-4 text-slate-400" />;
+    if (trend === 'increasing') return <TrendingUp className="w-4 h-4 text-red-500" />;
+    if (trend === 'decreasing') return <TrendingDown className="w-4 h-4 text-green-500" />;
+    return <Minus className="w-4 h-4 text-[#6B7280]" />;
   };
 
   const totalAlerts = summary 
@@ -252,8 +252,8 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
   const selectedSummary = forecast?.summaries[selectedForecastPeriod];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <header className="border-b border-white/10 bg-black/20 backdrop-blur-md">
+    <div className="min-h-screen bg-[#FAFAFA]">
+      <header className="border-b border-[#E5E7EB] bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
@@ -261,21 +261,21 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                 <Activity className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white">ARKA Operations Hub</h1>
-                <p className="text-xs text-slate-400">Multi-Modal Cargo Operations</p>
+                <h1 className="text-xl font-bold text-[#111827]">ARKA Operations Hub</h1>
+                <p className="text-xs text-[#6B7280]">Multi-Modal Cargo Operations</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
               {totalAlerts > 0 && (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/20 border border-red-500/30">
-                  <AlertTriangle className="w-4 h-4 text-red-400" />
-                  <span className="text-sm text-red-400">{totalAlerts} alerts</span>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 border border-red-200">
+                  <AlertTriangle className="w-4 h-4 text-[#DC2626]" />
+                  <span className="text-sm text-[#DC2626]">{totalAlerts} alerts</span>
                 </div>
               )}
-              <span className="text-sm text-slate-400">{user.username || user.email}</span>
+              <span className="text-sm text-[#6B7280]">{user.username || user.email}</span>
               <button
                 onClick={onLogout}
-                className="text-sm text-slate-400 hover:text-white transition-colors"
+                className="text-sm text-[#6B7280] hover:text-[#111827] transition-colors"
               >
                 Logout
               </button>
@@ -287,7 +287,7 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+            <Loader2 className="w-8 h-8 text-[#2563EB] animate-spin" />
           </div>
         ) : (
           <>
@@ -303,13 +303,13 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm"
+                  className="p-4 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm"
                 >
                   <div className="flex items-center gap-2 mb-2">
-                    <stat.icon className={`w-4 h-4 text-${stat.color}-400`} />
-                    <span className="text-xs text-slate-400">{stat.label}</span>
+                    <stat.icon className={`w-4 h-4 text-${stat.color}-500`} />
+                    <span className="text-xs text-[#6B7280]">{stat.label}</span>
                   </div>
-                  <p className="text-2xl font-bold text-white">{stat.value}</p>
+                  <p className="text-2xl font-bold text-[#111827]">{stat.value}</p>
                 </motion.div>
               ))}
             </div>
@@ -322,23 +322,23 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: i * 0.1 }}
                   onClick={() => onSelectModule(module.id)}
-                  className="group p-6 rounded-3xl bg-white/5 border border-white/10 hover:border-white/20 backdrop-blur-sm text-left transition-all hover:scale-[1.02]"
+                  className="group p-6 rounded-3xl bg-white border border-[#E5E7EB] hover:border-[#2563EB]/30 shadow-sm hover:shadow-md text-left transition-all hover:scale-[1.02]"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className={`p-3 rounded-2xl bg-gradient-to-r ${module.gradient}`}>
                       <module.icon className="w-6 h-6 text-white" />
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                    <ChevronRight className="w-5 h-5 text-[#9CA3AF] group-hover:text-[#2563EB] group-hover:translate-x-1 transition-all" />
                   </div>
                   
-                  <h3 className="text-lg font-semibold text-white mb-1">{module.name}</h3>
-                  <p className="text-sm text-slate-400 mb-4">{module.subtitle}</p>
+                  <h3 className="text-lg font-semibold text-[#111827] mb-1">{module.name}</h3>
+                  <p className="text-sm text-[#6B7280] mb-4">{module.subtitle}</p>
                   
                   <div className="grid grid-cols-3 gap-2">
                     {module.stats.map((stat) => (
                       <div key={stat.label} className="text-center">
-                        <div className="text-lg font-bold text-white">{stat.value}</div>
-                        <div className="text-xs text-slate-500">{stat.label}</div>
+                        <div className="text-lg font-bold text-[#111827]">{stat.value}</div>
+                        <div className="text-xs text-[#6B7280]">{stat.label}</div>
                       </div>
                     ))}
                   </div>
@@ -350,29 +350,29 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-6 rounded-2xl bg-red-500/10 border border-red-500/20 mb-8"
+                className="p-6 rounded-2xl bg-red-50 border border-red-200 mb-8"
               >
-                <h3 className="text-lg font-semibold text-red-400 mb-4 flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-[#DC2626] mb-4 flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5" />
                   Active Alerts
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {summary.alerts.aging_items > 0 && (
-                    <div className="p-3 rounded-xl bg-red-500/10">
-                      <div className="text-2xl font-bold text-red-400">{summary.alerts.aging_items}</div>
-                      <div className="text-sm text-red-300/70">Aging items (&gt;7 years)</div>
+                    <div className="p-3 rounded-xl bg-red-100/50">
+                      <div className="text-2xl font-bold text-[#DC2626]">{summary.alerts.aging_items}</div>
+                      <div className="text-sm text-red-700/70">Aging items (&gt;7 years)</div>
                     </div>
                   )}
                   {summary.alerts.critical_sites > 0 && (
-                    <div className="p-3 rounded-xl bg-red-500/10">
-                      <div className="text-2xl font-bold text-red-400">{summary.alerts.critical_sites}</div>
-                      <div className="text-sm text-red-300/70">Sites at critical capacity</div>
+                    <div className="p-3 rounded-xl bg-red-100/50">
+                      <div className="text-2xl font-bold text-[#DC2626]">{summary.alerts.critical_sites}</div>
+                      <div className="text-sm text-red-700/70">Sites at critical capacity</div>
                     </div>
                   )}
                   {summary.alerts.pending_assignments > 0 && (
-                    <div className="p-3 rounded-xl bg-amber-500/10">
-                      <div className="text-2xl font-bold text-amber-400">{summary.alerts.pending_assignments}</div>
-                      <div className="text-sm text-amber-300/70">Manifests awaiting transport</div>
+                    <div className="p-3 rounded-xl bg-amber-100/50">
+                      <div className="text-2xl font-bold text-[#D97706]">{summary.alerts.pending_assignments}</div>
+                      <div className="text-sm text-amber-700/70">Manifests awaiting transport</div>
                     </div>
                   )}
                 </div>
@@ -384,25 +384,25 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
-                className="p-6 rounded-2xl bg-[#0f172a] border border-purple-500/20 mb-8"
+                className="p-6 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm mb-8"
               >
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                    <Warehouse className="w-5 h-5 text-purple-400" />
+                  <h3 className="text-lg font-semibold text-[#111827] flex items-center gap-2">
+                    <Warehouse className="w-5 h-5 text-purple-500" />
                     Capacity Overview
                   </h3>
                   <div className="flex items-center gap-4 text-xs">
                     <span className="flex items-center gap-1.5">
                       <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
-                      <span className="text-slate-400">&lt;60%</span>
+                      <span className="text-[#6B7280]">&lt;60%</span>
                     </span>
                     <span className="flex items-center gap-1.5">
                       <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                      <span className="text-slate-400">60-85%</span>
+                      <span className="text-[#6B7280]">60-85%</span>
                     </span>
                     <span className="flex items-center gap-1.5">
                       <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                      <span className="text-slate-400">&gt;85%</span>
+                      <span className="text-[#6B7280]">&gt;85%</span>
                     </span>
                   </div>
                 </div>
@@ -411,15 +411,15 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                   {forecast.siteForecasts.map((site) => (
                     <div 
                       key={site.siteId} 
-                      className={`p-4 rounded-xl bg-white/5 border ${getUtilizationBorder(site.currentUtilization)}`}
+                      className={`p-4 rounded-xl bg-[#FAFAFA] border ${getUtilizationBorder(site.currentUtilization)}`}
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <h4 className="font-medium text-white flex items-center gap-2">
+                          <h4 className="font-medium text-[#111827] flex items-center gap-2">
                             {site.siteName}
                             <TrendIcon trend={site.trend} />
                           </h4>
-                          <p className="text-xs text-slate-400 mt-0.5">
+                          <p className="text-xs text-[#6B7280] mt-0.5">
                             {site.trend === 'increasing' && 'Capacity trending up'}
                             {site.trend === 'decreasing' && 'Capacity trending down'}
                             {site.trend === 'stable' && 'Capacity stable'}
@@ -427,17 +427,17 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                         </div>
                         <div className="text-right">
                           <span className={`text-lg font-bold ${
-                            getUtilizationColor(site.currentUtilization) === 'red' ? 'text-red-400' :
-                            getUtilizationColor(site.currentUtilization) === 'yellow' ? 'text-amber-400' :
-                            'text-green-400'
+                            getUtilizationColor(site.currentUtilization) === 'red' ? 'text-[#DC2626]' :
+                            getUtilizationColor(site.currentUtilization) === 'yellow' ? 'text-[#D97706]' :
+                            'text-[#16A34A]'
                           }`}>
                             {site.currentUtilization}%
                           </span>
-                          <p className="text-xs text-slate-500">utilization</p>
+                          <p className="text-xs text-[#6B7280]">utilization</p>
                         </div>
                       </div>
 
-                      <div className="h-2 rounded-full bg-slate-700 overflow-hidden mb-3">
+                      <div className="h-2 rounded-full bg-[#E5E7EB] overflow-hidden mb-3">
                         <div 
                           className={`h-full transition-all ${getUtilizationBg(site.currentUtilization)}`}
                           style={{ width: `${Math.min(100, site.currentUtilization)}%` }}
@@ -445,46 +445,46 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                       </div>
 
                       <div className="grid grid-cols-3 gap-4 text-center">
-                        <div className="p-2 rounded-lg bg-white/5">
+                        <div className="p-2 rounded-lg bg-white border border-[#E5E7EB]">
                           <div className="flex items-center justify-center gap-1 mb-1">
-                            <Box className="w-3.5 h-3.5 text-purple-400" />
+                            <Box className="w-3.5 h-3.5 text-purple-500" />
                           </div>
-                          <div className="text-sm font-medium text-white">
+                          <div className="text-sm font-medium text-[#111827]">
                             {site.usedPalletPositions}/{site.totalPalletPositions}
                           </div>
-                          <div className="text-xs text-slate-500">Pallet Positions</div>
+                          <div className="text-xs text-[#6B7280]">Pallet Positions</div>
                         </div>
-                        <div className="p-2 rounded-lg bg-white/5">
+                        <div className="p-2 rounded-lg bg-white border border-[#E5E7EB]">
                           <div className="flex items-center justify-center gap-1 mb-1">
-                            <Weight className="w-3.5 h-3.5 text-purple-400" />
+                            <Weight className="w-3.5 h-3.5 text-purple-500" />
                           </div>
-                          <div className="text-sm font-medium text-white">
+                          <div className="text-sm font-medium text-[#111827]">
                             {site.weightUtilizationPercent}%
                           </div>
-                          <div className="text-xs text-slate-500">Weight Used</div>
+                          <div className="text-xs text-[#6B7280]">Weight Used</div>
                         </div>
-                        <div className="p-2 rounded-lg bg-white/5">
+                        <div className="p-2 rounded-lg bg-white border border-[#E5E7EB]">
                           <div className="flex items-center justify-center gap-1 mb-1">
-                            <BarChart3 className="w-3.5 h-3.5 text-purple-400" />
+                            <BarChart3 className="w-3.5 h-3.5 text-purple-500" />
                           </div>
-                          <div className="text-sm font-medium text-white">
+                          <div className="text-sm font-medium text-[#111827]">
                             {Math.round(site.usedCubicFeet).toLocaleString()}
                           </div>
-                          <div className="text-xs text-slate-500">Cu. Ft. Used</div>
+                          <div className="text-xs text-[#6B7280]">Cu. Ft. Used</div>
                         </div>
                       </div>
 
                       {(site.daysUntilWarning || site.daysUntilCritical) && (
-                        <div className="mt-3 pt-3 border-t border-white/10">
+                        <div className="mt-3 pt-3 border-t border-[#E5E7EB]">
                           <div className="flex items-center gap-2 text-xs">
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                            <AlertTriangle className="w-3.5 h-3.5 text-[#D97706]" />
                             {site.daysUntilCritical && (
-                              <span className="text-amber-400">
+                              <span className="text-[#D97706]">
                                 Critical in ~{site.daysUntilCritical} days
                               </span>
                             )}
                             {!site.daysUntilCritical && site.daysUntilWarning && (
-                              <span className="text-amber-400">
+                              <span className="text-[#D97706]">
                                 Warning threshold in ~{site.daysUntilWarning} days
                               </span>
                             )}
@@ -502,11 +502,11 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="p-6 rounded-2xl bg-[#0f172a] border border-blue-500/20"
+                className="p-6 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm"
               >
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-blue-400" />
+                  <h3 className="text-lg font-semibold text-[#111827] flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-[#2563EB]" />
                     90-Day Forecast
                   </h3>
                   <div className="flex gap-2">
@@ -516,8 +516,8 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                         onClick={() => setSelectedForecastPeriod(period)}
                         className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
                           selectedForecastPeriod === period
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                            ? 'bg-[#2563EB] text-white'
+                            : 'bg-[#FAFAFA] text-[#6B7280] hover:bg-[#E5E7EB]'
                         }`}
                       >
                         {period === 'thirtyDay' ? '30 Days' : period === 'sixtyDay' ? '60 Days' : '90 Days'}
@@ -529,63 +529,63 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                 {selectedSummary && (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                      <div className="p-4 rounded-xl bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20">
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200">
                         <div className="flex items-center gap-2 mb-2">
-                          <Plane className="w-4 h-4 text-blue-400" />
-                          <span className="text-sm text-blue-300">Air Operations</span>
+                          <Plane className="w-4 h-4 text-[#2563EB]" />
+                          <span className="text-sm text-blue-700">Air Operations</span>
                         </div>
-                        <div className="text-2xl font-bold text-white mb-1">
+                        <div className="text-2xl font-bold text-[#111827] mb-1">
                           {selectedSummary.totalExpectedFlights}
                         </div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-[#6B7280]">
                           Expected flights • {formatWeight(selectedSummary.totalAirCargoLbs)} cargo
                         </div>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20">
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200">
                         <div className="flex items-center gap-2 mb-2">
-                          <Truck className="w-4 h-4 text-amber-400" />
-                          <span className="text-sm text-amber-300">Land Logistics</span>
+                          <Truck className="w-4 h-4 text-[#D97706]" />
+                          <span className="text-sm text-amber-700">Land Logistics</span>
                         </div>
-                        <div className="text-2xl font-bold text-white mb-1">
+                        <div className="text-2xl font-bold text-[#111827] mb-1">
                           {selectedSummary.totalExpectedConvoys}
                         </div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-[#6B7280]">
                           Expected convoys • {formatWeight(selectedSummary.totalLandCargoLbs)} cargo
                         </div>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-gradient-to-br from-teal-500/10 to-emerald-500/10 border border-teal-500/20">
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-200">
                         <div className="flex items-center gap-2 mb-2">
-                          <Ship className="w-4 h-4 text-teal-400" />
-                          <span className="text-sm text-teal-300">Sea Freight</span>
+                          <Ship className="w-4 h-4 text-teal-600" />
+                          <span className="text-sm text-teal-700">Sea Freight</span>
                         </div>
-                        <div className="text-2xl font-bold text-white mb-1">
+                        <div className="text-2xl font-bold text-[#111827] mb-1">
                           {selectedSummary.totalExpectedVoyages}
                         </div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-[#6B7280]">
                           Expected voyages
                         </div>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                      <div className="p-4 rounded-xl bg-[#FAFAFA] border border-[#E5E7EB]">
                         <div className="flex items-center gap-2 mb-3">
-                          <Warehouse className="w-4 h-4 text-purple-400" />
-                          <span className="text-sm text-slate-300">Projected Warehouse Utilization</span>
+                          <Warehouse className="w-4 h-4 text-purple-500" />
+                          <span className="text-sm text-[#111827]">Projected Warehouse Utilization</span>
                         </div>
                         <div className="flex items-baseline gap-2">
                           <span className={`text-3xl font-bold ${
-                            selectedSummary.avgWarehouseUtilization >= 85 ? 'text-red-400' :
-                            selectedSummary.avgWarehouseUtilization >= 60 ? 'text-amber-400' :
-                            'text-green-400'
+                            selectedSummary.avgWarehouseUtilization >= 85 ? 'text-[#DC2626]' :
+                            selectedSummary.avgWarehouseUtilization >= 60 ? 'text-[#D97706]' :
+                            'text-[#16A34A]'
                           }`}>
                             {selectedSummary.avgWarehouseUtilization}%
                           </span>
-                          <span className="text-slate-500 text-sm">average</span>
+                          <span className="text-[#6B7280] text-sm">average</span>
                         </div>
-                        <div className="mt-3 h-2 rounded-full bg-slate-700 overflow-hidden">
+                        <div className="mt-3 h-2 rounded-full bg-[#E5E7EB] overflow-hidden">
                           <div 
                             className={`h-full transition-all ${getUtilizationBg(selectedSummary.avgWarehouseUtilization)}`}
                             style={{ width: `${Math.min(100, selectedSummary.avgWarehouseUtilization)}%` }}
@@ -593,22 +593,22 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                         </div>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                      <div className="p-4 rounded-xl bg-[#FAFAFA] border border-[#E5E7EB]">
                         <div className="flex items-center gap-2 mb-3">
-                          <AlertTriangle className="w-4 h-4 text-amber-400" />
-                          <span className="text-sm text-slate-300">Capacity Warnings</span>
+                          <AlertTriangle className="w-4 h-4 text-[#D97706]" />
+                          <span className="text-sm text-[#111827]">Capacity Warnings</span>
                         </div>
                         <div className="flex items-baseline gap-2">
                           <span className={`text-3xl font-bold ${
-                            selectedSummary.daysWithWarnings > 30 ? 'text-red-400' :
-                            selectedSummary.daysWithWarnings > 10 ? 'text-amber-400' :
-                            'text-green-400'
+                            selectedSummary.daysWithWarnings > 30 ? 'text-[#DC2626]' :
+                            selectedSummary.daysWithWarnings > 10 ? 'text-[#D97706]' :
+                            'text-[#16A34A]'
                           }`}>
                             {selectedSummary.daysWithWarnings}
                           </span>
-                          <span className="text-slate-500 text-sm">days with warnings</span>
+                          <span className="text-[#6B7280] text-sm">days with warnings</span>
                         </div>
-                        <p className="text-xs text-slate-500 mt-2">
+                        <p className="text-xs text-[#6B7280] mt-2">
                           {selectedSummary.daysWithWarnings === 0 
                             ? 'No capacity issues expected in forecast period'
                             : `${selectedSummary.daysWithWarnings} days may require capacity attention`
@@ -617,8 +617,8 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-4 border-t border-white/10">
-                      <div className="flex items-center justify-between text-xs text-slate-500">
+                    <div className="mt-4 pt-4 border-t border-[#E5E7EB]">
+                      <div className="flex items-center justify-between text-xs text-[#6B7280]">
                         <span>Based on {forecast.historicalDataPoints.flights} flights, {forecast.historicalDataPoints.convoys} convoys, {forecast.historicalDataPoints.voyages} voyages</span>
                         <span>Generated {new Date(forecast.generatedAt).toLocaleString()}</span>
                       </div>
@@ -632,10 +632,10 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="p-6 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center"
+                className="p-6 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm flex items-center justify-center"
               >
-                <Loader2 className="w-6 h-6 text-blue-500 animate-spin mr-3" />
-                <span className="text-slate-400">Loading forecast data...</span>
+                <Loader2 className="w-6 h-6 text-[#2563EB] animate-spin mr-3" />
+                <span className="text-[#6B7280]">Loading forecast data...</span>
               </motion.div>
             )}
           </>
