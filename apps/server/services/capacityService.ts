@@ -117,20 +117,77 @@ export async function getSiteCapacity(siteId: number): Promise<CapacityMetrics |
 }
 
 /**
- * Get capacity metrics for all sites
+ * Get capacity metrics for all sites (optimized batch query)
  */
-export async function getAllSiteCapacities(): Promise<CapacityMetrics[]> {
-  const sites = await db.query.warehouseSites.findMany();
-  const capacities: CapacityMetrics[] = [];
-
-  for (const site of sites) {
-    const capacity = await getSiteCapacity(site.id);
-    if (capacity) {
-      capacities.push(capacity);
-    }
+export async function getAllSiteCapacities(userId?: number): Promise<CapacityMetrics[]> {
+  // Fetch sites and all locations in parallel to avoid N+1 queries
+  const [sites, allLocations] = await Promise.all([
+    userId 
+      ? db.query.warehouseSites.findMany({ where: eq(warehouseSites.user_id, userId) })
+      : db.query.warehouseSites.findMany(),
+    db.query.warehouseLocations.findMany(),
+  ]);
+  
+  // Group locations by site_id for efficient lookup
+  const locationsBySite = new Map<number, typeof allLocations>();
+  for (const loc of allLocations) {
+    const siteLocations = locationsBySite.get(loc.site_id) || [];
+    siteLocations.push(loc);
+    locationsBySite.set(loc.site_id, siteLocations);
   }
-
-  return capacities;
+  
+  // Calculate capacity for each site in-memory
+  return sites.map(site => {
+    const locations = locationsBySite.get(site.id) || [];
+    
+    const totalPositions = locations.length;
+    const occupiedPositions = locations.filter(l => l.is_occupied).length;
+    const openPositions = totalPositions - occupiedPositions;
+    
+    // Calculate cubic feet
+    const totalCubicFeet = locations.reduce((sum, loc) => {
+      const l = parseFloat(String(loc.block_length_ft)) || PALLET_BLOCK_LENGTH_FT;
+      const w = parseFloat(String(loc.block_width_ft)) || PALLET_BLOCK_WIDTH_FT;
+      const h = parseFloat(String(loc.block_height_ft)) || PALLET_BLOCK_HEIGHT_FT;
+      return sum + (l * w * h);
+    }, 0);
+    
+    const usedCubicFeet = locations
+      .filter(l => l.is_occupied)
+      .reduce((sum, loc) => {
+        const l = parseFloat(String(loc.block_length_ft)) || PALLET_BLOCK_LENGTH_FT;
+        const w = parseFloat(String(loc.block_width_ft)) || PALLET_BLOCK_WIDTH_FT;
+        const h = parseFloat(String(loc.block_height_ft)) || PALLET_BLOCK_HEIGHT_FT;
+        return sum + (l * w * h);
+      }, 0);
+    
+    // Calculate weight
+    const totalWeightCapacity = locations.reduce((sum, loc) => {
+      return sum + (loc.max_weight_lbs || MAX_PALLET_WEIGHT_LBS);
+    }, 0);
+    
+    const currentWeight = locations.reduce((sum, loc) => {
+      return sum + (loc.current_weight_lbs || 0);
+    }, 0);
+    
+    const utilizationPercent = totalPositions > 0 ? (occupiedPositions / totalPositions) * 100 : 0;
+    const weightUtilization = totalWeightCapacity > 0 ? (currentWeight / totalWeightCapacity) * 100 : 0;
+    
+    return {
+      siteId: site.id,
+      siteName: site.name,
+      totalPalletPositions: totalPositions,
+      usedPalletPositions: occupiedPositions,
+      openPalletPositions: openPositions,
+      utilizationPercent: Math.round(utilizationPercent * 10) / 10,
+      totalCubicFeet: Math.round(totalCubicFeet * 100) / 100,
+      usedCubicFeet: Math.round(usedCubicFeet * 100) / 100,
+      totalWeightCapacityLbs: totalWeightCapacity,
+      currentWeightLbs: currentWeight,
+      weightUtilizationPercent: Math.round(weightUtilization * 10) / 10,
+      status: getCapacityStatus(Math.max(utilizationPercent, weightUtilization)),
+    };
+  });
 }
 
 /**

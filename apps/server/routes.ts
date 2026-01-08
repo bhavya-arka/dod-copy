@@ -6672,6 +6672,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get unified operations summary for dashboard
   app.get("/api/operations/summary", authMiddleware, async (req: AuthRequest, res) => {
     try {
+      const startTime = Date.now();
+      const timings: Record<string, number> = {};
+      
       const userId = req.user!.id;
       const now = new Date();
       
@@ -6680,29 +6683,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
       
-      // First get user's warehouse sites
-      const userSites = await db.query.warehouseSites.findMany({ 
-        where: eq(warehouseSites.user_id, userId) 
-      });
-      const userSiteIds = userSites.map(s => s.id);
-      
-      // Parallel fetch all data - core transport queries
+      // Parallel fetch ALL data including warehouse sites
+      const t1 = Date.now();
       const [
+        userSites,
         flightPlansData,
         landConvoysData,
         seaVoyagesData,
         manifestsData,
       ] = await Promise.all([
+        db.query.warehouseSites.findMany({ where: eq(warehouseSites.user_id, userId) }),
         db.query.flightPlans.findMany({ where: eq(flightPlans.user_id, userId) }),
         db.query.landConvoys.findMany({ where: eq(landConvoys.user_id, userId) }),
         db.query.seaVoyages.findMany({ where: eq(seaVoyages.user_id, userId) }),
         db.query.crossModalManifests.findMany({ where: eq(crossModalManifests.user_id, userId) }),
       ]);
+      timings['phase1_core_queries'] = Date.now() - t1;
+      
+      const userSiteIds = userSites.map(s => s.id);
       
       // Warehouse queries - only fetch if user has warehouse sites
       let inventoryItems: (typeof warehouseInventoryItems.$inferSelect)[] = [];
       let transfersData: (typeof warehouseTransfers.$inferSelect)[] = [];
       
+      const t2 = Date.now();
       if (userSiteIds.length > 0) {
         const [invItems, transfers] = await Promise.all([
           db.query.warehouseInventoryItems.findMany({ 
@@ -6718,6 +6722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         inventoryItems = invItems;
         transfersData = transfers;
       }
+      timings['phase2_warehouse_queries'] = Date.now() - t2;
       
       const warehouseSitesData = userSites;
       
@@ -6820,7 +6825,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       // Warehouse enhanced summary
-      const capacities = await getAllSiteCapacities();
+      const t3 = Date.now();
+      const capacities = await getAllSiteCapacities(userId);
+      timings['phase3_site_capacities'] = Date.now() - t3;
+      
       const totalWeight = inventoryItems.reduce((sum, i) => sum + ((i.weight_lbs || 0) * (i.quantity || 1)), 0);
       const itemsThisMonth = inventoryItems.filter(i => isThisMonth(i.created_at));
       const itemsLastMonth = inventoryItems.filter(i => isLastMonth(i.created_at));
@@ -6867,6 +6875,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return agingDays >= agingThreshold;
       });
       
+      timings['total'] = Date.now() - startTime;
+      console.log('[Operations Summary] Timings (ms):', JSON.stringify(timings));
+      
       res.json({
         activeMissions,
         cargoInTransport,
@@ -6892,6 +6903,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get 90-day predictive forecast for load planning
   app.get("/api/operations/predictive-forecast", authMiddleware, async (req: AuthRequest, res) => {
     try {
+      const startTime = Date.now();
+      const timings: Record<string, number> = {};
+      
       const userId = req.user!.id;
       const daysParam = parseInt(req.query.days as string) || 30;
       const FORECAST_DAYS = Math.min(Math.max(daysParam, 1), 90);
@@ -6900,20 +6914,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const msPerDay = 24 * 60 * 60 * 1000;
       const futureDate = new Date(now.getTime() + FORECAST_DAYS * msPerDay);
       
-      // Get user's warehouse sites for capacity data
-      const userSites = await db.query.warehouseSites.findMany({ 
-        where: eq(warehouseSites.user_id, userId) 
-      });
-      const userSiteIds = userSites.map(s => s.id);
-      
-      // Fetch future scheduled transports and capacity data in parallel
+      // Fetch everything in parallel including user sites
+      const t1 = Date.now();
       const [
+        userSites,
         flightPlansData,
         landConvoysData,
         seaVoyagesData,
         siteCapacities,
-        futureStats,
       ] = await Promise.all([
+        db.query.warehouseSites.findMany({ where: eq(warehouseSites.user_id, userId) }),
         db.query.flightPlans.findMany({ 
           where: and(
             eq(flightPlans.user_id, userId),
@@ -6932,9 +6942,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             gte(seaVoyages.scheduled_departure, now)
           )
         }),
-        getAllSiteCapacities(),
-        transportStatsService.getFutureStats(userId, FORECAST_DAYS),
+        getAllSiteCapacities(userId),
       ]);
+      timings['main_queries'] = Date.now() - t1;
       
       // Filter to only scheduled activities within forecast window
       const upcomingAir = flightPlansData.filter(p => 
@@ -6993,6 +7003,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           daysUntilCritical: daysUntilCritical > 0 && daysUntilCritical <= 90 ? daysUntilCritical : null,
         };
       });
+      
+      timings['total'] = Date.now() - startTime;
+      console.log('[Predictive Forecast] Timings (ms):', JSON.stringify(timings));
       
       res.json({
         generatedAt: now.toISOString(),
