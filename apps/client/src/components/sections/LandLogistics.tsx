@@ -18,7 +18,7 @@ import {
   Navigation,
 } from "lucide-react";
 import { User } from "../../hooks/useAuth";
-import { StatusBadge, TransportTable, CapacityWidget, LocationAutocomplete, RouteMap, PlaceDetails, TransportAiInsights } from '../transport';
+import { StatusBadge, TransportTable, CapacityWidget, LocationAutocomplete, RouteMap, PlaceDetails, TransportAiInsights, MilitaryLocationSelect, MilitaryInstallation } from '../transport';
 import { ConvoyVisualization } from '../3d/ConvoyVisualization';
 import {
   Dialog,
@@ -60,6 +60,8 @@ interface ConvoyFormData {
   destination: string;
   origin_coords?: LocationCoords;
   destination_coords?: LocationCoords;
+  origin_installation?: MilitaryInstallation | null;
+  destination_installation?: MilitaryInstallation | null;
   route_id?: number;
   scheduled_departure: string;
   scheduled_arrival: string;
@@ -184,7 +186,17 @@ function LandLogistics({
       });
       await fetchData();
       setShowCreateModal(false);
-      setFormData({ name: '', origin: '', destination: '', scheduled_departure: '', scheduled_arrival: '' });
+      setFormData({ 
+        name: '', 
+        origin: '', 
+        destination: '', 
+        origin_installation: null,
+        destination_installation: null,
+        origin_coords: undefined,
+        destination_coords: undefined,
+        scheduled_departure: '', 
+        scheduled_arrival: '' 
+      });
       setConvoyRouteInfo(null);
     } catch (error) {
       console.error('Error creating convoy:', error);
@@ -288,6 +300,62 @@ function LandLogistics({
         setConvoyRouteInfo,
         setIsCalculatingRoute
       );
+    }
+  }, [formData.origin_coords, calculateRouteHandler]);
+
+  const handleOriginInstallationChange = useCallback((installation: MilitaryInstallation | null) => {
+    if (installation) {
+      const coords: LocationCoords = {
+        lat: parseFloat(installation.latitude),
+        lng: parseFloat(installation.longitude),
+        formattedAddress: installation.address || `${installation.name}, ${installation.city}, ${installation.state || installation.country}`,
+      };
+      setFormData(prev => ({
+        ...prev,
+        origin: installation.name,
+        origin_installation: installation,
+        origin_coords: coords,
+      }));
+
+      if (formData.destination_coords) {
+        calculateRouteHandler(coords, formData.destination_coords, setConvoyRouteInfo, setIsCalculatingRoute);
+      }
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        origin: '',
+        origin_installation: null,
+        origin_coords: undefined,
+      }));
+      setConvoyRouteInfo(null);
+    }
+  }, [formData.destination_coords, calculateRouteHandler]);
+
+  const handleDestinationInstallationChange = useCallback((installation: MilitaryInstallation | null) => {
+    if (installation) {
+      const coords: LocationCoords = {
+        lat: parseFloat(installation.latitude),
+        lng: parseFloat(installation.longitude),
+        formattedAddress: installation.address || `${installation.name}, ${installation.city}, ${installation.state || installation.country}`,
+      };
+      setFormData(prev => ({
+        ...prev,
+        destination: installation.name,
+        destination_installation: installation,
+        destination_coords: coords,
+      }));
+
+      if (formData.origin_coords) {
+        calculateRouteHandler(formData.origin_coords, coords, setConvoyRouteInfo, setIsCalculatingRoute);
+      }
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        destination: '',
+        destination_installation: null,
+        destination_coords: undefined,
+      }));
+      setConvoyRouteInfo(null);
     }
   }, [formData.origin_coords, calculateRouteHandler]);
 
@@ -845,19 +913,19 @@ function LandLogistics({
               />
             </div>
             
-            <LocationAutocomplete
-              value={formData.origin}
-              onChange={handleOriginChange}
-              placeholder="Search for origin location..."
-              label="Origin"
+            <MilitaryLocationSelect
+              value={formData.origin_installation || null}
+              onChange={handleOriginInstallationChange}
+              placeholder="Select origin installation..."
+              label="Origin Installation"
               required
             />
             
-            <LocationAutocomplete
-              value={formData.destination}
-              onChange={handleDestinationChange}
-              placeholder="Search for destination location..."
-              label="Destination"
+            <MilitaryLocationSelect
+              value={formData.destination_installation || null}
+              onChange={handleDestinationInstallationChange}
+              placeholder="Select destination installation..."
+              label="Destination Installation"
               required
             />
             

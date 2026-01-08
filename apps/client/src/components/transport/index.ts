@@ -13,6 +13,9 @@ export type { CapacityWidgetProps } from './CapacityWidget';
 export { LocationAutocomplete } from './LocationAutocomplete';
 export type { LocationAutocompleteProps, PlaceDetails } from './LocationAutocomplete';
 
+export { MilitaryLocationSelect } from './MilitaryLocationSelect';
+export type { MilitaryLocationSelectProps, MilitaryInstallation } from './MilitaryLocationSelect';
+
 export { RouteMap } from './RouteMap';
 export type { RouteMapProps } from './RouteMap';
 

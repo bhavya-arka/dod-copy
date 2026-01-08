@@ -36,7 +36,8 @@ import {
   insertCrossModalManifestSchema,
   insertManifestItemSchema,
   flightPlans,
-  seaVoyages
+  seaVoyages,
+  militaryInstallations
 } from "@shared/schema";
 import { eq, and, or, like, ilike, sql, gt, lt, isNull, isNotNull, asc, desc, count, inArray } from "drizzle-orm";
 import {
@@ -7732,6 +7733,133 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Transport API] Error fetching assets:", error);
       res.status(500).json({ error: "Failed to fetch transport assets" });
+    }
+  });
+
+  // ============================================================================
+  // MILITARY INSTALLATIONS API
+  // ============================================================================
+
+  // GET /api/military-installations - Get all active military installations
+  app.get("/api/military-installations", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const searchQuery = req.query.search as string | undefined;
+      const typeFilter = req.query.type as string | undefined;
+      const branchFilter = req.query.branch as string | undefined;
+
+      let conditions = [eq(militaryInstallations.is_active, true)];
+
+      if (typeFilter) {
+        conditions.push(eq(militaryInstallations.type, typeFilter));
+      }
+
+      if (branchFilter) {
+        conditions.push(eq(militaryInstallations.branch, branchFilter));
+      }
+
+      let results = await db.select()
+        .from(militaryInstallations)
+        .where(and(...conditions))
+        .orderBy(asc(militaryInstallations.name));
+
+      if (searchQuery && searchQuery.trim()) {
+        const search = searchQuery.toLowerCase().trim();
+        results = results.filter(inst => 
+          inst.name.toLowerCase().includes(search) ||
+          inst.code.toLowerCase().includes(search) ||
+          inst.city.toLowerCase().includes(search) ||
+          (inst.state && inst.state.toLowerCase().includes(search))
+        );
+      }
+
+      res.json(results);
+    } catch (error) {
+      console.error("[Military Installations] Error fetching installations:", error);
+      res.status(500).json({ error: "Failed to fetch military installations" });
+    }
+  });
+
+  // POST /api/admin/seed-military-installations - Seed military installations (superadmin only)
+  app.post("/api/admin/seed-military-installations", authMiddleware, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const installationsData = [
+        // Air Force Bases
+        { code: 'TRAVIS', name: 'Travis Air Force Base', type: 'air_base', branch: 'air_force', city: 'Fairfield', state: 'CA', country: 'USA', region: 'CONUS', latitude: '38.2721', longitude: '-121.9399', address: 'Travis AFB, CA 94535' },
+        { code: 'DOVER', name: 'Dover Air Force Base', type: 'air_base', branch: 'air_force', city: 'Dover', state: 'DE', country: 'USA', region: 'CONUS', latitude: '39.1305', longitude: '-75.4660', address: 'Dover AFB, DE 19902' },
+        { code: 'ANDREWS', name: 'Joint Base Andrews', type: 'joint_base', branch: 'air_force', city: 'Camp Springs', state: 'MD', country: 'USA', region: 'CONUS', latitude: '38.8108', longitude: '-76.8670', address: 'Joint Base Andrews, MD 20762' },
+        { code: 'RAMSTEIN', name: 'Ramstein Air Base', type: 'air_base', branch: 'air_force', city: 'Ramstein', state: null, country: 'Germany', region: 'Europe', latitude: '49.4369', longitude: '7.6003', address: 'Ramstein Air Base, Germany' },
+        { code: 'KADENA', name: 'Kadena Air Base', type: 'air_base', branch: 'air_force', city: 'Kadena', state: 'Okinawa', country: 'Japan', region: 'Pacific', latitude: '26.3556', longitude: '127.7678', address: 'Kadena AB, Okinawa, Japan' },
+        { code: 'EDWARDS', name: 'Edwards Air Force Base', type: 'air_base', branch: 'air_force', city: 'Edwards', state: 'CA', country: 'USA', region: 'CONUS', latitude: '34.9054', longitude: '-117.8840', address: 'Edwards AFB, CA 93524' },
+        { code: 'NELLIS', name: 'Nellis Air Force Base', type: 'air_base', branch: 'air_force', city: 'Las Vegas', state: 'NV', country: 'USA', region: 'CONUS', latitude: '36.2362', longitude: '-115.0336', address: 'Nellis AFB, NV 89191' },
+        { code: 'HILL', name: 'Hill Air Force Base', type: 'air_base', branch: 'air_force', city: 'Ogden', state: 'UT', country: 'USA', region: 'CONUS', latitude: '41.1210', longitude: '-111.9728', address: 'Hill AFB, UT 84056' },
+        { code: 'MCCONNELL', name: 'McConnell Air Force Base', type: 'air_base', branch: 'air_force', city: 'Wichita', state: 'KS', country: 'USA', region: 'CONUS', latitude: '37.6217', longitude: '-97.2683', address: 'McConnell AFB, KS 67221' },
+        { code: 'SCOTT', name: 'Scott Air Force Base', type: 'air_base', branch: 'air_force', city: 'Belleville', state: 'IL', country: 'USA', region: 'CONUS', latitude: '38.5422', longitude: '-89.8519', address: 'Scott AFB, IL 62225' },
+
+        // Army Bases
+        { code: 'LIBERTY', name: 'Fort Liberty', type: 'army_base', branch: 'army', city: 'Fayetteville', state: 'NC', country: 'USA', region: 'CONUS', latitude: '35.1418', longitude: '-79.0063', address: 'Fort Liberty, NC 28310' },
+        { code: 'CAVAZOS', name: 'Fort Cavazos', type: 'army_base', branch: 'army', city: 'Killeen', state: 'TX', country: 'USA', region: 'CONUS', latitude: '31.1145', longitude: '-97.7769', address: 'Fort Cavazos, TX 76544' },
+        { code: 'CAMPBELL', name: 'Fort Campbell', type: 'army_base', branch: 'army', city: 'Clarksville', state: 'TN', country: 'USA', region: 'CONUS', latitude: '36.6681', longitude: '-87.4753', address: 'Fort Campbell, KY 42223' },
+        { code: 'JBLM', name: 'Joint Base Lewis-McChord', type: 'joint_base', branch: 'army', city: 'Tacoma', state: 'WA', country: 'USA', region: 'CONUS', latitude: '47.1376', longitude: '-122.4764', address: 'Joint Base Lewis-McChord, WA 98433' },
+        { code: 'BLISS', name: 'Fort Bliss', type: 'army_base', branch: 'army', city: 'El Paso', state: 'TX', country: 'USA', region: 'CONUS', latitude: '31.8111', longitude: '-106.4225', address: 'Fort Bliss, TX 79916' },
+
+        // Navy Bases
+        { code: 'NORFOLK', name: 'Naval Station Norfolk', type: 'navy_base', branch: 'navy', city: 'Norfolk', state: 'VA', country: 'USA', region: 'CONUS', latitude: '36.9466', longitude: '-76.2916', address: 'Naval Station Norfolk, VA 23511' },
+        { code: 'NBSD', name: 'Naval Base San Diego', type: 'navy_base', branch: 'navy', city: 'San Diego', state: 'CA', country: 'USA', region: 'CONUS', latitude: '32.6836', longitude: '-117.1286', address: 'Naval Base San Diego, CA 92136' },
+        { code: 'PEARL', name: 'Naval Station Pearl Harbor', type: 'navy_base', branch: 'navy', city: 'Honolulu', state: 'HI', country: 'USA', region: 'Pacific', latitude: '21.3505', longitude: '-157.9744', address: 'Naval Station Pearl Harbor, HI 96860' },
+        { code: 'CORONADO', name: 'Naval Base Coronado', type: 'navy_base', branch: 'navy', city: 'Coronado', state: 'CA', country: 'USA', region: 'CONUS', latitude: '32.6812', longitude: '-117.1668', address: 'Naval Base Coronado, CA 92118' },
+        { code: 'NASJAX', name: 'Naval Air Station Jacksonville', type: 'navy_base', branch: 'navy', city: 'Jacksonville', state: 'FL', country: 'USA', region: 'CONUS', latitude: '30.2358', longitude: '-81.6806', address: 'NAS Jacksonville, FL 32212' },
+
+        // Marine Bases
+        { code: 'PENDLETON', name: 'Marine Corps Base Camp Pendleton', type: 'marine_base', branch: 'marines', city: 'Oceanside', state: 'CA', country: 'USA', region: 'CONUS', latitude: '33.3869', longitude: '-117.5653', address: 'Camp Pendleton, CA 92055' },
+        { code: 'LEJEUNE', name: 'Marine Corps Base Camp Lejeune', type: 'marine_base', branch: 'marines', city: 'Jacksonville', state: 'NC', country: 'USA', region: 'CONUS', latitude: '34.6178', longitude: '-77.3692', address: 'Camp Lejeune, NC 28547' },
+        { code: 'MIRAMAR', name: 'Marine Corps Air Station Miramar', type: 'marine_base', branch: 'marines', city: 'San Diego', state: 'CA', country: 'USA', region: 'CONUS', latitude: '32.8683', longitude: '-117.1424', address: 'MCAS Miramar, CA 92145' },
+
+        // DLA Depots/Warehouses
+        { code: 'DDSP', name: 'DLA Distribution Susquehanna', type: 'depot', branch: 'dla', city: 'New Cumberland', state: 'PA', country: 'USA', region: 'CONUS', latitude: '40.2218', longitude: '-76.8595', address: 'DLA Distribution Susquehanna, PA 17070' },
+        { code: 'DDJC', name: 'DLA Distribution San Joaquin', type: 'depot', branch: 'dla', city: 'Tracy', state: 'CA', country: 'USA', region: 'CONUS', latitude: '37.7063', longitude: '-121.4362', address: 'DLA Distribution San Joaquin, CA 95304' },
+        { code: 'DDRV', name: 'DLA Distribution Red River', type: 'depot', branch: 'dla', city: 'Texarkana', state: 'TX', country: 'USA', region: 'CONUS', latitude: '33.4359', longitude: '-94.0469', address: 'DLA Distribution Red River, TX 75507' },
+        { code: 'DDAA', name: 'DLA Distribution Anniston', type: 'depot', branch: 'dla', city: 'Anniston', state: 'AL', country: 'USA', region: 'CONUS', latitude: '33.7597', longitude: '-85.8364', address: 'DLA Distribution Anniston, AL 36201' },
+        { code: 'DDOO', name: 'DLA Distribution Oklahoma City', type: 'depot', branch: 'dla', city: 'Oklahoma City', state: 'OK', country: 'USA', region: 'CONUS', latitude: '35.4147', longitude: '-97.3866', address: 'DLA Distribution Oklahoma City, OK 73145' },
+
+        // Joint Bases
+        { code: 'JBPHH', name: 'Joint Base Pearl Harbor-Hickam', type: 'joint_base', branch: 'joint', city: 'Honolulu', state: 'HI', country: 'USA', region: 'Pacific', latitude: '21.3387', longitude: '-157.9444', address: 'JBPHH, HI 96860' },
+        { code: 'JBSA', name: 'Joint Base San Antonio', type: 'joint_base', branch: 'joint', city: 'San Antonio', state: 'TX', country: 'USA', region: 'CONUS', latitude: '29.3844', longitude: '-98.5811', address: 'JBSA, TX 78236' },
+        { code: 'JBLE', name: 'Joint Base Langley-Eustis', type: 'joint_base', branch: 'joint', city: 'Hampton', state: 'VA', country: 'USA', region: 'CONUS', latitude: '37.0828', longitude: '-76.3605', address: 'JBLE, VA 23665' },
+        { code: 'JBER', name: 'Joint Base Elmendorf-Richardson', type: 'joint_base', branch: 'joint', city: 'Anchorage', state: 'AK', country: 'USA', region: 'CONUS', latitude: '61.2509', longitude: '-149.8073', address: 'JBER, AK 99506' },
+
+        // Ports
+        { code: 'MOTSP', name: 'Military Ocean Terminal Sunny Point', type: 'port', branch: 'army', city: 'Southport', state: 'NC', country: 'USA', region: 'CONUS', latitude: '33.9639', longitude: '-77.9528', address: 'MOTSU, Southport, NC 28461' },
+        { code: 'MOTCO', name: 'Military Ocean Terminal Concord', type: 'port', branch: 'army', city: 'Concord', state: 'CA', country: 'USA', region: 'CONUS', latitude: '38.0127', longitude: '-122.0353', address: 'MOTCO, Concord, CA 94520' },
+      ];
+
+      const existingCount = await db.select({ count: count() }).from(militaryInstallations);
+      
+      if (existingCount[0].count > 0) {
+        const clearExisting = req.query.force === 'true';
+        if (!clearExisting) {
+          return res.status(409).json({ 
+            error: "Military installations already exist. Use ?force=true to clear and reseed.",
+            existing_count: existingCount[0].count
+          });
+        }
+        await db.delete(militaryInstallations);
+      }
+
+      const inserted = await db.insert(militaryInstallations).values(
+        installationsData.map(inst => ({
+          ...inst,
+          is_active: true
+        }))
+      ).returning();
+
+      res.status(201).json({
+        message: "Military installations seeded successfully",
+        count: inserted.length,
+        installations: inserted.map(i => ({ id: i.id, code: i.code, name: i.name }))
+      });
+    } catch (error) {
+      console.error("[Military Installations] Error seeding installations:", error);
+      res.status(500).json({ error: "Failed to seed military installations" });
     }
   });
 

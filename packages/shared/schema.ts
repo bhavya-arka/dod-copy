@@ -34,6 +34,44 @@ export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
 export type Organization = typeof organizations.$inferSelect;
 
 // ============================================================================
+// MILITARY INSTALLATIONS
+// ============================================================================
+
+// Installation type enum
+export const installationTypeEnum = ['air_base', 'army_base', 'navy_base', 'marine_base', 'joint_base', 'depot', 'warehouse', 'port', 'arsenal', 'station'] as const;
+export type InstallationType = typeof installationTypeEnum[number];
+
+// Branch enum
+export const militaryBranchEnum = ['air_force', 'army', 'navy', 'marines', 'space_force', 'coast_guard', 'dla', 'joint'] as const;
+export type MilitaryBranch = typeof militaryBranchEnum[number];
+
+// Military Installations table
+export const militaryInstallations = pgTable("military_installations", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull(), // Short code like "JBLM", "TRAVIS"
+  name: text("name").notNull(), // Full name
+  type: text("type").notNull(), // air_base, army_base, navy_base, depot, warehouse, port
+  branch: text("branch").notNull(), // air_force, army, navy, marines, dla, joint
+  city: text("city").notNull(),
+  state: text("state"), // For US locations
+  country: text("country").notNull().default('USA'),
+  region: text("region"), // CONUS, OCONUS, Pacific, Europe, etc.
+  latitude: numeric("latitude", { precision: 10, scale: 6 }).notNull(),
+  longitude: numeric("longitude", { precision: 10, scale: 6 }).notNull(),
+  address: text("address"),
+  is_active: boolean("is_active").notNull().default(true),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMilitaryInstallationSchema = createInsertSchema(militaryInstallations).omit({
+  id: true,
+  created_at: true,
+});
+
+export type InsertMilitaryInstallation = z.infer<typeof insertMilitaryInstallationSchema>;
+export type MilitaryInstallation = typeof militaryInstallations.$inferSelect;
+
+// ============================================================================
 // USERS & AUTHENTICATION
 // ============================================================================
 
