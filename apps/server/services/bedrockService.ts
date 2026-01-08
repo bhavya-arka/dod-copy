@@ -268,6 +268,63 @@ const JSON_SCHEMAS: Record<AiInsightType, string> = {
   "special_cargo_notes": { "advon_items": "string", "hazmat_items": "string", "oversized_items": "string" },
   "fleet_shortage_analysis": { "has_unloaded_cargo": boolean, "unloaded_item_count": number, "unloaded_weight_lb": number, "recommended_additional_aircraft": [] },
   "optimization_notes": ["string"]
+}`,
+
+  land_convoy_analysis: `{
+  "convoy_summary": { "total_vehicles": number, "total_cargo_weight_lb": number, "convoy_length_miles": number, "estimated_duration_hours": number },
+  "vehicle_utilization": [{ "vehicle_type": "string", "count": number, "weight_utilization_percent": number, "volume_utilization_percent": number }],
+  "route_assessment": { "terrain_difficulty": "easy|moderate|difficult|severe", "security_risk": "low|medium|high", "recommended_speed_mph": number },
+  "logistics_recommendations": ["string"],
+  "fuel_planning": { "total_fuel_gallons": number, "refuel_points_needed": number, "estimated_cost_usd": number },
+  "risk_factors": ["string"],
+  "mission_readiness": "ready|needs_attention|not_ready"
+}`,
+
+  land_route_optimization: `{
+  "route_summary": { "origin": "string", "destination": "string", "total_distance_miles": number, "estimated_time_hours": number },
+  "waypoints": [{ "name": "string", "purpose": "refuel|rest|security_checkpoint|staging", "distance_from_start_miles": number }],
+  "alternative_routes": [{ "name": "string", "distance_miles": number, "time_hours": number, "pros": ["string"], "cons": ["string"] }],
+  "terrain_analysis": { "road_conditions": "paved|unpaved|mixed", "elevation_change_ft": number, "challenging_segments": ["string"] },
+  "optimization_recommendations": ["string"],
+  "weather_considerations": ["string"]
+}`,
+
+  sea_voyage_analysis: `{
+  "voyage_summary": { "vessel_name": "string", "vessel_type": "string", "total_teu_capacity": number, "teu_utilized": number, "utilization_percent": number },
+  "port_schedule": [{ "port": "string", "arrival_date": "string", "departure_date": "string", "operations": ["loading|unloading|bunkering|maintenance"] }],
+  "cargo_manifest_summary": { "total_containers": number, "hazmat_containers": number, "refrigerated_containers": number, "oversized_cargo_count": number },
+  "fuel_efficiency": { "estimated_fuel_mt": number, "fuel_cost_usd": number, "emissions_mt_co2": number },
+  "voyage_risks": [{ "risk_type": "weather|piracy|port_congestion|mechanical", "severity": "low|medium|high", "mitigation": "string" }],
+  "compliance_status": { "imo_compliant": boolean, "customs_documentation": "complete|pending|missing", "notes": ["string"] },
+  "recommendations": ["string"]
+}`,
+
+  sea_container_optimization: `{
+  "container_summary": { "total_containers": number, "twenty_ft": number, "forty_ft": number, "forty_ft_hc": number, "special_containers": number },
+  "stacking_analysis": { "current_stack_height_avg": number, "max_safe_stack": number, "weight_distribution_grade": "A|B|C|D" },
+  "load_sequence": [{ "container_id": "string", "position": "string", "weight_lb": number, "load_order": number, "notes": "string" }],
+  "port_optimization": { "estimated_crane_moves": number, "loading_time_hours": number, "efficiency_score": number },
+  "hazmat_segregation": { "compliant": boolean, "issues": ["string"], "recommendations": ["string"] },
+  "space_utilization_recommendations": ["string"]
+}`,
+
+  cross_modal_manifest_analysis: `{
+  "manifest_overview": { "manifest_id": "string", "total_items": number, "total_weight_lb": number, "transport_modes": ["air|land|sea"] },
+  "modal_breakdown": [{ "mode": "air|land|sea", "item_count": number, "weight_lb": number, "volume_cuft": number, "estimated_cost_usd": number }],
+  "transfer_points": [{ "location": "string", "from_mode": "string", "to_mode": "string", "handling_requirements": ["string"], "estimated_time_hours": number }],
+  "efficiency_analysis": { "overall_efficiency_score": number, "bottlenecks": ["string"], "cost_per_lb": number },
+  "optimization_opportunities": [{ "description": "string", "potential_savings_usd": number, "potential_time_savings_hours": number, "implementation_difficulty": "easy|medium|hard" }],
+  "compliance_checklist": [{ "requirement": "string", "status": "met|not_met|pending", "notes": "string" }],
+  "recommendations": ["string"]
+}`,
+
+  warehouse_capacity_forecast: `{
+  "current_capacity": { "total_locations": number, "occupied_locations": number, "utilization_percent": number, "weight_utilization_percent": number },
+  "forecast_90_days": [{ "period": "string", "projected_inbound_lb": number, "projected_outbound_lb": number, "net_change_lb": number, "projected_utilization_percent": number }],
+  "capacity_alerts": [{ "alert_type": "overcapacity|aging_inventory|weight_limit", "severity": "low|medium|high", "affected_zone": "string", "recommendation": "string" }],
+  "trend_analysis": { "growth_rate_percent": number, "seasonal_factors": ["string"], "confidence_level": "low|medium|high" },
+  "optimization_recommendations": [{ "action": "string", "expected_impact": "string", "priority": "high|medium|low" }],
+  "resource_planning": { "additional_storage_needed_sqft": number, "recommended_actions": ["string"] }
 }`
 };
 
@@ -282,6 +339,12 @@ const RESPONSE_SCHEMAS: Record<string, string[]> = {
   mission_analytics: ["mission_summary", "performance_metrics", "advice_messages", "risk_assessment"],
   flight_allocation_analysis: ["executive_summary", "fleet_status", "cob_summary", "fleet_shortage_analysis"],
   warehouse_optimization: ["summary", "recommendations", "metrics"],
+  land_convoy_analysis: ["convoy_summary", "vehicle_utilization", "route_assessment", "logistics_recommendations"],
+  land_route_optimization: ["route_summary", "waypoints", "terrain_analysis", "optimization_recommendations"],
+  sea_voyage_analysis: ["voyage_summary", "port_schedule", "cargo_manifest_summary", "voyage_risks"],
+  sea_container_optimization: ["container_summary", "stacking_analysis", "load_sequence", "hazmat_segregation"],
+  cross_modal_manifest_analysis: ["manifest_overview", "modal_breakdown", "transfer_points", "recommendations"],
+  warehouse_capacity_forecast: ["current_capacity", "forecast_90_days", "capacity_alerts", "optimization_recommendations"],
 };
 
 // Knowledge base query mappings per insight type
@@ -293,7 +356,13 @@ const KB_QUERIES: Record<AiInsightType, string> = {
   compliance: "DoD cargo transportation regulations hazmat compliance",
   mission_briefing: "military mission briefing format requirements",
   mission_analytics: "military airlift mission performance metrics efficiency optimization",
-  flight_allocation_analysis: "military airlift fleet allocation cargo loading regulations"
+  flight_allocation_analysis: "military airlift fleet allocation cargo loading regulations",
+  land_convoy_analysis: "military ground convoy planning vehicle utilization tactical logistics",
+  land_route_optimization: "military ground transport route planning terrain analysis waypoints",
+  sea_voyage_analysis: "military sealift vessel operations port logistics maritime security",
+  sea_container_optimization: "container stacking regulations weight distribution hazmat segregation",
+  cross_modal_manifest_analysis: "intermodal cargo transfer air land sea logistics optimization",
+  warehouse_capacity_forecast: "warehouse capacity planning inventory forecasting storage optimization"
 };
 
 // Validate response against expected schema fields

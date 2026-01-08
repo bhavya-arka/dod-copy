@@ -18,7 +18,7 @@ import {
   Navigation,
 } from "lucide-react";
 import { User } from "../../hooks/useAuth";
-import { StatusBadge, TransportTable, CapacityWidget, LocationAutocomplete, RouteMap, PlaceDetails } from '../transport';
+import { StatusBadge, TransportTable, CapacityWidget, LocationAutocomplete, RouteMap, PlaceDetails, TransportAiInsights } from '../transport';
 import { ConvoyVisualization } from '../3d/ConvoyVisualization';
 import {
   Dialog,
@@ -516,6 +516,32 @@ function LandLogistics({
                     </div>
                   )}
                 </div>
+
+                {convoys.length > 0 && (
+                  <TransportAiInsights
+                    mode="land"
+                    inputData={{
+                      statistics: {
+                        activeConvoys: statistics?.activeConvoys || 0,
+                        inTransit: statistics?.inTransit || 0,
+                        completedToday: statistics?.completedToday || 0,
+                        totalPayloadLbs: statistics?.totalPayloadLbs || 0,
+                      },
+                      convoys: convoys.map(c => ({
+                        id: c.id,
+                        name: c.name,
+                        origin: c.origin,
+                        destination: c.destination,
+                        status: c.status,
+                        vehicleCount: c.vehicle_count,
+                        totalWeightLbs: c.total_weight_lbs,
+                      })),
+                      vehicleTypesCount: vehicleTypes.length,
+                      routesCount: routes.length,
+                    }}
+                    className="mt-6"
+                  />
+                )}
               </motion.div>
             )}
 

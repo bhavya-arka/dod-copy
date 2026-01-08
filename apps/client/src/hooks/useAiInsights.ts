@@ -9,7 +9,13 @@ export type InsightType =
   | 'compliance'
   | 'mission_briefing'
   | 'mission_analytics'
-  | 'flight_allocation_analysis';
+  | 'flight_allocation_analysis'
+  | 'land_convoy_analysis'
+  | 'land_route_optimization'
+  | 'sea_voyage_analysis'
+  | 'sea_container_optimization'
+  | 'cross_modal_manifest_analysis'
+  | 'warehouse_capacity_forecast';
 
 export interface TokenUsage {
   inputTokens: number;

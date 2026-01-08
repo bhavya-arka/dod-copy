@@ -15,3 +15,6 @@ export type { LocationAutocompleteProps, PlaceDetails } from './LocationAutocomp
 
 export { RouteMap } from './RouteMap';
 export type { RouteMapProps } from './RouteMap';
+
+export { TransportAiInsights } from './TransportAiInsights';
+export type { TransportAiInsightsProps, TransportMode } from './TransportAiInsights';

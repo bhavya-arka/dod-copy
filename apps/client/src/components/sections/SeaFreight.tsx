@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { User } from "../../hooks/useAuth";
 import * as transportService from "../../services/transportService";
-import { StatusBadge } from "../transport/StatusBadge";
+import { StatusBadge, TransportAiInsights } from "../transport";
 import {
   Dialog,
   DialogContent,
@@ -397,6 +397,32 @@ export default function SeaFreight({
             <p>No scheduled arrivals or departures</p>
           </div>
         </motion.div>
+
+        {voyages.length > 0 && (
+          <TransportAiInsights
+            mode="sea"
+            inputData={{
+              statistics: {
+                activeVessels: statistics?.activePlans ?? 0,
+                inTransit: statistics?.underway ?? 0,
+                atPort: statistics?.loading ?? 0,
+                totalVoyages: statistics?.totalPlans ?? 0,
+              },
+              voyages: voyages.map(v => ({
+                id: v.id,
+                name: v.name,
+                origin: v.origin,
+                destination: v.destination,
+                status: v.status,
+                cargoCount: v.cargo_count,
+                totalWeightLbs: v.total_weight_lbs,
+                departureTime: v.departure_time,
+                arrivalTime: v.arrival_time,
+              })),
+            }}
+            className="mt-6"
+          />
+        )}
       </main>
 
       <Dialog open={showCreateModal} onOpenChange={(open) => { setShowCreateModal(open); if (!open) setCreateError(null); }}>
