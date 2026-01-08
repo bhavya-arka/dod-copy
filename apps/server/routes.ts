@@ -5058,6 +5058,178 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============================================================================
+  // WORKFLOW STATE MACHINE API
+  // ============================================================================
+
+  // Valid workflow transitions
+  const WORKFLOW_TRANSITIONS: Record<string, string[]> = {
+    'received': ['store'],
+    'store': ['package', 'ship'], // Can go to package or directly to ship
+    'package': ['ship'],
+    'ship': ['delivered', 'return'],
+    'delivered': [], // Terminal state
+    'return': ['store'], // Returns go back to store
+  };
+
+  // Get valid next states for an item
+  app.get("/api/warehouse/workflow/transitions/:currentState", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { currentState } = req.params;
+      const validStates = WORKFLOW_TRANSITIONS[currentState] || [];
+      
+      res.json({
+        current_state: currentState,
+        valid_transitions: validStates,
+        is_terminal: validStates.length === 0,
+      });
+    } catch (error) {
+      console.error("[Workflow] Error getting transitions:", error);
+      res.status(500).json({ error: "Failed to get workflow transitions" });
+    }
+  });
+
+  // Update item workflow state
+  app.put("/api/warehouse/inventory/:id/workflow", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const { new_state, notes } = req.body;
+      
+      // Get current item
+      const item = await db.query.warehouseInventoryItems.findFirst({
+        where: and(
+          eq(warehouseInventoryItems.id, parseInt(id)),
+          eq(warehouseInventoryItems.user_id, req.user!.id)
+        ),
+      });
+      
+      if (!item) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      
+      const currentState = item.workflow_status || 'received';
+      const validTransitions = WORKFLOW_TRANSITIONS[currentState] || [];
+      
+      if (!validTransitions.includes(new_state)) {
+        return res.status(400).json({
+          error: `Invalid workflow transition`,
+          message: `Cannot transition from '${currentState}' to '${new_state}'. Valid transitions: ${validTransitions.join(', ') || 'none (terminal state)'}`,
+        });
+      }
+      
+      // Update item workflow state
+      const [updated] = await db.update(warehouseInventoryItems)
+        .set({
+          workflow_status: new_state,
+          workflow_updated_at: new Date(),
+        })
+        .where(eq(warehouseInventoryItems.id, parseInt(id)))
+        .returning();
+      
+      res.json({
+        success: true,
+        previous_state: currentState,
+        new_state: new_state,
+        item: updated,
+      });
+    } catch (error) {
+      console.error("[Workflow] Error updating workflow state:", error);
+      res.status(500).json({ error: "Failed to update workflow state" });
+    }
+  });
+
+  // Batch update workflow state for multiple items
+  app.put("/api/warehouse/inventory/workflow/batch", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { item_ids, new_state } = req.body;
+      
+      if (!item_ids || !Array.isArray(item_ids) || item_ids.length === 0) {
+        return res.status(400).json({ error: "item_ids array is required" });
+      }
+      
+      const results = {
+        success: [] as number[],
+        failed: [] as { id: number; reason: string }[],
+      };
+      
+      for (const itemId of item_ids) {
+        const item = await db.query.warehouseInventoryItems.findFirst({
+          where: and(
+            eq(warehouseInventoryItems.id, itemId),
+            eq(warehouseInventoryItems.user_id, req.user!.id)
+          ),
+        });
+        
+        if (!item) {
+          results.failed.push({ id: itemId, reason: 'Item not found' });
+          continue;
+        }
+        
+        const currentState = item.workflow_status || 'received';
+        const validTransitions = WORKFLOW_TRANSITIONS[currentState] || [];
+        
+        if (!validTransitions.includes(new_state)) {
+          results.failed.push({ id: itemId, reason: `Cannot transition from '${currentState}' to '${new_state}'` });
+          continue;
+        }
+        
+        await db.update(warehouseInventoryItems)
+          .set({
+            workflow_status: new_state,
+            workflow_updated_at: new Date(),
+          })
+          .where(eq(warehouseInventoryItems.id, itemId));
+        
+        results.success.push(itemId);
+      }
+      
+      res.json({
+        total: item_ids.length,
+        successful: results.success.length,
+        failed: results.failed.length,
+        results,
+      });
+    } catch (error) {
+      console.error("[Workflow] Error batch updating workflow:", error);
+      res.status(500).json({ error: "Failed to batch update workflow" });
+    }
+  });
+
+  // Get workflow statistics
+  app.get("/api/warehouse/workflow/statistics", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const items = await db.query.warehouseInventoryItems.findMany({
+        where: eq(warehouseInventoryItems.user_id, req.user!.id),
+      });
+      
+      const stateCounts: Record<string, number> = {
+        received: 0,
+        store: 0,
+        package: 0,
+        ship: 0,
+        delivered: 0,
+        return: 0,
+      };
+      
+      for (const item of items) {
+        const state = item.workflow_status || 'received';
+        if (stateCounts[state] !== undefined) {
+          stateCounts[state]++;
+        }
+      }
+      
+      res.json({
+        total_items: items.length,
+        by_state: stateCounts,
+        workflow_states: Object.keys(WORKFLOW_TRANSITIONS),
+        transitions: WORKFLOW_TRANSITIONS,
+      });
+    } catch (error) {
+      console.error("[Workflow] Error getting statistics:", error);
+      res.status(500).json({ error: "Failed to get workflow statistics" });
+    }
+  });
+
+  // ============================================================================
   // WAREHOUSE OPTIMIZATION PLANS API
   // ============================================================================
 
