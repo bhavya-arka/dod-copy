@@ -10,6 +10,10 @@ export interface TransportPlan {
   status: TransportStatus;
   departure_time?: string;
   arrival_time?: string;
+  scheduled_departure?: string;
+  scheduled_arrival?: string;
+  actual_departure?: string;
+  actual_arrival?: string;
   total_weight_lbs: number;
   cargo_count: number;
   created_at: string;

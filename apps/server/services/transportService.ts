@@ -66,6 +66,10 @@ function mapFlightPlanToTransportPlan(fp: typeof flightPlans.$inferSelect): Tran
     status: normalizeStatus(fp.status),
     departure_time: undefined,
     arrival_time: undefined,
+    scheduled_departure: fp.scheduled_departure?.toISOString(),
+    scheduled_arrival: fp.scheduled_arrival?.toISOString(),
+    actual_departure: fp.actual_departure?.toISOString(),
+    actual_arrival: fp.actual_arrival?.toISOString(),
     total_weight_lbs: fp.total_weight_lb || 0,
     cargo_count: fp.movement_items_count || 0,
     created_at: fp.created_at.toISOString(),
@@ -87,6 +91,10 @@ function mapLandConvoyToTransportPlan(lc: LandConvoyWithRoute): TransportPlan {
     status: normalizeStatus(lc.status),
     departure_time: lc.departure_time?.toISOString(),
     arrival_time: lc.arrival_time?.toISOString(),
+    scheduled_departure: lc.scheduled_departure?.toISOString(),
+    scheduled_arrival: lc.scheduled_arrival?.toISOString(),
+    actual_departure: lc.actual_departure?.toISOString(),
+    actual_arrival: lc.actual_arrival?.toISOString(),
     total_weight_lbs: lc.total_cargo_weight_lbs || 0,
     cargo_count: lc.vehicle_count || 0,
     created_at: lc.created_at.toISOString(),
@@ -104,6 +112,10 @@ function mapSeaVoyageToTransportPlan(sv: typeof seaVoyages.$inferSelect): Transp
     status: normalizeStatus(sv.status),
     departure_time: sv.departure_time?.toISOString(),
     arrival_time: sv.arrival_time?.toISOString(),
+    scheduled_departure: sv.scheduled_departure?.toISOString(),
+    scheduled_arrival: sv.scheduled_arrival?.toISOString(),
+    actual_departure: sv.actual_departure?.toISOString(),
+    actual_arrival: sv.actual_arrival?.toISOString(),
     total_weight_lbs: 0,
     cargo_count: 0,
     created_at: sv.created_at.toISOString(),
@@ -184,6 +196,10 @@ export async function createPlan(
         user_id: userId,
         name: data.name || 'New Flight Plan',
         status: dbStatus,
+        scheduled_departure: data.scheduled_departure ? new Date(data.scheduled_departure) : undefined,
+        scheduled_arrival: data.scheduled_arrival ? new Date(data.scheduled_arrival) : undefined,
+        actual_departure: data.actual_departure ? new Date(data.actual_departure) : undefined,
+        actual_arrival: data.actual_arrival ? new Date(data.actual_arrival) : undefined,
         allocation_data: {},
         movement_data: { origin: data.origin, destination: data.destination },
         movement_items_count: data.cargo_count || 0,
@@ -219,6 +235,10 @@ export async function createPlan(
         total_cargo_weight_lbs: data.total_weight_lbs || 0,
         departure_time: data.departure_time ? new Date(data.departure_time) : undefined,
         arrival_time: data.arrival_time ? new Date(data.arrival_time) : undefined,
+        scheduled_departure: data.scheduled_departure ? new Date(data.scheduled_departure) : undefined,
+        scheduled_arrival: data.scheduled_arrival ? new Date(data.scheduled_arrival) : undefined,
+        actual_departure: data.actual_departure ? new Date(data.actual_departure) : undefined,
+        actual_arrival: data.actual_arrival ? new Date(data.actual_arrival) : undefined,
       }).returning();
       return convoy ? mapLandConvoyToTransportPlan({ ...convoy, route }) : null;
     }
@@ -231,6 +251,10 @@ export async function createPlan(
         status: dbStatus,
         departure_time: data.departure_time ? new Date(data.departure_time) : undefined,
         arrival_time: data.arrival_time ? new Date(data.arrival_time) : undefined,
+        scheduled_departure: data.scheduled_departure ? new Date(data.scheduled_departure) : undefined,
+        scheduled_arrival: data.scheduled_arrival ? new Date(data.scheduled_arrival) : undefined,
+        actual_departure: data.actual_departure ? new Date(data.actual_departure) : undefined,
+        actual_arrival: data.actual_arrival ? new Date(data.actual_arrival) : undefined,
       }).returning();
       return voyage ? mapSeaVoyageToTransportPlan(voyage) : null;
     }
@@ -254,6 +278,10 @@ export async function updatePlan(
       if (data.status) updateData.status = denormalizeStatus(data.status, mode);
       if (data.total_weight_lbs !== undefined) updateData.total_weight_lb = data.total_weight_lbs;
       if (data.cargo_count !== undefined) updateData.movement_items_count = data.cargo_count;
+      if (data.scheduled_departure) updateData.scheduled_departure = new Date(data.scheduled_departure);
+      if (data.scheduled_arrival) updateData.scheduled_arrival = new Date(data.scheduled_arrival);
+      if (data.actual_departure) updateData.actual_departure = new Date(data.actual_departure);
+      if (data.actual_arrival) updateData.actual_arrival = new Date(data.actual_arrival);
       
       const [plan] = await db.update(flightPlans)
         .set(updateData)
@@ -269,6 +297,10 @@ export async function updatePlan(
       if (data.cargo_count !== undefined) updateData.vehicle_count = data.cargo_count;
       if (data.departure_time) updateData.departure_time = new Date(data.departure_time);
       if (data.arrival_time) updateData.arrival_time = new Date(data.arrival_time);
+      if (data.scheduled_departure) updateData.scheduled_departure = new Date(data.scheduled_departure);
+      if (data.scheduled_arrival) updateData.scheduled_arrival = new Date(data.scheduled_arrival);
+      if (data.actual_departure) updateData.actual_departure = new Date(data.actual_departure);
+      if (data.actual_arrival) updateData.actual_arrival = new Date(data.actual_arrival);
       
       const [convoy] = await db.update(landConvoys)
         .set(updateData)
@@ -296,6 +328,10 @@ export async function updatePlan(
       if (data.destination) updateData.destination_port = data.destination;
       if (data.departure_time) updateData.departure_time = new Date(data.departure_time);
       if (data.arrival_time) updateData.arrival_time = new Date(data.arrival_time);
+      if (data.scheduled_departure) updateData.scheduled_departure = new Date(data.scheduled_departure);
+      if (data.scheduled_arrival) updateData.scheduled_arrival = new Date(data.scheduled_arrival);
+      if (data.actual_departure) updateData.actual_departure = new Date(data.actual_departure);
+      if (data.actual_arrival) updateData.actual_arrival = new Date(data.actual_arrival);
       
       const [voyage] = await db.update(seaVoyages)
         .set(updateData)
