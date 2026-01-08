@@ -5,7 +5,7 @@ Arka Cargo Operations is a comprehensive multi-modal logistics platform designed
 ## Key Capabilities
 
 - **Air Operations (PACAF Airlift)**: C-17/C-130 load planning, 463L palletization, route optimization, and 3D cargo visualization.
-- **Land Logistics**: Ground transport convoy planning, truck routing, and overland cargo manifests.
+- **Land Logistics**: Ground transport convoy planning with Google Maps integration for location selection, route calculation, and distance matrix.
 - **Sea Freight**: Maritime container planning, vessel manifests, and port logistics.
 - **Warehouse Management (WMS)**: Multi-site inventory tracking, pallet positioning, aging alerts, and capacity optimization.
 
@@ -50,6 +50,24 @@ All transport modes follow unified lifecycle: `draft → planned → loading →
 - **`apps/client/src/lib/vehicleDimensions.ts`**: Military vehicle dimensions (LMTV, HEMTT, HET, MTVR, PLS, C-17, C-130, ships) with scaling utilities.
 - **`apps/client/src/components/3d/VehicleMesh.tsx`**: Reusable Three.js vehicle component with accurate proportions.
 - **`apps/client/src/components/3d/ConvoyVisualization.tsx`**: 3D convoy scene with formation spacing, status-based animation, and dust particles.
+
+### Google Maps Integration (Land Logistics)
+Backend service (`apps/server/services/googleMapsService.ts`) using GOOGLE_API_KEY secret:
+- **Geocoding**: Address-to-coordinates and reverse geocoding
+- **Route Calculation**: Driving directions with waypoints, avoid tolls/highways options
+- **Distance Matrix**: Multi-origin/destination distance calculations
+- **Place Autocomplete**: Location search with session tokens for efficiency
+- **Place Details**: Full location details from place IDs
+
+API Endpoints:
+- `POST /api/land/routes/calculate` - Calculate route between locations
+- `GET /api/land/places/autocomplete?input=query` - Location autocomplete
+- `GET /api/land/places/:placeId` - Get place details
+- `POST /api/land/routes/optimize` - Distance matrix for multiple stops
+
+Frontend Components:
+- **`LocationAutocomplete`**: Google Places-powered location input with 300ms debouncing
+- **`RouteMap`**: Leaflet map with CARTO dark tiles showing routes with markers and polylines
 
 ## PACAF Air Operations Pipeline
 The Air module features a multi-stage pipeline:
@@ -104,6 +122,10 @@ AI insights are powered by AWS Bedrock with the Nova Lite model.
 - React Three Fiber
 - React Three Drei
 - Three.js
+
+**Maps & Geolocation**:
+- Google Maps API (via GOOGLE_API_KEY secret)
+- Leaflet (route visualization)
 
 **UI Framework**:
 - Radix UI components
