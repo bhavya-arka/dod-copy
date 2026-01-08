@@ -27,6 +27,7 @@ import LoadPlanViewer from './LoadPlanViewer';
 import RoutePlanner from './RoutePlanner';
 import { MissionProvider } from '../context/MissionContext';
 import MissionWorkspace from './MissionWorkspace';
+import { getFlightPlan } from '../services/flightService';
 
 // Sample data for demo purposes - 23 cargo items + 30 PAX
 const SAMPLE_CSV = `item_id,description,length_in,width_in,height_in,weight_lb,lead_tcn,pax
@@ -100,15 +101,7 @@ export default function PACAPApp({ onDashboard, onLogout, userEmail, loadPlanId 
     setState(prev => ({ ...prev, isProcessing: true, error: null }));
     
     try {
-      const response = await fetch(`/api/flight-plans/${planId}`, {
-        credentials: 'include'
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to load flight plan');
-      }
-      
-      const plan = await response.json();
+      const plan = await getFlightPlan(planId);
       
       // Check for allocation_data - this is required
       if (!plan.allocation_data) {

@@ -28,6 +28,15 @@ import {
   DialogDescription,
   DialogFooter,
 } from "../ui/dialog";
+import * as landService from '../../services/landService';
+import type {
+  VehicleType,
+  LandRoute,
+  Convoy,
+  ConvoyVehicle,
+  LandStatistics,
+  RouteInfo,
+} from '../../services/landService';
 
 interface LandLogisticsProps {
   user: User;
@@ -35,73 +44,14 @@ interface LandLogisticsProps {
   onLogout: () => void;
 }
 
-interface VehicleType {
-  id: number;
-  code: string;
-  name: string;
-  category: string;
-  payload_lbs: number;
-  max_speed_mph: number;
-  range_miles: number;
-  fuel_type: string;
-  axle_config: string;
-  pallet_capacity_463l: number;
-  passenger_capacity: number;
-  notes: string;
-}
+type RouteType = LandRoute;
 
-interface RouteType {
-  id: number;
-  name: string;
-  origin: string;
-  destination: string;
-  distance_miles: number;
-  estimated_time_hours: number;
-  status: string;
-}
-
-interface ConvoyVehicle {
-  id: number;
-  vehicleCode: string;
-  position: number;
-  lane: number;
-}
-
-interface Convoy {
-  id: number;
-  name: string;
-  route_id?: number;
-  origin: string;
-  destination: string;
-  status: 'draft' | 'planned' | 'loading' | 'underway' | 'completed' | 'cancelled';
-  vehicle_count: number;
-  total_weight_lbs: number;
-  departure_time?: string;
-  arrival_time?: string;
-  vehicles?: ConvoyVehicle[];
-}
-
-interface Statistics {
-  totalRoutes: number;
-  activeRoutes: number;
-  totalConvoys: number;
-  activeConvoys: number;
-  inTransit: number;
-  pendingConvoys: number;
-  completedToday: number;
-  totalPayloadLbs: number;
-}
+type Statistics = LandStatistics;
 
 interface LocationCoords {
   lat: number;
   lng: number;
   formattedAddress: string;
-}
-
-interface RouteInfo {
-  distance_miles: number;
-  duration_hours: number;
-  polyline?: string;
 }
 
 interface ConvoyFormData {
@@ -204,17 +154,11 @@ function LandLogistics({
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [statsRes, vehiclesRes, routesRes, convoysRes] = await Promise.all([
-        fetch('/api/land/statistics', { credentials: 'include' }),
-        fetch('/api/land/vehicle-types', { credentials: 'include' }),
-        fetch('/api/land/routes', { credentials: 'include' }),
-        fetch('/api/land/convoys', { credentials: 'include' }),
-      ]);
-
-      if (statsRes.ok) setStatistics(await statsRes.json());
-      if (vehiclesRes.ok) setVehicleTypes(await vehiclesRes.json());
-      if (routesRes.ok) setRoutes(await routesRes.json());
-      if (convoysRes.ok) setConvoys(await convoysRes.json());
+      const data = await landService.fetchAllData();
+      setStatistics(data.statistics);
+      setVehicleTypes(data.vehicleTypes);
+      setRoutes(data.routes);
+      setConvoys(data.convoys);
     } catch (error) {
       console.error('Error fetching land logistics data:', error);
     } finally {
@@ -231,24 +175,11 @@ function LandLogistics({
     
     setIsCreating(true);
     try {
-      const res = await fetch('/api/land/convoys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          ...formData,
-          status: 'draft',
-          vehicle_count: 0,
-          total_weight_lbs: 0,
-        }),
-      });
-      
-      if (res.ok) {
-        await fetchData();
-        setShowCreateModal(false);
-        setFormData({ name: '', origin: '', destination: '', departure_time: '' });
-        setConvoyRouteInfo(null);
-      }
+      await landService.createConvoy(formData);
+      await fetchData();
+      setShowCreateModal(false);
+      setFormData({ name: '', origin: '', destination: '', departure_time: '' });
+      setConvoyRouteInfo(null);
     } catch (error) {
       console.error('Error creating convoy:', error);
     } finally {
@@ -259,18 +190,10 @@ function LandLogistics({
   const handleUpdateConvoyStatus = useCallback(async (convoyId: number, newStatus: string) => {
     setIsUpdating(true);
     try {
-      const res = await fetch(`/api/land/convoys/${convoyId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ status: newStatus }),
-      });
-      
-      if (res.ok) {
-        setConvoys(prev => prev.map(c => c.id === convoyId ? { ...c, status: newStatus as Convoy['status'] } : c));
-        if (selectedConvoy?.id === convoyId) {
-          setSelectedConvoy(prev => prev ? { ...prev, status: newStatus as Convoy['status'] } : null);
-        }
+      await landService.updateConvoyStatus(convoyId, newStatus);
+      setConvoys(prev => prev.map(c => c.id === convoyId ? { ...c, status: newStatus as Convoy['status'] } : c));
+      if (selectedConvoy?.id === convoyId) {
+        setSelectedConvoy(prev => prev ? { ...prev, status: newStatus as Convoy['status'] } : null);
       }
     } catch (error) {
       console.error('Error updating convoy status:', error);
@@ -282,38 +205,17 @@ function LandLogistics({
   const handleAddVehicleToConvoy = useCallback(async (vehicleCode: string) => {
     if (!selectedConvoy) return;
     
-    const newVehicle: ConvoyVehicle = {
-      id: Date.now(),
-      vehicleCode,
-      position: (selectedConvoy.vehicles?.length || 0),
-      lane: 1,
-    };
-    
-    const updatedVehicles = [...(selectedConvoy.vehicles || []), newVehicle];
-    
     try {
-      const res = await fetch(`/api/land/convoys/${selectedConvoy.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ 
-          vehicles: updatedVehicles,
-          vehicle_count: updatedVehicles.length,
-        }),
-      });
+      const updatedConvoy = await landService.addVehicleToConvoy(
+        selectedConvoy.id, 
+        selectedConvoy, 
+        { vehicleCode }
+      );
       
-      if (res.ok) {
-        setSelectedConvoy(prev => prev ? { 
-          ...prev, 
-          vehicles: updatedVehicles,
-          vehicle_count: updatedVehicles.length,
-        } : null);
-        setConvoys(prev => prev.map(c => 
-          c.id === selectedConvoy.id 
-            ? { ...c, vehicles: updatedVehicles, vehicle_count: updatedVehicles.length }
-            : c
-        ));
-      }
+      setSelectedConvoy(updatedConvoy);
+      setConvoys(prev => prev.map(c => 
+        c.id === selectedConvoy.id ? updatedConvoy : c
+      ));
     } catch (error) {
       console.error('Error adding vehicle to convoy:', error);
     }
@@ -321,36 +223,23 @@ function LandLogistics({
     setShowVehicleSelectModal(false);
   }, [selectedConvoy]);
 
-  const calculateRoute = useCallback(async (
+  const calculateRouteHandler = useCallback(async (
     originCoords: LocationCoords,
     destCoords: LocationCoords,
     setRouteInfo: (info: RouteInfo | null) => void,
-    setLoading: (loading: boolean) => void
+    setLoadingState: (loading: boolean) => void
   ) => {
-    setLoading(true);
+    setLoadingState(true);
     try {
-      const res = await fetch('/api/land/routes/calculate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          origin: { lat: originCoords.lat, lng: originCoords.lng },
-          destination: { lat: destCoords.lat, lng: destCoords.lng },
-        }),
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        setRouteInfo({
-          distance_miles: data.distance_miles || data.distanceMiles || 0,
-          duration_hours: data.duration_hours || data.durationHours || 0,
-          polyline: data.polyline || data.overview_polyline,
-        });
-      }
+      const routeInfo = await landService.calculateRoute(
+        { lat: originCoords.lat, lng: originCoords.lng },
+        { lat: destCoords.lat, lng: destCoords.lng }
+      );
+      setRouteInfo(routeInfo);
     } catch (error) {
       console.error('Error calculating route:', error);
     } finally {
-      setLoading(false);
+      setLoadingState(false);
     }
   }, []);
 
@@ -366,14 +255,14 @@ function LandLogistics({
     }));
     
     if (placeDetails && formData.destination_coords) {
-      calculateRoute(
+      calculateRouteHandler(
         { lat: placeDetails.lat, lng: placeDetails.lng, formattedAddress: placeDetails.formattedAddress },
         formData.destination_coords,
         setConvoyRouteInfo,
         setIsCalculatingRoute
       );
     }
-  }, [formData.destination_coords, calculateRoute]);
+  }, [formData.destination_coords, calculateRouteHandler]);
 
   const handleDestinationChange = useCallback((value: string, placeDetails?: PlaceDetails) => {
     setFormData(prev => ({
@@ -387,14 +276,14 @@ function LandLogistics({
     }));
     
     if (placeDetails && formData.origin_coords) {
-      calculateRoute(
+      calculateRouteHandler(
         formData.origin_coords,
         { lat: placeDetails.lat, lng: placeDetails.lng, formattedAddress: placeDetails.formattedAddress },
         setConvoyRouteInfo,
         setIsCalculatingRoute
       );
     }
-  }, [formData.origin_coords, calculateRoute]);
+  }, [formData.origin_coords, calculateRouteHandler]);
 
   const handlePlanOriginChange = useCallback((value: string, placeDetails?: PlaceDetails) => {
     setPlanOrigin(value);
@@ -403,12 +292,12 @@ function LandLogistics({
       setPlanOriginCoords(coords);
       
       if (planDestinationCoords) {
-        calculateRoute(coords, planDestinationCoords, setPlanRouteInfo, setIsPlanningRoute);
+        calculateRouteHandler(coords, planDestinationCoords, setPlanRouteInfo, setIsPlanningRoute);
       }
     } else {
       setPlanOriginCoords(null);
     }
-  }, [planDestinationCoords, calculateRoute]);
+  }, [planDestinationCoords, calculateRouteHandler]);
 
   const handlePlanDestinationChange = useCallback((value: string, placeDetails?: PlaceDetails) => {
     setPlanDestination(value);
@@ -417,12 +306,12 @@ function LandLogistics({
       setPlanDestinationCoords(coords);
       
       if (planOriginCoords) {
-        calculateRoute(planOriginCoords, coords, setPlanRouteInfo, setIsPlanningRoute);
+        calculateRouteHandler(planOriginCoords, coords, setPlanRouteInfo, setIsPlanningRoute);
       }
     } else {
       setPlanDestinationCoords(null);
     }
-  }, [planOriginCoords, calculateRoute]);
+  }, [planOriginCoords, calculateRouteHandler]);
 
   const tabs = useMemo(() => [
     { id: 'overview', label: 'Overview', icon: BarChart3 },

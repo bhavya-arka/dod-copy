@@ -2,31 +2,14 @@ import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { User } from "../hooks/useAuth";
 import { Plane, CheckCircle, FileText, Check, Pencil } from "lucide-react";
-
-interface FlightScheduleInfo {
-  id: number;
-  name: string;
-  schedule_data: {
-    callsign?: string;
-    origin_icao?: string;
-    destination_icao?: string;
-    scheduled_departure?: string;
-    scheduled_arrival?: string;
-    is_modified?: boolean;
-  };
-}
-
-interface FlightPlanSummary {
-  id: number;
-  name: string;
-  status: "draft" | "complete" | "archived";
-  created_at: string;
-  updated_at: string;
-  movement_items_count: number;
-  total_weight_lb: number;
-  aircraft_count: number;
-  schedules?: FlightScheduleInfo[];
-}
+import { 
+  getFlightPlans, 
+  deleteFlightPlan, 
+  updateFlightPlanStatus, 
+  getFlightSchedules,
+  FlightPlan,
+  FlightSchedule
+} from "../services/flightService";
 
 interface DashboardProps {
   user: User;
@@ -41,7 +24,7 @@ export default function Dashboard({
   onStartNew,
   onLoadPlan,
 }: DashboardProps) {
-  const [plans, setPlans] = useState<FlightPlanSummary[]>([]);
+  const [plans, setPlans] = useState<FlightPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"all" | "draft" | "complete">(
@@ -50,42 +33,27 @@ export default function Dashboard({
 
   const fetchPlans = useCallback(async () => {
     try {
-      const response = await fetch("/api/flight-plans", {
-        credentials: "include",
-      });
-      if (response.ok) {
-        const data = await response.json();
+      const data = await getFlightPlans();
 
-        const plansWithSchedules = await Promise.all(
-          data.map(async (plan: FlightPlanSummary) => {
-            try {
-              const scheduleResponse = await fetch(
-                `/api/flight-plans/${plan.id}/schedules`,
-                {
-                  credentials: "include",
-                },
-              );
-              if (scheduleResponse.ok) {
-                const schedules = await scheduleResponse.json();
-                return { ...plan, schedules };
-              }
-            } catch (err) {
-              console.error(
-                `Failed to fetch schedules for plan ${plan.id}:`,
-                err,
-              );
-            }
-            return { ...plan, schedules: [] };
-          }),
-        );
+      const plansWithSchedules = await Promise.all(
+        data.map(async (plan: FlightPlan) => {
+          try {
+            const schedules = await getFlightSchedules(plan.id);
+            return { ...plan, schedules };
+          } catch (err) {
+            console.error(
+              `Failed to fetch schedules for plan ${plan.id}:`,
+              err,
+            );
+          }
+          return { ...plan, schedules: [] };
+        }),
+      );
 
-        setPlans(plansWithSchedules);
-      } else {
-        setError("Failed to load your flight plans");
-      }
+      setPlans(plansWithSchedules);
     } catch (err) {
       console.error("Failed to fetch flight plans:", err);
-      setError("Network error");
+      setError("Failed to load your flight plans");
     } finally {
       setIsLoading(false);
     }
@@ -99,14 +67,9 @@ export default function Dashboard({
     if (!confirm("Are you sure you want to delete this flight plan?")) return;
 
     try {
-      const response = await fetch(`/api/flight-plans/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (response.ok) {
-        setPlans(plans.filter((p) => p.id !== id));
-        await fetchPlans();
-      }
+      await deleteFlightPlan(id);
+      setPlans(plans.filter((p) => p.id !== id));
+      await fetchPlans();
     } catch (err) {
       console.error("Failed to delete flight plan:", err);
       setError("Failed to delete flight plan");
@@ -115,15 +78,8 @@ export default function Dashboard({
 
   const handleMarkComplete = async (id: number) => {
     try {
-      const response = await fetch(`/api/flight-plans/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ status: "complete" }),
-      });
-      if (response.ok) {
-        await fetchPlans();
-      }
+      await updateFlightPlanStatus(id, "complete");
+      await fetchPlans();
     } catch {
       setError("Failed to update plan status");
     }
@@ -331,15 +287,15 @@ export default function Dashboard({
                                 });
 
                                 // Find start points (origins that are never destinations)
-                                const startBases = [...origins].filter(
+                                const startBases = Array.from(origins).filter(
                                   (o) => !destinations.has(o),
                                 );
                                 // Find end points (destinations that are never origins)
-                                const endBases = [...destinations].filter(
+                                const endBases = Array.from(destinations).filter(
                                   (d) => !origins.has(d),
                                 );
                                 // Intermediate stops are both origin and destination
-                                const intermediateBases = [...allBases].filter(
+                                const intermediateBases = Array.from(allBases).filter(
                                   (b) => origins.has(b) && destinations.has(b),
                                 );
 
