@@ -56,6 +56,8 @@ export default function SeaFreight({
     destination: '',
     vessel_name: '',
     container_count: 1,
+    scheduled_departure: '',
+    scheduled_arrival: '',
   });
 
   const fetchData = useCallback(async () => {
@@ -91,10 +93,20 @@ export default function SeaFreight({
         origin: formData.origin,
         destination: formData.destination,
         status: 'draft',
+        departure_time: formData.scheduled_departure ? new Date(formData.scheduled_departure).toISOString() : undefined,
+        arrival_time: formData.scheduled_arrival ? new Date(formData.scheduled_arrival).toISOString() : undefined,
       });
       await fetchData();
       setShowCreateModal(false);
-      setFormData({ name: '', origin: '', destination: '', vessel_name: '', container_count: 1 });
+      setFormData({ 
+        name: '', 
+        origin: '', 
+        destination: '', 
+        vessel_name: '', 
+        container_count: 1,
+        scheduled_departure: '',
+        scheduled_arrival: '',
+      });
     } catch (err) {
       console.error('Error creating voyage:', err);
       setCreateError(err instanceof Error ? err.message : 'Failed to create voyage');
@@ -441,6 +453,26 @@ export default function SeaFreight({
                 onChange={(e) => setFormData(prev => ({ ...prev, container_count: parseInt(e.target.value) || 1 }))}
                 className="w-full px-3 py-2 rounded-lg border border-[#E5E7EB] text-[#111827] focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30"
               />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-[#111827] mb-1">Scheduled Departure</label>
+                <input
+                  type="datetime-local"
+                  value={formData.scheduled_departure}
+                  onChange={(e) => setFormData(prev => ({ ...prev, scheduled_departure: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-[#E5E7EB] text-[#111827] focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#111827] mb-1">Scheduled Arrival</label>
+                <input
+                  type="datetime-local"
+                  value={formData.scheduled_arrival}
+                  onChange={(e) => setFormData(prev => ({ ...prev, scheduled_arrival: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-[#E5E7EB] text-[#111827] focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30"
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
