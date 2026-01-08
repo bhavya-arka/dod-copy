@@ -171,8 +171,8 @@ export default function AgingThresholdsModal({ onClose, onSuccess }: AgingThresh
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-[#004E89]/10">
-              <Calendar className="w-5 h-5 text-[#004E89]" />
+            <div className="p-2 rounded-lg bg-[#2563EB]/10">
+              <Calendar className="w-5 h-5 text-[#2563EB]" />
             </div>
             <h2 className="text-lg font-semibold text-foreground">Aging Thresholds</h2>
           </div>
@@ -191,7 +191,7 @@ export default function AgingThresholdsModal({ onClose, onSuccess }: AgingThresh
 
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-[#004E89]" />
+              <Loader2 className="w-6 h-6 animate-spin text-[#2563EB]" />
             </div>
           ) : (
             <div className="space-y-3">
@@ -208,14 +208,14 @@ export default function AgingThresholdsModal({ onClose, onSuccess }: AgingThresh
                           value={editForm.name}
                           onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                           placeholder="Name"
-                          className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-white text-sm focus:outline-none focus:border-[#004E89]"
+                          className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-white text-sm focus:outline-none focus:border-[#2563EB]"
                         />
                         <input
                           type="number"
                           value={editForm.days}
                           onChange={(e) => setEditForm({ ...editForm, days: e.target.value })}
                           placeholder="Days"
-                          className="w-20 px-3 py-1.5 rounded-lg border border-border bg-white text-sm focus:outline-none focus:border-[#004E89]"
+                          className="w-20 px-3 py-1.5 rounded-lg border border-border bg-white text-sm focus:outline-none focus:border-[#2563EB]"
                         />
                       </div>
                       <div className="flex items-center justify-between">
@@ -241,7 +241,7 @@ export default function AgingThresholdsModal({ onClose, onSuccess }: AgingThresh
                           <button
                             onClick={handleSaveEdit}
                             disabled={saving}
-                            className="px-3 py-1 text-xs rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] disabled:opacity-50"
+                            className="px-3 py-1 text-xs rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] disabled:opacity-50"
                           >
                             <Check className="w-3 h-3" />
                           </button>
@@ -281,21 +281,21 @@ export default function AgingThresholdsModal({ onClose, onSuccess }: AgingThresh
               ))}
 
               {showAddForm && (
-                <div className="p-3 rounded-xl bg-[#004E89]/5 border border-[#004E89]/20 space-y-3">
+                <div className="p-3 rounded-xl bg-[#2563EB]/5 border border-[#2563EB]/20 space-y-3">
                   <div className="flex gap-2">
                     <input
                       type="text"
                       value={newThreshold.name}
                       onChange={(e) => setNewThreshold({ ...newThreshold, name: e.target.value })}
                       placeholder="Threshold name"
-                      className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-white text-sm focus:outline-none focus:border-[#004E89]"
+                      className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-white text-sm focus:outline-none focus:border-[#2563EB]"
                     />
                     <input
                       type="number"
                       value={newThreshold.days}
                       onChange={(e) => setNewThreshold({ ...newThreshold, days: e.target.value })}
                       placeholder="Days"
-                      className="w-20 px-3 py-1.5 rounded-lg border border-border bg-white text-sm focus:outline-none focus:border-[#004E89]"
+                      className="w-20 px-3 py-1.5 rounded-lg border border-border bg-white text-sm focus:outline-none focus:border-[#2563EB]"
                     />
                   </div>
                   <div className="flex items-center justify-between">
@@ -324,7 +324,7 @@ export default function AgingThresholdsModal({ onClose, onSuccess }: AgingThresh
                       <button
                         onClick={handleAdd}
                         disabled={saving}
-                        className="px-3 py-1 text-xs rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] disabled:opacity-50"
+                        className="px-3 py-1 text-xs rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] disabled:opacity-50"
                       >
                         Add
                       </button>
@@ -346,7 +346,7 @@ export default function AgingThresholdsModal({ onClose, onSuccess }: AgingThresh
           {!showAddForm && (
             <button
               onClick={() => setShowAddForm(true)}
-              className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-[#004E89] text-[#004E89] hover:bg-[#004E89]/5 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-[#2563EB] text-[#2563EB] hover:bg-[#2563EB]/5 transition-colors"
             >
               <Plus className="w-4 h-4" />
               Add Threshold
@@ -355,7 +355,7 @@ export default function AgingThresholdsModal({ onClose, onSuccess }: AgingThresh
           <div className="flex-1" />
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors"
+            className="px-4 py-2 text-sm rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors"
           >
             Done
           </button>

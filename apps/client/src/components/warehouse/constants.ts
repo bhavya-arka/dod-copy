@@ -4,8 +4,8 @@
 
 /** Military minimalism theme colors */
 export const WMS_COLORS = {
-  navy: "#004E89",
-  navyHover: "#003d6d",
+  navy: "#2563EB",
+  navyHover: "#1d4ed8",
   success: "#16A34A",
   warning: "#F59E0B",
   error: "#DC2626",

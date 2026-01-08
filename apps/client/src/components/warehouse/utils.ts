@@ -43,7 +43,7 @@ export function getToastBgColor(type: string): string {
     case "warning":
       return "bg-[#F59E0B]";
     default:
-      return "bg-[#004E89]";
+      return "bg-[#2563EB]";
   }
 }
 

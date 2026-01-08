@@ -110,8 +110,8 @@ export default function SystemSettingsModal({ onClose, onSuccess }: SystemSettin
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-[#004E89]/10">
-              <Settings className="w-5 h-5 text-[#004E89]" />
+            <div className="p-2 rounded-lg bg-[#2563EB]/10">
+              <Settings className="w-5 h-5 text-[#2563EB]" />
             </div>
             <h2 className="text-lg font-semibold text-foreground">System Settings</h2>
           </div>
@@ -126,7 +126,7 @@ export default function SystemSettingsModal({ onClose, onSuccess }: SystemSettin
         <div className="p-4 space-y-4">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-[#004E89]" />
+              <Loader2 className="w-6 h-6 animate-spin text-[#2563EB]" />
             </div>
           ) : (
             <>
@@ -137,7 +137,7 @@ export default function SystemSettingsModal({ onClose, onSuccess }: SystemSettin
                 <select
                   value={settings.timezone}
                   onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
                 >
                   {TIMEZONES.map((tz) => (
                     <option key={tz} value={tz}>{tz}</option>
@@ -152,7 +152,7 @@ export default function SystemSettingsModal({ onClose, onSuccess }: SystemSettin
                 <select
                   value={settings.date_format}
                   onChange={(e) => setSettings({ ...settings, date_format: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
                 >
                   {DATE_FORMATS.map((fmt) => (
                     <option key={fmt.value} value={fmt.value}>{fmt.label}</option>
@@ -167,7 +167,7 @@ export default function SystemSettingsModal({ onClose, onSuccess }: SystemSettin
                 <select
                   value={settings.weight_unit}
                   onChange={(e) => setSettings({ ...settings, weight_unit: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
                 >
                   {WEIGHT_UNITS.map((unit) => (
                     <option key={unit.value} value={unit.value}>{unit.label}</option>
@@ -182,7 +182,7 @@ export default function SystemSettingsModal({ onClose, onSuccess }: SystemSettin
                 <select
                   value={settings.default_page_size}
                   onChange={(e) => setSettings({ ...settings, default_page_size: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
                 >
                   {PAGE_SIZES.map((size) => (
                     <option key={size} value={size}>{size} items per page</option>
@@ -209,7 +209,7 @@ export default function SystemSettingsModal({ onClose, onSuccess }: SystemSettin
           <button
             onClick={handleSave}
             disabled={loading || saving}
-            className="px-4 py-2 text-sm rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 text-sm rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             Save Settings

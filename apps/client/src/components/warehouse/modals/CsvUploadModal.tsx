@@ -70,7 +70,7 @@ export default function CsvUploadModal({ siteId, onClose, onSuccess }: CsvUpload
               type="file"
               accept=".csv"
               onChange={handleFileChange}
-              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#004E89] file:text-white hover:file:bg-[#003d6d]"
+              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#2563EB] file:text-white hover:file:bg-[#1d4ed8]"
             />
           </div>
           <div>
@@ -80,7 +80,7 @@ export default function CsvUploadModal({ siteId, onClose, onSuccess }: CsvUpload
               onChange={(e) => setCsvContent(e.target.value)}
               placeholder="requisition_no,description,quantity,length_in,width_in,height_in,weight_lb,unit_price..."
               rows={8}
-              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm font-mono focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40 resize-none"
+              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm font-mono focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40 resize-none"
             />
           </div>
 
@@ -95,7 +95,7 @@ export default function CsvUploadModal({ siteId, onClose, onSuccess }: CsvUpload
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-2.5 text-sm rounded-xl bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center justify-center gap-2"
+              className="flex-1 py-2.5 text-sm rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center justify-center gap-2"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Import

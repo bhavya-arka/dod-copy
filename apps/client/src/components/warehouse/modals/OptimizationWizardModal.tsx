@@ -300,14 +300,14 @@ export default function OptimizationWizardModal({
             onClick={() => setSelectedAlgorithm(algo.id)}
             className={`p-4 rounded-xl border-2 text-left transition-all ${
               selectedAlgorithm === algo.id
-                ? "border-[#004E89] bg-[#004E89]/5"
-                : "border-border hover:border-[#004E89]/50"
+                ? "border-[#2563EB] bg-[#2563EB]/5"
+                : "border-border hover:border-[#2563EB]/50"
             }`}
           >
             <div className="flex items-start gap-3">
               <div
                 className={`p-2 rounded-lg flex-shrink-0 ${
-                  selectedAlgorithm === algo.id ? "bg-[#004E89] text-white" : "bg-muted text-muted-foreground"
+                  selectedAlgorithm === algo.id ? "bg-[#2563EB] text-white" : "bg-muted text-muted-foreground"
                 }`}
               >
                 {algo.icon}
@@ -316,14 +316,14 @@ export default function OptimizationWizardModal({
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-medium text-foreground">{algo.name}</p>
                   {selectedAlgorithm === algo.id && (
-                    <Check className="w-5 h-5 text-[#004E89] flex-shrink-0" />
+                    <Check className="w-5 h-5 text-[#2563EB] flex-shrink-0" />
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">{algo.description}</p>
                 <ul className="mt-2 space-y-1">
                   {algo.bullets.map((bullet, idx) => (
                     <li key={idx} className="text-xs text-muted-foreground flex items-start gap-1.5">
-                      <span className="text-[#004E89] mt-0.5">•</span>
+                      <span className="text-[#2563EB] mt-0.5">•</span>
                       <span>{bullet}</span>
                     </li>
                   ))}
@@ -527,28 +527,28 @@ export default function OptimizationWizardModal({
           <p className="text-sm font-medium text-foreground mb-3">Execution Order:</p>
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-6 h-6 rounded-full bg-[#004E89] text-white text-xs flex items-center justify-center font-bold">1</div>
+              <div className="w-6 h-6 rounded-full bg-[#2563EB] text-white text-xs flex items-center justify-center font-bold">1</div>
               <div>
                 <p className="text-sm font-medium">CardStack</p>
                 <p className="text-xs text-muted-foreground">Consolidate items by ship class</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-6 h-6 rounded-full bg-[#004E89] text-white text-xs flex items-center justify-center font-bold">2</div>
+              <div className="w-6 h-6 rounded-full bg-[#2563EB] text-white text-xs flex items-center justify-center font-bold">2</div>
               <div>
                 <p className="text-sm font-medium">Size Standardization</p>
                 <p className="text-xs text-muted-foreground">Group by program code for rack optimization</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-6 h-6 rounded-full bg-[#004E89] text-white text-xs flex items-center justify-center font-bold">3</div>
+              <div className="w-6 h-6 rounded-full bg-[#2563EB] text-white text-xs flex items-center justify-center font-bold">3</div>
               <div>
                 <p className="text-sm font-medium">Value Density Analysis</p>
                 <p className="text-xs text-muted-foreground">Prioritize high-value items for accessibility</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-6 h-6 rounded-full bg-[#004E89] text-white text-xs flex items-center justify-center font-bold">4</div>
+              <div className="w-6 h-6 rounded-full bg-[#2563EB] text-white text-xs flex items-center justify-center font-bold">4</div>
               <div>
                 <p className="text-sm font-medium">Bin-Packing Order</p>
                 <p className="text-xs text-muted-foreground">Stage items for efficient pallet utilization</p>
@@ -566,7 +566,7 @@ export default function OptimizationWizardModal({
 
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-[#004E89]/10">
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-[#2563EB]/10">
           {ALGORITHMS.find((a) => a.id === selectedAlgorithm)?.icon}
           <span className="font-medium text-foreground">
             {ALGORITHMS.find((a) => a.id === selectedAlgorithm)?.name}
@@ -585,14 +585,14 @@ export default function OptimizationWizardModal({
     <div className="space-y-6 py-8">
       {loading ? (
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-[#004E89] mx-auto mb-4" />
+          <Loader2 className="w-12 h-12 animate-spin text-[#2563EB] mx-auto mb-4" />
           <p className="text-lg font-medium text-foreground mb-2">Analyzing Warehouse...</p>
           <p className="text-sm text-muted-foreground mb-4">
             Running {ALGORITHMS.find((a) => a.id === selectedAlgorithm)?.name} algorithm
           </p>
           <div className="w-full max-w-md mx-auto h-2 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-[#004E89] rounded-full transition-all duration-300"
+              className="h-full bg-[#2563EB] rounded-full transition-all duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -605,7 +605,7 @@ export default function OptimizationWizardModal({
           <p className="text-sm text-red-500 mb-4">{error}</p>
           <button
             onClick={runAnalysis}
-            className="px-4 py-2 rounded-xl bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors"
+            className="px-4 py-2 rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors"
           >
             Retry Analysis
           </button>
@@ -632,8 +632,8 @@ export default function OptimizationWizardModal({
             <p className="text-xl font-bold text-[#16A34A]">{result.summary.slotsFreed}</p>
             <p className="text-xs text-muted-foreground">Slots Freed</p>
           </div>
-          <div className="p-3 rounded-xl bg-[#004E89]/10 text-center">
-            <p className="text-xl font-bold text-[#004E89]">{result.summary.zonesOptimized}</p>
+          <div className="p-3 rounded-xl bg-[#2563EB]/10 text-center">
+            <p className="text-xl font-bold text-[#2563EB]">{result.summary.zonesOptimized}</p>
             <p className="text-xs text-muted-foreground">Zones Optimized</p>
           </div>
           <div className="p-3 rounded-xl bg-[#7C3AED]/10 text-center">
@@ -662,7 +662,7 @@ export default function OptimizationWizardModal({
                 key={action.id}
                 className="flex items-start gap-3 p-4 border-b border-border last:border-0 hover:bg-muted/30"
               >
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#004E89] text-white text-xs flex items-center justify-center">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#2563EB] text-white text-xs flex items-center justify-center">
                   {index + 1}
                 </span>
                 <div className="flex-1 min-w-0">
@@ -674,7 +674,7 @@ export default function OptimizationWizardModal({
                       </span>
                     )}
                   </div>
-                  <p className="text-xs font-medium text-[#004E89]">
+                  <p className="text-xs font-medium text-[#2563EB]">
                     {action.item} {(action as any).itemDescription && `- ${(action as any).itemDescription}`}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -804,7 +804,7 @@ export default function OptimizationWizardModal({
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                       step >= s.number
-                        ? "bg-[#004E89] text-white"
+                        ? "bg-[#2563EB] text-white"
                         : "bg-muted text-muted-foreground"
                     }`}
                   >
@@ -815,7 +815,7 @@ export default function OptimizationWizardModal({
                 {i < steps.length - 1 && (
                   <div
                     className={`flex-1 h-0.5 mx-2 ${
-                      step > s.number ? "bg-[#004E89]" : "bg-muted"
+                      step > s.number ? "bg-[#2563EB]" : "bg-muted"
                     }`}
                   />
                 )}
@@ -845,7 +845,7 @@ export default function OptimizationWizardModal({
           {step === 5 ? (
             <button
               onClick={onClose}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors"
             >
               Done
             </button>
@@ -853,7 +853,7 @@ export default function OptimizationWizardModal({
             <button
               onClick={handleNext}
               disabled={!canProceed() || loading}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {step === 2 ? "Run Analysis" : "Next"}
               <ChevronRight className="w-4 h-4" />

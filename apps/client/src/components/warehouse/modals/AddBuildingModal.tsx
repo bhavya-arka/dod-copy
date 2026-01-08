@@ -83,8 +83,8 @@ export default function AddBuildingModal({
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-lg mx-4 p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-[#004E89]/10">
-              <Building2 className="w-5 h-5 text-[#004E89]" />
+            <div className="p-2 rounded-xl bg-[#2563EB]/10">
+              <Building2 className="w-5 h-5 text-[#2563EB]" />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-foreground">
@@ -113,7 +113,7 @@ export default function AddBuildingModal({
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                 placeholder="e.g., B-870"
-                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
               />
             </div>
             <div>
@@ -123,7 +123,7 @@ export default function AddBuildingModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Main Warehouse"
-                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
               />
             </div>
           </div>
@@ -138,7 +138,7 @@ export default function AddBuildingModal({
                   value={lengthFt}
                   onChange={(e) => setLengthFt(e.target.value)}
                   placeholder="300"
-                  className="w-full px-3 py-2 rounded-xl bg-white border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89]"
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB]"
                 />
               </div>
               <div>
@@ -148,7 +148,7 @@ export default function AddBuildingModal({
                   value={widthFt}
                   onChange={(e) => setWidthFt(e.target.value)}
                   placeholder="150"
-                  className="w-full px-3 py-2 rounded-xl bg-white border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89]"
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB]"
                 />
               </div>
               <div>
@@ -158,7 +158,7 @@ export default function AddBuildingModal({
                   value={heightFt}
                   onChange={(e) => setHeightFt(e.target.value)}
                   placeholder="30"
-                  className="w-full px-3 py-2 rounded-xl bg-white border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89]"
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB]"
                 />
               </div>
             </div>
@@ -171,7 +171,7 @@ export default function AddBuildingModal({
               value={capacityPallets}
               onChange={(e) => setCapacityPallets(e.target.value)}
               placeholder="e.g., 500"
-              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
             />
             <p className="text-xs text-muted-foreground mt-1">Total pallet positions in this building</p>
           </div>
@@ -183,7 +183,7 @@ export default function AddBuildingModal({
               onChange={(e) => setGeometryNotes(e.target.value)}
               placeholder="Building layout notes, special requirements, etc."
               rows={2}
-              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40 resize-none"
+              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40 resize-none"
             />
           </div>
 
@@ -198,7 +198,7 @@ export default function AddBuildingModal({
             <button
               type="submit"
               disabled={loading || !code.trim() || !name.trim()}
-              className="flex-1 py-2.5 text-sm rounded-xl bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 py-2.5 text-sm rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {isEdit ? "Save Changes" : "Add Building"}

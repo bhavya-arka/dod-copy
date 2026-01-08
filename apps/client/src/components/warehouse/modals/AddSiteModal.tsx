@@ -52,7 +52,7 @@ export default function AddSiteModal({ onClose, onSuccess }: AddSiteModalProps) 
     }
   };
 
-  const inputClass = "w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40";
+  const inputClass = "w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40";
   const labelClass = "block text-sm font-medium text-foreground mb-1";
 
   return (
@@ -60,7 +60,7 @@ export default function AddSiteModal({ onClose, onSuccess }: AddSiteModalProps) 
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-[#004E89]" />
+            <MapPin className="w-5 h-5 text-[#2563EB]" />
             <h2 className="text-lg font-semibold text-foreground">Add Warehouse Site</h2>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -221,7 +221,7 @@ export default function AddSiteModal({ onClose, onSuccess }: AddSiteModalProps) 
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-2.5 text-sm rounded-xl bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center justify-center gap-2"
+              className="flex-1 py-2.5 text-sm rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center justify-center gap-2"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Create Site

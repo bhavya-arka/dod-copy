@@ -208,7 +208,7 @@ export default function WMSSitesStorage({
     if (isLoading) {
       return (
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="w-5 h-5 animate-spin text-[#004E89]" />
+          <Loader2 className="w-5 h-5 animate-spin text-[#2563EB]" />
           <span className="ml-2 text-sm text-muted-foreground">Loading buildings...</span>
         </div>
       );
@@ -323,7 +323,7 @@ export default function WMSSitesStorage({
         {renderBuildings(site.id)}
         <button
           onClick={(e) => handleAddBuildingClick(e, site)}
-          className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-border hover:border-[#004E89] hover:bg-[#004E89]/5 text-muted-foreground hover:text-[#004E89] transition-colors"
+          className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-border hover:border-[#2563EB] hover:bg-[#2563EB]/5 text-muted-foreground hover:text-[#2563EB] transition-colors"
         >
           <Plus className="w-4 h-4" />
           <span className="text-sm">Add Building</span>
@@ -342,7 +342,7 @@ export default function WMSSitesStorage({
           </div>
           <button
             onClick={onAddSite}
-            className="text-sm px-3 py-2 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center gap-2"
+            className="text-sm px-3 py-2 rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             Add Site
@@ -358,7 +358,7 @@ export default function WMSSitesStorage({
       >
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin text-[#004E89]" />
+            <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
           </div>
         ) : sites.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
@@ -367,7 +367,7 @@ export default function WMSSitesStorage({
             <p className="text-sm text-muted-foreground/70 mb-4">Add your first site to manage storage</p>
             <button
               onClick={onAddSite}
-              className="text-sm px-4 py-2 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center gap-2"
+              className="text-sm px-4 py-2 rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               Add Site

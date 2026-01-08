@@ -61,7 +61,7 @@ export default function WMSOperations({
             </button>
             <button
               onClick={onOpenTransferForm}
-              className="text-sm px-3 py-2 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center gap-2"
+              className="text-sm px-3 py-2 rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               New Transfer
@@ -80,7 +80,7 @@ export default function WMSOperations({
           <h2 className="text-lg font-semibold text-foreground mb-4">Transfer Orders</h2>
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-8 h-8 animate-spin text-[#004E89]" />
+              <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
             </div>
           ) : transfers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
@@ -89,7 +89,7 @@ export default function WMSOperations({
               <p className="text-sm text-muted-foreground/70 mb-4">Create a transfer to move inventory between sites</p>
               <button
                 onClick={onOpenTransferForm}
-                className="text-sm px-4 py-2 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center gap-2"
+                className="text-sm px-4 py-2 rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Create First Transfer
@@ -137,7 +137,7 @@ export default function WMSOperations({
             <div className="p-4 rounded-xl bg-muted/50 border border-dashed border-border">
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 rounded-lg bg-white border border-border">
-                  <FileText className="w-4 h-4 text-[#004E89]" />
+                  <FileText className="w-4 h-4 text-[#2563EB]" />
                 </div>
                 <div>
                   <p className="font-medium text-foreground">Generate Manifest</p>
@@ -146,7 +146,7 @@ export default function WMSOperations({
               </div>
               <button
                 onClick={() => onShowToast("Manifest generation coming soon!", "info")}
-                className="w-full text-sm py-2 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors"
+                className="w-full text-sm py-2 rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors"
               >
                 Generate
               </button>
@@ -155,7 +155,7 @@ export default function WMSOperations({
             <div className="p-4 rounded-xl bg-muted/50 border border-dashed border-border">
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 rounded-lg bg-white border border-border">
-                  <Box className="w-4 h-4 text-[#004E89]" />
+                  <Box className="w-4 h-4 text-[#2563EB]" />
                 </div>
                 <div>
                   <p className="font-medium text-foreground">Load Planning</p>
@@ -164,7 +164,7 @@ export default function WMSOperations({
               </div>
               <button
                 onClick={() => onShowToast("Load planning coming soon!", "info")}
-                className="w-full text-sm py-2 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors"
+                className="w-full text-sm py-2 rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors"
               >
                 Plan Load
               </button>

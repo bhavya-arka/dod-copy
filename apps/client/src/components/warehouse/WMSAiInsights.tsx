@@ -306,7 +306,7 @@ export default function WMSAiInsights({
           <button
             onClick={handleOpenWizard}
             disabled={!selectedSiteId}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#004E89] to-[#0066b3] text-white hover:from-[#003d6d] hover:to-[#004E89] transition-all flex items-center gap-2 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-md"
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#2563EB] to-[#1d4ed8] text-white hover:from-[#1d4ed8] hover:to-[#2563EB] transition-all flex items-center gap-2 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-md"
           >
             <Wand2 className="w-5 h-5" />
             <span className="font-medium">Optimization Wizard</span>
@@ -318,11 +318,11 @@ export default function WMSAiInsights({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="rounded-2xl bg-gradient-to-r from-[#004E89]/10 to-[#0066b3]/10 border border-[#004E89]/20 p-4 mb-6"
+        className="rounded-2xl bg-gradient-to-r from-[#2563EB]/10 to-[#1d4ed8]/10 border border-[#2563EB]/20 p-4 mb-6"
       >
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex items-center gap-2">
-            <Warehouse className="w-5 h-5 text-[#004E89]" />
+            <Warehouse className="w-5 h-5 text-[#2563EB]" />
             <span className="text-sm font-medium text-foreground">Select Warehouse:</span>
           </div>
           <select
@@ -332,7 +332,7 @@ export default function WMSAiInsights({
               setOptimization(null);
               setAiInsight(null);
             }}
-            className="flex-1 px-4 py-2.5 rounded-xl bg-white border-2 border-[#004E89]/30 text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-2 focus:ring-[#004E89]/20 transition-all font-medium"
+            className="flex-1 px-4 py-2.5 rounded-xl bg-white border-2 border-[#2563EB]/30 text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 transition-all font-medium"
           >
             <option value="">Choose a warehouse site to analyze...</option>
             {sites.map((site) => (
@@ -359,14 +359,14 @@ export default function WMSAiInsights({
             transition={{ delay: i * 0.1 + 0.2 }}
             onClick={() => handleCardClick(card)}
             disabled={!selectedSiteId || loadingCardId === card.id}
-            className={`group rounded-2xl bg-white border border-border shadow-sm p-6 text-left transition-all duration-200 hover:shadow-lg hover:border-[#004E89]/30 ${card.hoverBgColor} disabled:opacity-60 disabled:cursor-not-allowed relative overflow-hidden`}
+            className={`group rounded-2xl bg-white border border-border shadow-sm p-6 text-left transition-all duration-200 hover:shadow-lg hover:border-[#2563EB]/30 ${card.hoverBgColor} disabled:opacity-60 disabled:cursor-not-allowed relative overflow-hidden`}
             title={card.tooltip}
           >
             <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
               {loadingCardId === card.id ? (
-                <Loader2 className="w-5 h-5 animate-spin text-[#004E89]" />
+                <Loader2 className="w-5 h-5 animate-spin text-[#2563EB]" />
               ) : (
-                <ChevronRight className="w-5 h-5 text-[#004E89]" />
+                <ChevronRight className="w-5 h-5 text-[#2563EB]" />
               )}
             </div>
             <div className="flex items-start gap-4">
@@ -374,13 +374,13 @@ export default function WMSAiInsights({
                 <card.icon className={`w-6 h-6 ${card.color}`} />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-foreground mb-1 group-hover:text-[#004E89] transition-colors">
+                <h3 className="font-semibold text-foreground mb-1 group-hover:text-[#2563EB] transition-colors">
                   {card.title}
                 </h3>
                 <p className="text-sm text-muted-foreground">{card.description}</p>
                 <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                   {card.action === "wizard" ? (
-                    <span className="px-2 py-0.5 bg-[#004E89]/10 text-[#004E89] rounded-full font-medium">
+                    <span className="px-2 py-0.5 bg-[#2563EB]/10 text-[#2563EB] rounded-full font-medium">
                       Opens Wizard
                     </span>
                   ) : (
@@ -404,8 +404,8 @@ export default function WMSAiInsights({
         >
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-[#004E89]/10 rounded-xl">
-                <Save className="w-5 h-5 text-[#004E89]" />
+              <div className="p-2 bg-[#2563EB]/10 rounded-xl">
+                <Save className="w-5 h-5 text-[#2563EB]" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-foreground">Saved Plans</h2>
@@ -435,7 +435,7 @@ export default function WMSAiInsights({
                         <span className="font-medium text-foreground truncate">
                           {plan.name}
                         </span>
-                        <span className="text-xs px-2 py-0.5 bg-[#004E89]/10 text-[#004E89] rounded-full font-medium">
+                        <span className="text-xs px-2 py-0.5 bg-[#2563EB]/10 text-[#2563EB] rounded-full font-medium">
                           {formatAlgorithmName(plan.algorithm)}
                         </span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusBadge.color}`}>
@@ -470,7 +470,7 @@ export default function WMSAiInsights({
                       {(plan.status === 'in_progress' || plan.status === 'completed') && (
                         <button
                           onClick={() => setViewingPlan(plan)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-[#004E89] hover:bg-[#004E89]/10 transition-colors"
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-[#2563EB] hover:bg-[#2563EB]/10 transition-colors"
                           title="View details"
                         >
                           <Eye className="w-4 h-4" />
@@ -605,7 +605,7 @@ export default function WMSAiInsights({
           <button
             onClick={handleRunOptimization}
             disabled={!selectedSiteId || optimizationLoading}
-            className="px-4 py-2.5 rounded-xl bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-w-[160px]"
+            className="px-4 py-2.5 rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-w-[160px]"
           >
             {optimizationLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
             <span className="font-medium">Run Analysis</span>
@@ -656,7 +656,7 @@ export default function WMSAiInsights({
                             ? "text-[#DC2626]"
                             : rec.priority === "medium"
                               ? "text-[#F59E0B]"
-                              : "text-[#004E89]"
+                              : "text-[#2563EB]"
                         }`}
                       />
                       <div>

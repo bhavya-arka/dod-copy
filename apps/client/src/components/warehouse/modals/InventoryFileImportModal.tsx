@@ -177,8 +177,8 @@ export default function InventoryFileImportModal({
       onDragLeave={handleDragLeave}
       className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
         isDragging
-          ? "border-[#004E89] bg-[#004E89]/5"
-          : "border-border hover:border-[#004E89]/50"
+          ? "border-[#2563EB] bg-[#2563EB]/5"
+          : "border-border hover:border-[#2563EB]/50"
       }`}
     >
       <input
@@ -197,7 +197,7 @@ export default function InventoryFileImportModal({
       </p>
       <button
         onClick={() => fileInputRef.current?.click()}
-        className="px-6 py-2.5 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors"
+        className="px-6 py-2.5 rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors"
       >
         Browse Files
       </button>
@@ -206,7 +206,7 @@ export default function InventoryFileImportModal({
 
   const renderUploadingState = () => (
     <div className="flex flex-col items-center py-12">
-      <Loader2 className="w-12 h-12 text-[#004E89] animate-spin mb-4" />
+      <Loader2 className="w-12 h-12 text-[#2563EB] animate-spin mb-4" />
       <p className="text-lg font-medium text-foreground mb-2">Processing file...</p>
       <p className="text-sm text-muted-foreground">
         {selectedFile?.name}
@@ -224,7 +224,7 @@ export default function InventoryFileImportModal({
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
-          <FileText className="w-5 h-5 text-[#004E89]" />
+          <FileText className="w-5 h-5 text-[#2563EB]" />
           <div>
             <p className="font-medium text-foreground">{uploadResult.filename}</p>
             <p className="text-xs text-muted-foreground">
@@ -263,7 +263,7 @@ export default function InventoryFileImportModal({
                   >
                     <div>{col.originalName}</div>
                     {col.mappedTo && (
-                      <div className="text-xs font-normal text-[#004E89]">
+                      <div className="text-xs font-normal text-[#2563EB]">
                         → {col.mappedTo}
                       </div>
                     )}
@@ -314,7 +314,7 @@ export default function InventoryFileImportModal({
 
   const renderCommittingState = () => (
     <div className="flex flex-col items-center py-12">
-      <Loader2 className="w-12 h-12 text-[#004E89] animate-spin mb-4" />
+      <Loader2 className="w-12 h-12 text-[#2563EB] animate-spin mb-4" />
       <p className="text-lg font-medium text-foreground mb-2">Saving to database...</p>
       <p className="text-sm text-muted-foreground">
         This may take a moment for large files
@@ -339,7 +339,7 @@ export default function InventoryFileImportModal({
         </div>
         <button
           onClick={handleSuccessClose}
-          className="px-6 py-2.5 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors"
+          className="px-6 py-2.5 rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors"
         >
           Done
         </button>
@@ -389,7 +389,7 @@ export default function InventoryFileImportModal({
         <button
           onClick={handleCommit}
           disabled={!uploadResult?.canCommit}
-          className="flex-1 py-2.5 text-sm rounded-xl bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="flex-1 py-2.5 text-sm rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           Confirm Import
         </button>

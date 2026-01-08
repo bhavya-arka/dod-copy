@@ -184,7 +184,7 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
               <select
                 value={sourceSiteId}
                 onChange={(e) => setSourceSiteId(e.target.value ? Number(e.target.value) : "")}
-                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
               >
                 <option value="">Select source...</option>
                 {sites.map((site) => (
@@ -200,7 +200,7 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
               <select
                 value={destSiteId}
                 onChange={(e) => setDestSiteId(e.target.value ? Number(e.target.value) : "")}
-                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
               >
                 <option value="">Select destination...</option>
                 {sites.map((site) => (
@@ -222,7 +222,7 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
                   onClick={() => setTransportMode(mode.value)}
                   className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm transition-colors ${
                     transportMode === mode.value
-                      ? "bg-[#004E89] text-white"
+                      ? "bg-[#2563EB] text-white"
                       : "bg-muted text-muted-foreground hover:bg-muted/80"
                   }`}
                 >
@@ -246,7 +246,7 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
                   <select
                     value={aircraftType}
                     onChange={(e) => setAircraftType(e.target.value as typeof aircraftType)}
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-blue-300 text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-blue-300 text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
                   >
                     {AIRCRAFT_TYPES.map((type) => (
                       <option key={type.value} value={type.value}>
@@ -263,7 +263,7 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
                     value={missionId}
                     onChange={(e) => setMissionId(e.target.value)}
                     placeholder="e.g., AMC-2024-001"
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-blue-300 text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-blue-300 text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
                   />
                 </div>
               </div>
@@ -320,7 +320,7 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search items..."
-                      className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-white border border-border text-sm focus:outline-none focus:border-[#004E89]"
+                      className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-white border border-border text-sm focus:outline-none focus:border-[#2563EB]"
                     />
                   </div>
                   <div className="flex gap-2 text-xs">
@@ -351,7 +351,7 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
                     >
                       <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                         selectedItemIds.has(item.id)
-                          ? "bg-[#004E89] border-[#004E89]"
+                          ? "bg-[#2563EB] border-[#2563EB]"
                           : "border-gray-300"
                       }`}>
                         {selectedItemIds.has(item.id) && <Check className="w-3 h-3 text-white" />}
@@ -418,7 +418,7 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Additional notes..."
               rows={3}
-              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40 resize-none"
+              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40 resize-none"
             />
           </div>
 
@@ -433,7 +433,7 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
             <button
               type="submit"
               disabled={loading || selectedItemIds.size === 0}
-              className="flex-1 py-2.5 text-sm rounded-xl bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 py-2.5 text-sm rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Create Transfer

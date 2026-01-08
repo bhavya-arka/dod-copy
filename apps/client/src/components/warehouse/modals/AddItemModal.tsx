@@ -117,7 +117,7 @@ export default function AddItemModal({ siteId, sites, onClose, onSuccess, onSele
             <select
               value={selectedSite}
               onChange={(e) => setSelectedSite(e.target.value ? Number(e.target.value) : "")}
-              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
             >
               <option value="">Select a site...</option>
               {sites.map((site) => (
@@ -135,7 +135,7 @@ export default function AddItemModal({ siteId, sites, onClose, onSuccess, onSele
               value={requisitionNo}
               onChange={(e) => setRequisitionNo(e.target.value)}
               placeholder="e.g., REQ-2024-001"
-              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
             />
           </div>
 
@@ -146,7 +146,7 @@ export default function AddItemModal({ siteId, sites, onClose, onSuccess, onSele
               value={nsn}
               onChange={(e) => handleNsnChange(e.target.value)}
               placeholder="XXXX-XX-XXX-XXXX"
-              className={`w-full px-4 py-2 rounded-xl bg-muted border ${nsnError ? "border-red-300" : "border-border"} text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40`}
+              className={`w-full px-4 py-2 rounded-xl bg-muted border ${nsnError ? "border-red-300" : "border-border"} text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40`}
             />
             {nsnError && <p className="text-xs text-[#DC2626] mt-1">{nsnError}</p>}
           </div>
@@ -158,7 +158,7 @@ export default function AddItemModal({ siteId, sites, onClose, onSuccess, onSele
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Item description"
-              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
             />
           </div>
 
@@ -170,7 +170,7 @@ export default function AddItemModal({ siteId, sites, onClose, onSuccess, onSele
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
                 min="1"
-                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
               />
             </div>
             <div>
@@ -180,7 +180,7 @@ export default function AddItemModal({ siteId, sites, onClose, onSuccess, onSele
                 value={unitPrice}
                 onChange={(e) => setUnitPrice(e.target.value)}
                 placeholder="0.00"
-                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
               />
             </div>
           </div>
@@ -192,7 +192,7 @@ export default function AddItemModal({ siteId, sites, onClose, onSuccess, onSele
                 type="text"
                 value={length}
                 onChange={(e) => setLength(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89]"
+                className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB]"
               />
             </div>
             <div>
@@ -201,7 +201,7 @@ export default function AddItemModal({ siteId, sites, onClose, onSuccess, onSele
                 type="text"
                 value={width}
                 onChange={(e) => setWidth(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89]"
+                className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB]"
               />
             </div>
             <div>
@@ -210,7 +210,7 @@ export default function AddItemModal({ siteId, sites, onClose, onSuccess, onSele
                 type="text"
                 value={height}
                 onChange={(e) => setHeight(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89]"
+                className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB]"
               />
             </div>
             <div>
@@ -219,7 +219,7 @@ export default function AddItemModal({ siteId, sites, onClose, onSuccess, onSele
                 type="text"
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89]"
+                className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB]"
               />
             </div>
           </div>
@@ -235,7 +235,7 @@ export default function AddItemModal({ siteId, sites, onClose, onSuccess, onSele
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-2.5 text-sm rounded-xl bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center justify-center gap-2"
+              className="flex-1 py-2.5 text-sm rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center justify-center gap-2"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Add Item

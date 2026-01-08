@@ -298,7 +298,7 @@ export default function PlanActionsModal({
           </div>
           <div className="h-2 bg-muted rounded-full overflow-hidden">
             <div 
-              className="h-full bg-[#004E89] rounded-full transition-all duration-300"
+              className="h-full bg-[#2563EB] rounded-full transition-all duration-300"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -339,7 +339,7 @@ export default function PlanActionsModal({
         <div className="flex-1 overflow-y-auto p-6">
           {loading && !sortedActions.length ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-[#004E89]" />
+              <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
             </div>
           ) : sortedActions.length === 0 ? (
             <div className="text-center py-12">
@@ -351,11 +351,11 @@ export default function PlanActionsModal({
               {sortedActions.map((action) => (
                 <div 
                   key={action.id}
-                  className="p-4 rounded-xl border border-border bg-card hover:border-[#004E89]/30 transition-colors"
+                  className="p-4 rounded-xl border border-border bg-card hover:border-[#2563EB]/30 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#004E89]/10 text-[#004E89] flex items-center justify-center text-sm font-medium">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#2563EB]/10 text-[#2563EB] flex items-center justify-center text-sm font-medium">
                         {action.sequence + 1}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -379,7 +379,7 @@ export default function PlanActionsModal({
                         <div className="flex items-center gap-2 mt-1 text-sm">
                           <MapPin className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
                           <span className="text-muted-foreground">{action.from_location || 'N/A'}</span>
-                          <ArrowRight className="w-4 h-4 text-[#004E89]" />
+                          <ArrowRight className="w-4 h-4 text-[#2563EB]" />
                           <span className="text-foreground font-medium">{action.to_location || 'N/A'}</span>
                         </div>
 

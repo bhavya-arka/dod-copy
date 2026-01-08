@@ -52,7 +52,7 @@ export default function WMSDashboard({
   const capacityUsed = calculateCapacityUsage(totalItems, sites.length);
 
   const metrics = [
-    { label: "Total Sites", value: sites.length.toString(), icon: Warehouse, color: "text-[#004E89]", bgColor: "bg-blue-50" },
+    { label: "Total Sites", value: sites.length.toString(), icon: Warehouse, color: "text-[#2563EB]", bgColor: "bg-blue-50" },
     { label: "Active Shipments", value: activeTransfers.toString(), icon: ArrowRightLeft, color: "text-[#16A34A]", bgColor: "bg-green-50" },
     { label: "Items in Transit", value: inTransitCount.toString(), icon: Truck, color: "text-purple-600", bgColor: "bg-purple-50" },
     { label: "Capacity Used", value: `${capacityUsed}%`, icon: Box, color: "text-[#F59E0B]", bgColor: "bg-amber-50" },
@@ -104,10 +104,10 @@ export default function WMSDashboard({
             <button
               key={action.label}
               onClick={action.action}
-              className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-[#004E89]/10 transition-colors text-left group"
+              className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-[#2563EB]/10 transition-colors text-left group"
             >
-              <div className="p-2 rounded-lg bg-white border border-border group-hover:border-[#004E89]/30">
-                <action.icon className="w-4 h-4 text-[#004E89]" />
+              <div className="p-2 rounded-lg bg-white border border-border group-hover:border-[#2563EB]/30">
+                <action.icon className="w-4 h-4 text-[#2563EB]" />
               </div>
               <div>
                 <p className="text-sm font-medium text-foreground">{action.label}</p>
@@ -129,7 +129,7 @@ export default function WMSDashboard({
             <h2 className="text-lg font-semibold text-foreground">Warehouse Sites</h2>
             <button
               onClick={onAddSite}
-              className="text-sm px-3 py-1.5 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center gap-1"
+              className="text-sm px-3 py-1.5 rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center gap-1"
             >
               <Plus className="w-4 h-4" />
               Add Site
@@ -137,7 +137,7 @@ export default function WMSDashboard({
           </div>
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-[#004E89]" />
+              <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
             </div>
           ) : sites.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -145,7 +145,7 @@ export default function WMSDashboard({
               <p className="text-center mb-2">No warehouse sites configured</p>
               <button
                 onClick={onAddSite}
-                className="text-sm px-4 py-2 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center gap-2"
+                className="text-sm px-4 py-2 rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Add Your First Site
@@ -198,7 +198,7 @@ export default function WMSDashboard({
           </div>
           <button
             onClick={() => onTabChange("inventory")}
-            className="w-full mt-4 text-sm text-[#004E89] hover:underline flex items-center justify-center gap-1"
+            className="w-full mt-4 text-sm text-[#2563EB] hover:underline flex items-center justify-center gap-1"
           >
             View all inventory
             <ChevronRight className="w-4 h-4" />

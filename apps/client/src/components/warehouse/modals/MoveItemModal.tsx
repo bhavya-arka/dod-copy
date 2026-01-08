@@ -104,7 +104,7 @@ export default function MoveItemModal({
       let successCount = 0;
       let failCount = 0;
 
-      for (const itemId of selectedItems) {
+      for (const itemId of Array.from(selectedItems)) {
         try {
           await moveInventoryItem(currentSiteId, itemId, {
             destination_site_id: destinationSiteId !== currentSiteId ? destinationSiteId : undefined,
@@ -167,13 +167,13 @@ export default function MoveItemModal({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search items..."
-              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+              className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
             />
 
             <div className="max-h-64 overflow-y-auto border border-border rounded-xl">
               {itemsLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-[#004E89]" />
+                  <Loader2 className="w-6 h-6 animate-spin text-[#2563EB]" />
                 </div>
               ) : filteredItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
@@ -186,14 +186,14 @@ export default function MoveItemModal({
                     <label
                       key={item.id}
                       className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors ${
-                        selectedItems.has(item.id) ? "bg-[#004E89]/10" : ""
+                        selectedItems.has(item.id) ? "bg-[#2563EB]/10" : ""
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={selectedItems.has(item.id)}
                         onChange={() => toggleItem(item.id)}
-                        className="w-4 h-4 rounded border-border text-[#004E89] focus:ring-[#004E89]/40"
+                        className="w-4 h-4 rounded border-border text-[#2563EB] focus:ring-[#2563EB]/40"
                       />
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-foreground text-sm truncate">
@@ -233,7 +233,7 @@ export default function MoveItemModal({
               <select
                 value={destinationSiteId}
                 onChange={(e) => setDestinationSiteId(Number(e.target.value))}
-                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
               >
                 {sites.map((site) => (
                   <option key={site.id} value={site.id}>
@@ -254,7 +254,7 @@ export default function MoveItemModal({
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Reason for move, special handling instructions..."
                 rows={3}
-                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40 resize-none"
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40 resize-none"
               />
             </div>
 
@@ -279,7 +279,7 @@ export default function MoveItemModal({
                 <Building2 className="w-4 h-4 text-muted-foreground" />
                 <span className="font-medium">{currentSite?.name}</span>
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                <span className="font-medium text-[#004E89]">{destinationSite?.name}</span>
+                <span className="font-medium text-[#2563EB]">{destinationSite?.name}</span>
               </div>
 
               <div className="border-t border-border pt-3">
@@ -345,7 +345,7 @@ export default function MoveItemModal({
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-lg mx-4 p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
-            <Move className="w-5 h-5 text-[#004E89]" />
+            <Move className="w-5 h-5 text-[#2563EB]" />
             <h2 className="text-lg font-semibold text-foreground">Move Items</h2>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -359,7 +359,7 @@ export default function MoveItemModal({
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                   step === s
-                    ? "bg-[#004E89] text-white"
+                    ? "bg-[#2563EB] text-white"
                     : ["select", "destination", "preview"].indexOf(step) > i
                     ? "bg-[#16A34A] text-white"
                     : "bg-muted text-muted-foreground"
@@ -412,7 +412,7 @@ export default function MoveItemModal({
             type="button"
             onClick={handleNext}
             disabled={loading || !canProceed()}
-            className="flex-1 py-2.5 text-sm rounded-xl bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 py-2.5 text-sm rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
             {step === "preview" ? "Confirm Move" : "Next"}

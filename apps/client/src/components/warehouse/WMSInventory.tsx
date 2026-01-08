@@ -763,7 +763,7 @@ export default function WMSInventory({
           onClick={() => setPage(p)}
           className={`px-3 py-1 text-sm rounded-lg transition-colors ${
             p === page
-              ? "bg-[#004E89] text-white"
+              ? "bg-[#2563EB] text-white"
               : "hover:bg-muted text-foreground"
           }`}
         >
@@ -811,7 +811,7 @@ export default function WMSInventory({
             </button>
             <button
               onClick={handleAddItem}
-              className="text-sm px-3 py-2 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center gap-2"
+              className="text-sm px-3 py-2 rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               Add Item
@@ -830,7 +830,7 @@ export default function WMSInventory({
           <select
             value={selectedSiteId || ""}
             onChange={(e) => onSelectSite(e.target.value ? Number(e.target.value) : null)}
-            className="px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+            className="px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
           >
             <option value="">Select warehouse site...</option>
             {sites.map((site) => (
@@ -847,7 +847,7 @@ export default function WMSInventory({
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={handleSearchKeyDown}
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-muted border border-border text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-muted border border-border text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
             />
           </div>
           
@@ -856,14 +856,14 @@ export default function WMSInventory({
               onClick={() => setFilterOpen(!filterOpen)}
               className={`text-sm px-3 py-2 rounded-lg border flex items-center gap-2 transition-colors ${
                 filters.length > 0
-                  ? "border-[#004E89] bg-[#004E89]/10 text-[#004E89]"
+                  ? "border-[#2563EB] bg-[#2563EB]/10 text-[#2563EB]"
                   : "border-border bg-white hover:bg-muted text-foreground"
               }`}
             >
               <Filter className="w-4 h-4" />
               Filter
               {filters.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-[#004E89] text-white text-xs">{filters.length}</span>
+                <span className="px-1.5 py-0.5 rounded-full bg-[#2563EB] text-white text-xs">{filters.length}</span>
               )}
             </button>
             {filterOpen && (
@@ -875,13 +875,13 @@ export default function WMSInventory({
                       <span className="text-muted-foreground">Match:</span>
                       <button
                         onClick={() => setFilterLogic("and")}
-                        className={`px-2 py-1 rounded ${filterLogic === "and" ? "bg-[#004E89] text-white" : "bg-muted text-foreground"}`}
+                        className={`px-2 py-1 rounded ${filterLogic === "and" ? "bg-[#2563EB] text-white" : "bg-muted text-foreground"}`}
                       >
                         AND
                       </button>
                       <button
                         onClick={() => setFilterLogic("or")}
-                        className={`px-2 py-1 rounded ${filterLogic === "or" ? "bg-[#004E89] text-white" : "bg-muted text-foreground"}`}
+                        className={`px-2 py-1 rounded ${filterLogic === "or" ? "bg-[#2563EB] text-white" : "bg-muted text-foreground"}`}
                       >
                         OR
                       </button>
@@ -939,7 +939,7 @@ export default function WMSInventory({
                 <div className="flex items-center justify-between pt-3 border-t border-border">
                   <button
                     onClick={addFilter}
-                    className="text-sm text-[#004E89] hover:underline flex items-center gap-1"
+                    className="text-sm text-[#2563EB] hover:underline flex items-center gap-1"
                   >
                     <Plus className="w-4 h-4" />
                     Add filter
@@ -978,7 +978,7 @@ export default function WMSInventory({
                         type="checkbox"
                         checked={col.visible}
                         onChange={() => toggleColumnVisibility(col.key)}
-                        className="rounded border-border text-[#004E89] focus:ring-[#004E89]"
+                        className="rounded border-border text-[#2563EB] focus:ring-[#2563EB]"
                       />
                       <span className="text-sm text-foreground">{col.label}</span>
                     </label>
@@ -1003,12 +1003,12 @@ export default function WMSInventory({
             {searchTerms.map((term) => (
               <span
                 key={term}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#004E89]/10 text-[#004E89] text-sm border border-[#004E89]/20"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#2563EB]/10 text-[#2563EB] text-sm border border-[#2563EB]/20"
               >
                 {term}
                 <button
                   onClick={() => handleRemoveSearchTerm(term)}
-                  className="hover:bg-[#004E89]/20 rounded-full p-0.5 transition-colors"
+                  className="hover:bg-[#2563EB]/20 rounded-full p-0.5 transition-colors"
                   title="Remove search term"
                 >
                   <X className="w-3 h-3" />
@@ -1034,7 +1034,7 @@ export default function WMSInventory({
           </div>
         ) : loading && items.length === 0 ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin text-[#004E89]" />
+            <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
           </div>
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
@@ -1046,7 +1046,7 @@ export default function WMSInventory({
             {filters.length === 0 && searchTerms.length === 0 && (
               <button
                 onClick={handleImport}
-                className="text-sm px-4 py-2 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors flex items-center gap-2"
+                className="text-sm px-4 py-2 rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors flex items-center gap-2"
               >
                 <Upload className="w-4 h-4" />
                 Import Inventory
@@ -1058,7 +1058,7 @@ export default function WMSInventory({
             <div className="overflow-x-auto relative">
               {loading && (
                 <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-10">
-                  <Loader2 className="w-6 h-6 animate-spin text-[#004E89]" />
+                  <Loader2 className="w-6 h-6 animate-spin text-[#2563EB]" />
                 </div>
               )}
               <table className="w-full">
@@ -1072,7 +1072,7 @@ export default function WMSInventory({
                           if (el) el.indeterminate = someSelected;
                         }}
                         onChange={(e) => handleSelectAll(e.target.checked)}
-                        className="rounded border-border text-[#004E89] focus:ring-[#004E89]"
+                        className="rounded border-border text-[#2563EB] focus:ring-[#2563EB]"
                       />
                     </th>
                     {visibleColumns.map((col) => (
@@ -1089,7 +1089,7 @@ export default function WMSInventory({
                         } ${
                           draggedColumnKey === col.key ? "opacity-50 bg-muted cursor-grabbing" : "cursor-grab"
                         } ${
-                          dragOverColumnKey === col.key ? "bg-[#004E89]/20 border-l-2 border-[#004E89]" : ""
+                          dragOverColumnKey === col.key ? "bg-[#2563EB]/20 border-l-2 border-[#2563EB]" : ""
                         } ${
                           draggedColumnKey && draggedColumnKey !== col.key ? "cursor-grabbing" : ""
                         }`}
@@ -1119,13 +1119,13 @@ export default function WMSInventory({
                 </thead>
                 <tbody>
                   {items.map((item) => (
-                    <tr key={item.id} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${selectedItems.has(item.id) ? 'bg-[#004E89]/5' : ''}`}>
+                    <tr key={item.id} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${selectedItems.has(item.id) ? 'bg-[#2563EB]/5' : ''}`}>
                       <td className="py-3 px-2">
                         <input
                           type="checkbox"
                           checked={selectedItems.has(item.id)}
                           onChange={(e) => handleSelectItem(item.id, e.target.checked)}
-                          className="rounded border-border text-[#004E89] focus:ring-[#004E89]"
+                          className="rounded border-border text-[#2563EB] focus:ring-[#2563EB]"
                         />
                       </td>
                       {visibleColumns.map((col) => (

@@ -81,7 +81,7 @@ export default function WMSAdmin({
               <select
                 value={selectedSiteId || ""}
                 onChange={(e) => onSelectSite(e.target.value ? Number(e.target.value) : null)}
-                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#004E89] focus:ring-1 focus:ring-[#004E89]/40"
+                className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/40"
               >
                 <option value="">Select a site...</option>
                 {sites.map((site) => (
@@ -92,10 +92,10 @@ export default function WMSAdmin({
               </select>
             </div>
 
-            <div className="p-4 rounded-xl bg-muted/50 border-2 border-dashed border-[#004E89]/30">
+            <div className="p-4 rounded-xl bg-muted/50 border-2 border-dashed border-[#2563EB]/30">
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-lg bg-[#004E89]/10 border border-[#004E89]/20">
-                  <FileText className="w-5 h-5 text-[#004E89]" />
+                <div className="p-2 rounded-lg bg-[#2563EB]/10 border border-[#2563EB]/20">
+                  <FileText className="w-5 h-5 text-[#2563EB]" />
                 </div>
                 <div>
                   <p className="font-medium text-foreground">Import Inventory (PDF or CSV)</p>
@@ -105,7 +105,7 @@ export default function WMSAdmin({
               <button
                 onClick={handleFileImport}
                 disabled={!selectedSiteId}
-                className="w-full text-sm py-2.5 rounded-lg bg-[#004E89] text-white hover:bg-[#003d6d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full text-sm py-2.5 rounded-lg bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 <Upload className="w-4 h-4" />
                 Import PDF/CSV File
@@ -115,7 +115,7 @@ export default function WMSAdmin({
             <div className="p-4 rounded-xl bg-muted/50 border border-dashed border-border">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-lg bg-white border border-border">
-                  <Download className="w-5 h-5 text-[#004E89]" />
+                  <Download className="w-5 h-5 text-[#2563EB]" />
                 </div>
                 <div>
                   <p className="font-medium text-foreground">Export Data</p>
