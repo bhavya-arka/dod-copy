@@ -8,7 +8,8 @@
   "exports": {
     ".": "./schema.ts",
     "./schema": "./schema.ts",
-    "./inventoryColumns": "./inventoryColumns.ts"
+    "./inventoryColumns": "./inventoryColumns.ts",
+    "./transportTypes": "./transportTypes.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.39.1",
