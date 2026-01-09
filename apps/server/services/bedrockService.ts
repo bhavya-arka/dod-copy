@@ -7,12 +7,12 @@
 
 import {
   BedrockRuntimeClient,
-  InvokeModelCommand
+  InvokeModelCommand,
 } from "@aws-sdk/client-bedrock-runtime";
 
 import {
   BedrockAgentRuntimeClient,
-  RetrieveCommand
+  RetrieveCommand,
 } from "@aws-sdk/client-bedrock-agent-runtime";
 
 import crypto from "crypto";
@@ -21,9 +21,13 @@ import crypto from "crypto";
 const TRACE_LAMBDA_ENDPOINT = process.env.BEDROCK_TRACE_LAMBDA_ENDPOINT || "";
 
 if (TRACE_LAMBDA_ENDPOINT) {
-  console.log(`[Bedrock:Lambda] Trace logging configured: ${TRACE_LAMBDA_ENDPOINT}`);
+  console.log(
+    `[Bedrock:Lambda] Trace logging configured: ${TRACE_LAMBDA_ENDPOINT}`,
+  );
 } else {
-  console.log("[Bedrock:Lambda] Trace logging not configured (BEDROCK_TRACE_LAMBDA_ENDPOINT not set)");
+  console.log(
+    "[Bedrock:Lambda] Trace logging not configured (BEDROCK_TRACE_LAMBDA_ENDPOINT not set)",
+  );
 }
 
 // Trace data interface
@@ -42,28 +46,58 @@ interface BedrockTrace {
 // Log trace to Lambda via API Gateway (fire and forget)
 async function logTraceToLambda(trace: BedrockTrace): Promise<void> {
   if (!TRACE_LAMBDA_ENDPOINT) {
-    return; // Skip if not configured
+    console.log("[Bedrock:Trace] Skipping - no endpoint configured");
+    return;
   }
-  
+
+  console.log("[Bedrock:Trace] Sending trace to Lambda", {
+    trace_id: trace.trace_id,
+    endpoint: TRACE_LAMBDA_ENDPOINT.substring(0, 50) + "...",
+    model: trace.model,
+    latency_ms: trace.latency_ms,
+    tokens: { input: trace.token_input, output: trace.token_output },
+    docs_retrieved: trace.retrieved_docs.length,
+  });
+
   try {
-    // Fire and forget - don't await, use AbortController for timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+    const timeoutId = setTimeout(() => {
+      console.log("[Bedrock:Trace] Request timeout (5s)", { trace_id: trace.trace_id });
+      controller.abort();
+    }, 5000);
+
+    const startTime = Date.now();
     
     fetch(TRACE_LAMBDA_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(trace),
-      signal: controller.signal
-    }).then(() => {
-      clearTimeout(timeoutId);
-      console.log("[Bedrock:Lambda] Trace sent", { trace_id: trace.trace_id });
-    }).catch(() => {
-      clearTimeout(timeoutId);
-      // Silent failure - fire and forget
+      signal: controller.signal,
+    })
+      .then((response) => {
+        clearTimeout(timeoutId);
+        const duration = Date.now() - startTime;
+        console.log("[Bedrock:Trace] Lambda response received", {
+          trace_id: trace.trace_id,
+          status: response.status,
+          statusText: response.statusText,
+          duration_ms: duration,
+        });
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        const duration = Date.now() - startTime;
+        console.error("[Bedrock:Trace] Lambda request failed", {
+          trace_id: trace.trace_id,
+          error: error instanceof Error ? error.message : String(error),
+          duration_ms: duration,
+        });
+      });
+  } catch (error) {
+    console.error("[Bedrock:Trace] Exception in trace logging", {
+      trace_id: trace.trace_id,
+      error: error instanceof Error ? error.message : String(error),
     });
-  } catch {
-    // Non-blocking - silent failure
   }
 }
 import type { AiInsightType } from "../../../packages/shared/schema";
@@ -74,43 +108,59 @@ const KNOWLEDGE_BASE_ID = process.env.AWS_BEDROCK_KNOWLEDGE_BASE_ID || "";
 // Model ID can be overridden via environment variable (default: Nova Lite with US regional inference profile)
 const MODEL_ID = process.env.AWS_BEDROCK_MODEL_ID || "us.amazon.nova-lite-v1:0";
 
-console.log(`[Bedrock:CONFIG] Region: ${AWS_REGION}, Model: ${MODEL_ID}, KB: ${KNOWLEDGE_BASE_ID ? "configured" : "not configured"}`);
+console.log(
+  `[Bedrock:CONFIG] Region: ${AWS_REGION}, Model: ${MODEL_ID}, KB: ${KNOWLEDGE_BASE_ID ? "configured" : "not configured"}`,
+);
 
 // Sanitize AWS credentials - trim whitespace that may have been introduced during copy/paste
 function getAwsCredentials() {
   const accessKeyId = (process.env.AWS_ACCESS_KEY_ID || "").trim();
   const secretAccessKey = (process.env.AWS_SECRET_ACCESS_KEY || "").trim();
-  
+
   // Validate format
   if (accessKeyId && accessKeyId.length !== 20) {
-    console.warn(`[Bedrock] Warning: AWS_ACCESS_KEY_ID has unexpected length ${accessKeyId.length} (expected 20)`);
+    console.warn(
+      `[Bedrock] Warning: AWS_ACCESS_KEY_ID has unexpected length ${accessKeyId.length} (expected 20)`,
+    );
   }
   if (secretAccessKey && secretAccessKey.length !== 40) {
-    console.warn(`[Bedrock] Warning: AWS_SECRET_ACCESS_KEY has unexpected length ${secretAccessKey.length} (expected 40)`);
+    console.warn(
+      `[Bedrock] Warning: AWS_SECRET_ACCESS_KEY has unexpected length ${secretAccessKey.length} (expected 40)`,
+    );
   }
-  
+
   return { accessKeyId, secretAccessKey };
 }
 
 // Rate limiting configuration - configurable via environment variables
 // Validate and parse rate limit values with safe defaults
-function parseRateLimit(envVar: string | undefined, defaultValue: number): number {
+function parseRateLimit(
+  envVar: string | undefined,
+  defaultValue: number,
+): number {
   if (!envVar) return defaultValue;
   const parsed = parseInt(envVar, 10);
   if (isNaN(parsed) || parsed <= 0) {
-    console.warn(`[Bedrock:CONFIG] Invalid rate limit value "${envVar}", using default: ${defaultValue}`);
+    console.warn(
+      `[Bedrock:CONFIG] Invalid rate limit value "${envVar}", using default: ${defaultValue}`,
+    );
     return defaultValue;
   }
   return parsed;
 }
 
 const RATE_LIMIT = {
-  maxRequestsPerMinute: parseRateLimit(process.env.AI_RATE_LIMIT_PER_MINUTE, 10),
+  maxRequestsPerMinute: parseRateLimit(
+    process.env.AI_RATE_LIMIT_PER_MINUTE,
+    10,
+  ),
   maxRequestsPerHour: parseRateLimit(process.env.AI_RATE_LIMIT_PER_HOUR, 100),
-  requestWindow: new Map<string, number[]>()
+  requestWindow: new Map<string, number[]>(),
 };
 
-console.log(`[Bedrock:CONFIG] Rate limits: ${RATE_LIMIT.maxRequestsPerMinute}/min, ${RATE_LIMIT.maxRequestsPerHour}/hour`);
+console.log(
+  `[Bedrock:CONFIG] Rate limits: ${RATE_LIMIT.maxRequestsPerMinute}/min, ${RATE_LIMIT.maxRequestsPerHour}/hour`,
+);
 
 // Clients (lazy initialized)
 let runtimeClient: BedrockRuntimeClient | null = null;
@@ -123,8 +173,8 @@ function getBedrockRuntimeClient(): BedrockRuntimeClient {
       region: AWS_REGION,
       credentials: {
         accessKeyId: creds.accessKeyId,
-        secretAccessKey: creds.secretAccessKey
-      }
+        secretAccessKey: creds.secretAccessKey,
+      },
     });
   }
   return runtimeClient;
@@ -137,29 +187,34 @@ function getBedrockAgentClient(): BedrockAgentRuntimeClient {
       region: AWS_REGION,
       credentials: {
         accessKeyId: creds.accessKeyId,
-        secretAccessKey: creds.secretAccessKey
-      }
+        secretAccessKey: creds.secretAccessKey,
+      },
     });
   }
   return agentClient;
 }
 
 // Rate limiting check
-function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs?: number } {
+function checkRateLimit(userId: string): {
+  allowed: boolean;
+  retryAfterMs?: number;
+} {
   const now = Date.now();
   const oneMinuteAgo = now - 60000;
   const oneHourAgo = now - 3600000;
 
   let userRequests = RATE_LIMIT.requestWindow.get(userId) || [];
-  
+
   // Clean old entries
-  userRequests = userRequests.filter(ts => ts > oneHourAgo);
-  
-  const requestsLastMinute = userRequests.filter(ts => ts > oneMinuteAgo).length;
+  userRequests = userRequests.filter((ts) => ts > oneHourAgo);
+
+  const requestsLastMinute = userRequests.filter(
+    (ts) => ts > oneMinuteAgo,
+  ).length;
   const requestsLastHour = userRequests.length;
 
   if (requestsLastMinute >= RATE_LIMIT.maxRequestsPerMinute) {
-    const oldestInMinute = userRequests.filter(ts => ts > oneMinuteAgo)[0];
+    const oldestInMinute = userRequests.filter((ts) => ts > oneMinuteAgo)[0];
     return { allowed: false, retryAfterMs: oldestInMinute + 60000 - now };
   }
 
@@ -177,10 +232,13 @@ function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs?: numb
 
 // Generate SHA256 hash for cache validation
 // Includes flightPlanId to ensure proper cache isolation per flight plan
-export function generateInputHash(data: any, flightPlanId?: number | null): string {
+export function generateInputHash(
+  data: any,
+  flightPlanId?: number | null,
+): string {
   const hashInput = {
     ...data,
-    flightPlanId: flightPlanId ?? null
+    flightPlanId: flightPlanId ?? null,
   };
   const normalized = JSON.stringify(hashInput, Object.keys(hashInput).sort());
   return crypto.createHash("sha256").update(normalized).digest("hex");
@@ -314,26 +372,79 @@ const JSON_SCHEMAS: Record<AiInsightType, string> = {
   "trend_analysis": { "growth_rate_percent": number, "seasonal_factors": ["string"], "confidence_level": "low|medium|high" },
   "optimization_recommendations": [{ "action": "string", "expected_impact": "string", "priority": "high|medium|low" }],
   "resource_planning": { "additional_storage_needed_sqft": number, "recommended_actions": ["string"] }
-}`
+}`,
 };
 
 // Required fields for response validation
 const RESPONSE_SCHEMAS: Record<string, string[]> = {
-  allocation_summary: ["summary", "key_metrics", "optimization_suggestions", "risk_flags"],
+  allocation_summary: [
+    "summary",
+    "key_metrics",
+    "optimization_suggestions",
+    "risk_flags",
+  ],
   cob_analysis: ["cob_assessment", "balance_analysis", "safety_notes"],
-  pallet_review: ["pallet_efficiency", "configuration_notes", "tiedown_recommendations"],
-  route_planning: ["route_assessment", "optimization_notes", "fuel_efficiency_tips"],
+  pallet_review: [
+    "pallet_efficiency",
+    "configuration_notes",
+    "tiedown_recommendations",
+  ],
+  route_planning: [
+    "route_assessment",
+    "optimization_notes",
+    "fuel_efficiency_tips",
+  ],
   compliance: ["compliance_status", "regulation_citations", "checklist_items"],
   mission_briefing: ["mission_overview", "key_statistics", "critical_items"],
-  mission_analytics: ["mission_summary", "performance_metrics", "advice_messages", "risk_assessment"],
-  flight_allocation_analysis: ["executive_summary", "fleet_status", "cob_summary", "fleet_shortage_analysis"],
+  mission_analytics: [
+    "mission_summary",
+    "performance_metrics",
+    "advice_messages",
+    "risk_assessment",
+  ],
+  flight_allocation_analysis: [
+    "executive_summary",
+    "fleet_status",
+    "cob_summary",
+    "fleet_shortage_analysis",
+  ],
   warehouse_optimization: ["summary", "recommendations", "metrics"],
-  land_convoy_analysis: ["convoy_summary", "vehicle_utilization", "route_assessment", "logistics_recommendations"],
-  land_route_optimization: ["route_summary", "waypoints", "terrain_analysis", "optimization_recommendations"],
-  sea_voyage_analysis: ["voyage_summary", "port_schedule", "cargo_manifest_summary", "voyage_risks"],
-  sea_container_optimization: ["container_summary", "stacking_analysis", "load_sequence", "hazmat_segregation"],
-  cross_modal_manifest_analysis: ["manifest_overview", "modal_breakdown", "transfer_points", "recommendations"],
-  warehouse_capacity_forecast: ["current_capacity", "forecast_90_days", "capacity_alerts", "optimization_recommendations"],
+  land_convoy_analysis: [
+    "convoy_summary",
+    "vehicle_utilization",
+    "route_assessment",
+    "logistics_recommendations",
+  ],
+  land_route_optimization: [
+    "route_summary",
+    "waypoints",
+    "terrain_analysis",
+    "optimization_recommendations",
+  ],
+  sea_voyage_analysis: [
+    "voyage_summary",
+    "port_schedule",
+    "cargo_manifest_summary",
+    "voyage_risks",
+  ],
+  sea_container_optimization: [
+    "container_summary",
+    "stacking_analysis",
+    "load_sequence",
+    "hazmat_segregation",
+  ],
+  cross_modal_manifest_analysis: [
+    "manifest_overview",
+    "modal_breakdown",
+    "transfer_points",
+    "recommendations",
+  ],
+  warehouse_capacity_forecast: [
+    "current_capacity",
+    "forecast_90_days",
+    "capacity_alerts",
+    "optimization_recommendations",
+  ],
 };
 
 // Knowledge base query mappings per insight type
@@ -344,23 +455,34 @@ const KB_QUERIES: Record<AiInsightType, string> = {
   route_planning: "military airlift route planning fuel efficiency",
   compliance: "DoD cargo transportation regulations hazmat compliance",
   mission_briefing: "military mission briefing format requirements",
-  mission_analytics: "military airlift mission performance metrics efficiency optimization",
-  flight_allocation_analysis: "military airlift fleet allocation cargo loading regulations",
-  land_convoy_analysis: "military ground convoy planning vehicle utilization tactical logistics",
-  land_route_optimization: "military ground transport route planning terrain analysis waypoints",
-  sea_voyage_analysis: "military sealift vessel operations port logistics maritime security",
-  sea_container_optimization: "container stacking regulations weight distribution hazmat segregation",
-  cross_modal_manifest_analysis: "intermodal cargo transfer air land sea logistics optimization",
-  warehouse_capacity_forecast: "warehouse capacity planning inventory forecasting storage optimization"
+  mission_analytics:
+    "military airlift mission performance metrics efficiency optimization",
+  flight_allocation_analysis:
+    "military airlift fleet allocation cargo loading regulations",
+  land_convoy_analysis:
+    "military ground convoy planning vehicle utilization tactical logistics",
+  land_route_optimization:
+    "military ground transport route planning terrain analysis waypoints",
+  sea_voyage_analysis:
+    "military sealift vessel operations port logistics maritime security",
+  sea_container_optimization:
+    "container stacking regulations weight distribution hazmat segregation",
+  cross_modal_manifest_analysis:
+    "intermodal cargo transfer air land sea logistics optimization",
+  warehouse_capacity_forecast:
+    "warehouse capacity planning inventory forecasting storage optimization",
 };
 
 // Validate response against expected schema fields
-function validateResponse(result: any, insightType: string): { valid: boolean; missing: string[] } {
+function validateResponse(
+  result: any,
+  insightType: string,
+): { valid: boolean; missing: string[] } {
   const expectedFields = RESPONSE_SCHEMAS[insightType] || [];
-  if (!result || typeof result !== 'object' || result.error) {
+  if (!result || typeof result !== "object" || result.error) {
     return { valid: false, missing: expectedFields };
   }
-  const missing = expectedFields.filter(field => !(field in result));
+  const missing = expectedFields.filter((field) => !(field in result));
   return { valid: missing.length === 0, missing };
 }
 
@@ -369,13 +491,13 @@ function buildStructuredPrompt(
   context: string,
   queryData: string,
   schema: string,
-  guardrails: string[]
+  guardrails: string[],
 ): { system: string; user: string } {
   // Concise system prompt for faster first token
   const system = `You are an expert military logistics analyst. Output ONLY valid JSON matching the schema. No markdown, no explanations.
 
 GUARDRAILS:
-${guardrails.map((g, i) => `${i + 1}. ${g}`).join('\n')}`;
+${guardrails.map((g, i) => `${i + 1}. ${g}`).join("\n")}`;
 
   // Structured user prompt
   const user = context
@@ -404,9 +526,14 @@ Output ONLY the JSON object. No other text.`;
 }
 
 // Retrieve context from Knowledge Base (returns context text and document names for tracing)
-async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 3): Promise<{ context: string; documentNames: string[] }> {
+async function retrieveKnowledgeBaseContext(
+  query: string,
+  maxResults: number = 3,
+): Promise<{ context: string; documentNames: string[] }> {
   if (!KNOWLEDGE_BASE_ID) {
-    console.log("[Bedrock] No Knowledge Base ID configured, skipping retrieval");
+    console.log(
+      "[Bedrock] No Knowledge Base ID configured, skipping retrieval",
+    );
     return { context: "", documentNames: [] };
   }
 
@@ -418,28 +545,34 @@ async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 
     const command = new RetrieveCommand({
       knowledgeBaseId: KNOWLEDGE_BASE_ID,
       retrievalQuery: { text: query },
-      retrievalConfiguration: { 
-        vectorSearchConfiguration: { 
-          numberOfResults: maxResults 
-        } 
-      }
+      retrievalConfiguration: {
+        vectorSearchConfiguration: {
+          numberOfResults: maxResults,
+        },
+      },
     });
 
     const response = await client.send(command);
     const kbDuration = Date.now() - kbStartTime;
-    
+
     if (!response.retrievalResults || response.retrievalResults.length === 0) {
-      console.log("[Bedrock:TIMING] KB retrieval completed", { durationMs: kbDuration, contextLength: 0 });
+      console.log("[Bedrock:TIMING] KB retrieval completed", {
+        durationMs: kbDuration,
+        contextLength: 0,
+      });
       return { context: "", documentNames: [] };
     }
 
     // Extract document names from location URIs
     const documentNames: string[] = [];
     for (const result of response.retrievalResults) {
-      const uri = result.location?.s3Location?.uri || result.location?.webLocation?.url || "";
+      const uri =
+        result.location?.s3Location?.uri ||
+        result.location?.webLocation?.url ||
+        "";
       if (uri) {
         // Extract filename from URI
-        const parts = uri.split('/');
+        const parts = uri.split("/");
         const filename = parts[parts.length - 1] || uri;
         if (filename && !documentNames.includes(filename)) {
           documentNames.push(filename);
@@ -448,15 +581,22 @@ async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 
     }
 
     const context = response.retrievalResults
-      .map(r => r.content?.text || "")
-      .filter(text => text.length > 0)
+      .map((r) => r.content?.text || "")
+      .filter((text) => text.length > 0)
       .join("\n\n---\n\n");
 
-    console.log("[Bedrock:TIMING] KB retrieval completed", { durationMs: kbDuration, contextLength: context.length, docs: documentNames });
+    console.log("[Bedrock:TIMING] KB retrieval completed", {
+      durationMs: kbDuration,
+      contextLength: context.length,
+      docs: documentNames,
+    });
     return { context, documentNames };
   } catch (error) {
     const kbDuration = Date.now() - kbStartTime;
-    console.error("[Bedrock:ERROR] KB retrieval failed", { durationMs: kbDuration, error });
+    console.error("[Bedrock:ERROR] KB retrieval failed", {
+      durationMs: kbDuration,
+      error,
+    });
     return { context: "", documentNames: [] };
   }
 }
@@ -464,11 +604,17 @@ async function retrieveKnowledgeBaseContext(query: string, maxResults: number = 
 // Invoke Nova Lite model with structured prompts
 async function invokeModel(
   systemPrompt: string,
-  userPrompt: string
-): Promise<{ result: any; tokenUsage: { inputTokens: number; outputTokens: number }; ttftMs: number }> {
+  userPrompt: string,
+): Promise<{
+  result: any;
+  tokenUsage: { inputTokens: number; outputTokens: number };
+  ttftMs: number;
+}> {
   const invokeStartTime = Date.now();
-  console.log("[Bedrock:TIMING] Model invocation started", { modelId: MODEL_ID });
-  
+  console.log("[Bedrock:TIMING] Model invocation started", {
+    modelId: MODEL_ID,
+  });
+
   try {
     const client = getBedrockRuntimeClient();
 
@@ -477,22 +623,22 @@ async function invokeModel(
       messages: [
         {
           role: "user",
-          content: [{ text: userPrompt }]
-        }
+          content: [{ text: userPrompt }],
+        },
       ],
       system: [{ text: systemPrompt }],
       inferenceConfig: {
         max_new_tokens: 2048,
         temperature: 0.3,
-        top_p: 0.9
-      }
+        top_p: 0.9,
+      },
     };
 
     const command = new InvokeModelCommand({
       modelId: MODEL_ID,
       contentType: "application/json",
       accept: "application/json",
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
     });
 
     const response = await client.send(command);
@@ -516,15 +662,15 @@ async function invokeModel(
       if (jsonMatch) {
         parsedResult = JSON.parse(jsonMatch[0]);
         // Validate it's a proper object (not null)
-        isValidJson = parsedResult !== null && typeof parsedResult === 'object';
+        isValidJson = parsedResult !== null && typeof parsedResult === "object";
       }
-      
+
       if (!isValidJson) {
         parsedResult = {
           error: true,
           errorType: "json_extraction_failed",
           message: "No valid JSON object found in model response",
-          rawResponse: resultText.substring(0, 500)
+          rawResponse: resultText.substring(0, 500),
         };
       }
     } catch (e) {
@@ -532,21 +678,21 @@ async function invokeModel(
         error: true,
         errorType: "json_parse_error",
         message: e instanceof Error ? e.message : "Failed to parse JSON",
-        rawResponse: resultText.substring(0, 500)
+        rawResponse: resultText.substring(0, 500),
       };
     }
 
     const tokenUsage = {
       inputTokens: responseBody.usage?.inputTokens || 0,
-      outputTokens: responseBody.usage?.outputTokens || 0
+      outputTokens: responseBody.usage?.outputTokens || 0,
     };
 
-    console.log("[Bedrock:TIMING] Model response received", { 
-      ttftMs, 
-      tokenUsage, 
+    console.log("[Bedrock:TIMING] Model response received", {
+      ttftMs,
+      tokenUsage,
       hasValidJson: isValidJson,
       systemPromptLength: systemPrompt.length,
-      userPromptLength: userPrompt.length
+      userPromptLength: userPrompt.length,
     });
 
     return { result: parsedResult, tokenUsage, ttftMs };
@@ -575,22 +721,35 @@ export interface InsightResult {
 }
 
 export async function generateInsight(
-  options: GenerateInsightOptions
+  options: GenerateInsightOptions,
 ): Promise<InsightResult> {
-  const { type, inputData, userId, flightPlanId, forceRegenerate = false } = options;
+  const {
+    type,
+    inputData,
+    userId,
+    flightPlanId,
+    forceRegenerate = false,
+  } = options;
   const totalStartTime = Date.now();
   const traceId = crypto.randomUUID();
 
   // Include flightPlanId in hash to ensure proper cache isolation per flight plan
   const inputHash = generateInputHash({ type, ...inputData }, flightPlanId);
-  
-  console.log("[Bedrock:TIMING] Insight generation started", { type, flightPlanId, inputHash, traceId });
+
+  console.log("[Bedrock:TIMING] Insight generation started", {
+    type,
+    flightPlanId,
+    inputHash,
+    traceId,
+  });
 
   try {
     // Rate limit check
     const rateCheck = checkRateLimit(userId);
     if (!rateCheck.allowed) {
-      throw new Error(`Rate limit exceeded. Try again in ${Math.ceil((rateCheck.retryAfterMs || 60000) / 1000)} seconds.`);
+      throw new Error(
+        `Rate limit exceeded. Try again in ${Math.ceil((rateCheck.retryAfterMs || 60000) / 1000)} seconds.`,
+      );
     }
 
     const schema = JSON_SCHEMAS[type];
@@ -601,12 +760,18 @@ export async function generateInsight(
     // Retrieve knowledge base context (returns context and document names)
     const kbStartTime = Date.now();
     const kbQuery = KB_QUERIES[type] || `military logistics ${type}`;
-    const { context: kbContext, documentNames: retrievedDocs } = await retrieveKnowledgeBaseContext(kbQuery);
+    const { context: kbContext, documentNames: retrievedDocs } =
+      await retrieveKnowledgeBaseContext(kbQuery);
     const kbDuration = Date.now() - kbStartTime;
 
     // Build structured prompt
     const queryData = JSON.stringify(inputData, null, 2);
-    const { system, user } = buildStructuredPrompt(kbContext, queryData, schema, GUARDRAILS);
+    const { system, user } = buildStructuredPrompt(
+      kbContext,
+      queryData,
+      schema,
+      GUARDRAILS,
+    );
 
     // Invoke model
     const modelStartTime = Date.now();
@@ -616,10 +781,10 @@ export async function generateInsight(
     // Validate response structure
     const validation = validateResponse(result, type);
     if (!validation.valid) {
-      console.warn("[Bedrock:VALIDATION] Response missing required fields", { 
-        type, 
+      console.warn("[Bedrock:VALIDATION] Response missing required fields", {
+        type,
         missing: validation.missing,
-        hasError: !!result?.error
+        hasError: !!result?.error,
       });
     }
 
@@ -630,7 +795,7 @@ export async function generateInsight(
       modelMs: modelDuration,
       ttftMs,
       totalMs: totalDuration,
-      valid: validation.valid
+      valid: validation.valid,
     });
 
     // Log trace to S3 (non-blocking)
@@ -643,8 +808,10 @@ export async function generateInsight(
       latency_ms: totalDuration,
       token_input: tokenUsage.inputTokens,
       token_output: tokenUsage.outputTokens,
-      session_id: userId
+      session_id: userId,
     };
+    console.log()
+    console.log(trace);
     logTraceToLambda(trace); // Fire and forget to Lambda
 
     return {
@@ -652,11 +819,15 @@ export async function generateInsight(
       inputHash,
       tokenUsage,
       fromCache: false,
-      timingMs: { kb: kbDuration, model: modelDuration, total: totalDuration }
+      timingMs: { kb: kbDuration, model: modelDuration, total: totalDuration },
     };
   } catch (error) {
     const totalDuration = Date.now() - totalStartTime;
-    console.error("[Bedrock:ERROR] Insight generation failed", { type, totalMs: totalDuration, error });
+    console.error("[Bedrock:ERROR] Insight generation failed", {
+      type,
+      totalMs: totalDuration,
+      error,
+    });
     throw error;
   }
 }
@@ -669,7 +840,7 @@ export async function checkBedrockHealth(): Promise<{
 }> {
   try {
     const knowledgeBaseConfigured = !!KNOWLEDGE_BASE_ID;
-    
+
     // Try a minimal model invocation
     const client = getBedrockRuntimeClient();
     const command = new InvokeModelCommand({
@@ -679,18 +850,18 @@ export async function checkBedrockHealth(): Promise<{
       body: JSON.stringify({
         schemaVersion: "messages-v1",
         messages: [{ role: "user", content: [{ text: "test" }] }],
-        inferenceConfig: { max_new_tokens: 5 }
-      })
+        inferenceConfig: { max_new_tokens: 5 },
+      }),
     });
 
     await client.send(command);
-    
+
     return { healthy: true, knowledgeBaseConfigured };
   } catch (error) {
-    return { 
-      healthy: false, 
+    return {
+      healthy: false,
       knowledgeBaseConfigured: !!KNOWLEDGE_BASE_ID,
-      error: error instanceof Error ? error.message : "Unknown error"
+      error: error instanceof Error ? error.message : "Unknown error",
     };
   }
 }
@@ -698,5 +869,5 @@ export async function checkBedrockHealth(): Promise<{
 export default {
   generateInsight,
   generateInputHash,
-  checkBedrockHealth
+  checkBedrockHealth,
 };
