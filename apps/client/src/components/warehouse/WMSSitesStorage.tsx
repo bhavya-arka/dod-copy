@@ -75,8 +75,8 @@ export default function WMSSitesStorage({
   const [isDeletingZone, setIsDeletingZone] = useState(false);
   const [seedingZones, setSeedingZones] = useState<Set<number>>(new Set());
 
-  const fetchBuildingsForSite = useCallback(async (siteId: number) => {
-    if (siteBuildings[siteId] || loadingBuildings.has(siteId)) {
+  const fetchBuildingsForSite = useCallback(async (siteId: number, force = false) => {
+    if (!force && (siteBuildings[siteId] || loadingBuildings.has(siteId))) {
       return;
     }
 
@@ -96,8 +96,8 @@ export default function WMSSitesStorage({
     }
   }, [siteBuildings, loadingBuildings]);
 
-  const fetchZonesForSite = useCallback(async (siteId: number) => {
-    if (siteZones[siteId] || loadingZones.has(siteId)) {
+  const fetchZonesForSite = useCallback(async (siteId: number, force = false) => {
+    if (!force && (siteZones[siteId] || loadingZones.has(siteId))) {
       return;
     }
 
@@ -214,17 +214,14 @@ export default function WMSSitesStorage({
   const handleConfirmDeleteBuilding = async () => {
     if (!buildingToDelete) return;
     
+    const siteId = buildingToDelete.siteId;
     setIsDeletingBuilding(true);
     try {
-      await deleteBuilding(buildingToDelete.siteId, buildingToDelete.building.id);
+      await deleteBuilding(siteId, buildingToDelete.building.id);
       onShowToast(`Building "${buildingToDelete.building.code}" deleted successfully`, "success");
-      setSiteBuildings(prev => {
-        const newBuildings = { ...prev };
-        delete newBuildings[buildingToDelete.siteId];
-        return newBuildings;
-      });
       setDeleteBuildingDialogOpen(false);
       setBuildingToDelete(null);
+      fetchBuildingsForSite(siteId, true);
       onRefresh();
     } catch (error) {
       onShowToast(
@@ -237,17 +234,13 @@ export default function WMSSitesStorage({
   };
 
   const handleBuildingModalSuccess = () => {
+    const siteId = addBuildingModalSite?.id;
     setAddBuildingModalOpen(false);
     setAddBuildingModalSite(null);
     setEditBuildingData(undefined);
-    setSiteBuildings(prev => {
-      if (addBuildingModalSite) {
-        const newBuildings = { ...prev };
-        delete newBuildings[addBuildingModalSite.id];
-        return newBuildings;
-      }
-      return prev;
-    });
+    if (siteId) {
+      fetchBuildingsForSite(siteId, true);
+    }
     onRefresh();
   };
 
@@ -266,17 +259,14 @@ export default function WMSSitesStorage({
   const handleConfirmDeleteZone = async () => {
     if (!zoneToDelete) return;
     
+    const siteId = zoneToDelete.siteId;
     setIsDeletingZone(true);
     try {
       await deleteZone(zoneToDelete.zone.id);
       onShowToast(`Zone "${zoneToDelete.zone.code}" deleted successfully`, "success");
-      setSiteZones(prev => {
-        const newZones = { ...prev };
-        delete newZones[zoneToDelete.siteId];
-        return newZones;
-      });
       setDeleteZoneDialogOpen(false);
       setZoneToDelete(null);
+      fetchZonesForSite(siteId, true);
       onRefresh();
     } catch (error) {
       onShowToast(
@@ -289,16 +279,12 @@ export default function WMSSitesStorage({
   };
 
   const handleZoneModalSuccess = () => {
+    const siteId = addZoneModalSite?.id;
     setAddZoneModalOpen(false);
     setAddZoneModalSite(null);
-    setSiteZones(prev => {
-      if (addZoneModalSite) {
-        const newZones = { ...prev };
-        delete newZones[addZoneModalSite.id];
-        return newZones;
-      }
-      return prev;
-    });
+    if (siteId) {
+      fetchZonesForSite(siteId, true);
+    }
     onRefresh();
   };
 
@@ -308,12 +294,7 @@ export default function WMSSitesStorage({
     try {
       const result = await seedDefaultZones(siteId);
       onShowToast(`${result.count} default zones created`, "success");
-      setSiteZones(prev => {
-        const newZones = { ...prev };
-        delete newZones[siteId];
-        return newZones;
-      });
-      fetchZonesForSite(siteId);
+      fetchZonesForSite(siteId, true);
     } catch (error) {
       onShowToast(
         error instanceof Error ? error.message : "Failed to seed zones",

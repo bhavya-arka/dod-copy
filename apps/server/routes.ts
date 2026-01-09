@@ -2970,10 +2970,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .where(eq(warehouseZones.id, existingZone.id));
         } else if (capacity_pallets && parseInt(capacity_pallets) > 0) {
           await db.insert(warehouseZones).values({
+            site_id: siteId,
             building_id: buildingId,
             code: `${updated.code}-MAIN`,
             name: `${updated.name} Main Storage`,
             zone_type: 'rack',
+            is_outdoor: false,
+            usage_type: 'general',
             weight_limit_lbs: 2000,
             capacity_pallets: parseInt(capacity_pallets),
           });
