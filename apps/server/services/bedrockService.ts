@@ -46,58 +46,32 @@ interface BedrockTrace {
 // Log trace to Lambda via API Gateway (fire and forget)
 async function logTraceToLambda(trace: BedrockTrace): Promise<void> {
   if (!TRACE_LAMBDA_ENDPOINT) {
-    console.log("[Bedrock:Trace] Skipping - no endpoint configured");
-    return;
+    return; // Skip if not configured
   }
 
-  console.log("[Bedrock:Trace] Sending trace to Lambda", {
-    trace_id: trace.trace_id,
-    endpoint: TRACE_LAMBDA_ENDPOINT.substring(0, 50) + "...",
-    model: trace.model,
-    latency_ms: trace.latency_ms,
-    tokens: { input: trace.token_input, output: trace.token_output },
-    docs_retrieved: trace.retrieved_docs.length,
-  });
-
   try {
+    // Fire and forget - don't await, use AbortController for timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      console.log("[Bedrock:Trace] Request timeout (5s)", { trace_id: trace.trace_id });
-      controller.abort();
-    }, 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
-    const startTime = Date.now();
-    
     fetch(TRACE_LAMBDA_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(trace),
       signal: controller.signal,
     })
-      .then((response) => {
+      .then(() => {
         clearTimeout(timeoutId);
-        const duration = Date.now() - startTime;
-        console.log("[Bedrock:Trace] Lambda response received", {
+        console.log("[Bedrock:Lambda] Trace sent", {
           trace_id: trace.trace_id,
-          status: response.status,
-          statusText: response.statusText,
-          duration_ms: duration,
         });
       })
-      .catch((error) => {
+      .catch(() => {
         clearTimeout(timeoutId);
-        const duration = Date.now() - startTime;
-        console.error("[Bedrock:Trace] Lambda request failed", {
-          trace_id: trace.trace_id,
-          error: error instanceof Error ? error.message : String(error),
-          duration_ms: duration,
-        });
+        // Silent failure - fire and forget
       });
-  } catch (error) {
-    console.error("[Bedrock:Trace] Exception in trace logging", {
-      trace_id: trace.trace_id,
-      error: error instanceof Error ? error.message : String(error),
-    });
+  } catch {
+    // Non-blocking - silent failure
   }
 }
 import type { AiInsightType } from "../../../packages/shared/schema";
@@ -810,7 +784,7 @@ export async function generateInsight(
       token_output: tokenUsage.outputTokens,
       session_id: userId,
     };
-    console.log()
+    console.log();
     console.log(trace);
     logTraceToLambda(trace); // Fire and forget to Lambda
 

@@ -1,0 +1,132 @@
+/**
+ *
+ * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
+ * @param {Object} event - API Gateway Lambda Proxy Input Format
+ *
+ * Context doc: https://docs.aws.amazon.com/lambda/latest/dg/nodejs-prog-model-context.html
+ * @param {Object} context
+ *
+ * Return doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html
+ * @returns {Object} object - API Gateway Lambda Proxy Output Format
+ *
+ */
+
+import axios from 'axios';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const SLACK_WEBHOOK_ENV = 'SLACK_WEBHOOK_URL';
+
+const safeJsonParse = (value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    return null;
+  }
+};
+
+const parsePayload = (event) => {
+  if (!event) {
+    return null;
+  }
+
+  if (typeof event === 'string') {
+    return safeJsonParse(event);
+  }
+
+  if (event.body !== undefined) {
+    let body = event.body;
+    if (event.isBase64Encoded) {
+      body = Buffer.from(body, 'base64').toString('utf-8');
+    }
+    return safeJsonParse(body);
+  }
+
+  return event;
+};
+
+const formatMessage = (payload) => {
+  const docsValue = payload.retrieved_docs;
+  const docs = Array.isArray(docsValue)
+    ? docsValue
+    : docsValue
+      ? [String(docsValue)]
+      : [];
+  const appName = process.env.SLACK_APP_NAME || 'RAG_TRACE';
+
+  const lines = [
+    `*${appName}*`,
+    `*Trace ID:* ${payload.trace_id ?? 'n/a'}`,
+    `*Timestamp:* ${payload.timestamp ?? 'n/a'}`,
+    `*Model:* ${payload.model ?? 'n/a'}`,
+    `*Input:* ${payload.input ?? 'n/a'}`,
+    `*Retrieved Docs:* ${docs.length ? docs.join(', ') : 'none'}`,
+    `*Latency (ms):* ${payload.latency_ms ?? 'n/a'}`,
+    `*Token Input:* ${payload.token_input ?? 'n/a'}`,
+    `*Token Output:* ${payload.token_output ?? 'n/a'}`,
+    `*Session ID:* ${payload.session_id ?? 'n/a'}`
+  ];
+
+  return lines.join('\n');
+};
+
+const sendToSlack = async (payload) => {
+  const webhookUrl = process.env[SLACK_WEBHOOK_ENV];
+
+  if (!webhookUrl) {
+    throw new Error(`Missing ${SLACK_WEBHOOK_ENV}.`);
+  }
+
+  const response = await axios.post(
+    webhookUrl,
+    { data: { message: formatMessage(payload) } },
+    {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+    }
+  );
+
+  if (!response || response.status < 200 || response.status >= 300) {
+    throw new Error('Slack webhook error.');
+  }
+
+  return response.data;
+};
+
+export const lambdaHandler = async (event, context) => {
+  try {
+    const payload = parsePayload(event);
+
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: 'Invalid payload.' })
+      };
+    }
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'Slack message sent.',
+        trace_id: payload.trace_id ?? null
+      })
+    };
+  } catch (error) {
+    console.error('Slack send failed', error);
+
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        message: 'Failed to send Slack message.',
+        error: error?.message || 'Unknown error.'
+      })
+    };
+  }
+};
+  
