@@ -271,9 +271,10 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
       name: 'Air Operations',
       subtitle: 'PACAF Airlift',
       icon: Plane,
-      gradient: 'from-blue-500 to-cyan-500',
+      accentColor: '#3B82F6',
+      accentBg: 'bg-blue-50',
       stats: summary ? [
-        { label: 'Active Sorties', value: summary.air.active_sorties, highlight: true },
+        { label: 'Active Sorties', value: summary.air.active_sorties, primary: true },
         { label: 'Cargo In-Flight', value: formatWeight(summary.air.cargo_in_flight_lbs) },
         { label: 'This Month', value: summary.air.this_month, trend: summary.air.month_change },
         { label: 'Total Missions', value: summary.air.total_missions },
@@ -284,9 +285,10 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
       name: 'Land Logistics',
       subtitle: 'Ground Transport',
       icon: Truck,
-      gradient: 'from-amber-500 to-orange-500',
+      accentColor: '#F59E0B',
+      accentBg: 'bg-amber-50',
       stats: summary ? [
-        { label: 'Active Convoys', value: summary.land.active_convoys, highlight: true },
+        { label: 'Active Convoys', value: summary.land.active_convoys, primary: true },
         { label: 'Cargo In-Transit', value: formatWeight(summary.land.cargo_in_transit_lbs) },
         { label: 'This Month', value: summary.land.this_month, trend: summary.land.month_change },
         { label: 'Pending Dispatch', value: summary.land.pending_dispatch },
@@ -297,9 +299,10 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
       name: 'Sea Freight',
       subtitle: 'Maritime Operations',
       icon: Ship,
-      gradient: 'from-teal-500 to-emerald-500',
+      accentColor: '#14B8A6',
+      accentBg: 'bg-teal-50',
       stats: summary ? [
-        { label: 'Voyages At Sea', value: summary.sea.active_voyages, highlight: true },
+        { label: 'Voyages At Sea', value: summary.sea.active_voyages, primary: true },
         { label: 'Containers', value: `${summary.sea.containers_at_sea} TEU` },
         { label: 'This Month', value: summary.sea.this_month, trend: summary.sea.month_change },
         { label: 'Planned Departures', value: summary.sea.planned_departures },
@@ -310,9 +313,10 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
       name: 'Warehouse',
       subtitle: 'WMS Operations',
       icon: Warehouse,
-      gradient: 'from-purple-500 to-pink-500',
+      accentColor: '#8B5CF6',
+      accentBg: 'bg-purple-50',
       stats: summary ? [
-        { label: 'Total Sites', value: summary.warehouse.total_sites, highlight: true },
+        { label: 'Total Sites', value: summary.warehouse.total_sites, primary: true },
         { label: 'Inventory Items', value: summary.warehouse.total_items.toLocaleString() },
         { label: 'Avg Utilization', value: `${summary.warehouse.avg_utilization}%` },
         { label: 'Pending Transfers', value: summary.warehouse.pending_transfers },
@@ -324,29 +328,29 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
-      <header className="border-b border-[#E5E7EB] bg-white shadow-sm">
+      <header className="border-b border-[#F3F4F6] bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500">
-                <Activity className="w-6 h-6 text-white" />
+              <div className="p-2.5 rounded-xl bg-[#111827]">
+                <Activity className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-[#111827]">ARKA Operations Hub</h1>
-                <p className="text-xs text-[#6B7280]">Multi-Modal Cargo Operations</p>
+                <h1 className="text-lg font-semibold text-[#111827] tracking-tight">ARKA Operations</h1>
+                <p className="text-xs text-[#9CA3AF]">Multi-Modal Cargo Hub</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
               {totalAlerts > 0 && (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 border border-red-200">
-                  <AlertTriangle className="w-4 h-4 text-[#DC2626]" />
-                  <span className="text-sm text-[#DC2626]">{totalAlerts} alerts</span>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50">
+                  <AlertTriangle className="w-4 h-4 text-red-500" />
+                  <span className="text-sm font-medium text-red-600">{totalAlerts} alerts</span>
                 </div>
               )}
               <span className="text-sm text-[#6B7280]">{user.username || user.email}</span>
               <button
                 onClick={onLogout}
-                className="text-sm text-[#6B7280] hover:text-[#111827] transition-colors"
+                className="text-sm text-[#9CA3AF] hover:text-[#111827] transition-colors"
               >
                 Logout
               </button>
@@ -362,58 +366,66 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
               {[
-                { label: 'Active Missions', value: summary?.activeMissions.total || 0, icon: Activity, color: 'text-blue-500', subtext: `${summary?.activeMissions.air || 0} air, ${summary?.activeMissions.land || 0} land, ${summary?.activeMissions.sea || 0} sea` },
-                { label: 'Cargo In Transit', value: formatWeight(summary?.cargoInTransport.total_lbs || 0), icon: Weight, color: 'text-green-500', subtext: 'Currently moving' },
-                { label: 'Manifests In Transit', value: summary?.manifests.in_transit || 0, icon: TrendingUp, color: 'text-cyan-500', subtext: `${summary?.manifests.unassigned || 0} awaiting assignment` },
-                { label: 'Warehouse Items', value: (summary?.warehouse.total_items || 0).toLocaleString(), icon: Package, color: 'text-purple-500', subtext: `${summary?.warehouse.avg_utilization || 0}% utilization` },
+                { label: 'Active Missions', value: summary?.activeMissions.total || 0, icon: Activity, color: '#3B82F6', subtext: `${summary?.activeMissions.air || 0} air, ${summary?.activeMissions.land || 0} land, ${summary?.activeMissions.sea || 0} sea` },
+                { label: 'Cargo In Transit', value: formatWeight(summary?.cargoInTransport.total_lbs || 0), icon: Weight, color: '#10B981', subtext: 'Currently moving' },
+                { label: 'Manifests In Transit', value: summary?.manifests.in_transit || 0, icon: Box, color: '#06B6D4', subtext: `${summary?.manifests.unassigned || 0} awaiting assignment` },
+                { label: 'Warehouse Items', value: (summary?.warehouse.total_items || 0).toLocaleString(), icon: Package, color: '#8B5CF6', subtext: `${summary?.warehouse.avg_utilization || 0}% utilization` },
               ].map((stat, i) => (
                 <motion.div
                   key={stat.label}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="p-4 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm"
+                  className="p-5 rounded-2xl bg-white border border-[#F3F4F6] hover:border-[#E5E7EB] transition-colors"
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <stat.icon className={`w-4 h-4 ${stat.color}`} />
-                    <span className="text-xs text-[#6B7280]">{stat.label}</span>
+                  <div className="flex items-center gap-2 mb-3">
+                    <stat.icon className="w-4 h-4" style={{ color: stat.color }} />
+                    <span className="text-xs font-medium text-[#6B7280] uppercase tracking-wide">{stat.label}</span>
                   </div>
-                  <p className="text-2xl font-bold text-[#111827]">{stat.value}</p>
-                  <p className="text-xs text-[#9CA3AF] mt-1">{stat.subtext}</p>
+                  <p className="text-3xl font-bold text-[#111827] mb-1">{stat.value}</p>
+                  <p className="text-sm text-[#9CA3AF]">{stat.subtext}</p>
                 </motion.div>
               ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
               {modules.map((module, i) => (
                 <motion.button
                   key={module.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: i * 0.1 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.08 }}
                   onClick={() => onSelectModule(module.id)}
-                  className="group p-6 rounded-3xl bg-white border border-[#E5E7EB] hover:border-[#2563EB]/30 shadow-sm hover:shadow-md text-left transition-all hover:scale-[1.02]"
+                  className="group p-8 rounded-2xl bg-white border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm hover:shadow-lg text-left transition-all duration-300"
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className={`p-3 rounded-2xl bg-gradient-to-r ${module.gradient}`}>
-                      <module.icon className="w-6 h-6 text-white" />
+                  <div className="flex items-start justify-between mb-6">
+                    <div 
+                      className={`p-3 rounded-xl ${module.accentBg}`}
+                      style={{ color: module.accentColor }}
+                    >
+                      <module.icon className="w-6 h-6" />
                     </div>
-                    <ChevronRight className="w-5 h-5 text-[#9CA3AF] group-hover:text-[#2563EB] group-hover:translate-x-1 transition-all" />
+                    <ChevronRight className="w-5 h-5 text-[#D1D5DB] group-hover:text-[#6B7280] group-hover:translate-x-1 transition-all" />
                   </div>
                   
-                  <h3 className="text-lg font-semibold text-[#111827] mb-1">{module.name}</h3>
-                  <p className="text-sm text-[#6B7280] mb-4">{module.subtitle}</p>
+                  <h3 className="text-xl font-semibold text-[#111827] mb-1">{module.name}</h3>
+                  <p className="text-sm text-[#9CA3AF] mb-6">{module.subtitle}</p>
                   
-                  <div className="grid grid-cols-2 gap-3">
-                    {module.stats.map((stat: { label: string; value: string | number; highlight?: boolean; trend?: number }) => (
-                      <div key={stat.label} className={`p-2 rounded-lg ${stat.highlight ? 'bg-gradient-to-r ' + module.gradient + '/10' : 'bg-[#F9FAFB]'}`}>
-                        <div className="flex items-center justify-between">
-                          <span className={`text-lg font-bold ${stat.highlight ? 'text-[#111827]' : 'text-[#374151]'}`}>{stat.value}</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    {module.stats.map((stat: { label: string; value: string | number; primary?: boolean; trend?: number }) => (
+                      <div key={stat.label} className="space-y-1">
+                        <div className="flex items-baseline gap-2">
+                          <span 
+                            className={`text-2xl font-bold ${stat.primary ? '' : 'text-[#374151]'}`}
+                            style={stat.primary ? { color: module.accentColor } : undefined}
+                          >
+                            {stat.value}
+                          </span>
                           {stat.trend !== undefined && <MonthTrendBadge change={stat.trend} />}
                         </div>
-                        <div className="text-xs text-[#6B7280]">{stat.label}</div>
+                        <div className="text-xs text-[#9CA3AF] font-medium uppercase tracking-wide">{stat.label}</div>
                       </div>
                     ))}
                   </div>
