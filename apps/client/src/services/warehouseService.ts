@@ -1220,3 +1220,93 @@ export async function getOptimizationEvents(
   }
   return response.json();
 }
+
+/** Warehouse alert from analytics */
+export interface WarehouseAlert {
+  id: number;
+  site_id: number;
+  alert_type: string;
+  severity: 'info' | 'warning' | 'critical';
+  entity_type: string | null;
+  entity_id: number | null;
+  entity_name: string | null;
+  message: string;
+  metric_value: string | null;
+  threshold_value: string | null;
+  trend_change_percent: string | null;
+  is_resolved: boolean;
+  created_at: string;
+}
+
+/** Trend metric from analytics */
+export interface TrendMetric {
+  date: string;
+  metricKey: string;
+  value: number;
+  zoneName?: string;
+}
+
+/**
+ * Get alerts for a warehouse site
+ * @param siteId - Site ID
+ * @returns Array of warehouse alerts
+ */
+export async function getWarehouseAlerts(siteId: number): Promise<WarehouseAlert[]> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/alerts`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to fetch alerts");
+  }
+  return response.json();
+}
+
+/**
+ * Resolve (dismiss) a warehouse alert
+ * @param siteId - Site ID
+ * @param alertId - Alert ID to resolve
+ */
+export async function resolveWarehouseAlert(siteId: number, alertId: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/alerts/${alertId}/resolve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to resolve alert");
+  }
+}
+
+/**
+ * Run warehouse analytics to generate alerts
+ * @param siteId - Site ID
+ */
+export async function runWarehouseAnalytics(siteId: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/analytics/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to run analytics");
+  }
+}
+
+/**
+ * Get trend metrics for a warehouse site
+ * @param siteId - Site ID
+ * @returns Array of trend metrics
+ */
+export async function getWarehouseTrendMetrics(siteId: number): Promise<TrendMetric[]> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/analytics/trends`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to fetch trend metrics");
+  }
+  return response.json();
+}

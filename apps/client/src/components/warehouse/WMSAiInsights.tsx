@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   Brain, 
   Layers, 
   Activity, 
-  AlertTriangle, 
+  AlertTriangle,
+  AlertCircle, 
   Shield, 
   Loader2, 
   CheckCircle, 
@@ -18,7 +20,9 @@ import {
   Clock,
   Trash2,
   Play,
-  Eye
+  Eye,
+  X,
+  Bell
 } from "lucide-react";
 import type { WarehouseSite, OptimizationResult, ToastMessage } from "./types";
 import { 
@@ -27,8 +31,12 @@ import {
   getOptimizationPlans,
   executeOptimizationPlan,
   deleteOptimizationPlan,
+  getWarehouseAlerts,
+  resolveWarehouseAlert,
+  runWarehouseAnalytics,
   type WarehouseAiInsight,
-  type OptimizationPlan
+  type OptimizationPlan,
+  type WarehouseAlert
 } from "../../services/warehouseService";
 import OptimizationWizardModal, { type Algorithm } from "./modals/OptimizationWizardModal";
 import PlanActionsModal from "./modals/PlanActionsModal";
@@ -122,8 +130,91 @@ export default function WMSAiInsights({
   const [selectedPlan, setSelectedPlan] = useState<OptimizationPlan | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [viewingPlan, setViewingPlan] = useState<OptimizationPlan | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [dismissingAlertId, setDismissingAlertId] = useState<number | null>(null);
 
+  const queryClient = useQueryClient();
   const selectedSite = sites.find(s => s.id === selectedSiteId);
+
+  const { data: alerts = [], isLoading: alertsLoading, refetch: refetchAlerts } = useQuery<WarehouseAlert[]>({
+    queryKey: ['warehouse-alerts', selectedSiteId],
+    queryFn: () => selectedSiteId ? getWarehouseAlerts(selectedSiteId) : Promise.resolve([]),
+    enabled: !!selectedSiteId,
+  });
+
+  const activeAlerts = alerts.filter(a => !a.is_resolved);
+
+  const handleRunAnalytics = async () => {
+    if (!selectedSiteId) {
+      onShowToast("Please select a warehouse site first", "warning");
+      return;
+    }
+    setAnalyticsLoading(true);
+    try {
+      await runWarehouseAnalytics(selectedSiteId);
+      await refetchAlerts();
+      onShowToast("Analytics completed, alerts refreshed!", "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to run analytics";
+      onShowToast(message, "error");
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  const handleDismissAlert = async (alertId: number) => {
+    if (!selectedSiteId) return;
+    setDismissingAlertId(alertId);
+    try {
+      await resolveWarehouseAlert(selectedSiteId, alertId);
+      await refetchAlerts();
+      onShowToast("Alert dismissed", "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to dismiss alert";
+      onShowToast(message, "error");
+    } finally {
+      setDismissingAlertId(null);
+    }
+  };
+
+  const formatRelativeTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+  };
+
+  const getAlertIcon = (severity: WarehouseAlert['severity']) => {
+    switch (severity) {
+      case 'critical':
+        return <AlertTriangle className="w-5 h-5 text-red-500" />;
+      case 'warning':
+        return <AlertCircle className="w-5 h-5 text-amber-500" />;
+      case 'info':
+      default:
+        return <Info className="w-5 h-5 text-blue-500" />;
+    }
+  };
+
+  const getAlertBorderClass = (severity: WarehouseAlert['severity']) => {
+    switch (severity) {
+      case 'critical':
+        return 'border-l-4 border-red-500';
+      case 'warning':
+        return 'border-l-4 border-amber-500';
+      case 'info':
+      default:
+        return 'border-l-4 border-blue-500';
+    }
+  };
 
   const fetchPlans = useCallback(async () => {
     if (!selectedSiteId) return;
@@ -506,6 +597,119 @@ export default function WMSAiInsights({
           </div>
         </motion.div>
       )}
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.48 }}
+        className="rounded-2xl bg-white border border-border shadow-sm p-6 mb-6"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-50 rounded-xl">
+              <Bell className="w-5 h-5 text-red-500" />
+            </div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-foreground">Active Alerts</h2>
+              {activeAlerts.length > 0 && (
+                <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded-full">
+                  {activeAlerts.length}
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={handleRunAnalytics}
+            disabled={!selectedSiteId || analyticsLoading}
+            className="px-3 py-1.5 rounded-lg bg-[#2563EB]/10 text-[#2563EB] hover:bg-[#2563EB]/20 transition-colors flex items-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {analyticsLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+            <span>Run Analytics</span>
+          </button>
+        </div>
+
+        {alertsLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : activeAlerts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="p-3 bg-green-50 rounded-full mb-3">
+              <CheckCircle className="w-6 h-6 text-green-500" />
+            </div>
+            <p className="text-sm font-medium text-foreground">No Active Alerts</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {selectedSiteId 
+                ? "All systems are operating normally. Run analytics to check for new alerts."
+                : "Select a warehouse site to view alerts."}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {activeAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                className={`p-4 rounded-lg bg-white shadow-sm ${getAlertBorderClass(alert.severity)} transition-all hover:shadow-md`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className="flex-shrink-0 mt-0.5">
+                      {getAlertIcon(alert.severity)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">
+                        {alert.message}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-muted-foreground">
+                        {alert.entity_name && (
+                          <span className="px-2 py-0.5 bg-gray-100 rounded-full">
+                            {alert.entity_name}
+                          </span>
+                        )}
+                        {alert.metric_value && alert.threshold_value && (
+                          <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full">
+                            {alert.metric_value} / {alert.threshold_value} threshold
+                          </span>
+                        )}
+                        {alert.trend_change_percent && (
+                          <span className={`px-2 py-0.5 rounded-full ${
+                            parseFloat(alert.trend_change_percent) > 0 
+                              ? 'bg-green-50 text-green-700' 
+                              : 'bg-red-50 text-red-700'
+                          }`}>
+                            {parseFloat(alert.trend_change_percent) > 0 ? '+' : ''}
+                            {alert.trend_change_percent}% trend
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatRelativeTime(alert.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDismissAlert(alert.id)}
+                    disabled={dismissingAlertId === alert.id}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-gray-100 transition-colors flex-shrink-0 disabled:opacity-50"
+                    title="Dismiss alert"
+                  >
+                    {dismissingAlertId === alert.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <X className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </motion.div>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}

@@ -28,21 +28,28 @@ export interface TrendMetric {
 async function checkDuplicateAlert(
   siteId: number, 
   entityType: string,
-  entityId: number,
+  entityId: number | null | undefined,
   alertType: string
 ): Promise<boolean> {
   const cutoffTime = new Date(Date.now() - DEDUP_HOURS * 60 * 60 * 1000);
   
+  const conditions = [
+    eq(warehouseAlerts.site_id, siteId),
+    eq(warehouseAlerts.entity_type, entityType),
+    eq(warehouseAlerts.alert_type, alertType),
+    eq(warehouseAlerts.is_resolved, false),
+    gte(warehouseAlerts.created_at, cutoffTime)
+  ];
+
+  if (entityId !== null && entityId !== undefined) {
+    conditions.push(eq(warehouseAlerts.entity_id, entityId));
+  } else {
+    conditions.push(isNull(warehouseAlerts.entity_id));
+  }
+
   const existingAlerts = await db.select()
     .from(warehouseAlerts)
-    .where(and(
-      eq(warehouseAlerts.site_id, siteId),
-      eq(warehouseAlerts.entity_type, entityType),
-      eq(warehouseAlerts.entity_id, entityId),
-      eq(warehouseAlerts.alert_type, alertType),
-      eq(warehouseAlerts.is_resolved, false),
-      gte(warehouseAlerts.created_at, cutoffTime)
-    ))
+    .where(and(...conditions))
     .limit(1);
   
   return existingAlerts.length > 0;
@@ -174,9 +181,15 @@ async function analyzeTrends(siteId: number): Promise<void> {
       return sum + (itemCount / capacity) * 100;
     }, 0) / previousWeekHistory.length;
 
-    if (avgPreviousUtil === 0) continue;
+    // Skip if no capacity data
+    if (avgCurrentUtil === 0 || avgPreviousUtil === 0) continue;
 
     const changePercent = ((avgCurrentUtil - avgPreviousUtil) / avgPreviousUtil) * 100;
+    
+    // Guard against NaN
+    if (isNaN(changePercent) || !isFinite(changePercent)) {
+      continue;
+    }
 
     if (changePercent > TREND_ALERT_THRESHOLD) {
       await createAlert({
