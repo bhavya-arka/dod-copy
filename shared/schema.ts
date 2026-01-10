@@ -1338,3 +1338,49 @@ export const insertTransportOperationalStatsSchema = createInsertSchema(transpor
 });
 export type InsertTransportOperationalStats = z.infer<typeof insertTransportOperationalStatsSchema>;
 export type TransportOperationalStats = typeof transportOperationalStats.$inferSelect;
+
+// Warehouse Metric Snapshots - daily metric aggregates for trend analysis
+export const warehouseMetricSnapshots = pgTable("warehouse_metric_snapshots", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  metric_key: text("metric_key").notNull(), // capacity_utilization, throughput_inbound, throughput_outbound, avg_dwell_time, optimization_rate
+  period_start: timestamp("period_start").notNull(),
+  period_end: timestamp("period_end").notNull(),
+  value: numeric("value", { precision: 14, scale: 4 }).notNull(),
+  metadata: jsonb("metadata").notNull().default({}), // zone-level breakdown, etc.
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseMetricSnapshotSchema = createInsertSchema(warehouseMetricSnapshots).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseMetricSnapshot = z.infer<typeof insertWarehouseMetricSnapshotSchema>;
+export type WarehouseMetricSnapshot = typeof warehouseMetricSnapshots.$inferSelect;
+
+// Warehouse Alerts - threshold breaches and trend notifications
+export const warehouseAlerts = pgTable("warehouse_alerts", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  alert_type: text("alert_type").notNull(), // threshold_capacity, threshold_aging, trend_throughput, trend_dwell_time
+  severity: text("severity").notNull().default("warning"), // info, warning, critical
+  entity_type: text("entity_type"), // zone, site, item
+  entity_id: integer("entity_id"), // zone_id, etc.
+  entity_name: text("entity_name"), // human-readable name
+  message: text("message").notNull(),
+  metric_value: numeric("metric_value", { precision: 14, scale: 4 }),
+  threshold_value: numeric("threshold_value", { precision: 14, scale: 4 }),
+  trend_change_percent: numeric("trend_change_percent", { precision: 8, scale: 2 }),
+  metadata: jsonb("metadata").notNull().default({}),
+  is_resolved: boolean("is_resolved").notNull().default(false),
+  resolved_at: timestamp("resolved_at"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseAlertSchema = createInsertSchema(warehouseAlerts).omit({
+  id: true,
+  created_at: true,
+  resolved_at: true,
+});
+export type InsertWarehouseAlert = z.infer<typeof insertWarehouseAlertSchema>;
+export type WarehouseAlert = typeof warehouseAlerts.$inferSelect;
