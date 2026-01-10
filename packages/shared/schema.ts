@@ -676,6 +676,10 @@ export const warehouseZones = pgTable("warehouse_zones", {
   location_pattern: text("location_pattern"),
   weight_limit_lbs: integer("weight_limit_lbs").default(2000),
   capacity_pallets: integer("capacity_pallets"),
+  total_capacity: integer("total_capacity").default(0),
+  current_item_count: integer("current_item_count").default(0),
+  current_weight_lbs: numeric("current_weight_lbs", { precision: 12, scale: 2 }).default("0"),
+  last_synced_at: timestamp("last_synced_at"),
   metadata: jsonb("metadata").notNull().default({}),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
@@ -686,6 +690,26 @@ export const insertWarehouseZoneSchema = createInsertSchema(warehouseZones).omit
 });
 export type InsertWarehouseZone = z.infer<typeof insertWarehouseZoneSchema>;
 export type WarehouseZone = typeof warehouseZones.$inferSelect;
+
+// Warehouse Zone Capacity History - historical snapshots of zone capacity
+export const warehouseZoneCapacityHistory = pgTable("warehouse_zone_capacity_history", {
+  id: serial("id").primaryKey(),
+  zone_id: integer("zone_id").notNull(),
+  site_id: integer("site_id").notNull(),
+  item_count: integer("item_count").notNull().default(0),
+  total_weight_lbs: numeric("total_weight_lbs", { precision: 12, scale: 2 }).notNull().default("0"),
+  total_capacity: integer("total_capacity").default(0),
+  utilization_percent: numeric("utilization_percent", { precision: 5, scale: 2 }).default("0"),
+  snapshot_date: timestamp("snapshot_date").defaultNow().notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseZoneCapacityHistorySchema = createInsertSchema(warehouseZoneCapacityHistory).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseZoneCapacityHistory = z.infer<typeof insertWarehouseZoneCapacityHistorySchema>;
+export type WarehouseZoneCapacityHistory = typeof warehouseZoneCapacityHistory.$inferSelect;
 
 // Warehouse Locations - individual pallet positions
 export const warehouseLocations = pgTable("warehouse_locations", {

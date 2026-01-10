@@ -16,6 +16,7 @@ import {
   warehouseTransfers,
   warehouseBuildings,
   warehouseZones,
+  warehouseZoneCapacityHistory,
   warehouseLocations,
   warehouseSettings,
   warehouseAgingThresholds,
@@ -3044,7 +3045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // WAREHOUSE ZONES ROUTES
   // ============================================================================
 
-  // GET /api/warehouse/sites/:siteId/zones - List zones for a site
+  // GET /api/warehouse/sites/:siteId/zones - List zones for a site with optional filters
   app.get("/api/warehouse/sites/:siteId/zones", authMiddleware, async (req: AuthRequest, res) => {
     try {
       const siteId = parseInt(req.params.siteId);
@@ -3063,9 +3064,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Warehouse site not found" });
       }
 
+      const { zone_type, usage_type, is_outdoor, min_capacity, max_capacity } = req.query;
+
+      const conditions = [eq(warehouseZones.site_id, siteId)];
+
+      if (zone_type && typeof zone_type === 'string') {
+        conditions.push(eq(warehouseZones.zone_type, zone_type));
+      }
+
+      if (usage_type && typeof usage_type === 'string') {
+        conditions.push(eq(warehouseZones.usage_type, usage_type));
+      }
+
+      if (is_outdoor !== undefined) {
+        const isOutdoorBool = is_outdoor === 'true' || is_outdoor === '1';
+        conditions.push(eq(warehouseZones.is_outdoor, isOutdoorBool));
+      }
+
+      if (min_capacity) {
+        const minCap = parseInt(min_capacity as string);
+        if (!isNaN(minCap)) {
+          conditions.push(gte(warehouseZones.total_capacity, minCap));
+        }
+      }
+
+      if (max_capacity) {
+        const maxCap = parseInt(max_capacity as string);
+        if (!isNaN(maxCap)) {
+          conditions.push(lte(warehouseZones.total_capacity, maxCap));
+        }
+      }
+
       const zones = await db.select()
         .from(warehouseZones)
-        .where(eq(warehouseZones.site_id, siteId));
+        .where(and(...conditions));
 
       res.json(zones);
     } catch (error) {
@@ -3243,6 +3275,169 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Warehouse] Failed to delete zone:", error);
       res.status(500).json({ error: "Failed to delete zone" });
+    }
+  });
+
+  // POST /api/warehouse/sites/:siteId/zones/resync - Trigger resync for all zones at site
+  app.post("/api/warehouse/sites/:siteId/zones/resync", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const { zoneCapacityService } = await import('./services');
+      const result = await zoneCapacityService.resyncZoneCapacity(siteId);
+
+      if (result.success) {
+        const zones = await db.select()
+          .from(warehouseZones)
+          .where(eq(warehouseZones.site_id, siteId));
+
+        for (const zone of zones) {
+          await zoneCapacityService.recordCapacityHistory(zone.id, siteId, {
+            itemCount: zone.current_item_count || 0,
+            totalWeightLbs: parseFloat(String(zone.current_weight_lbs) || "0"),
+            totalCapacity: zone.total_capacity || zone.capacity_pallets || 0
+          });
+        }
+      }
+
+      console.log(`[Warehouse] Resynced zones for site ${siteId}: ${result.zonesUpdated} zones updated`);
+      res.json(result);
+    } catch (error) {
+      console.error("[Warehouse] Failed to resync zones:", error);
+      res.status(500).json({ error: "Failed to resync zones" });
+    }
+  });
+
+  // GET /api/warehouse/sites/:siteId/zones/summary - Return capacity summary
+  app.get("/api/warehouse/sites/:siteId/zones/summary", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const { zoneCapacityService } = await import('./services');
+      const summary = await zoneCapacityService.getZoneCapacitySummary(siteId);
+
+      if (!summary) {
+        return res.status(404).json({ error: "No zones found for site" });
+      }
+
+      res.json(summary);
+    } catch (error) {
+      console.error("[Warehouse] Failed to get zones summary:", error);
+      res.status(500).json({ error: "Failed to get zones summary" });
+    }
+  });
+
+  // GET /api/warehouse/zones/:zoneId/history - Get capacity history for a zone
+  app.get("/api/warehouse/zones/:zoneId/history", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const zoneId = parseInt(req.params.zoneId);
+      if (isNaN(zoneId)) {
+        return res.status(400).json({ error: "Invalid zone ID" });
+      }
+
+      const [zone] = await db.select()
+        .from(warehouseZones)
+        .where(eq(warehouseZones.id, zoneId));
+
+      if (!zone) {
+        return res.status(404).json({ error: "Zone not found" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, zone.site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied to this zone" });
+      }
+
+      const { start_date, end_date } = req.query;
+      const startDate = start_date ? new Date(start_date as string) : undefined;
+      const endDate = end_date ? new Date(end_date as string) : undefined;
+
+      const { zoneCapacityService } = await import('./services');
+      const history = await zoneCapacityService.getZoneCapacityHistory(zoneId, startDate, endDate);
+
+      res.json(history);
+    } catch (error) {
+      console.error("[Warehouse] Failed to get zone history:", error);
+      res.status(500).json({ error: "Failed to get zone history" });
+    }
+  });
+
+  // PATCH /api/warehouse/zones/:zoneId/capacity - Update total_capacity manually
+  app.patch("/api/warehouse/zones/:zoneId/capacity", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const zoneId = parseInt(req.params.zoneId);
+      if (isNaN(zoneId)) {
+        return res.status(400).json({ error: "Invalid zone ID" });
+      }
+
+      const { total_capacity } = req.body;
+      if (total_capacity === undefined || typeof total_capacity !== 'number') {
+        return res.status(400).json({ error: "total_capacity must be a number" });
+      }
+
+      const [zone] = await db.select()
+        .from(warehouseZones)
+        .where(eq(warehouseZones.id, zoneId));
+
+      if (!zone) {
+        return res.status(404).json({ error: "Zone not found" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, zone.site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied to this zone" });
+      }
+
+      const [updated] = await db.update(warehouseZones)
+        .set({ total_capacity })
+        .where(eq(warehouseZones.id, zoneId))
+        .returning();
+
+      console.log(`[Warehouse] Updated zone ${zoneId} capacity to ${total_capacity}`);
+      res.json(updated);
+    } catch (error) {
+      console.error("[Warehouse] Failed to update zone capacity:", error);
+      res.status(500).json({ error: "Failed to update zone capacity" });
     }
   });
 
