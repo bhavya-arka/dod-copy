@@ -4147,8 +4147,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[Warehouse Import] Committing ${validRows.length} rows from session ${uploadId}`);
 
+      // Fetch zones for this site to enable zone matching
+      const siteZones = await db.select()
+        .from(warehouseZones)
+        .where(eq(warehouseZones.site_id, siteId));
+      
+      console.log(`[Warehouse Import] Found ${siteZones.length} zones for zone matching`);
+
       // Prepare items for insertion with all BATS fields
-      const itemsToInsert = validRows.map((row, idx) => ({
+      const itemsToInsert = validRows.map((row, idx) => {
+        // Determine zone_id: use pre-matched or calculate from location
+        let zoneId = row.matched_zone_id || null;
+        if (zoneId === null && row.location && siteZones.length > 0) {
+          const matchResult = matchLocationToZone(row.location, siteZones);
+          if (matchResult.zoneId !== null) {
+            zoneId = matchResult.zoneId;
+          }
+        }
+        
+        return {
         site_id: siteId,
         storage_facility: row.storage_facility || null,
         ship: row.ship || null,
@@ -4177,6 +4194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         receipt_price: row.receipt_price || null,
         receipt_date: row.receipt_date || null,
         location: row.location || null,
+        zone_id: zoneId,
         lot_no: row.lot || null,
         serial_no: row.serial_no || null,
         barcode: row.barcode || null,
@@ -4205,7 +4223,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           imported_at: new Date().toISOString(),
           source_file: session.filename,
         },
-      }));
+      };
+      });
 
       // Insert items in batches
       const BATCH_SIZE = 100;

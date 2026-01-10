@@ -5,8 +5,9 @@ import {
   warehouseLocations,
   warehouseZoneCapacityHistory 
 } from "@shared/schema";
-import { eq, and, sql, gte, lte, sum, count } from "drizzle-orm";
-import { matchLocationToZone } from "./zoneMatchingService";
+import { eq, and, sql, gte, lte, sum, count, isNull } from "drizzle-orm";
+import { matchLocationToZone, type ZoneMatchResult } from "./zoneMatchingService";
+import type { WarehouseZone } from "@shared/schema";
 
 export interface ZoneCapacityData {
   zoneId: number;
@@ -32,7 +33,108 @@ export interface ResyncResult {
   success: boolean;
   zonesUpdated: number;
   itemsProcessed: number;
+  itemsBackfilled: number;
   errors: string[];
+}
+
+export interface BackfillResult {
+  success: boolean;
+  itemsUpdated: number;
+  itemsProcessed: number;
+  errors: string[];
+}
+
+export async function backfillZoneIds(siteId: number): Promise<BackfillResult> {
+  const result: BackfillResult = {
+    success: true,
+    itemsUpdated: 0,
+    itemsProcessed: 0,
+    errors: []
+  };
+
+  try {
+    const zones = await db.select()
+      .from(warehouseZones)
+      .where(eq(warehouseZones.site_id, siteId));
+
+    if (zones.length === 0) {
+      console.log(`[ZoneCapacity] No zones found for site ${siteId}, skipping backfill`);
+      return result;
+    }
+
+    const zoneCache = new Map<string, { zoneId: number; pattern: RegExp | null }>();
+    for (const zone of zones) {
+      let pattern: RegExp | null = null;
+      if (zone.location_pattern) {
+        try {
+          pattern = new RegExp(zone.location_pattern, 'i');
+        } catch (e) {
+          console.warn(`[ZoneCapacity] Invalid regex pattern for zone ${zone.code}: ${zone.location_pattern}`);
+        }
+      }
+      zoneCache.set(zone.code, { zoneId: zone.id, pattern });
+    }
+
+    const itemsWithNullZone = await db.select()
+      .from(warehouseInventoryItems)
+      .where(and(
+        eq(warehouseInventoryItems.site_id, siteId),
+        isNull(warehouseInventoryItems.zone_id)
+      ));
+
+    result.itemsProcessed = itemsWithNullZone.length;
+
+    if (itemsWithNullZone.length === 0) {
+      console.log(`[ZoneCapacity] No items with NULL zone_id for site ${siteId}`);
+      return result;
+    }
+
+    console.log(`[ZoneCapacity] Backfilling zone_id for ${itemsWithNullZone.length} items in site ${siteId}`);
+
+    const locationToZoneMap = new Map<number, number>();
+    const locations = await db.select()
+      .from(warehouseLocations)
+      .where(eq(warehouseLocations.site_id, siteId));
+    
+    for (const loc of locations) {
+      if (loc.zone_id !== null) {
+        locationToZoneMap.set(loc.id, loc.zone_id);
+      }
+    }
+
+    for (const item of itemsWithNullZone) {
+      let matchedZoneId: number | null = null;
+
+      if (item.location_id !== null && locationToZoneMap.has(item.location_id)) {
+        matchedZoneId = locationToZoneMap.get(item.location_id)!;
+      }
+      else if (item.location) {
+        const matchResult = matchLocationToZone(item.location, zones);
+        if (matchResult.zoneId !== null) {
+          matchedZoneId = matchResult.zoneId;
+        }
+      }
+
+      if (matchedZoneId !== null) {
+        try {
+          await db.update(warehouseInventoryItems)
+            .set({ zone_id: matchedZoneId })
+            .where(eq(warehouseInventoryItems.id, item.id));
+          result.itemsUpdated++;
+        } catch (error) {
+          result.errors.push(`Failed to update item ${item.id}: ${error}`);
+        }
+      }
+    }
+
+    console.log(`[ZoneCapacity] Backfilled ${result.itemsUpdated}/${result.itemsProcessed} items for site ${siteId}`);
+  } catch (error) {
+    result.success = false;
+    result.errors.push(`Backfill failed: ${error}`);
+    console.error("[ZoneCapacity] Backfill error:", error);
+  }
+
+  return result;
 }
 
 export async function resyncZoneCapacity(
@@ -43,10 +145,17 @@ export async function resyncZoneCapacity(
     success: true,
     zonesUpdated: 0,
     itemsProcessed: 0,
+    itemsBackfilled: 0,
     errors: []
   };
 
   try {
+    const backfillResult = await backfillZoneIds(siteId);
+    result.itemsBackfilled = backfillResult.itemsUpdated;
+    if (backfillResult.errors.length > 0) {
+      result.errors.push(...backfillResult.errors);
+    }
+
     const zonesQuery = zoneId 
       ? db.select().from(warehouseZones).where(and(
           eq(warehouseZones.site_id, siteId),
@@ -107,7 +216,8 @@ export async function resyncZoneCapacity(
       if (assignedZoneId !== null && zoneStats.has(assignedZoneId)) {
         const stats = zoneStats.get(assignedZoneId)!;
         stats.itemCount += item.quantity || 1;
-        const weight = parseFloat(String(item.weight_lbs) || "0") * (item.quantity || 1);
+        const rawWeight = parseFloat(String(item.weight_lbs || 0));
+        const weight = isNaN(rawWeight) ? 0 : rawWeight * (item.quantity || 1);
         stats.totalWeight += weight;
       }
     }
@@ -117,10 +227,11 @@ export async function resyncZoneCapacity(
       const stats = zoneStats.get(zone.id)!;
       
       try {
+        const roundedWeight = Math.round(stats.totalWeight);
         await db.update(warehouseZones)
           .set({
             current_item_count: stats.itemCount,
-            current_weight_lbs: String(Math.round(stats.totalWeight)),
+            current_weight_lbs: String(isNaN(roundedWeight) ? 0 : roundedWeight),
             last_synced_at: now
           })
           .where(eq(warehouseZones.id, zone.id));
