@@ -8223,7 +8223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const msPerDay = 24 * 60 * 60 * 1000;
       const futureDate = new Date(now.getTime() + FORECAST_DAYS * msPerDay);
       
-      // Fetch everything in parallel including user sites
+      // Fetch everything in parallel including user sites and optimization plans
       const t1 = Date.now();
       const [
         userSites,
@@ -8231,6 +8231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         landConvoysData,
         seaVoyagesData,
         siteCapacities,
+        optimizationPlansData,
       ] = await Promise.all([
         db.query.warehouseSites.findMany({ where: eq(warehouseSites.user_id, userId) }),
         db.query.flightPlans.findMany({ 
@@ -8252,6 +8253,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
         }),
         getAllSiteCapacities(userId),
+        // Fetch active optimization plans with target completion dates
+        db.select()
+          .from(warehouseOptimizationPlans)
+          .where(and(
+            eq(warehouseOptimizationPlans.user_id, userId),
+            sql`${warehouseOptimizationPlans.status} IN ('pending', 'in_progress')`
+          )),
       ]);
       timings['main_queries'] = Date.now() - t1;
       
@@ -8363,8 +8371,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
             avgUtilization: Math.round(currentUtilization * 10) / 10,
             sitesWithWarnings,
           },
+          optimization: {
+            activePlans: optimizationPlansData.length,
+            plansWithTargetDate: optimizationPlansData.filter(p => p.target_completion_date).length,
+            totalPendingMoves: optimizationPlansData.reduce((sum, p) => sum + (p.total_actions - p.completed_actions), 0),
+          },
         },
         siteForecasts,
+        // Optimization plans with target completion dates for load forecasting
+        optimizationForecasts: optimizationPlansData
+          .filter(p => p.target_completion_date)
+          .map(p => {
+            const site = siteCapacities.find(s => s.siteId === p.site_id);
+            const pendingMoves = p.total_actions - p.completed_actions;
+            // Estimate capacity change based on optimization summary
+            const summary = typeof p.summary === 'object' && p.summary !== null ? p.summary as Record<string, unknown> : {};
+            const estimatedSlotsFreed = (summary.slotsFreed as number) || 0;
+            
+            return {
+              planId: p.id,
+              planName: p.name,
+              siteId: p.site_id,
+              siteName: site?.siteName || 'Unknown',
+              algorithm: p.algorithm,
+              status: p.status,
+              targetCompletionDate: p.target_completion_date?.toISOString(),
+              totalActions: p.total_actions,
+              completedActions: p.completed_actions,
+              pendingMoves,
+              progressPercent: p.total_actions > 0 ? Math.round((p.completed_actions / p.total_actions) * 100) : 0,
+              estimatedCapacityImpact: {
+                slotsFreed: estimatedSlotsFreed,
+                projectedUtilizationChange: site 
+                  ? Math.round((estimatedSlotsFreed / Math.max(1, site.totalPalletPositions)) * 100 * 10) / 10 
+                  : 0,
+              },
+            };
+          }),
       });
     } catch (error) {
       console.error("[Operations] Error generating predictive forecast:", error);
