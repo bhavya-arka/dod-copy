@@ -610,10 +610,11 @@ export const insertWarehouseBuildingSchema = createInsertSchema(warehouseBuildin
 export type InsertWarehouseBuilding = z.infer<typeof insertWarehouseBuildingSchema>;
 export type WarehouseBuilding = typeof warehouseBuildings.$inferSelect;
 
-// Warehouse Zones - logical areas within buildings
+// Warehouse Zones - logical areas within sites (zone-based organization)
 export const warehouseZones = pgTable("warehouse_zones", {
   id: serial("id").primaryKey(),
-  building_id: integer("building_id").notNull(),
+  site_id: integer("site_id").notNull(),
+  building_id: integer("building_id"),
   code: text("code").notNull(),
   name: text("name").notNull(),
   zone_type: text("zone_type").notNull().default("rack"),
