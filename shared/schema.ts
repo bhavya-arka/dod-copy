@@ -627,16 +627,42 @@ export const warehouseZones = pgTable("warehouse_zones", {
   location_pattern: text("location_pattern"),
   weight_limit_lbs: integer("weight_limit_lbs").default(2000),
   capacity_pallets: integer("capacity_pallets"),
+  current_item_count: integer("current_item_count").default(0),
+  current_weight_lbs: integer("current_weight_lbs").default(0),
+  total_capacity: integer("total_capacity").default(100),
+  last_synced_at: timestamp("last_synced_at"),
   metadata: jsonb("metadata").notNull().default({}),
   created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Zone Capacity History - snapshots of zone capacity over time
+export const warehouseZoneCapacityHistory = pgTable("warehouse_zone_capacity_history", {
+  id: serial("id").primaryKey(),
+  zone_id: integer("zone_id").notNull(),
+  site_id: integer("site_id").notNull(),
+  captured_at: timestamp("captured_at").defaultNow().notNull(),
+  total_capacity: integer("total_capacity").notNull(),
+  current_item_count: integer("current_item_count").notNull(),
+  current_weight_lbs: integer("current_weight_lbs").default(0),
+  bulk_used: integer("bulk_used").default(0),
+  rack_used: integer("rack_used").default(0),
+  source: text("source").notNull().default("resync"),
 });
 
 export const insertWarehouseZoneSchema = createInsertSchema(warehouseZones).omit({
   id: true,
   created_at: true,
+  last_synced_at: true,
 });
 export type InsertWarehouseZone = z.infer<typeof insertWarehouseZoneSchema>;
 export type WarehouseZone = typeof warehouseZones.$inferSelect;
+
+export const insertWarehouseZoneCapacityHistorySchema = createInsertSchema(warehouseZoneCapacityHistory).omit({
+  id: true,
+  captured_at: true,
+});
+export type InsertWarehouseZoneCapacityHistory = z.infer<typeof insertWarehouseZoneCapacityHistorySchema>;
+export type WarehouseZoneCapacityHistory = typeof warehouseZoneCapacityHistory.$inferSelect;
 
 // Warehouse Locations - individual pallet positions
 export const warehouseLocations = pgTable("warehouse_locations", {
@@ -676,6 +702,7 @@ export const warehouseInventoryItems = pgTable("warehouse_inventory_items", {
   id: serial("id").primaryKey(),
   site_id: integer("site_id").notNull(),
   location_id: integer("location_id"),
+  zone_id: integer("zone_id"),
   storage_facility: text("storage_facility"),
   ship: text("ship"),
   ship_class: text("ship_class"),
