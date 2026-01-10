@@ -3580,9 +3580,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const baseCondition = eq(warehouseInventoryItems.site_id, siteId);
       const whereConditions: any[] = [baseCondition];
 
-      // Add zone_id filter if provided
+      // Add zone filter if provided - use location pattern matching
       if (zoneId !== null && !isNaN(zoneId)) {
-        whereConditions.push(eq(warehouseInventoryItems.zone_id, zoneId));
+        const [zone] = await db.select()
+          .from(warehouseZones)
+          .where(eq(warehouseZones.id, zoneId));
+        
+        if (zone && zone.location_pattern) {
+          whereConditions.push(
+            sql`${warehouseInventoryItems.location} ~ ${zone.location_pattern}`
+          );
+        } else if (zone) {
+          const zoneCode = zone.code;
+          if (/^\d{4}$/.test(zoneCode)) {
+            const prefix = zoneCode.charAt(0);
+            whereConditions.push(
+              sql`${warehouseInventoryItems.location} ~ ${`^${prefix}\\d{3}`}`
+            );
+          } else {
+            whereConditions.push(eq(warehouseInventoryItems.zone_id, zoneId));
+          }
+        }
       }
 
       // Add search conditions - each term must match at least one searchable field
