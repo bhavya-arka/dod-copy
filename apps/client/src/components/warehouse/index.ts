@@ -8,6 +8,7 @@ export { default as WMSInventory } from "./WMSInventory";
 export { default as WMSOperations } from "./WMSOperations";
 export { default as WMSSitesStorage } from "./WMSSitesStorage";
 export { default as WMSAiInsights } from "./WMSAiInsights";
+export { default as WMSHistory } from "./WMSHistory";
 export { default as WMSAdmin } from "./WMSAdmin";
 export { default as Toast } from "./Toast";
 

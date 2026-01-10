@@ -88,13 +88,16 @@ export default function PlanActionsModal({
     status: 'in_progress' | 'completed' | 'skipped',
     notes?: string
   ) => {
+    console.log('[PlanActionsModal] handleUpdateAction called:', { actionId, status, planId: currentPlan.id });
     setProcessingActions(prev => new Set(prev).add(actionId));
     try {
+      console.log('[PlanActionsModal] Calling updateOptimizationAction...');
       await updateOptimizationAction(currentPlan.id, actionId, { 
         status, 
         notes: notes || actionNotes[actionId] 
       });
       
+      console.log('[PlanActionsModal] Action updated successfully');
       const statusLabel = status === 'in_progress' ? 'started' : status;
       onShowToast(`Action ${statusLabel} successfully`, "success");
       await refreshPlan();
@@ -102,6 +105,7 @@ export default function PlanActionsModal({
       setActiveNoteInput(null);
       setActionNotes(prev => ({ ...prev, [actionId]: '' }));
     } catch (err) {
+      console.error('[PlanActionsModal] Error updating action:', err);
       onShowToast(err instanceof Error ? err.message : "Failed to update action", "error");
     } finally {
       setProcessingActions(prev => {
@@ -352,7 +356,13 @@ export default function PlanActionsModal({
             </div>
           </div>
           <button
-            onClick={onClose}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('[PlanActionsModal] Close button clicked');
+              onClose();
+            }}
             className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
           >
             <X className="w-5 h-5" />
@@ -554,7 +564,13 @@ export default function PlanActionsModal({
                     <div className="flex-shrink-0">
                       {action.status === 'pending' && !isPlanFinalized && (
                         <button
-                          onClick={() => handleUpdateAction(action.id, 'in_progress')}
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('[PlanActionsModal] Start button clicked for action:', action.id);
+                            handleUpdateAction(action.id, 'in_progress');
+                          }}
                           disabled={processingActions.has(action.id) || isPlanFinalized}
                           className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >

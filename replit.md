@@ -82,7 +82,7 @@ The Air module features a multi-stage pipeline:
 The system supports C-17 Globemaster III and C-130H/J Hercules aircraft, adhering to standardized 463L pallet specifications. Cargo loading/unloading is simulated with a forward-to-aft sequence based on destination and cargo type.
 
 ## DLA-Compliant Warehouse Management System (WMS)
-The WMS is modular, featuring a 7-section navigation (Dashboard, Inventory, Operations, Sites & Storage, Analytics, AI Insights, Admin). Key features include:
+The WMS is modular, featuring an 8-section navigation (Dashboard, Inventory, Operations, Sites & Storage, Analytics, AI Insights, History, Admin). Key features include:
 - Multi-site inventory tracking and pallet-level location management.
 - NSN validation (####-##-###-####), aging alerts (>7 years), and weight constraints.
 - **DLA Pallet Standards**: 4×4×4 ft pallet blocks, ≤2,000 lbs per pallet, with real-time capacity tracking.
@@ -121,6 +121,13 @@ The WMS is modular, featuring a 7-section navigation (Dashboard, Inventory, Oper
 - Inter-warehouse transfers linked to Air, Land, or Sea transport modes.
 - **90-Day Predictive Load Planning**: Forecasts capacity needs based on historical convoy/voyage/flight patterns, plus active optimization plans with target completion dates for capacity impact projections.
 - **Capacity Visualization**: Color-coded status indicators (green <60%, yellow 60-85%, red >85%) with trend arrows.
+- **Optimization History Page** (`apps/client/src/components/warehouse/WMSHistory.tsx`):
+  - Comprehensive event tracking for all optimization activities
+  - Timeline view of events grouped by day with color-coded event types
+  - Filter by site, event type, and date range
+  - Summary cards showing total events, actions started/completed/skipped
+  - API endpoint: `GET /api/warehouse/optimization-events` with pagination and filtering
+  - Events logged for: plan creation, action start/complete/skip, target date changes, plan cancellation
 
 ## Data Models
 Key data models include `MovementItem`, `Pallet463L`, `AircraftLoadPlan`, `AllocationResult` for air operations, and `warehouse_sites`, `warehouse_buildings`, `warehouse_zones`, `warehouse_locations`, `warehouse_inventory_items`, `warehouse_transfers` for WMS. Land and Sea modules have `land_routes`, `land_convoys`, `sea_voyages`, and `sea_containers`.

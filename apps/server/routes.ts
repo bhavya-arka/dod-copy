@@ -5697,6 +5697,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/warehouse/optimization-events - Get optimization events for user's sites
+  app.get("/api/warehouse/optimization-events", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { site_id, plan_id, event_type, start_date, end_date, limit = '100', offset = '0' } = req.query;
+      
+      const limitNum = Math.min(parseInt(limit as string) || 100, 1000);
+      const offsetNum = parseInt(offset as string) || 0;
+
+      // Get user's site IDs for security filtering
+      const userSites = await db.select({ id: warehouseSites.id })
+        .from(warehouseSites)
+        .where(eq(warehouseSites.user_id, req.user!.id));
+      const userSiteIds = userSites.map(s => s.id);
+
+      if (userSiteIds.length === 0) {
+        return res.json({ events: [], total: 0, limit: limitNum, offset: offsetNum });
+      }
+
+      // Build conditions array
+      const conditions = [
+        inArray(warehouseOptimizationPlans.site_id, userSiteIds)
+      ];
+
+      if (site_id) {
+        const siteIdNum = parseInt(site_id as string);
+        if (!isNaN(siteIdNum) && userSiteIds.includes(siteIdNum)) {
+          conditions.push(eq(warehouseOptimizationPlans.site_id, siteIdNum));
+        }
+      }
+
+      if (plan_id) {
+        const planIdNum = parseInt(plan_id as string);
+        if (!isNaN(planIdNum)) {
+          conditions.push(eq(warehouseOptimizationEvents.plan_id, planIdNum));
+        }
+      }
+
+      if (event_type && typeof event_type === 'string') {
+        conditions.push(eq(warehouseOptimizationEvents.event_type, event_type));
+      }
+
+      if (start_date && typeof start_date === 'string') {
+        conditions.push(gte(warehouseOptimizationEvents.created_at, new Date(start_date)));
+      }
+
+      if (end_date && typeof end_date === 'string') {
+        const endDateObj = new Date(end_date);
+        endDateObj.setHours(23, 59, 59, 999);
+        conditions.push(lte(warehouseOptimizationEvents.created_at, endDateObj));
+      }
+
+      // Get total count
+      const [countResult] = await db.select({ count: count() })
+        .from(warehouseOptimizationEvents)
+        .innerJoin(warehouseOptimizationPlans, eq(warehouseOptimizationEvents.plan_id, warehouseOptimizationPlans.id))
+        .where(and(...conditions));
+
+      // Get events with joins
+      const events = await db.select({
+        id: warehouseOptimizationEvents.id,
+        plan_id: warehouseOptimizationEvents.plan_id,
+        user_id: warehouseOptimizationEvents.user_id,
+        event_type: warehouseOptimizationEvents.event_type,
+        payload: warehouseOptimizationEvents.payload,
+        created_at: warehouseOptimizationEvents.created_at,
+        plan_name: warehouseOptimizationPlans.name,
+        plan_status: warehouseOptimizationPlans.status,
+        site_id: warehouseOptimizationPlans.site_id,
+        site_name: warehouseSites.name,
+        site_code: warehouseSites.code,
+        user_email: users.email,
+      })
+        .from(warehouseOptimizationEvents)
+        .innerJoin(warehouseOptimizationPlans, eq(warehouseOptimizationEvents.plan_id, warehouseOptimizationPlans.id))
+        .innerJoin(warehouseSites, eq(warehouseOptimizationPlans.site_id, warehouseSites.id))
+        .leftJoin(users, eq(warehouseOptimizationEvents.user_id, users.id))
+        .where(and(...conditions))
+        .orderBy(desc(warehouseOptimizationEvents.created_at))
+        .limit(limitNum)
+        .offset(offsetNum);
+
+      res.json({
+        events,
+        total: countResult?.count || 0,
+        limit: limitNum,
+        offset: offsetNum,
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch optimization events:", error);
+      res.status(500).json({ error: "Failed to fetch optimization events" });
+    }
+  });
+
   // ============================================================================
   // WAREHOUSE CONFIGURATION API (PROTECTED)
   // ============================================================================

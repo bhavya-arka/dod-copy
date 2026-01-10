@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Building2,
   Brain,
+  History,
   Settings,
 } from "lucide-react";
 import { User } from "../../hooks/useAuth";
@@ -23,6 +24,7 @@ import {
   WMSOperations,
   WMSSitesStorage,
   WMSAiInsights,
+  WMSHistory,
   WMSAdmin,
   Toast,
   AddSiteModal,
@@ -129,6 +131,7 @@ export default function WarehouseManagement({
     { id: "operations", label: "Operations", icon: <ArrowRightLeft className="w-4 h-4" /> },
     { id: "sites", label: "Sites & Storage", icon: <Building2 className="w-4 h-4" /> },
     { id: "ai-insights", label: "AI Insights", icon: <Brain className="w-4 h-4" /> },
+    { id: "history", label: "History", icon: <History className="w-4 h-4" /> },
     { id: "admin", label: "Admin", icon: <Settings className="w-4 h-4" /> },
   ];
 
@@ -266,6 +269,13 @@ export default function WarehouseManagement({
             sites={sites}
             selectedSiteId={selectedSiteId}
             onSelectSite={setSelectedSiteId}
+            onShowToast={showToast}
+          />
+        )}
+
+        {activeTab === "history" && (
+          <WMSHistory
+            sites={sites}
             onShowToast={showToast}
           />
         )}

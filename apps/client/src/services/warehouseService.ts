@@ -1151,3 +1151,69 @@ export async function fetchZoneHistory(
   }
   return response.json();
 }
+
+/** Optimization event from API */
+export interface OptimizationEvent {
+  id: number;
+  plan_id: number;
+  user_id: number;
+  event_type: string;
+  payload: Record<string, any>;
+  created_at: string;
+  plan_name: string;
+  plan_status: string;
+  site_id: number;
+  site_name: string;
+  site_code: string;
+  user_email: string | null;
+}
+
+/** Optimization events response */
+export interface OptimizationEventsResponse {
+  events: OptimizationEvent[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** Optimization events query filters */
+export interface OptimizationEventsFilters {
+  site_id?: number;
+  plan_id?: number;
+  event_type?: string;
+  start_date?: string;
+  end_date?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Fetch optimization events with optional filters
+ * @param filters - Query filters
+ * @returns Paginated optimization events
+ */
+export async function getOptimizationEvents(
+  filters: OptimizationEventsFilters = {}
+): Promise<OptimizationEventsResponse> {
+  const params = new URLSearchParams();
+  
+  if (filters.site_id) params.set("site_id", filters.site_id.toString());
+  if (filters.plan_id) params.set("plan_id", filters.plan_id.toString());
+  if (filters.event_type) params.set("event_type", filters.event_type);
+  if (filters.start_date) params.set("start_date", filters.start_date);
+  if (filters.end_date) params.set("end_date", filters.end_date);
+  if (filters.limit) params.set("limit", filters.limit.toString());
+  if (filters.offset) params.set("offset", filters.offset.toString());
+  
+  const queryString = params.toString();
+  const url = `${API_BASE}/optimization-events${queryString ? `?${queryString}` : ""}`;
+  
+  const response = await fetch(url, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to fetch optimization events");
+  }
+  return response.json();
+}

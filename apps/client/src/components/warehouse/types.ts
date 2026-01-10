@@ -213,7 +213,7 @@ export interface ToastMessage {
 }
 
 /** WMS navigation tabs */
-export type WMSTab = "dashboard" | "inventory" | "operations" | "sites" | "ai-insights" | "admin";
+export type WMSTab = "dashboard" | "inventory" | "operations" | "sites" | "ai-insights" | "history" | "admin";
 
 /** Inventory filter options (legacy) */
 export interface InventoryFilter {
