@@ -15,7 +15,12 @@ import {
   CheckCircle2,
   XCircle,
   PlayCircle,
-  Target
+  Target,
+  ChevronDown,
+  ChevronUp,
+  TrendingUp,
+  Boxes,
+  FolderOpen
 } from "lucide-react";
 import { 
   updateOptimizationAction, 
@@ -49,6 +54,7 @@ export default function PlanActionsModal({
   const [settingTargetDate, setSettingTargetDate] = useState(false);
   const [editingTargetDate, setEditingTargetDate] = useState(false);
   const [targetDateInput, setTargetDateInput] = useState<string>("");
+  const [showImpactMetrics, setShowImpactMetrics] = useState(true);
 
   useEffect(() => {
     if (plan?.id) {
@@ -381,6 +387,58 @@ export default function PlanActionsModal({
               className="h-full bg-[#2563EB] rounded-full transition-all duration-300"
               style={{ width: `${progressPercent}%` }}
             />
+          </div>
+
+          {/* Impact Metrics Section */}
+          <div className="mt-4 rounded-xl bg-background border border-border overflow-hidden">
+            <button
+              onClick={() => setShowImpactMetrics(!showImpactMetrics)}
+              className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-medium text-foreground">Impact Metrics</span>
+              </div>
+              {showImpactMetrics ? (
+                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              )}
+            </button>
+            
+            {showImpactMetrics && (
+              <div className="p-3 pt-0 grid grid-cols-3 gap-3">
+                <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <span className="text-xs font-medium text-green-700 dark:text-green-400">Items Moved</span>
+                  </div>
+                  <span className="text-xl font-bold text-green-700 dark:text-green-300">
+                    {currentPlan.completed_actions}
+                  </span>
+                </div>
+                
+                <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                  <div className="flex items-center gap-2 mb-1">
+                    <FolderOpen className="w-4 h-4 text-green-600" />
+                    <span className="text-xs font-medium text-green-700 dark:text-green-400">Positions Freed</span>
+                  </div>
+                  <span className="text-xl font-bold text-green-700 dark:text-green-300">
+                    {(currentPlan.summary as any)?.positions_freed ?? 0}
+                  </span>
+                </div>
+                
+                <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Boxes className="w-4 h-4 text-green-600" />
+                    <span className="text-xs font-medium text-green-700 dark:text-green-400">Consolidated</span>
+                  </div>
+                  <span className="text-xl font-bold text-green-700 dark:text-green-300">
+                    {(currentPlan.summary as any)?.items_consolidated ?? 0}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Target Completion Date Section */}

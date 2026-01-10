@@ -780,6 +780,9 @@ export interface OptimizationPlanSummary {
   pickEfficiencyGain: string;
   itemsAffected: number;
   actionsGenerated: number;
+  total_items_moved?: number;
+  positions_freed?: number;
+  items_consolidated?: number;
 }
 
 /** Individual action within an optimization plan */

@@ -6900,6 +6900,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updateData.movement_notes = notes;
         }
 
+        // Track impact metrics when completing an action
+        let positionFreed = false;
+        let wasConsolidation = false;
+
+        // If action was completed, calculate impact metrics BEFORE applying the move
+        if (status === "completed" && action.status !== "completed" && action.from_location && action.to_location) {
+          // Check if to_location already has items (consolidation)
+          const [existingAtDestination] = await tx.select({ count: count() })
+            .from(warehouseInventoryItems)
+            .where(and(
+              eq(warehouseInventoryItems.site_id, plan.site_id),
+              eq(warehouseInventoryItems.location, action.to_location),
+              sql`${warehouseInventoryItems.id} != ${action.item_id}`
+            ));
+          wasConsolidation = (existingAtDestination?.count ?? 0) > 0;
+
+          // Check how many items are at from_location (to know if we're freeing a position)
+          const [itemsAtSource] = await tx.select({ count: count() })
+            .from(warehouseInventoryItems)
+            .where(and(
+              eq(warehouseInventoryItems.site_id, plan.site_id),
+              eq(warehouseInventoryItems.location, action.from_location)
+            ));
+          // Position is freed if this is the only item at that location
+          positionFreed = (itemsAtSource?.count ?? 0) === 1;
+        }
+
         // Update the action
         const [updatedAction] = await tx.update(warehouseOptimizationActions)
           .set(updateData)
@@ -6918,9 +6945,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
               .where(eq(warehouseInventoryItems.id, action.item_id));
           }
 
+          // Get current summary to update metrics
+          const [currentPlan] = await tx.select()
+            .from(warehouseOptimizationPlans)
+            .where(eq(warehouseOptimizationPlans.id, planId));
+          
+          const currentSummary = (currentPlan?.summary as any) || {};
+          const newSummary = {
+            ...currentSummary,
+            total_items_moved: (currentSummary.total_items_moved || 0) + 1,
+            positions_freed: (currentSummary.positions_freed || 0) + (positionFreed ? 1 : 0),
+            items_consolidated: (currentSummary.items_consolidated || 0) + (wasConsolidation ? 1 : 0),
+          };
+
           await tx.update(warehouseOptimizationPlans)
             .set({
               completed_actions: sql`${warehouseOptimizationPlans.completed_actions} + 1`,
+              summary: newSummary,
               updated_at: new Date(),
             })
             .where(eq(warehouseOptimizationPlans.id, planId));
@@ -6947,12 +6988,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        // Create an event for the status change
+        // Create an event for the status change with impact metrics
         await tx.insert(warehouseOptimizationEvents).values({
           plan_id: planId,
           user_id: req.user!.id,
           event_type: `action_${status}`,
-          payload: { action_id: actionId, status, notes },
+          payload: { 
+            action_id: actionId, 
+            status, 
+            notes,
+            impact: status === "completed" ? { position_freed: positionFreed, was_consolidation: wasConsolidation } : undefined
+          },
         });
 
         return updatedAction;
