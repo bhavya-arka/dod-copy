@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   X,
   Settings2,
@@ -13,7 +13,6 @@ import {
   ArrowDown,
 } from "lucide-react";
 import type {
-  FilterCondition,
   ColumnConfig,
   PaginatedInventoryResponse,
   InventoryItem,
@@ -73,12 +72,6 @@ export default function ZoneItemsModal({
   const cacheVersionRef = useRef(0);
   const visitedPagesRef = useRef<Set<number>>(new Set());
 
-  const zoneFilter: FilterCondition = useMemo(() => ({
-    id: "zone_filter",
-    field: "zone_id",
-    operator: "equals",
-    value: zone?.id?.toString() || "",
-  }), [zone?.id]);
 
   const getCacheKey = useCallback((pageNum: number) => {
     return JSON.stringify({
@@ -174,8 +167,7 @@ export default function ZoneItemsModal({
         pageSize,
         sortBy,
         sortOrder,
-        filters: [zoneFilter],
-        filterLogic: "and",
+        zone_id: zone.id,
       });
 
       addToCache(cacheKey, response);
@@ -188,7 +180,7 @@ export default function ZoneItemsModal({
         prefetchingRef.current.delete(cacheKey);
       }
     }
-  }, [zone, siteId, pageSize, sortBy, sortOrder, zoneFilter, getCacheKey, addToCache, getFromCache]);
+  }, [zone, siteId, pageSize, sortBy, sortOrder, getCacheKey, addToCache, getFromCache]);
 
   const fetchData = useCallback(async () => {
     if (!zone || !isOpen) return;
@@ -211,8 +203,7 @@ export default function ZoneItemsModal({
         pageSize,
         sortBy,
         sortOrder,
-        filters: [zoneFilter],
-        filterLogic: "and",
+        zone_id: zone.id,
       });
 
       if (response) {
@@ -225,7 +216,7 @@ export default function ZoneItemsModal({
     } finally {
       setLoading(false);
     }
-  }, [zone, isOpen, page, pageSize, sortBy, sortOrder, siteId, zoneFilter, getCacheKey, addToCache, getFromCache]);
+  }, [zone, isOpen, page, pageSize, sortBy, sortOrder, siteId, getCacheKey, addToCache, getFromCache]);
 
   const prefetchAdjacentPages = useCallback(async () => {
     if (!zone || !paginatedData) return;

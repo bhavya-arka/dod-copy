@@ -229,6 +229,7 @@ export async function fetchInventoryPaginated(
     searchParams.set("filters", JSON.stringify(params.filters));
   }
   if (params.filterLogic) searchParams.set("filterLogic", params.filterLogic);
+  if (params.zone_id !== undefined) searchParams.set("zone_id", params.zone_id.toString());
 
   const queryString = searchParams.toString();
   const url = `${API_BASE}/sites/${siteId}/inventory${queryString ? `?${queryString}` : ""}`;

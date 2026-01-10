@@ -292,6 +292,7 @@ export interface InventoryQueryParams {
   searchTerms?: string[];
   filters?: FilterCondition[];
   filterLogic?: "and" | "or";
+  zone_id?: number;
 }
 
 /** Parsed NSN data */

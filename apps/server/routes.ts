@@ -3572,9 +3572,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Parse zone_id filter for zone-specific inventory queries
+      const zoneIdParam = req.query.zone_id as string;
+      const zoneId = zoneIdParam ? parseInt(zoneIdParam) : null;
+
       // Build where conditions
       const baseCondition = eq(warehouseInventoryItems.site_id, siteId);
       const whereConditions: any[] = [baseCondition];
+
+      // Add zone_id filter if provided
+      if (zoneId !== null && !isNaN(zoneId)) {
+        whereConditions.push(eq(warehouseInventoryItems.zone_id, zoneId));
+      }
 
       // Add search conditions - each term must match at least one searchable field
       // Multiple terms are AND'ed together (all must match)
