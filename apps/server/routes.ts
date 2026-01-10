@@ -4626,6 +4626,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
 
+      // Extract zone constraints from params
+      const zoneConstraints = params?.zoneConstraints || { sourceZoneIds: [], targetZoneIds: [], enableZoneFiltering: false };
+      const { sourceZoneIds = [], targetZoneIds = [], enableZoneFiltering = false } = zoneConstraints;
+      
+      // Filter items by source zones if zone filtering is enabled
+      let filteredItems = itemsWithData;
+      if (enableZoneFiltering && sourceZoneIds.length > 0) {
+        filteredItems = itemsWithData.filter(item => 
+          item.matched_zone_id !== null && sourceZoneIds.includes(item.matched_zone_id)
+        );
+        console.log(`[Optimize] Zone filtering enabled: ${filteredItems.length} items from ${sourceZoneIds.length} source zones (was ${itemsWithData.length})`);
+      }
+
+      // Get target zones for placement (if specified, else use all zones)
+      const allowedTargetZones = enableZoneFiltering && targetZoneIds.length > 0
+        ? zones.filter(z => targetZoneIds.includes(z.id))
+        : zones;
+      console.log(`[Optimize] Target zones: ${allowedTargetZones.length} zones available`);
+
       let actions: Array<{
         id: string;
         action: string;
@@ -4658,8 +4677,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { minItemsToConsolidate = 2, maxActionsToGenerate = 50 } = params || {};
         
         // Group items by ship_class (items for the same ship should be together)
-        const shipGroups: Map<string, typeof itemsWithData> = new Map();
-        for (const item of itemsWithData) {
+        // Use filteredItems instead of itemsWithData for zone constraint support
+        const shipGroups: Map<string, typeof filteredItems> = new Map();
+        for (const item of filteredItems) {
           if (!item.ship_class) continue;
           if (!shipGroups.has(item.ship_class)) {
             shipGroups.set(item.ship_class, []);
@@ -4677,14 +4697,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (shipItems.length < minItemsToConsolidate) continue;
           
           // Find the most common zone for this ship's items using matched_zone_id
+          // If target zones are specified, only consider those zones
           const zoneCounts: Map<number, number> = new Map();
           for (const item of shipItems) {
             if (item.matched_zone_id !== null) {
-              zoneCounts.set(item.matched_zone_id, (zoneCounts.get(item.matched_zone_id) || 0) + 1);
+              // If target zones specified, only count items in those zones
+              if (enableZoneFiltering && targetZoneIds.length > 0) {
+                if (targetZoneIds.includes(item.matched_zone_id)) {
+                  zoneCounts.set(item.matched_zone_id, (zoneCounts.get(item.matched_zone_id) || 0) + 1);
+                }
+              } else {
+                zoneCounts.set(item.matched_zone_id, (zoneCounts.get(item.matched_zone_id) || 0) + 1);
+              }
             }
           }
           
-          // Find zone with most items
+          // Find zone with most items (from allowed targets)
           let targetZoneId: number | null = null;
           let maxCount = 0;
           for (const [zoneId, count] of Array.from(zoneCounts.entries())) {
@@ -4694,8 +4722,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
           
-          // Get the target zone object for naming
-          const targetZone = zones.find(z => z.id === targetZoneId);
+          // If no target found from item counts but we have target zones, use first target zone
+          if (targetZoneId === null && enableZoneFiltering && allowedTargetZones.length > 0) {
+            targetZoneId = allowedTargetZones[0].id;
+          }
+          
+          // Get the target zone object for naming (from allowed zones)
+          const targetZone = allowedTargetZones.find(z => z.id === targetZoneId) || zones.find(z => z.id === targetZoneId);
           if (!targetZone) continue;
           
           // Create target location using actual zone code
@@ -4749,10 +4782,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Small items go to small_material zones, large items go to large_material zones
         const { maxActionsToGenerate = 50 } = params || {};
         
-        // Find zones by usage type
-        const smallMaterialZones = zones.filter(z => z.usage_type === 'small_material');
-        const largeMaterialZones = zones.filter(z => z.usage_type === 'large_material');
-        const mixedMaterialZones = zones.filter(z => z.usage_type === 'mixed_material');
+        // Find zones by usage type - filter by allowed target zones if zone constraints enabled
+        const zonesForFiltering = enableZoneFiltering && allowedTargetZones.length > 0 ? allowedTargetZones : zones;
+        const smallMaterialZones = zonesForFiltering.filter(z => z.usage_type === 'small_material');
+        const largeMaterialZones = zonesForFiltering.filter(z => z.usage_type === 'large_material');
+        const mixedMaterialZones = zonesForFiltering.filter(z => z.usage_type === 'mixed_material');
         
         // Determine ideal zone for each item based on weight/dimensions
         const smallWeightThreshold = 50; // lbs
@@ -4763,7 +4797,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let standardizedValue = 0;
         const affectedZoneIds = new Set<number>();
         
-        for (const item of itemsWithData) {
+        // Use filteredItems instead of itemsWithData
+        for (const item of filteredItems) {
           if (item.matched_zone_id === null) continue;
           
           const currentZone = item.matched_zone;
@@ -4836,7 +4871,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { highValueThreshold = 1000, maxActionsToGenerate = 50 } = params || {};
         
         // Rank zones by accessibility: indoor first, then by code (2000 < 3000 < 4000 < 7000)
-        const rankedZones = [...zones]
+        // Use allowed target zones if zone constraints enabled
+        const zonesForRanking = enableZoneFiltering && allowedTargetZones.length > 0 ? allowedTargetZones : zones;
+        const rankedZones = [...zonesForRanking]
           .filter(z => !z.is_outdoor && z.usage_type !== 'hazmat')
           .sort((a, b) => {
             const codeA = parseInt(a.code.replace(/\D/g, '')) || 9999;
@@ -4856,8 +4893,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             actionsGenerated: 0,
           };
         } else {
-          // Sort items by value descending
-          const sortedByValue = [...itemsWithData]
+          // Sort items by value descending - use filteredItems
+          const sortedByValue = [...filteredItems]
             .filter(i => i.value > 0)
             .sort((a, b) => b.value - a.value);
           
@@ -4920,17 +4957,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // SHORESIDE items go to outdoor BULK zones, RESIDUAL to holding areas
         const { maxItemsPerPallet = 15, prioritizeByValue = true, maxActionsToGenerate = 50 } = params || {};
         
-        // Find staging zones by type - prefer outdoor bulk zones for staging
-        const bulkZones = zones.filter(z => 
+        // Find staging zones by type - use allowed target zones if zone constraints enabled
+        const zonesForStaging = enableZoneFiltering && allowedTargetZones.length > 0 ? allowedTargetZones : zones;
+        const bulkZones = zonesForStaging.filter(z => 
           z.is_outdoor && 
           (z.usage_type?.includes('bulk') || z.usage_type === 'uncrated' || z.usage_type === 'crated') &&
           (z.bulk_available || 0) > 0
         );
-        const indoorZones = zones.filter(z => !z.is_outdoor);
-        const hazmatZone = zones.find(z => z.usage_type === 'hazmat');
+        const indoorZones = zonesForStaging.filter(z => !z.is_outdoor);
+        const hazmatZone = zonesForStaging.find(z => z.usage_type === 'hazmat');
         
         // Map dispositions to appropriate zone types
-        const getZoneForDisposition = (disposition: string): typeof zones[0] | null => {
+        const getZoneForDisposition = (disposition: string): typeof zonesForStaging[0] | null => {
           switch (disposition.toUpperCase()) {
             case 'SHORESIDE':
               // SHORESIDE goes to outdoor bulk zones for easy dock access
@@ -4941,14 +4979,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             case 'HAZMAT':
               return hazmatZone || null;
             default:
-              // Default to first available bulk zone
-              return bulkZones[0] || indoorZones[0] || null;
+              // Default to first available bulk zone or indoor zone
+              return bulkZones[0] || indoorZones[0] || zonesForStaging[0] || null;
           }
         };
         
-        // Group items by mat_disposition
-        const dispositionGroups: Map<string, typeof itemsWithData> = new Map();
-        for (const item of itemsWithData) {
+        // Group items by mat_disposition - use filteredItems
+        const dispositionGroups: Map<string, typeof filteredItems> = new Map();
+        for (const item of filteredItems) {
           const disposition = item.mat_disposition || 'UNASSIGNED';
           if (!dispositionGroups.has(disposition)) {
             dispositionGroups.set(disposition, []);
