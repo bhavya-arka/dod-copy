@@ -5611,14 +5611,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Optimization run not found" });
       }
 
-      // For now, just mark the plan as applied (actual implementation would update item locations)
-      // In a full implementation, this would iterate through actions and update warehouse_inventory_items
+      // Get the action plan
+      const actionPlan = run.action_plan as { actions: Array<{
+        id: string;
+        item: string;
+        from: string;
+        to: string;
+        targetZoneId?: number | null;
+      }> } | null;
+
+      if (!actionPlan?.actions || actionPlan.actions.length === 0) {
+        return res.json({
+          success: true,
+          message: "No actions to apply",
+          runId,
+          actionsApplied: 0
+        });
+      }
+
+      console.log(`[Optimize Apply] Processing ${actionPlan.actions.length} actions for run ${runId}`);
+
+      // Apply each action by updating item locations
+      let actionsApplied = 0;
+      let errors: string[] = [];
+
+      for (const action of actionPlan.actions) {
+        try {
+          // Find the item by requisition number
+          const [item] = await db.select()
+            .from(warehouseInventoryItems)
+            .where(and(
+              eq(warehouseInventoryItems.site_id, siteId),
+              eq(warehouseInventoryItems.requisition_no, action.item)
+            ))
+            .limit(1);
+
+          if (!item) {
+            errors.push(`Item ${action.item} not found`);
+            continue;
+          }
+
+          // Update the item's location in raw_row
+          const rawRow = (item.raw_row as Record<string, any>) || {};
+          const updatedRawRow = {
+            ...rawRow,
+            location: action.to,
+            previous_location: action.from,
+            optimization_applied: new Date().toISOString(),
+          };
+
+          // Update the item
+          await db.update(warehouseInventoryItems)
+            .set({
+              location: action.to,
+              zone_id: action.targetZoneId || null,
+              raw_row: updatedRawRow,
+              updated_at: new Date(),
+            })
+            .where(eq(warehouseInventoryItems.id, item.id));
+
+          actionsApplied++;
+        } catch (err) {
+          console.error(`[Optimize Apply] Failed to apply action for ${action.item}:`, err);
+          errors.push(`Failed to move ${action.item}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
+      }
+
+      console.log(`[Optimize Apply] Applied ${actionsApplied}/${actionPlan.actions.length} actions`);
+
+      // Mark the optimization run as applied
+      await db.update(warehouseOptimizationRuns)
+        .set({
+          status: 'applied',
+          completed_at: new Date(),
+        })
+        .where(eq(warehouseOptimizationRuns.id, runId));
 
       res.json({ 
         success: true, 
-        message: "Optimization plan applied successfully",
+        message: actionsApplied === actionPlan.actions.length 
+          ? `Successfully moved ${actionsApplied} items to new locations`
+          : `Applied ${actionsApplied}/${actionPlan.actions.length} actions${errors.length > 0 ? `. Errors: ${errors.slice(0, 3).join('; ')}` : ''}`,
         runId,
-        actionsApplied: ((run.action_plan as any)?.actions?.length || 0)
+        actionsApplied,
+        totalActions: actionPlan.actions.length,
+        errors: errors.length > 0 ? errors.slice(0, 5) : undefined
       });
     } catch (error) {
       console.error("[Warehouse] Failed to apply optimization:", error);
