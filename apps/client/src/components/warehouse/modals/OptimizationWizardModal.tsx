@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { X, Loader2, ChevronRight, ChevronLeft, Check, Layers, Ruler, DollarSign, Box, FileDown, Play, Save, AlertCircle, Zap } from "lucide-react";
-import type { WarehouseSite, ToastMessage } from "../types";
-import { runOptimizationWizard, runAllOptimizations, applyOptimizationPlan, createOptimizationPlan, type OptimizationWizardResult, type CreatePlanData } from "../../../services/warehouseService";
+import { X, Loader2, ChevronRight, ChevronLeft, Check, Layers, Ruler, DollarSign, Box, FileDown, Play, Save, AlertCircle, Zap, MapPin } from "lucide-react";
+import type { WarehouseSite, WarehouseZone, ToastMessage } from "../types";
+import { runOptimizationWizard, runAllOptimizations, applyOptimizationPlan, createOptimizationPlan, fetchSiteZones, type OptimizationWizardResult, type CreatePlanData } from "../../../services/warehouseService";
 import { generateWarehouseOptimizationPDF } from "../../../lib/warehouseOptimizationPdfExport";
 
 export type Algorithm = "cardstack" | "size_standardization" | "value_density" | "bin_packing" | "run_all";
@@ -86,18 +86,32 @@ const ALGORITHMS: AlgorithmOption[] = [
   },
 ];
 
+interface ZoneConstraints {
+  sourceZoneIds: number[];
+  targetZoneIds: number[];
+  enableZoneFiltering: boolean;
+}
+
 interface AlgorithmParams {
   cardstack: { minItemsToConsolidate: number; maxActionsToGenerate: number };
   size_standardization: { minProgramItems: number; maxActionsToGenerate: number };
   value_density: { highValueThreshold: number; zoneDistanceMultiplier: number };
   bin_packing: { maxItemsPerPallet: number; prioritizeByValue: boolean };
+  zoneConstraints: ZoneConstraints;
 }
+
+const DEFAULT_ZONE_CONSTRAINTS: ZoneConstraints = {
+  sourceZoneIds: [],
+  targetZoneIds: [],
+  enableZoneFiltering: false,
+};
 
 const DEFAULT_PARAMS: AlgorithmParams = {
   cardstack: { minItemsToConsolidate: 2, maxActionsToGenerate: 50 },
   size_standardization: { minProgramItems: 3, maxActionsToGenerate: 50 },
   value_density: { highValueThreshold: 1000, zoneDistanceMultiplier: 1.5 },
   bin_packing: { maxItemsPerPallet: 15, prioritizeByValue: true },
+  zoneConstraints: DEFAULT_ZONE_CONSTRAINTS,
 };
 
 export default function OptimizationWizardModal({
@@ -118,12 +132,28 @@ export default function OptimizationWizardModal({
 
   const [applying, setApplying] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [zones, setZones] = useState<WarehouseZone[]>([]);
+  const [zonesLoading, setZonesLoading] = useState(true);
 
   useEffect(() => {
     if (initialAlgorithm) {
       setSelectedAlgorithm(initialAlgorithm);
     }
   }, [initialAlgorithm]);
+
+  useEffect(() => {
+    const loadZones = async () => {
+      try {
+        const fetchedZones = await fetchSiteZones(siteId);
+        setZones(fetchedZones);
+      } catch (err) {
+        console.error("Failed to fetch zones:", err);
+      } finally {
+        setZonesLoading(false);
+      }
+    };
+    loadZones();
+  }, [siteId]);
 
   const steps = [
     { number: 1, label: "Select Algorithm" },
@@ -577,6 +607,122 @@ export default function OptimizationWizardModal({
         {selectedAlgorithm === "size_standardization" && renderSizeStandardizationParams()}
         {selectedAlgorithm === "value_density" && renderValueDensityParams()}
         {selectedAlgorithm === "bin_packing" && renderBinPackingParams()}
+
+        {/* Zone Constraints Section */}
+        <div className="mt-6 pt-6 border-t border-border">
+          <div className="flex items-center gap-2 mb-4">
+            <MapPin className="w-5 h-5 text-[#2563EB]" />
+            <h4 className="text-sm font-medium text-foreground">Zone Constraints (Optional)</h4>
+          </div>
+          
+          <div className="mb-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={params.zoneConstraints.enableZoneFiltering}
+                onChange={(e) => {
+                  setParams(prev => ({
+                    ...prev,
+                    zoneConstraints: { 
+                      ...prev.zoneConstraints, 
+                      enableZoneFiltering: e.target.checked,
+                      sourceZoneIds: e.target.checked ? prev.zoneConstraints.sourceZoneIds : [],
+                      targetZoneIds: e.target.checked ? prev.zoneConstraints.targetZoneIds : [],
+                    }
+                  }));
+                }}
+                className="w-4 h-4 rounded border-border"
+              />
+              <span className="text-sm font-medium text-foreground">Enable zone-specific optimization</span>
+            </label>
+            <p className="text-xs text-muted-foreground mt-1 ml-6">
+              Restrict optimization to specific source and target zones instead of the entire warehouse.
+            </p>
+          </div>
+
+          {params.zoneConstraints.enableZoneFiltering && (
+            <div className="space-y-4 pl-6">
+              {zonesLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading zones...
+                </div>
+              ) : zones.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No zones configured for this site.</p>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Source Zones (items to move from)
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 bg-muted/30 rounded-lg">
+                      {zones.map((zone) => (
+                        <label key={zone.id} className="flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-muted">
+                          <input
+                            type="checkbox"
+                            checked={params.zoneConstraints.sourceZoneIds.includes(zone.id)}
+                            onChange={(e) => {
+                              setParams(prev => ({
+                                ...prev,
+                                zoneConstraints: {
+                                  ...prev.zoneConstraints,
+                                  sourceZoneIds: e.target.checked
+                                    ? [...prev.zoneConstraints.sourceZoneIds, zone.id]
+                                    : prev.zoneConstraints.sourceZoneIds.filter(id => id !== zone.id)
+                                }
+                              }));
+                            }}
+                            className="w-3.5 h-3.5 rounded border-border"
+                          />
+                          <span className="text-xs text-foreground truncate">{zone.code}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {params.zoneConstraints.sourceZoneIds.length === 0 
+                        ? "No selection = all zones" 
+                        : `${params.zoneConstraints.sourceZoneIds.length} zone(s) selected`}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Target Zones (move items to)
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 bg-muted/30 rounded-lg">
+                      {zones.map((zone) => (
+                        <label key={zone.id} className="flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-muted">
+                          <input
+                            type="checkbox"
+                            checked={params.zoneConstraints.targetZoneIds.includes(zone.id)}
+                            onChange={(e) => {
+                              setParams(prev => ({
+                                ...prev,
+                                zoneConstraints: {
+                                  ...prev.zoneConstraints,
+                                  targetZoneIds: e.target.checked
+                                    ? [...prev.zoneConstraints.targetZoneIds, zone.id]
+                                    : prev.zoneConstraints.targetZoneIds.filter(id => id !== zone.id)
+                                }
+                              }));
+                            }}
+                            className="w-3.5 h-3.5 rounded border-border"
+                          />
+                          <span className="text-xs text-foreground truncate">{zone.code}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {params.zoneConstraints.targetZoneIds.length === 0 
+                        ? "No selection = algorithm decides targets" 
+                        : `${params.zoneConstraints.targetZoneIds.length} zone(s) selected`}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     );
   };
