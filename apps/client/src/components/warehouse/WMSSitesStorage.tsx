@@ -165,11 +165,40 @@ export default function WMSSitesStorage({
     }
   };
 
+  const getZonePalletMetrics = (zone: WarehouseZone) => {
+    const rackAvailable = zone.rack_available || 0;
+    const rackOpen = zone.rack_open || 0;
+    const bulkAvailable = zone.bulk_available || 0;
+    const bulkOpen = zone.bulk_open || 0;
+    
+    const rackOccupied = Math.max(0, rackAvailable - rackOpen);
+    const bulkOccupied = Math.max(0, bulkAvailable - bulkOpen);
+    
+    const totalAvailable = rackAvailable + bulkAvailable;
+    const totalOccupied = rackOccupied + bulkOccupied;
+    
+    const rackUtilization = rackAvailable > 0 ? Math.round((rackOccupied / rackAvailable) * 100) : 0;
+    const bulkUtilization = bulkAvailable > 0 ? Math.round((bulkOccupied / bulkAvailable) * 100) : 0;
+    const totalUtilization = totalAvailable > 0 ? Math.round((totalOccupied / totalAvailable) * 100) : 0;
+    
+    return {
+      rackAvailable,
+      rackOpen,
+      rackOccupied,
+      rackUtilization,
+      bulkAvailable,
+      bulkOpen,
+      bulkOccupied,
+      bulkUtilization,
+      totalAvailable,
+      totalOccupied,
+      totalUtilization
+    };
+  };
+
   const getZoneUtilization = (zone: WarehouseZone): number => {
-    const capacity = zone.total_capacity || zone.capacity_pallets || 0;
-    const used = zone.current_item_count || 0;
-    if (capacity === 0) return 0;
-    return Math.round((used / capacity) * 100);
+    const metrics = getZonePalletMetrics(zone);
+    return metrics.totalUtilization;
   };
 
   const getUtilizationColor = (percent: number): string => {
@@ -462,38 +491,55 @@ export default function WMSSitesStorage({
       );
     }
 
+    const aggregatedMetrics = allZones.reduce((acc, zone) => {
+      const metrics = getZonePalletMetrics(zone);
+      return {
+        totalRackAvailable: acc.totalRackAvailable + metrics.rackAvailable,
+        totalRackOccupied: acc.totalRackOccupied + metrics.rackOccupied,
+        totalBulkAvailable: acc.totalBulkAvailable + metrics.bulkAvailable,
+        totalBulkOccupied: acc.totalBulkOccupied + metrics.bulkOccupied,
+        indoorCount: acc.indoorCount + (zone.is_outdoor ? 0 : 1),
+        outdoorCount: acc.outdoorCount + (zone.is_outdoor ? 1 : 0),
+      };
+    }, { totalRackAvailable: 0, totalRackOccupied: 0, totalBulkAvailable: 0, totalBulkOccupied: 0, indoorCount: 0, outdoorCount: 0 });
+
+    const totalAvailable = aggregatedMetrics.totalRackAvailable + aggregatedMetrics.totalBulkAvailable;
+    const totalOccupied = aggregatedMetrics.totalRackOccupied + aggregatedMetrics.totalBulkOccupied;
+    const totalOpen = totalAvailable - totalOccupied;
+    const overallUtilization = totalAvailable > 0 ? Math.round((totalOccupied / totalAvailable) * 100) : 0;
+
     return (
       <div className="space-y-4">
-        {summary && (
+        {allZones.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="p-3 rounded-lg border border-border bg-white">
               <div className="flex items-center gap-2 mb-1">
                 <Grid3X3 className="w-4 h-4 text-purple-500" />
                 <span className="text-xs text-muted-foreground">Total Zones</span>
               </div>
-              <p className="text-lg font-semibold text-foreground">{summary.totalZones}</p>
+              <p className="text-lg font-semibold text-foreground">{allZones.length}</p>
             </div>
             <div className="p-3 rounded-lg border border-border bg-white">
               <div className="flex items-center gap-2 mb-1">
                 <Package className="w-4 h-4 text-blue-500" />
-                <span className="text-xs text-muted-foreground">Capacity Used</span>
+                <span className="text-xs text-muted-foreground">Positions Used</span>
               </div>
               <p className="text-lg font-semibold text-foreground">
-                {summary.totalUsed}/{summary.totalCapacity}
+                {totalOccupied}/{totalAvailable}
                 <span className={`ml-2 text-sm ${
-                  summary.utilizationPercent > 85 ? "text-red-500" :
-                  summary.utilizationPercent > 60 ? "text-amber-500" : "text-emerald-500"
+                  overallUtilization > 85 ? "text-red-500" :
+                  overallUtilization > 60 ? "text-amber-500" : "text-emerald-500"
                 }`}>
-                  ({summary.utilizationPercent}%)
+                  ({overallUtilization}%)
                 </span>
               </p>
             </div>
             <div className="p-3 rounded-lg border border-border bg-white">
               <div className="flex items-center gap-2 mb-1">
                 <Package className="w-4 h-4 text-emerald-500" />
-                <span className="text-xs text-muted-foreground">Available</span>
+                <span className="text-xs text-muted-foreground">Open Positions</span>
               </div>
-              <p className="text-lg font-semibold text-foreground">{summary.availableSpace}</p>
+              <p className="text-lg font-semibold text-foreground">{totalOpen}</p>
             </div>
             <div className="p-3 rounded-lg border border-border bg-white">
               <div className="flex items-center gap-2 mb-1">
@@ -501,7 +547,7 @@ export default function WMSSitesStorage({
                 <span className="text-xs text-muted-foreground">Indoor/Outdoor</span>
               </div>
               <p className="text-lg font-semibold text-foreground">
-                {summary.byType?.indoor || 0}/{summary.byType?.outdoor || 0}
+                {aggregatedMetrics.indoorCount}/{aggregatedMetrics.outdoorCount}
               </p>
             </div>
           </div>
@@ -561,9 +607,8 @@ export default function WMSSitesStorage({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredZones.map((zone) => {
-              const utilization = getZoneUtilization(zone);
-              const capacity = zone.total_capacity || zone.capacity_pallets || 0;
-              const used = zone.current_item_count || 0;
+              const metrics = getZonePalletMetrics(zone);
+              const utilization = metrics.totalUtilization;
               
               return (
                 <div
@@ -619,25 +664,74 @@ export default function WMSSitesStorage({
                   </div>
 
                   <div className="space-y-2">
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-muted-foreground">Utilization</span>
-                        <span className={`font-medium ${
-                          utilization > 85 ? "text-red-600" : 
-                          utilization > 60 ? "text-amber-600" : "text-emerald-600"
-                        }`}>
-                          {used}/{capacity} ({utilization}%)
-                        </span>
+                    {metrics.rackAvailable > 0 && (
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-muted-foreground">Rack</span>
+                          <span className={`font-medium ${
+                            metrics.rackUtilization > 85 ? "text-red-600" : 
+                            metrics.rackUtilization > 60 ? "text-amber-600" : "text-emerald-600"
+                          }`}>
+                            {metrics.rackOccupied}/{metrics.rackAvailable} ({metrics.rackUtilization}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              metrics.rackUtilization > 85 ? "bg-red-500" : metrics.rackUtilization > 60 ? "bg-amber-500" : "bg-emerald-500"
+                            }`}
+                            style={{ width: `${Math.min(metrics.rackUtilization, 100)}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            utilization > 85 ? "bg-red-500" : utilization > 60 ? "bg-amber-500" : "bg-emerald-500"
-                          }`}
-                          style={{ width: `${Math.min(utilization, 100)}%` }}
-                        />
+                    )}
+                    {metrics.bulkAvailable > 0 && (
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-muted-foreground">Bulk</span>
+                          <span className={`font-medium ${
+                            metrics.bulkUtilization > 85 ? "text-red-600" : 
+                            metrics.bulkUtilization > 60 ? "text-amber-600" : "text-emerald-600"
+                          }`}>
+                            {metrics.bulkOccupied}/{metrics.bulkAvailable} ({metrics.bulkUtilization}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              metrics.bulkUtilization > 85 ? "bg-red-500" : metrics.bulkUtilization > 60 ? "bg-amber-500" : "bg-emerald-500"
+                            }`}
+                            style={{ width: `${Math.min(metrics.bulkUtilization, 100)}%` }}
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
+                    {metrics.totalAvailable > 0 && (metrics.rackAvailable > 0 && metrics.bulkAvailable > 0) && (
+                      <div className="pt-1 border-t border-gray-200">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-muted-foreground font-medium">Total</span>
+                          <span className={`font-medium ${
+                            utilization > 85 ? "text-red-600" : 
+                            utilization > 60 ? "text-amber-600" : "text-emerald-600"
+                          }`}>
+                            {metrics.totalOccupied}/{metrics.totalAvailable} ({utilization}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              utilization > 85 ? "bg-red-500" : utilization > 60 ? "bg-amber-500" : "bg-emerald-500"
+                            }`}
+                            style={{ width: `${Math.min(utilization, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {metrics.totalAvailable === 0 && (
+                      <div className="text-xs text-muted-foreground italic">
+                        No capacity configured
+                      </div>
+                    )}
                     <div className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-1 text-muted-foreground">
                         <Clock className="w-3 h-3" />

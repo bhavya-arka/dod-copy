@@ -10,3 +10,4 @@ export * as transportService from './transportService';
 export * as googleMapsService from './googleMapsService';
 export * as zoneMatchingService from './zoneMatchingService';
 export * as zoneCapacityService from './zoneCapacityService';
+export * as palletPositionService from './palletPositionService';

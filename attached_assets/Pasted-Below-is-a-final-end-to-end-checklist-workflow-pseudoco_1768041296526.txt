@@ -1,0 +1,345 @@
+Below is a final, end-to-end checklist + workflow + pseudocode that takes an **inventory sheet** (CSV/XLSX with a Location column) and produces the **same style of metrics as the PDF** (Available, Open, % Open for each zone, split Bulk vs Rack). It also clearly marks which pieces are **not derivable** from the inventory alone and therefore must be **user-provided/editable**, and which calculations are **estimate-prone** and must be shown as editable estimates.
+
+---
+
+# End-to-end workflow: Inventory Sheet → PDF-style Warehouse Usage
+
+## Goal output (matches the PDF layout)
+
+For each zone (e.g., 2000, 3000, 4000, GFM/RACK, BULK02, BULK03, BULK04, BACKYARD, 7000):
+
+* **Pallet Positions (Bulk)**: Available, Open, %Open
+* **Pallet Positions (Rack)**: Available, Open, %Open
+* Aggregate totals across all zones/types
+
+Where:
+
+* **Available** = fixed capacity (not from inventory; comes from warehouse map/config)
+* **Occupied (Used)** = derived from inventory by counting **unique occupied pallet positions**
+* **Open** = `Available - Occupied`
+* **%Open** = `Open / Available`
+
+---
+
+# Checklist: what you need vs what you can compute
+
+## A) Derivable from inventory sheet (reliable if you have a correct map)
+
+✅ **Occupied rack pallet positions by zone**
+
+* You can compute this from a Location column if rack positions are encoded like `####-A` / `####-B`.
+
+✅ **Which zone a rack location belongs to**
+
+* `2xxx → 2000`, `3xxx → 3000`, `4xxx → 4000`, `7xxx → 7000`, etc.
+
+✅ **Deduping duplicates**
+
+* Multiple rows with the same pallet position still count as 1 occupied position.
+
+## B) NOT derivable from inventory alone (must be user-provided / editable)
+
+⚠️ **Available capacities per zone/type** (the “Available” numbers in the PDF)
+
+* This comes from a warehouse map or capacity table, not from inventory.
+
+⚠️ **Valid rack position list for each zone** (to avoid overcounting)
+
+* Inventory may contain staging codes or non-capacity locations that look like rack codes.
+* You need a defined list or range of valid pallet positions per zone.
+
+⚠️ **Bulk occupancy by pallet position** (often impossible from Location alone)
+
+* Inventory often lists `BULK03` (zone label) but not the individual bulk “slots.”
+* Without a pallet ID / container ID / position ID, you cannot reliably count how many bulk pallet positions are occupied.
+
+## C) Potentially derivable but error-prone (must be shown as estimates + editable)
+
+⚠️ **Whether “BOX 1 / BOX 2 / …” indicates separate pallet positions**
+
+* In many warehouses, BOX is a bin/sub-location within a pallet position.
+* If you count BOX as separate pallet positions when it isn’t, you’ll overcount occupancy.
+* If BOX truly is a separate pallet position and you ignore it, you’ll undercount.
+
+⚠️ **Handling generic locations like “WHSE”**
+
+* “WHSE” might mean staging, floor, receiving, or bulk.
+* Unless you define what it represents, any counting is an estimate.
+
+---
+
+# Concrete rules your app should implement
+
+## Rule 1 — Normalize the Location text
+
+* Uppercase
+* Trim
+* Collapse whitespace
+* Standardize separators
+
+## Rule 2 — Expand shorthand forms
+
+* `4060-A/B` should be treated as two possible positions: `4060-A`, `4060-B`
+
+## Rule 3 — Classify each row into one of:
+
+* **Rack location** (numeric pattern like `^\d{4}-[A-Z]`)
+* **Bulk zone token** (BULK02, BULK03, BULK04, BACKYARD, GFM/RACK)
+* **Unknown/Other** (WHSE, blank, malformed, etc.)
+
+## Rule 4 — Convert a row into a “pallet position key” (dedupe key)
+
+This is the single most important design decision.
+
+### Default (recommended for PDF-like pallet positions)
+
+* Rack position key = `####-A` or `####-B` (ignore BOX)
+
+### Optional alternate mode (estimate-prone)
+
+* Rack position key = `####-A BOX n` (only if user says BOX equals distinct pallet positions)
+
+## Rule 5 — Validate against “valid positions”
+
+Only count a rack position as occupied if it exists in the **warehouse map’s validPositions set**.
+
+* This prevents counting staging positions that look like rack codes.
+* Without this, occupied can exceed available and you won’t match the PDF.
+
+## Rule 6 — Compute metrics
+
+For each `(zone, type)`:
+
+* Occupied = number of unique position keys
+* Open = Available - Occupied (clamp at >= 0)
+* %Open = Open / Available (if available > 0)
+
+## Rule 7 — Bulk handling must be explicit
+
+Bulk can be handled in three modes, chosen by the user:
+
+1. **Exact mode (best)**: inventory includes a unique pallet/container ID per bulk pallet position
+
+   * Count unique pallet IDs per bulk zone.
+
+2. **Estimated mode (iffy)**: treat each distinct `(bulk zone token + some identifier)` as 1 pallet
+
+   * If you only have `BULK03` with no ID, you cannot estimate reliably.
+
+3. **Manual mode (fallback)**: user enters bulk occupied (or open) directly
+
+   * Your app should prompt for this when data is insufficient.
+
+---
+
+# User prompts your app must show when data is missing
+
+Your app should automatically detect “can’t derive this” cases and prompt for configuration.
+
+## Prompt A — Missing capacity (“Available”)
+
+If WAREHOUSE_MAP does not contain `available` for a zone/type:
+
+> “Capacity (Available pallet positions) for Zone X (Rack/Bulk) is missing. Please enter it or upload a warehouse map.”
+
+## Prompt B — Missing rack map (valid positions)
+
+If occupied rack count > available or if you have no validPositions set:
+
+> “Rack positions counted from inventory exceed capacity or no rack map is defined. Please provide the valid rack position range/list for Zone X so we can count only true pallet positions.”
+
+## Prompt C — Bulk cannot be computed
+
+If bulk zone tokens exist but there is no unique pallet identifier:
+
+> “Bulk occupancy cannot be derived from Location alone (ex: ‘BULK03’ has no pallet slot/ID). Choose: (1) provide pallet/container IDs column, (2) enter bulk occupied/open manually, or (3) accept estimates.”
+
+## Prompt D — BOX ambiguity
+
+If you see many BOX variations and counts don’t match expectations:
+
+> “Locations include ‘BOX n’. Does BOX represent distinct pallet positions? Choose: Ignore BOX (recommended), Count BOX as separate, or Custom rule.”
+
+---
+
+# Error-prone steps to flag as “estimate” in UI
+
+These parts should be labeled as **Estimates** and should be editable fields:
+
+1. **Any bulk occupancy derived without pallet IDs**
+2. **Any mapping of WHSE to a zone/type**
+3. **Counting BOX as separate pallet positions** (unless confirmed)
+4. **Any inferred rack ranges** (auto-discovered) until user confirms
+
+Your UI should show:
+
+* “Estimated Occupied: ___ (editable)”
+* “Confidence: Low/Medium/High”
+* “Why: missing pallet IDs / missing rack map / ambiguous BOX…”
+
+---
+
+# Full end-to-end pseudocode (copy-paste ready logic)
+
+## Data structures
+
+```pseudo
+WarehouseMap:
+  zone -> {
+    RACK: { available: int, validPositions: Set<string> (optional) },
+    BULK: { available: int, validPositions: Set<string> (optional) }
+  }
+
+Config:
+  countBoxAsSeparate: boolean
+  whseRule: enum("ignore", "treat_as_bulk_7000", "custom_zone")
+  bulkMode: enum("exact_by_pallet_id", "manual", "estimate")
+  bulkIdColumnName: string | null
+```
+
+## Main pipeline
+
+```pseudo
+function computePdfMetrics(inventoryRows, warehouseMap, config):
+  occupiedSets = dict(zone -> dict(type -> Set()))
+
+  for each row in inventoryRows:
+    locRaw = row["Location"]
+    loc = normalize(locRaw)
+
+    expandedLocs = expandAB(loc)   // handles 4060-A/B
+
+    for each oneLoc in expandedLocs:
+      parsed = parseLocation(oneLoc, row, config)
+
+      if parsed == null:
+        continue
+
+      zone = parsed.zone
+      type = parsed.type
+      positionKey = parsed.positionKey
+      confidence = parsed.confidence
+
+      // validate with rack map if present
+      if warehouseMap[zone][type].validPositions exists:
+        if positionKey not in validPositions:
+          continue  // not a true pallet position
+
+      occupiedSets[zone][type].add(positionKey)
+
+  results = dict()
+
+  for each zone in warehouseMap:
+    for type in ["RACK","BULK"]:
+      available = warehouseMap[zone][type].available
+      occupied = size(occupiedSets[zone][type]) if exists else 0
+
+      if available is missing:
+        prompt user to input capacity for zone/type
+        mark result as incomplete
+        continue
+
+      open = max(available - occupied, 0)
+      openPct = open / available if available > 0 else 0
+
+      results[zone][type] = {available, occupied, open, openPct}
+
+      // sanity checks
+      if occupied > available:
+        flag "overcount likely"
+        prompt user for validPositions map or rules adjustment
+
+  aggregate = sum across zones for rack and bulk separately
+
+  return {results, aggregate, warnings, promptsNeeded}
+```
+
+## Location parsing logic
+
+```pseudo
+function parseLocation(loc, row, config) -> Parsed | null:
+  if loc is empty: return null
+
+  // Bulk tokens
+  if loc in ["BULK02","BULK03","BULK04","BACKYARD","GFM/RACK"]:
+    if config.bulkMode == "exact_by_pallet_id":
+      palletId = row[config.bulkIdColumnName]
+      if palletId missing:
+        return Parsed(zone=loc, type="BULK", positionKey=loc, confidence="LOW", requiresUserInput=true)
+      return Parsed(zone=loc, type="BULK", positionKey=loc + "::" + palletId, confidence="HIGH")
+
+    if config.bulkMode == "manual":
+      return null // do not compute from rows; user provides counts
+
+    if config.bulkMode == "estimate":
+      // WARNING: only token-level; will undercount
+      return Parsed(zone=loc, type="BULK", positionKey=loc, confidence="LOW")
+
+  // Numeric rack-like pattern: ####-A [BOX n]
+  if matches(loc, "^(\\d{4})-([A-Z])"):
+    num = int(first4digits)
+    side = letter
+    zone = floor(num/1000)*1000 as string
+
+    if config.countBoxAsSeparate AND contains "BOX":
+      box = extract box label
+      key = format("%04d-%s BOX %s", num, side, box)
+      confidence = "MEDIUM"  // until user confirms
+    else:
+      key = format("%04d-%s", num, side)
+      confidence = "HIGH"
+
+    // 7000 numeric likely bulk or special (depends on your warehouse)
+    type = "BULK" if zone == "7000" else "RACK"
+
+    return Parsed(zone=zone, type=type, positionKey=key, confidence=confidence)
+
+  // WHSE or other generic
+  if loc == "WHSE":
+    if config.whseRule == "ignore":
+      return null
+    if config.whseRule == "treat_as_bulk_7000":
+      return Parsed(zone="7000", type="BULK", positionKey="WHSE", confidence="LOW")
+    if config.whseRule == "custom_zone":
+      userZone = getUserConfiguredWhseZone()
+      return Parsed(zone=userZone, type="BULK", positionKey="WHSE", confidence="LOW")
+
+  return null
+```
+
+---
+
+# What your UI should expose (so integration is robust)
+
+## Required editable settings (must exist)
+
+* Capacity table: Available pallet positions for each zone/type
+* Valid rack ranges/list per zone (or a way to upload a location map)
+* Bulk mode selector (exact/manual/estimate)
+* BOX handling toggle (ignore vs count)
+* WHSE handling rule (ignore vs assign)
+
+## Output must show “Confidence”
+
+For each zone/type result:
+
+* **High confidence**: rack positions counted + validated by validPositions
+* **Medium confidence**: rack counted without validation OR BOX mode enabled but unconfirmed
+* **Low confidence**: bulk estimated or WHSE assumptions
+
+---
+
+# Final “gold standard” to match the PDF exactly
+
+To match the PDF precisely and avoid “iffy” math:
+
+1. You must have a **warehouse map** that enumerates all valid rack pallet positions and capacities per zone.
+2. For bulk zones, you must have either:
+
+   * a pallet/container ID column (exact), OR
+   * manual bulk occupied/open input (trusted), OR
+   * accept estimates (clearly labeled as estimates).
+
+---
+
+If you want, I can also provide a single consolidated **TypeScript module file** (functions + types + example config object + warnings/prompts output format) that you can paste directly into Replit and call as `computePdfMetrics(rows, map, config)` without refactoring.

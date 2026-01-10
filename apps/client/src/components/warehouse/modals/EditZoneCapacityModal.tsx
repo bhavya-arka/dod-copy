@@ -16,20 +16,21 @@ export default function EditZoneCapacityModal({
   onSuccess,
   onShowToast,
 }: EditZoneCapacityModalProps) {
-  const [totalCapacity, setTotalCapacity] = useState<number>(zone.total_capacity || 0);
+  const [rackAvailable, setRackAvailable] = useState<number>(zone.rack_available || 0);
+  const [bulkAvailable, setBulkAvailable] = useState<number>(zone.bulk_available || 0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (totalCapacity < 0) {
-      onShowToast("Capacity must be a positive number", "error");
+    if (rackAvailable < 0 || bulkAvailable < 0) {
+      onShowToast("Capacity values must be positive numbers", "error");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await updateZoneCapacity(zone.id, totalCapacity);
+      await updateZoneCapacity(zone.id, { rack_available: rackAvailable, bulk_available: bulkAvailable });
       onShowToast(`Zone "${zone.code}" capacity updated`, "success");
       onSuccess();
     } catch (error) {
@@ -42,8 +43,17 @@ export default function EditZoneCapacityModal({
     }
   };
 
-  const currentUsed = zone.current_item_count || 0;
-  const utilization = totalCapacity > 0 ? Math.round((currentUsed / totalCapacity) * 100) : 0;
+  const rackOccupied = (zone.rack_available || 0) - (zone.rack_open || 0);
+  const bulkOccupied = (zone.bulk_available || 0) - (zone.bulk_open || 0);
+  
+  const projectedRackUtilization = rackAvailable > 0 ? Math.round((rackOccupied / rackAvailable) * 100) : 0;
+  const projectedBulkUtilization = bulkAvailable > 0 ? Math.round((bulkOccupied / bulkAvailable) * 100) : 0;
+
+  const getUtilizationColor = (utilization: number) => {
+    if (utilization > 85) return "text-red-600";
+    if (utilization > 60) return "text-amber-600";
+    return "text-emerald-600";
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -67,37 +77,64 @@ export default function EditZoneCapacityModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          <div className="p-3 bg-muted/50 rounded-lg">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-muted-foreground">Current Usage</span>
-              <span className="text-sm font-medium">{currentUsed} items</span>
+          <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Current Rack Occupied</span>
+              <span className="text-sm font-medium">{rackOccupied} positions</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Projected Utilization</span>
-              <span className={`text-sm font-medium ${
-                utilization > 85 ? "text-red-600" : 
-                utilization > 60 ? "text-amber-600" : "text-emerald-600"
-              }`}>
-                {utilization}%
-              </span>
+              <span className="text-sm text-muted-foreground">Current Bulk Occupied</span>
+              <span className="text-sm font-medium">{bulkOccupied} positions</span>
+            </div>
+            <div className="border-t border-border pt-2 mt-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Projected Rack Utilization</span>
+                <span className={`text-sm font-medium ${getUtilizationColor(projectedRackUtilization)}`}>
+                  {projectedRackUtilization}%
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Projected Bulk Utilization</span>
+                <span className={`text-sm font-medium ${getUtilizationColor(projectedBulkUtilization)}`}>
+                  {projectedBulkUtilization}%
+                </span>
+              </div>
             </div>
           </div>
 
           <div>
-            <label htmlFor="totalCapacity" className="block text-sm font-medium text-foreground mb-1">
-              Total Capacity (items)
+            <label htmlFor="rackAvailable" className="block text-sm font-medium text-foreground mb-1">
+              Rack Positions (Available)
             </label>
             <input
-              id="totalCapacity"
+              id="rackAvailable"
               type="number"
               min="0"
-              value={totalCapacity}
-              onChange={(e) => setTotalCapacity(parseInt(e.target.value) || 0)}
+              value={rackAvailable}
+              onChange={(e) => setRackAvailable(parseInt(e.target.value) || 0)}
               className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              placeholder="Enter total capacity"
+              placeholder="Enter rack positions available"
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              The maximum number of items this zone can hold
+              Total rack pallet positions in this zone
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="bulkAvailable" className="block text-sm font-medium text-foreground mb-1">
+              Bulk Positions (Available)
+            </label>
+            <input
+              id="bulkAvailable"
+              type="number"
+              min="0"
+              value={bulkAvailable}
+              onChange={(e) => setBulkAvailable(parseInt(e.target.value) || 0)}
+              className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              placeholder="Enter bulk positions available"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Total bulk floor pallet positions in this zone
             </p>
           </div>
 

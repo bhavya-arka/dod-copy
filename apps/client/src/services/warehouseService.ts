@@ -1051,17 +1051,20 @@ export async function resyncZones(siteId: number): Promise<{ success: boolean; z
 }
 
 /**
- * Update zone total capacity
+ * Update zone pallet position capacity
  * @param zoneId - Zone ID
- * @param totalCapacity - New total capacity value
+ * @param capacity - Object with rack_available and bulk_available values
  * @returns Updated zone
  */
-export async function updateZoneCapacity(zoneId: number, totalCapacity: number): Promise<WarehouseZone> {
+export async function updateZoneCapacity(
+  zoneId: number,
+  capacity: { rack_available: number; bulk_available: number }
+): Promise<WarehouseZone> {
   const response = await fetch(`${API_BASE}/zones/${zoneId}/capacity`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ total_capacity: totalCapacity }),
+    body: JSON.stringify(capacity),
   });
   if (!response.ok) {
     const error = await response.json();

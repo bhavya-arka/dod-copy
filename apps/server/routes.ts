@@ -3224,16 +3224,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const insertedZones = await db.insert(warehouseZones).values(zonesData).returning();
 
-      // After inserting zones, resync capacity to count current inventory items per zone
-      const { zoneCapacityService } = await import('./services');
-      const resyncResult = await zoneCapacityService.resyncZoneCapacity(siteId);
+      // After inserting zones, resync capacity using pallet position service
+      const { palletPositionService } = await import('./services');
+      const updateResult = await palletPositionService.updateZoneMetrics(siteId);
+      palletPositionService.invalidateMetricsCache(siteId);
 
-      console.log(`[Warehouse] Seeded ${insertedZones.length} zones for site ${siteId}, resync: ${resyncResult.zonesUpdated} zones updated`);
+      console.log(`[Warehouse] Seeded ${insertedZones.length} zones for site ${siteId}, resync: ${updateResult.zonesUpdated} zones updated`);
       res.status(201).json({
         success: true,
         message: `Created ${insertedZones.length} default zones`,
         zones: insertedZones,
-        resync: resyncResult
+        resync: updateResult
       });
     } catch (error) {
       console.error("[Warehouse] Failed to seed zones:", error);
@@ -3302,28 +3303,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Warehouse site not found" });
       }
 
-      const { zoneCapacityService } = await import('./services');
-      const result = await zoneCapacityService.resyncZoneCapacity(siteId);
+      const { palletPositionService, zoneCapacityService } = await import('./services');
+      
+      const config = {
+        countBoxAsSeparate: req.body.countBoxAsSeparate || false,
+        whseRule: req.body.whseRule || 'ignore',
+        bulkMode: req.body.bulkMode || 'estimate',
+        bulkIdColumnName: req.body.bulkIdColumnName || null
+      };
 
-      if (result.success) {
-        const zones = await db.select()
-          .from(warehouseZones)
-          .where(eq(warehouseZones.site_id, siteId));
+      const metrics = await palletPositionService.computePalletMetrics(siteId, config);
+      const updateResult = await palletPositionService.updateZoneMetrics(siteId, config);
+      palletPositionService.invalidateMetricsCache(siteId);
 
-        for (const zone of zones) {
+      const zones = await db.select()
+        .from(warehouseZones)
+        .where(eq(warehouseZones.site_id, siteId));
+
+      for (const zone of zones) {
+        const zoneMetric = metrics.zones.find(z => z.zoneId === zone.id);
+        if (zoneMetric) {
           await zoneCapacityService.recordCapacityHistory(zone.id, siteId, {
-            itemCount: zone.current_item_count || 0,
+            itemCount: zoneMetric.rack.occupied + zoneMetric.bulk.occupied,
             totalWeightLbs: parseFloat(String(zone.current_weight_lbs) || "0"),
-            totalCapacity: zone.total_capacity || zone.capacity_pallets || 0
+            totalCapacity: zoneMetric.rack.available + zoneMetric.bulk.available
           });
         }
       }
 
-      console.log(`[Warehouse] Resynced zones for site ${siteId}: ${result.zonesUpdated} zones updated`);
-      res.json(result);
+      console.log(`[Warehouse] Resynced zones for site ${siteId}: ${updateResult.zonesUpdated} zones updated`);
+      res.json({
+        success: updateResult.success,
+        zonesUpdated: updateResult.zonesUpdated,
+        metrics,
+        errors: updateResult.errors
+      });
     } catch (error) {
       console.error("[Warehouse] Failed to resync zones:", error);
       res.status(500).json({ error: "Failed to resync zones" });
+    }
+  });
+
+  // GET /api/warehouse/sites/:siteId/zones/pallet-metrics - Get pallet position metrics (PDF-style)
+  app.get("/api/warehouse/sites/:siteId/zones/pallet-metrics", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const { palletPositionService } = await import('./services');
+      
+      const forceRefresh = req.query.refresh === 'true';
+      const config = {
+        countBoxAsSeparate: req.query.countBoxAsSeparate === 'true',
+        whseRule: (req.query.whseRule as any) || 'ignore',
+        bulkMode: (req.query.bulkMode as any) || 'estimate',
+        bulkIdColumnName: (req.query.bulkIdColumnName as string) || null
+      };
+
+      const metrics = await palletPositionService.getCachedPalletMetrics(siteId, config, forceRefresh);
+      res.json(metrics);
+    } catch (error) {
+      console.error("[Warehouse] Failed to get pallet metrics:", error);
+      res.status(500).json({ error: "Failed to get pallet metrics" });
     }
   });
 
@@ -3401,7 +3455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PATCH /api/warehouse/zones/:zoneId/capacity - Update total_capacity manually
+  // PATCH /api/warehouse/zones/:zoneId/capacity - Update rack_available and bulk_available
   app.patch("/api/warehouse/zones/:zoneId/capacity", authMiddleware, async (req: AuthRequest, res) => {
     try {
       const zoneId = parseInt(req.params.zoneId);
@@ -3409,9 +3463,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid zone ID" });
       }
 
-      const { total_capacity } = req.body;
-      if (total_capacity === undefined || typeof total_capacity !== 'number') {
-        return res.status(400).json({ error: "total_capacity must be a number" });
+      const { rack_available, bulk_available } = req.body;
+      if (rack_available === undefined || typeof rack_available !== 'number') {
+        return res.status(400).json({ error: "rack_available must be a number" });
+      }
+      if (bulk_available === undefined || typeof bulk_available !== 'number') {
+        return res.status(400).json({ error: "bulk_available must be a number" });
       }
 
       const [zone] = await db.select()
@@ -3434,11 +3491,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const [updated] = await db.update(warehouseZones)
-        .set({ total_capacity })
+        .set({ rack_available, bulk_available })
         .where(eq(warehouseZones.id, zoneId))
         .returning();
 
-      console.log(`[Warehouse] Updated zone ${zoneId} capacity to ${total_capacity}`);
+      console.log(`[Warehouse] Updated zone ${zoneId} capacity: rack_available=${rack_available}, bulk_available=${bulk_available}`);
       res.json(updated);
     } catch (error) {
       console.error("[Warehouse] Failed to update zone capacity:", error);
@@ -6752,8 +6809,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(eq(warehouseOptimizationActions.id, actionId))
           .returning();
 
-        // If action was completed, update plan's completed_actions count
+        // If action was completed, update plan's completed_actions count and apply to inventory
         if (status === "completed" && action.status !== "completed") {
+          // Apply the action to inventory - update item location
+          if (action.item_id && action.to_location) {
+            await tx.update(warehouseInventoryItems)
+              .set({
+                location: action.to_location,
+                last_moved: new Date()
+              })
+              .where(eq(warehouseInventoryItems.id, action.item_id));
+          }
+
           await tx.update(warehouseOptimizationPlans)
             .set({
               completed_actions: sql`${warehouseOptimizationPlans.completed_actions} + 1`,
@@ -6793,6 +6860,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         return updatedAction;
       });
+
+      // Invalidate zone metrics cache when action is completed (outside transaction)
+      if (status === "completed") {
+        try {
+          const { palletPositionService } = await import('./services');
+          palletPositionService.invalidateMetricsCache(plan.site_id);
+          console.log(`[Optimization] Invalidated zone cache for site ${plan.site_id} after action completion`);
+        } catch (cacheError) {
+          console.warn("[Optimization] Failed to invalidate zone cache:", cacheError);
+        }
+      }
 
       res.json(result);
     } catch (error) {
