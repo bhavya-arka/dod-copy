@@ -1195,6 +1195,55 @@ export const insertWarehouseAgingThresholdSchema = createInsertSchema(warehouseA
 export type InsertWarehouseAgingThreshold = z.infer<typeof insertWarehouseAgingThresholdSchema>;
 export type WarehouseAgingThreshold = typeof warehouseAgingThresholds.$inferSelect;
 
+// Warehouse Alerts - stores generated alerts for capacity, aging, and trend issues
+export const warehouseAlertSeverityEnum = ['info', 'warning', 'critical'] as const;
+export type WarehouseAlertSeverity = typeof warehouseAlertSeverityEnum[number];
+
+export const warehouseAlertTypeEnum = ['capacity', 'trend', 'aging', 'throughput'] as const;
+export type WarehouseAlertType = typeof warehouseAlertTypeEnum[number];
+
+export const warehouseAlerts = pgTable("warehouse_alerts", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  zone_id: integer("zone_id"),
+  user_id: integer("user_id").notNull(),
+  alert_type: text("alert_type").notNull(), // 'capacity', 'trend', 'aging', 'throughput'
+  severity: text("severity").notNull().default("warning"), // 'info', 'warning', 'critical'
+  message: text("message").notNull(),
+  entity_key: text("entity_key").notNull(), // Unique key for deduplication (e.g., "zone_123_capacity")
+  is_resolved: boolean("is_resolved").notNull().default(false),
+  resolved_at: timestamp("resolved_at"),
+  resolved_by: integer("resolved_by"),
+  metadata: jsonb("metadata").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseAlertSchema = createInsertSchema(warehouseAlerts).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseAlert = z.infer<typeof insertWarehouseAlertSchema>;
+export type WarehouseAlert = typeof warehouseAlerts.$inferSelect;
+
+// Warehouse Metric Snapshots - stores time-series metric data
+export const warehouseMetricSnapshots = pgTable("warehouse_metric_snapshots", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  zone_id: integer("zone_id"),
+  metric_key: text("metric_key").notNull(), // 'daily_throughput', 'utilization', etc.
+  metric_value: numeric("metric_value", { precision: 12, scale: 4 }).notNull(),
+  snapshot_date: date("snapshot_date").notNull(),
+  metadata: jsonb("metadata").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseMetricSnapshotSchema = createInsertSchema(warehouseMetricSnapshots).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseMetricSnapshot = z.infer<typeof insertWarehouseMetricSnapshotSchema>;
+export type WarehouseMetricSnapshot = typeof warehouseMetricSnapshots.$inferSelect;
+
 // Warehouse Analytics Snapshots - store daily analytics data
 export const warehouseAnalyticsSnapshots = pgTable("warehouse_analytics_snapshots", {
   id: serial("id").primaryKey(),
