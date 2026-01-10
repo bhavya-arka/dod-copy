@@ -115,9 +115,11 @@ The WMS is modular, featuring a 7-section navigation (Dashboard, Inventory, Oper
   - **Size Standardization**: Groups items by dimensions to optimize rack utilization.
   - **Value Density Analysis**: Organizes by value-to-volume ratio for accessibility.
   - **Bin-Packing Order**: Calculates optimal placement for maximum container utilization.
+  - **Target Completion Dates**: Plans can have target dates for forecasting warehouse load over time.
+  - **Bulk Start All**: Single button to start all pending optimization moves at once.
 - **AI-Powered Analysis**: Uses AWS Bedrock (Nova Lite model) for warehouse-specific insights including placement optimization, load balancing recommendations, and aging alerts.
 - Inter-warehouse transfers linked to Air, Land, or Sea transport modes.
-- **90-Day Predictive Load Planning**: Forecasts capacity needs based on historical convoy/voyage/flight patterns with confidence levels.
+- **90-Day Predictive Load Planning**: Forecasts capacity needs based on historical convoy/voyage/flight patterns, plus active optimization plans with target completion dates for capacity impact projections.
 - **Capacity Visualization**: Color-coded status indicators (green <60%, yellow 60-85%, red >85%) with trend arrows.
 
 ## Data Models
