@@ -10,6 +10,7 @@ import OptimizationWizardModal from "./modals/OptimizationWizardModal";
 import AddBuildingModal from "./modals/AddBuildingModal";
 import AddZoneModal from "./modals/AddZoneModal";
 import EditZoneCapacityModal from "./modals/EditZoneCapacityModal";
+import ZoneItemsModal from "./modals/ZoneItemsModal";
 
 interface WMSSitesStorageProps {
   sites: WarehouseSite[];
@@ -82,6 +83,18 @@ export default function WMSSitesStorage({
   const [loadingSummaries, setLoadingSummaries] = useState<Set<number>>(new Set());
   const [resyncingSites, setResyncingSites] = useState<Set<number>>(new Set());
   const [editCapacityZone, setEditCapacityZone] = useState<WarehouseZone | null>(null);
+  const [zoneItemsModalOpen, setZoneItemsModalOpen] = useState(false);
+  const [selectedZoneForItems, setSelectedZoneForItems] = useState<{ id: number; code: string; name: string; site_id: number } | null>(null);
+
+  const handleZoneCardClick = (zone: WarehouseZone) => {
+    setSelectedZoneForItems({
+      id: zone.id,
+      code: zone.code,
+      name: zone.name,
+      site_id: zone.site_id,
+    });
+    setZoneItemsModalOpen(true);
+  };
 
   const fetchBuildingsForSite = useCallback(async (siteId: number, force = false) => {
     if (!force && (siteBuildings[siteId] || loadingBuildings.has(siteId))) {
@@ -613,7 +626,8 @@ export default function WMSSitesStorage({
               return (
                 <div
                   key={zone.id}
-                  className={`p-4 rounded-xl border transition-colors ${getUtilizationColor(utilization)}`}
+                  onClick={() => handleZoneCardClick(zone)}
+                  className={`p-4 rounded-xl border transition-colors cursor-pointer hover:shadow-md ${getUtilizationColor(utilization)}`}
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -1190,6 +1204,16 @@ export default function WMSSitesStorage({
         }
         confirmText="delete zone"
         isLoading={isDeletingZone}
+      />
+
+      <ZoneItemsModal
+        isOpen={zoneItemsModalOpen}
+        onClose={() => {
+          setZoneItemsModalOpen(false);
+          setSelectedZoneForItems(null);
+        }}
+        zone={selectedZoneForItems}
+        siteId={selectedZoneForItems?.site_id || 0}
       />
     </>
   );

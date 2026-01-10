@@ -75,10 +75,10 @@ export default function ZoneItemsModal({
 
   const zoneFilter: FilterCondition = useMemo(() => ({
     id: "zone_filter",
-    field: "location",
-    operator: "contains",
-    value: zone?.code || "",
-  }), [zone?.code]);
+    field: "zone_id",
+    operator: "equals",
+    value: zone?.id?.toString() || "",
+  }), [zone?.id]);
 
   const getCacheKey = useCallback((pageNum: number) => {
     return JSON.stringify({
