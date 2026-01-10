@@ -5111,9 +5111,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         algorithm: string;
       }> = [];
 
-      let totalSlotsFreed = 0;
-      let totalZonesOptimized = 0;
       const seenItems = new Set<string>();
+      const freedPositions = new Set<string>();
+      const impactedZones = new Set<string>();
       const phaseResults: Record<string, { 
         actions: number; 
         slotsFreed: number; 
@@ -5135,9 +5135,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         let actionId = 1;
         let phaseActions = 0;
-        let phaseSlotsFreed = 0;
         const sourceZonesSet = new Set<string>();
         const targetZonesSet = new Set<string>();
+        const phasePositions = new Set<string>();
 
         for (const [shipClass, shipItems] of Array.from(shipGroups.entries())) {
           if (shipItems.length < minItemsToConsolidate) continue;
@@ -5157,12 +5157,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           for (const item of shipItems) {
-            if (item.location_zone !== targetZone && allActions.length < 100) {
-              phaseSlotsFreed++;
+            if (item.location_zone !== targetZone && allActions.length < 100 && item.rack_location) {
               phaseActions++;
               sourceZonesSet.add(item.location_zone);
               targetZonesSet.add(targetZone);
               seenItems.add(item.requisition_no);
+              const normalizedLocation = item.rack_location.toUpperCase().trim();
+              freedPositions.add(normalizedLocation);
+              phasePositions.add(normalizedLocation);
+              impactedZones.add(item.location_zone);
+              impactedZones.add(targetZone);
               allActions.push({
                 id: `CS-${actionId++}`,
                 action: 'consolidate',
@@ -5182,12 +5186,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         phaseResults.cardstack = { 
           actions: phaseActions, 
-          slotsFreed: phaseSlotsFreed,
-          consolidationWins: `${phaseSlotsFreed} items → ${targetZonesSet.size} locations`,
+          slotsFreed: phasePositions.size,
+          consolidationWins: `${phaseActions} items → ${targetZonesSet.size} locations`,
           zonesOptimized: sourceZonesSet.size
         };
-        totalSlotsFreed += phaseSlotsFreed;
-        totalZonesOptimized += sourceZonesSet.size;
       }
 
       // Phase 2: Size Standardization - Group by program code
@@ -5204,8 +5206,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         let actionId = 1;
         let phaseActions = 0;
-        let phaseSlotsFreed = 0;
         const programsStandardized = new Set<string>();
+        const phasePositions = new Set<string>();
 
         for (const [programCode, programItems] of Array.from(programGroups.entries())) {
           if (programItems.length < minProgramItems) continue;
@@ -5216,10 +5218,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             programsStandardized.add(programCode);
             
             for (const item of programItems) {
-              if (item.location_zone !== targetZone && allActions.length < 150) {
-                phaseSlotsFreed++;
+              if (item.location_zone !== targetZone && allActions.length < 150 && item.rack_location) {
                 phaseActions++;
                 seenItems.add(item.requisition_no);
+                const normalizedLocation = item.rack_location.toUpperCase().trim();
+                freedPositions.add(normalizedLocation);
+                phasePositions.add(normalizedLocation);
+                impactedZones.add(item.location_zone);
+                impactedZones.add(targetZone);
                 allActions.push({
                   id: `SS-${actionId++}`,
                   action: 'standardize',
@@ -5240,49 +5246,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         phaseResults.size_standardization = { 
           actions: phaseActions, 
-          slotsFreed: phaseSlotsFreed,
-          consolidationWins: `${phaseSlotsFreed} items → ${programsStandardized.size} program zones`,
+          slotsFreed: phasePositions.size,
+          consolidationWins: `${phaseActions} items → ${programsStandardized.size} program zones`,
           zonesOptimized: programsStandardized.size
         };
-        totalSlotsFreed += phaseSlotsFreed;
-        totalZonesOptimized += programsStandardized.size;
       }
 
       // Phase 3: Value Density - Move high-value items to accessible zones
       {
         const { highValueThreshold = 1000 } = defaultParams.value_density;
-        const highValueItems = itemsWithData.filter(i => i.value >= highValueThreshold);
+        const highValueItems = itemsWithData.filter(i => i.value >= highValueThreshold && i.rack_location);
         
         let actionId = 1;
         let phaseActions = 0;
-        let phaseSlotsFreed = 0;
+        const phasePositions = new Set<string>();
 
-        // High-value items should be in accessible zones (lower zone numbers or Zone A)
-        // Extract numeric portion from location for accessibility scoring
         const getAccessibilityScore = (location: string): number => {
-          // Extract all numbers from location string
+          if (!location) return 500;
           const numbers = location.match(/\d+/g);
           if (numbers && numbers.length > 0) {
             return parseInt(numbers[0]);
           }
-          // If starts with A/B, assign low scores (accessible)
           if (location.startsWith('A') || location.startsWith('1')) return 100;
           if (location.startsWith('B') || location.startsWith('2')) return 200;
-          return 500; // Default mid-range
+          return 500;
         };
 
-        // Sort by value desc, then by accessibility score (higher = less accessible)
         const sortedItems = highValueItems.sort((a, b) => b.value - a.value);
         
-        // Take top high-value items that are in less accessible locations
         for (const item of sortedItems.slice(0, 30)) {
           const accessScore = getAccessibilityScore(item.rack_location);
           
-          // If item is in less accessible location (score > 1500), suggest moving
           if (accessScore > 1500 && allActions.length < 200) {
-            phaseSlotsFreed++;
             phaseActions++;
             seenItems.add(item.requisition_no);
+            const normalizedLocation = item.rack_location.toUpperCase().trim();
+            freedPositions.add(normalizedLocation);
+            phasePositions.add(normalizedLocation);
+            impactedZones.add(item.location_zone);
+            impactedZones.add('ZONE-A-PRIORITY');
             allActions.push({
               id: `VD-${actionId++}`,
               action: 'relocate_priority',
@@ -5300,15 +5302,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
-        // Also recommend moving any high-value items already not processed
         if (phaseActions < 10 && highValueItems.length > 0) {
-          // If few items qualified above, take top 10 by value that aren't already in Zone A
           for (const item of sortedItems.slice(0, 10)) {
             const alreadyHasAction = allActions.some(a => a.item === item.requisition_no && a.algorithm === 'value_density');
-            if (!alreadyHasAction && !item.rack_location.includes('PRIORITY') && allActions.length < 200) {
-              phaseSlotsFreed++;
+            if (!alreadyHasAction && item.rack_location && !item.rack_location.includes('PRIORITY') && allActions.length < 200) {
               phaseActions++;
               seenItems.add(item.requisition_no);
+              const normalizedLocation = item.rack_location.toUpperCase().trim();
+              freedPositions.add(normalizedLocation);
+              phasePositions.add(normalizedLocation);
+              impactedZones.add(item.location_zone);
+              impactedZones.add('ZONE-A-PRIORITY');
               allActions.push({
                 id: `VD-${actionId++}`,
                 action: 'relocate_priority',
@@ -5329,12 +5333,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         phaseResults.value_density = { 
           actions: phaseActions, 
-          slotsFreed: phaseSlotsFreed,
-          consolidationWins: `${phaseSlotsFreed} high-value items → priority zone`,
+          slotsFreed: phasePositions.size,
+          consolidationWins: `${phasePositions.size} high-value items → priority zone`,
           zonesOptimized: phaseActions > 0 ? 1 : 0
         };
-        totalSlotsFreed += phaseSlotsFreed;
-        if (phaseActions > 0) totalZonesOptimized += 1;
       }
 
       // Phase 4: Bin Packing - Stage items by disposition
@@ -5352,8 +5354,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         let actionId = 1;
         let phaseActions = 0;
-        let phaseSlotsFreed = 0;
         const palletLocationsSet = new Set<string>();
+        const phasePositions = new Set<string>();
 
         for (const [disposition, dispositionItems] of Array.from(dispositionGroups.entries())) {
           if (dispositionItems.length < 3) continue;
@@ -5364,14 +5366,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           for (let i = 0; i < Math.min(sorted.length, 50); i++) {
             const item = sorted[i];
+            if (!item.rack_location) continue;
             const palletNumber = Math.floor(i / maxItemsPerPallet) + 1;
             const palletLocation = `STAGING-${disposition}-P${palletNumber}`;
             
             if (allActions.length < 250) {
-              phaseSlotsFreed++;
               phaseActions++;
               palletLocationsSet.add(palletLocation);
               seenItems.add(item.requisition_no);
+              const normalizedLocation = item.rack_location.toUpperCase().trim();
+              freedPositions.add(normalizedLocation);
+              phasePositions.add(normalizedLocation);
+              impactedZones.add(item.location_zone);
               allActions.push({
                 id: `BP-${actionId++}`,
                 action: 'stage_pallet',
@@ -5391,12 +5397,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         phaseResults.bin_packing = { 
           actions: phaseActions, 
-          slotsFreed: phaseSlotsFreed,
-          consolidationWins: `${phaseSlotsFreed} items → ${palletLocationsSet.size} pallets`,
+          slotsFreed: phasePositions.size,
+          consolidationWins: `${phasePositions.size} positions → ${palletLocationsSet.size} pallets`,
           zonesOptimized: dispositionGroups.size
         };
-        totalSlotsFreed += phaseSlotsFreed;
-        totalZonesOptimized += dispositionGroups.size;
       }
 
       // De-duplicate: Keep highest priority/value action for each item
@@ -5438,14 +5442,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Calculate overall pick efficiency gain based on consolidation and accessibility moves
       const overallPickEfficiency = Math.min(
-        Math.round((totalSlotsFreed * 1.5) + (totalZonesOptimized * 3)),
+        Math.round((freedPositions.size * 1.5) + (impactedZones.size * 3)),
         40
       );
       
       const summary = {
-        slotsFreed: totalSlotsFreed,
+        slotsFreed: freedPositions.size,
         consolidationWins: `${seenItems.size} items reorganized`,
-        zonesOptimized: totalZonesOptimized,
+        zonesOptimized: impactedZones.size,
         pickEfficiencyGain: `+${overallPickEfficiency}% overall efficiency`,
         itemsAffected: seenItems.size,
         actionsGenerated: deduplicatedActions.length,
