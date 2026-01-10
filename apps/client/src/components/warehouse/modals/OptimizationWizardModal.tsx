@@ -659,28 +659,54 @@ export default function OptimizationWizardModal({
                     <label className="block text-sm font-medium text-foreground mb-2">
                       Source Zones (items to move from)
                     </label>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 bg-muted/30 rounded-lg">
-                      {zones.map((zone) => (
-                        <label key={zone.id} className="flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-muted">
-                          <input
-                            type="checkbox"
-                            checked={params.zoneConstraints.sourceZoneIds.includes(zone.id)}
-                            onChange={(e) => {
-                              setParams(prev => ({
-                                ...prev,
-                                zoneConstraints: {
-                                  ...prev.zoneConstraints,
-                                  sourceZoneIds: e.target.checked
-                                    ? [...prev.zoneConstraints.sourceZoneIds, zone.id]
-                                    : prev.zoneConstraints.sourceZoneIds.filter(id => id !== zone.id)
-                                }
-                              }));
-                            }}
-                            className="w-3.5 h-3.5 rounded border-border"
-                          />
-                          <span className="text-xs text-foreground truncate">{zone.code}</span>
-                        </label>
-                      ))}
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Select high-utilization zones (red/amber bars) to free up space
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 bg-muted/30 rounded-lg">
+                      {zones.map((zone) => {
+                        const rackAvailable = zone.rack_available || 0;
+                        const rackOpen = zone.rack_open || 0;
+                        const bulkAvailable = zone.bulk_available || 0;
+                        const bulkOpen = zone.bulk_open || 0;
+                        const totalAvailable = rackAvailable + bulkAvailable;
+                        const totalOccupied = (rackAvailable - rackOpen) + (bulkAvailable - bulkOpen);
+                        const utilization = totalAvailable > 0 ? Math.round((totalOccupied / totalAvailable) * 100) : 0;
+                        const barColor = utilization > 85 ? "bg-red-500" : utilization > 60 ? "bg-amber-500" : "bg-emerald-500";
+                        const textColor = utilization > 85 ? "text-red-600" : utilization > 60 ? "text-amber-600" : "text-emerald-600";
+                        
+                        return (
+                          <label key={zone.id} className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-muted border border-transparent hover:border-border">
+                            <input
+                              type="checkbox"
+                              checked={params.zoneConstraints.sourceZoneIds.includes(zone.id)}
+                              onChange={(e) => {
+                                setParams(prev => ({
+                                  ...prev,
+                                  zoneConstraints: {
+                                    ...prev.zoneConstraints,
+                                    sourceZoneIds: e.target.checked
+                                      ? [...prev.zoneConstraints.sourceZoneIds, zone.id]
+                                      : prev.zoneConstraints.sourceZoneIds.filter(id => id !== zone.id)
+                                  }
+                                }));
+                              }}
+                              className="w-3.5 h-3.5 rounded border-border flex-shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-medium text-foreground truncate">{zone.code}</span>
+                                <span className={`text-xs font-medium ${textColor}`}>{utilization}%</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-muted rounded-full mt-1 overflow-hidden">
+                                <div 
+                                  className={`h-full ${barColor} rounded-full transition-all`}
+                                  style={{ width: `${Math.min(utilization, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       {params.zoneConstraints.sourceZoneIds.length === 0 
@@ -693,28 +719,54 @@ export default function OptimizationWizardModal({
                     <label className="block text-sm font-medium text-foreground mb-2">
                       Target Zones (move items to)
                     </label>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 bg-muted/30 rounded-lg">
-                      {zones.map((zone) => (
-                        <label key={zone.id} className="flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-muted">
-                          <input
-                            type="checkbox"
-                            checked={params.zoneConstraints.targetZoneIds.includes(zone.id)}
-                            onChange={(e) => {
-                              setParams(prev => ({
-                                ...prev,
-                                zoneConstraints: {
-                                  ...prev.zoneConstraints,
-                                  targetZoneIds: e.target.checked
-                                    ? [...prev.zoneConstraints.targetZoneIds, zone.id]
-                                    : prev.zoneConstraints.targetZoneIds.filter(id => id !== zone.id)
-                                }
-                              }));
-                            }}
-                            className="w-3.5 h-3.5 rounded border-border"
-                          />
-                          <span className="text-xs text-foreground truncate">{zone.code}</span>
-                        </label>
-                      ))}
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Select low-utilization zones (green bars) with available space
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 bg-muted/30 rounded-lg">
+                      {zones.map((zone) => {
+                        const rackAvailable = zone.rack_available || 0;
+                        const rackOpen = zone.rack_open || 0;
+                        const bulkAvailable = zone.bulk_available || 0;
+                        const bulkOpen = zone.bulk_open || 0;
+                        const totalAvailable = rackAvailable + bulkAvailable;
+                        const totalOccupied = (rackAvailable - rackOpen) + (bulkAvailable - bulkOpen);
+                        const utilization = totalAvailable > 0 ? Math.round((totalOccupied / totalAvailable) * 100) : 0;
+                        const barColor = utilization > 85 ? "bg-red-500" : utilization > 60 ? "bg-amber-500" : "bg-emerald-500";
+                        const textColor = utilization > 85 ? "text-red-600" : utilization > 60 ? "text-amber-600" : "text-emerald-600";
+                        
+                        return (
+                          <label key={zone.id} className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-muted border border-transparent hover:border-border">
+                            <input
+                              type="checkbox"
+                              checked={params.zoneConstraints.targetZoneIds.includes(zone.id)}
+                              onChange={(e) => {
+                                setParams(prev => ({
+                                  ...prev,
+                                  zoneConstraints: {
+                                    ...prev.zoneConstraints,
+                                    targetZoneIds: e.target.checked
+                                      ? [...prev.zoneConstraints.targetZoneIds, zone.id]
+                                      : prev.zoneConstraints.targetZoneIds.filter(id => id !== zone.id)
+                                  }
+                                }));
+                              }}
+                              className="w-3.5 h-3.5 rounded border-border flex-shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-medium text-foreground truncate">{zone.code}</span>
+                                <span className={`text-xs font-medium ${textColor}`}>{utilization}%</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-muted rounded-full mt-1 overflow-hidden">
+                                <div 
+                                  className={`h-full ${barColor} rounded-full transition-all`}
+                                  style={{ width: `${Math.min(utilization, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       {params.zoneConstraints.targetZoneIds.length === 0 
