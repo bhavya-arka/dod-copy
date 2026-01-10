@@ -4,7 +4,7 @@
  */
 
 import { db } from "../db";
-import { warehouseSites, warehouseLocations, warehouseInventoryItems } from "../../../shared/schema";
+import { warehouseSites, warehouseLocations, warehouseInventoryItems, warehouseZones } from "../../../shared/schema";
 import { eq, sql, and, sum, inArray } from "drizzle-orm";
 
 // DLA Standard pallet block dimensions
@@ -118,9 +118,9 @@ export async function getSiteCapacity(siteId: number): Promise<CapacityMetrics |
 
 /**
  * Get capacity metrics for all sites (optimized batch query)
+ * Uses zone-based capacity (rack + bulk positions) for utilization calculation
  */
 export async function getAllSiteCapacities(userId?: number): Promise<CapacityMetrics[]> {
-  // First fetch sites to get the IDs for location filtering
   const sites = userId 
     ? await db.query.warehouseSites.findMany({ where: eq(warehouseSites.user_id, userId) })
     : await db.query.warehouseSites.findMany();
@@ -129,13 +129,24 @@ export async function getAllSiteCapacities(userId?: number): Promise<CapacityMet
     return [];
   }
   
-  // Fetch only locations for the user's sites (avoids loading unrelated data)
   const siteIds = sites.map(s => s.id);
-  const allLocations = await db.query.warehouseLocations.findMany({
-    where: inArray(warehouseLocations.site_id, siteIds)
-  });
   
-  // Group locations by site_id for efficient lookup
+  const [allZones, allLocations] = await Promise.all([
+    db.query.warehouseZones.findMany({
+      where: inArray(warehouseZones.site_id, siteIds)
+    }),
+    db.query.warehouseLocations.findMany({
+      where: inArray(warehouseLocations.site_id, siteIds)
+    })
+  ]);
+  
+  const zonesBySite = new Map<number, typeof allZones>();
+  for (const zone of allZones) {
+    const siteZones = zonesBySite.get(zone.site_id) || [];
+    siteZones.push(zone);
+    zonesBySite.set(zone.site_id, siteZones);
+  }
+  
   const locationsBySite = new Map<number, typeof allLocations>();
   for (const loc of allLocations) {
     const siteLocations = locationsBySite.get(loc.site_id) || [];
@@ -143,15 +154,30 @@ export async function getAllSiteCapacities(userId?: number): Promise<CapacityMet
     locationsBySite.set(loc.site_id, siteLocations);
   }
   
-  // Calculate capacity for each site in-memory
   return sites.map(site => {
+    const zones = zonesBySite.get(site.id) || [];
     const locations = locationsBySite.get(site.id) || [];
     
-    const totalPositions = locations.length;
-    const occupiedPositions = locations.filter(l => l.is_occupied).length;
-    const openPositions = totalPositions - occupiedPositions;
+    let totalPositions = 0;
+    let usedPositions = 0;
     
-    // Calculate cubic feet
+    for (const zone of zones) {
+      const rackAvail = zone.rack_available || 0;
+      const rackOpen = zone.rack_open || 0;
+      const bulkAvail = zone.bulk_available || 0;
+      const bulkOpen = zone.bulk_open || 0;
+      
+      totalPositions += rackAvail + bulkAvail;
+      usedPositions += (rackAvail - rackOpen) + (bulkAvail - bulkOpen);
+    }
+    
+    if (totalPositions === 0 && locations.length > 0) {
+      totalPositions = locations.length;
+      usedPositions = locations.filter(l => l.is_occupied).length;
+    }
+    
+    const openPositions = totalPositions - usedPositions;
+    
     const totalCubicFeet = locations.reduce((sum, loc) => {
       const l = parseFloat(String(loc.block_length_ft)) || PALLET_BLOCK_LENGTH_FT;
       const w = parseFloat(String(loc.block_width_ft)) || PALLET_BLOCK_WIDTH_FT;
@@ -168,7 +194,6 @@ export async function getAllSiteCapacities(userId?: number): Promise<CapacityMet
         return sum + (l * w * h);
       }, 0);
     
-    // Calculate weight
     const totalWeightCapacity = locations.reduce((sum, loc) => {
       return sum + (loc.max_weight_lbs || MAX_PALLET_WEIGHT_LBS);
     }, 0);
@@ -177,14 +202,14 @@ export async function getAllSiteCapacities(userId?: number): Promise<CapacityMet
       return sum + (loc.current_weight_lbs || 0);
     }, 0);
     
-    const utilizationPercent = totalPositions > 0 ? (occupiedPositions / totalPositions) * 100 : 0;
+    const utilizationPercent = totalPositions > 0 ? (usedPositions / totalPositions) * 100 : 0;
     const weightUtilization = totalWeightCapacity > 0 ? (currentWeight / totalWeightCapacity) * 100 : 0;
     
     return {
       siteId: site.id,
       siteName: site.name,
       totalPalletPositions: totalPositions,
-      usedPalletPositions: occupiedPositions,
+      usedPalletPositions: usedPositions,
       openPalletPositions: openPositions,
       utilizationPercent: Math.round(utilizationPercent * 10) / 10,
       totalCubicFeet: Math.round(totalCubicFeet * 100) / 100,
