@@ -988,3 +988,112 @@ export async function updateOptimizationAction(
   }
   return response.json();
 }
+
+/** Zone capacity summary response */
+export interface ZoneSummary {
+  totalZones: number;
+  totalCapacity: number;
+  totalUsed: number;
+  availableSpace: number;
+  utilizationPercent: number;
+  byType: {
+    indoor: number;
+    outdoor: number;
+  };
+  byUsage: Record<string, number>;
+}
+
+/** Zone capacity history entry */
+export interface ZoneHistoryEntry {
+  id: number;
+  zone_id: number;
+  site_id: number;
+  item_count: number;
+  total_weight_lbs: string;
+  total_capacity: number;
+  utilization_percent: string;
+  snapshot_date: string;
+  created_at: string;
+}
+
+/**
+ * Fetch zone capacity summary for a site
+ * @param siteId - Site ID
+ * @returns Zone summary data
+ */
+export async function fetchZoneSummary(siteId: number): Promise<ZoneSummary> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/zones/summary`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to fetch zone summary");
+  }
+  return response.json();
+}
+
+/**
+ * Trigger resync of zone capacities for a site
+ * @param siteId - Site ID
+ * @returns Resync result
+ */
+export async function resyncZones(siteId: number): Promise<{ success: boolean; zonesUpdated: number }> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/zones/resync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to resync zones");
+  }
+  return response.json();
+}
+
+/**
+ * Update zone total capacity
+ * @param zoneId - Zone ID
+ * @param totalCapacity - New total capacity value
+ * @returns Updated zone
+ */
+export async function updateZoneCapacity(zoneId: number, totalCapacity: number): Promise<WarehouseZone> {
+  const response = await fetch(`${API_BASE}/zones/${zoneId}/capacity`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ total_capacity: totalCapacity }),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to update zone capacity");
+  }
+  return response.json();
+}
+
+/**
+ * Fetch capacity history for a zone
+ * @param zoneId - Zone ID
+ * @param startDate - Optional start date filter
+ * @param endDate - Optional end date filter
+ * @returns Array of history entries
+ */
+export async function fetchZoneHistory(
+  zoneId: number,
+  startDate?: string,
+  endDate?: string
+): Promise<ZoneHistoryEntry[]> {
+  const params = new URLSearchParams();
+  if (startDate) params.set("start_date", startDate);
+  if (endDate) params.set("end_date", endDate);
+  const queryString = params.toString();
+  const url = `${API_BASE}/zones/${zoneId}/history${queryString ? `?${queryString}` : ""}`;
+  
+  const response = await fetch(url, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to fetch zone history");
+  }
+  return response.json();
+}

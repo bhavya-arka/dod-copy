@@ -42,6 +42,10 @@ export interface WarehouseZone {
   location_pattern?: string;
   weight_limit_lbs?: number;
   capacity_pallets?: number;
+  total_capacity?: number;
+  current_item_count?: number;
+  current_weight_lbs?: string;
+  last_synced_at?: string | null;
 }
 
 /** Zone usage types */

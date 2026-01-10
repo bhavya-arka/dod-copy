@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Building2, ChevronRight, ChevronDown, Move, Zap, Loader2, Trash2, Pencil, Grid3X3, Sprout, Sun, Home } from "lucide-react";
+import { Plus, Building2, ChevronRight, ChevronDown, Move, Zap, Loader2, Trash2, Pencil, Grid3X3, Sprout, Sun, Home, RefreshCw, Filter, Package, Clock } from "lucide-react";
 import type { WarehouseSite, WarehouseBuilding, WarehouseZone, ToastMessage } from "./types";
-import { deleteSite, getSiteBuildings, deleteBuilding, getWarehouseDeletionPreview, fetchSiteZones, deleteZone, seedDefaultZones } from "../../services/warehouseService";
+import { deleteSite, getSiteBuildings, deleteBuilding, getWarehouseDeletionPreview, fetchSiteZones, deleteZone, seedDefaultZones, fetchZoneSummary, resyncZones, ZoneSummary } from "../../services/warehouseService";
 import ConfirmDestructiveModal from "./modals/ConfirmDestructiveModal";
 import TextConfirmationDialog from "../ui/TextConfirmationDialog";
 import MoveItemModal from "./modals/MoveItemModal";
 import OptimizationWizardModal from "./modals/OptimizationWizardModal";
 import AddBuildingModal from "./modals/AddBuildingModal";
 import AddZoneModal from "./modals/AddZoneModal";
+import EditZoneCapacityModal from "./modals/EditZoneCapacityModal";
 
 interface WMSSitesStorageProps {
   sites: WarehouseSite[];
@@ -19,6 +20,8 @@ interface WMSSitesStorageProps {
 }
 
 type SiteTab = "zones" | "buildings";
+type ZoneTypeFilter = "all" | "indoor" | "outdoor";
+type CapacityStatusFilter = "all" | "available" | "low" | "full";
 
 const USAGE_TYPE_LABELS: Record<string, string> = {
   small_material: "Small Material",
@@ -74,6 +77,11 @@ export default function WMSSitesStorage({
   const [deleteZoneDialogOpen, setDeleteZoneDialogOpen] = useState(false);
   const [isDeletingZone, setIsDeletingZone] = useState(false);
   const [seedingZones, setSeedingZones] = useState<Set<number>>(new Set());
+  const [zoneFilters, setZoneFilters] = useState<Record<number, { type: ZoneTypeFilter; usage: string; capacity: CapacityStatusFilter }>>({});
+  const [zoneSummaries, setZoneSummaries] = useState<Record<number, ZoneSummary>>({});
+  const [loadingSummaries, setLoadingSummaries] = useState<Set<number>>(new Set());
+  const [resyncingSites, setResyncingSites] = useState<Set<number>>(new Set());
+  const [editCapacityZone, setEditCapacityZone] = useState<WarehouseZone | null>(null);
 
   const fetchBuildingsForSite = useCallback(async (siteId: number, force = false) => {
     if (!force && (siteBuildings[siteId] || loadingBuildings.has(siteId))) {
@@ -117,6 +125,97 @@ export default function WMSSitesStorage({
     }
   }, [siteZones, loadingZones]);
 
+  const fetchSummaryForSite = useCallback(async (siteId: number) => {
+    if (loadingSummaries.has(siteId)) return;
+    
+    setLoadingSummaries(prev => new Set(prev).add(siteId));
+    try {
+      const summary = await fetchZoneSummary(siteId);
+      setZoneSummaries(prev => ({ ...prev, [siteId]: summary }));
+    } catch (error) {
+      console.error("Failed to fetch zone summary:", error);
+    } finally {
+      setLoadingSummaries(prev => {
+        const next = new Set(prev);
+        next.delete(siteId);
+        return next;
+      });
+    }
+  }, [loadingSummaries]);
+
+  const handleResyncZones = async (e: React.MouseEvent, siteId: number) => {
+    e.stopPropagation();
+    setResyncingSites(prev => new Set(prev).add(siteId));
+    try {
+      const result = await resyncZones(siteId);
+      onShowToast(`Resynced ${result.zonesUpdated} zones`, "success");
+      fetchZonesForSite(siteId, true);
+      fetchSummaryForSite(siteId);
+    } catch (error) {
+      onShowToast(
+        error instanceof Error ? error.message : "Failed to resync zones",
+        "error"
+      );
+    } finally {
+      setResyncingSites(prev => {
+        const next = new Set(prev);
+        next.delete(siteId);
+        return next;
+      });
+    }
+  };
+
+  const getZoneUtilization = (zone: WarehouseZone): number => {
+    const capacity = zone.total_capacity || zone.capacity_pallets || 0;
+    const used = zone.current_item_count || 0;
+    if (capacity === 0) return 0;
+    return Math.round((used / capacity) * 100);
+  };
+
+  const getUtilizationColor = (percent: number): string => {
+    if (percent > 85) return "border-red-300 bg-red-50/30";
+    if (percent > 60) return "border-amber-300 bg-amber-50/30";
+    return "border-emerald-300 bg-emerald-50/30";
+  };
+
+  const formatSyncDate = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return "--";
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+
+  const getFilteredZones = (zones: WarehouseZone[], siteId: number): WarehouseZone[] => {
+    const filters = zoneFilters[siteId] || { type: "all", usage: "all", capacity: "all" };
+    
+    return zones.filter(zone => {
+      if (filters.type !== "all") {
+        if (filters.type === "indoor" && zone.is_outdoor) return false;
+        if (filters.type === "outdoor" && !zone.is_outdoor) return false;
+      }
+      
+      if (filters.usage !== "all" && zone.usage_type !== filters.usage) return false;
+      
+      if (filters.capacity !== "all") {
+        const util = getZoneUtilization(zone);
+        if (filters.capacity === "available" && util >= 60) return false;
+        if (filters.capacity === "low" && (util < 60 || util > 85)) return false;
+        if (filters.capacity === "full" && util <= 85) return false;
+      }
+      
+      return true;
+    });
+  };
+
+  const updateZoneFilter = (siteId: number, key: "type" | "usage" | "capacity", value: string) => {
+    setZoneFilters(prev => ({
+      ...prev,
+      [siteId]: {
+        ...prev[siteId] || { type: "all", usage: "all", capacity: "all" },
+        [key]: value
+      }
+    }));
+  };
+
   useEffect(() => {
     expandedSites.forEach(siteId => {
       if (!siteBuildings[siteId] && !loadingBuildings.has(siteId)) {
@@ -125,8 +224,11 @@ export default function WMSSitesStorage({
       if (!siteZones[siteId] && !loadingZones.has(siteId)) {
         fetchZonesForSite(siteId);
       }
+      if (!zoneSummaries[siteId] && !loadingSummaries.has(siteId)) {
+        fetchSummaryForSite(siteId);
+      }
     });
-  }, [expandedSites, fetchBuildingsForSite, fetchZonesForSite, siteBuildings, siteZones, loadingBuildings, loadingZones]);
+  }, [expandedSites, fetchBuildingsForSite, fetchZonesForSite, fetchSummaryForSite, siteBuildings, siteZones, zoneSummaries, loadingBuildings, loadingZones, loadingSummaries]);
 
   const handleMoveClick = (e: React.MouseEvent, siteId: number) => {
     e.stopPropagation();
@@ -317,8 +419,12 @@ export default function WMSSitesStorage({
 
   const renderZones = (siteId: number, site: WarehouseSite) => {
     const isLoading = loadingZones.has(siteId);
-    const zones = siteZones[siteId] || [];
+    const allZones = siteZones[siteId] || [];
     const isSeeding = seedingZones.has(siteId);
+    const isResyncing = resyncingSites.has(siteId);
+    const summary = zoneSummaries[siteId];
+    const filters = zoneFilters[siteId] || { type: "all", usage: "all", capacity: "all" };
+    const filteredZones = getFilteredZones(allZones, siteId);
 
     if (isLoading) {
       return (
@@ -329,7 +435,7 @@ export default function WMSSitesStorage({
       );
     }
 
-    if (zones.length === 0) {
+    if (allZones.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
           <Grid3X3 className="w-10 h-10 mb-2 opacity-50" />
@@ -357,89 +463,194 @@ export default function WMSSitesStorage({
     }
 
     return (
-      <div className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {zones.map((zone) => {
-            const bulkPercent = getCapacityPercent(zone.bulk_available, zone.bulk_open);
-            const rackPercent = getCapacityPercent(zone.rack_available, zone.rack_open);
-            
-            return (
-              <div
-                key={zone.id}
-                className="p-4 rounded-xl bg-gradient-to-br from-purple-50/50 to-white border border-purple-200/50 hover:border-purple-300 transition-colors"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 rounded-lg bg-purple-100">
-                      <Grid3X3 className="w-4 h-4 text-purple-600" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-foreground text-sm">{zone.code}</p>
-                      <p className="text-xs text-muted-foreground">{zone.name}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={(e) => handleDeleteZoneClick(e, zone, siteId)}
-                      className="p-1.5 rounded-lg hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
-                      title="Delete zone"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 mb-3">
-                  {zone.is_outdoor ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                      <Sun className="w-3 h-3" />
-                      Outdoor
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                      <Home className="w-3 h-3" />
-                      Indoor
-                    </span>
-                  )}
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                    {USAGE_TYPE_LABELS[zone.usage_type] || zone.usage_type}
-                  </span>
-                </div>
-
-                <div className="space-y-2">
-                  <div>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">Bulk</span>
-                      <span className="font-medium">{zone.bulk_open}/{zone.bulk_available}</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          bulkPercent > 80 ? "bg-red-500" : bulkPercent > 60 ? "bg-amber-500" : "bg-emerald-500"
-                        }`}
-                        style={{ width: `${Math.min(bulkPercent, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">Rack</span>
-                      <span className="font-medium">{zone.rack_open}/{zone.rack_available}</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          rackPercent > 80 ? "bg-red-500" : rackPercent > 60 ? "bg-amber-500" : "bg-emerald-500"
-                        }`}
-                        style={{ width: `${Math.min(rackPercent, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
+      <div className="space-y-4">
+        {summary && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-3 rounded-lg border border-border bg-white">
+              <div className="flex items-center gap-2 mb-1">
+                <Grid3X3 className="w-4 h-4 text-purple-500" />
+                <span className="text-xs text-muted-foreground">Total Zones</span>
               </div>
-            );
-          })}
+              <p className="text-lg font-semibold text-foreground">{summary.totalZones}</p>
+            </div>
+            <div className="p-3 rounded-lg border border-border bg-white">
+              <div className="flex items-center gap-2 mb-1">
+                <Package className="w-4 h-4 text-blue-500" />
+                <span className="text-xs text-muted-foreground">Capacity Used</span>
+              </div>
+              <p className="text-lg font-semibold text-foreground">
+                {summary.totalUsed}/{summary.totalCapacity}
+                <span className={`ml-2 text-sm ${
+                  summary.utilizationPercent > 85 ? "text-red-500" :
+                  summary.utilizationPercent > 60 ? "text-amber-500" : "text-emerald-500"
+                }`}>
+                  ({summary.utilizationPercent}%)
+                </span>
+              </p>
+            </div>
+            <div className="p-3 rounded-lg border border-border bg-white">
+              <div className="flex items-center gap-2 mb-1">
+                <Package className="w-4 h-4 text-emerald-500" />
+                <span className="text-xs text-muted-foreground">Available</span>
+              </div>
+              <p className="text-lg font-semibold text-foreground">{summary.availableSpace}</p>
+            </div>
+            <div className="p-3 rounded-lg border border-border bg-white">
+              <div className="flex items-center gap-2 mb-1">
+                <Home className="w-4 h-4 text-gray-500" />
+                <span className="text-xs text-muted-foreground">Indoor/Outdoor</span>
+              </div>
+              <p className="text-lg font-semibold text-foreground">
+                {summary.byType?.indoor || 0}/{summary.byType?.outdoor || 0}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg bg-muted/30 border border-border">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Filter className="w-3.5 h-3.5" />
+            <span>Filters:</span>
+          </div>
+          <select
+            value={filters.type}
+            onChange={(e) => updateZoneFilter(siteId, "type", e.target.value)}
+            className="text-xs px-2 py-1 rounded border border-border bg-white focus:outline-none focus:ring-1 focus:ring-purple-400"
+          >
+            <option value="all">All Types</option>
+            <option value="indoor">Indoor</option>
+            <option value="outdoor">Outdoor</option>
+          </select>
+          <select
+            value={filters.usage}
+            onChange={(e) => updateZoneFilter(siteId, "usage", e.target.value)}
+            className="text-xs px-2 py-1 rounded border border-border bg-white focus:outline-none focus:ring-1 focus:ring-purple-400"
+          >
+            <option value="all">All Usage</option>
+            {Object.entries(USAGE_TYPE_LABELS).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+          <select
+            value={filters.capacity}
+            onChange={(e) => updateZoneFilter(siteId, "capacity", e.target.value as CapacityStatusFilter)}
+            className="text-xs px-2 py-1 rounded border border-border bg-white focus:outline-none focus:ring-1 focus:ring-purple-400"
+          >
+            <option value="all">All Status</option>
+            <option value="available">Available (&lt;60%)</option>
+            <option value="low">Low (60-85%)</option>
+            <option value="full">Full (&gt;85%)</option>
+          </select>
+          <div className="ml-auto flex gap-2">
+            <button
+              onClick={(e) => handleResyncZones(e, siteId)}
+              disabled={isResyncing}
+              className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors disabled:opacity-50"
+              title="Resync zone capacities"
+            >
+              {isResyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              Resync
+            </button>
+          </div>
         </div>
+
+        {filteredZones.length === 0 ? (
+          <div className="text-center py-6 text-muted-foreground text-sm">
+            No zones match the current filters
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {filteredZones.map((zone) => {
+              const utilization = getZoneUtilization(zone);
+              const capacity = zone.total_capacity || zone.capacity_pallets || 0;
+              const used = zone.current_item_count || 0;
+              
+              return (
+                <div
+                  key={zone.id}
+                  className={`p-4 rounded-xl border transition-colors ${getUtilizationColor(utilization)}`}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-purple-100">
+                        <Grid3X3 className="w-4 h-4 text-purple-600" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground text-sm">{zone.code}</p>
+                        <p className="text-xs text-muted-foreground">{zone.name}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditCapacityZone(zone);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-purple-100 text-muted-foreground hover:text-purple-600 transition-colors"
+                        title="Edit capacity"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteZoneClick(e, zone, siteId)}
+                        className="p-1.5 rounded-lg hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
+                        title="Delete zone"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 mb-3">
+                    {zone.is_outdoor ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                        <Sun className="w-3 h-3" />
+                        Outdoor
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                        <Home className="w-3 h-3" />
+                        Indoor
+                      </span>
+                    )}
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                      {USAGE_TYPE_LABELS[zone.usage_type] || zone.usage_type}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-muted-foreground">Utilization</span>
+                        <span className={`font-medium ${
+                          utilization > 85 ? "text-red-600" : 
+                          utilization > 60 ? "text-amber-600" : "text-emerald-600"
+                        }`}>
+                          {used}/{capacity} ({utilization}%)
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            utilization > 85 ? "bg-red-500" : utilization > 60 ? "bg-amber-500" : "bg-emerald-500"
+                          }`}
+                          style={{ width: `${Math.min(utilization, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <Clock className="w-3 h-3" />
+                        <span>Synced:</span>
+                      </div>
+                      <span className="text-muted-foreground">{formatSyncDate(zone.last_synced_at)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex gap-2 pt-2">
           <button
@@ -831,6 +1042,20 @@ export default function WMSSitesStorage({
             setAddZoneModalSite(null);
           }}
           onSuccess={handleZoneModalSuccess}
+          onShowToast={onShowToast}
+        />
+      )}
+
+      {editCapacityZone !== null && (
+        <EditZoneCapacityModal
+          zone={editCapacityZone}
+          onClose={() => setEditCapacityZone(null)}
+          onSuccess={() => {
+            const siteId = editCapacityZone.site_id;
+            setEditCapacityZone(null);
+            fetchZonesForSite(siteId, true);
+            fetchSummaryForSite(siteId);
+          }}
           onShowToast={onShowToast}
         />
       )}
