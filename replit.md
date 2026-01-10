@@ -90,6 +90,17 @@ The WMS is modular, featuring a 7-section navigation (Dashboard, Inventory, Oper
 - **Manifest Parsers**: CSV, MILSTRIP (fixed-width with document identifiers), and FEDLOG (tab/pipe/comma-delimited) auto-detection.
 - PDF/CSV/XLSX file import with comprehensive validation (50+ BATS columns supported).
 - **Dynamic Column System**: Inventory columns are defined in `packages/shared/inventoryColumns.ts` as a single source of truth, fetched via API, and automatically merged with saved user preferences.
+- **Zone Management with Capacity Tracking**:
+  - Filtering by zone type (indoor/outdoor), usage type, and capacity status
+  - Capacity summary cards showing total/used/available space
+  - Resync feature to recalculate zone capacity from actual inventory counts
+  - Historical capacity tracking via `warehouse_zone_capacity_history` table
+  - Manual capacity editing with audit trail
+  - Color-coded utilization indicators (green <60%, yellow 60-85%, red >85%)
+- **Zone Capacity Service** (`apps/server/services/zoneCapacityService.ts`):
+  - `resyncZoneCapacity()`: Aggregates inventory counts by zone_id, updates current_item_count and current_weight_lbs
+  - `getZoneCapacitySummary()`: Returns aggregated capacity metrics for all zones at a site
+  - `recordCapacityHistory()`: Saves capacity snapshots for historical analysis
 - **Optimization Wizard** with 4 algorithms:
   - **CardStack**: Stacks similar items to reduce footprint and improve picking efficiency.
   - **Size Standardization**: Groups items by dimensions to optimize rack utilization.
