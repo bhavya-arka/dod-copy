@@ -749,6 +749,7 @@ export const warehouseInventoryItems = pgTable("warehouse_inventory_items", {
   id: serial("id").primaryKey(),
   site_id: integer("site_id").notNull(),
   location_id: integer("location_id"),
+  zone_id: integer("zone_id"),
   storage_facility: text("storage_facility"),
   ship: text("ship"),
   ship_class: text("ship_class"),

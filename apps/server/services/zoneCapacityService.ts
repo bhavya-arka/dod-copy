@@ -120,7 +120,7 @@ export async function resyncZoneCapacity(
         await db.update(warehouseZones)
           .set({
             current_item_count: stats.itemCount,
-            current_weight_lbs: Math.round(stats.totalWeight),
+            current_weight_lbs: String(Math.round(stats.totalWeight)),
             last_synced_at: now
           })
           .where(eq(warehouseZones.id, zone.id));
@@ -202,21 +202,15 @@ export async function recordCapacityHistory(
     itemCount: number;
     totalWeightLbs: number;
     totalCapacity?: number;
-    bulkUsed?: number;
-    rackUsed?: number;
-    source?: string;
   }
 ): Promise<{ success: boolean; historyId?: number; error?: string }> {
   try {
     const [history] = await db.insert(warehouseZoneCapacityHistory).values({
       zone_id: zoneId,
       site_id: siteId,
-      current_item_count: data.itemCount,
-      current_weight_lbs: Math.round(data.totalWeightLbs),
-      total_capacity: data.totalCapacity || 0,
-      bulk_used: data.bulkUsed || 0,
-      rack_used: data.rackUsed || 0,
-      source: data.source || "resync"
+      item_count: data.itemCount,
+      total_weight_lbs: String(Math.round(data.totalWeightLbs)),
+      total_capacity: data.totalCapacity || 0
     }).returning();
 
     console.log(`[ZoneCapacity] Recorded history for zone ${zoneId}`);
@@ -242,22 +236,22 @@ export async function getZoneCapacityHistory(
         .from(warehouseZoneCapacityHistory)
         .where(and(
           eq(warehouseZoneCapacityHistory.zone_id, zoneId),
-          gte(warehouseZoneCapacityHistory.captured_at, startDate),
-          lte(warehouseZoneCapacityHistory.captured_at, endDate)
+          gte(warehouseZoneCapacityHistory.snapshot_date, startDate),
+          lte(warehouseZoneCapacityHistory.snapshot_date, endDate)
         ));
     } else if (startDate) {
       query = db.select()
         .from(warehouseZoneCapacityHistory)
         .where(and(
           eq(warehouseZoneCapacityHistory.zone_id, zoneId),
-          gte(warehouseZoneCapacityHistory.captured_at, startDate)
+          gte(warehouseZoneCapacityHistory.snapshot_date, startDate)
         ));
     } else if (endDate) {
       query = db.select()
         .from(warehouseZoneCapacityHistory)
         .where(and(
           eq(warehouseZoneCapacityHistory.zone_id, zoneId),
-          lte(warehouseZoneCapacityHistory.captured_at, endDate)
+          lte(warehouseZoneCapacityHistory.snapshot_date, endDate)
         ));
     }
 

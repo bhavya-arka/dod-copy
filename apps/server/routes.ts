@@ -3224,11 +3224,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const insertedZones = await db.insert(warehouseZones).values(zonesData).returning();
 
-      console.log(`[Warehouse] Seeded ${insertedZones.length} zones for site ${siteId}`);
+      // After inserting zones, resync capacity to count current inventory items per zone
+      const { zoneCapacityService } = await import('./services');
+      const resyncResult = await zoneCapacityService.resyncZoneCapacity(siteId);
+
+      console.log(`[Warehouse] Seeded ${insertedZones.length} zones for site ${siteId}, resync: ${resyncResult.zonesUpdated} zones updated`);
       res.status(201).json({
         success: true,
         message: `Created ${insertedZones.length} default zones`,
-        zones: insertedZones
+        zones: insertedZones,
+        resync: resyncResult
       });
     } catch (error) {
       console.error("[Warehouse] Failed to seed zones:", error);
