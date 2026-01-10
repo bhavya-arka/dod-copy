@@ -88,9 +88,16 @@ export async function resyncZoneCapacity(
     for (const item of inventoryItems) {
       let assignedZoneId: number | null = null;
 
-      if (item.location_id !== null && locationToZoneMap.has(item.location_id)) {
+      // Priority 1: Use zone_id directly if set on the inventory item
+      if (item.zone_id !== null && item.zone_id !== undefined) {
+        assignedZoneId = item.zone_id;
+      }
+      // Priority 2: Fall back to location_id lookup if zone_id is null
+      else if (item.location_id !== null && locationToZoneMap.has(item.location_id)) {
         assignedZoneId = locationToZoneMap.get(item.location_id)!;
-      } else if (item.location) {
+      }
+      // Priority 3: Fall back to pattern matching if both zone_id and location_id are null
+      else if (item.location) {
         const matchResult = matchLocationToZone(item.location, zones);
         if (matchResult.zoneId !== null) {
           assignedZoneId = matchResult.zoneId;
@@ -113,7 +120,7 @@ export async function resyncZoneCapacity(
         await db.update(warehouseZones)
           .set({
             current_item_count: stats.itemCount,
-            current_weight_lbs: String(stats.totalWeight.toFixed(2)),
+            current_weight_lbs: Math.round(stats.totalWeight),
             last_synced_at: now
           })
           .where(eq(warehouseZones.id, zone.id));
@@ -195,21 +202,21 @@ export async function recordCapacityHistory(
     itemCount: number;
     totalWeightLbs: number;
     totalCapacity?: number;
+    bulkUsed?: number;
+    rackUsed?: number;
+    source?: string;
   }
 ): Promise<{ success: boolean; historyId?: number; error?: string }> {
   try {
-    const utilization = data.totalCapacity && data.totalCapacity > 0 
-      ? (data.itemCount / data.totalCapacity) * 100 
-      : 0;
-
     const [history] = await db.insert(warehouseZoneCapacityHistory).values({
       zone_id: zoneId,
       site_id: siteId,
-      item_count: data.itemCount,
-      total_weight_lbs: String(data.totalWeightLbs.toFixed(2)),
+      current_item_count: data.itemCount,
+      current_weight_lbs: Math.round(data.totalWeightLbs),
       total_capacity: data.totalCapacity || 0,
-      utilization_percent: String(utilization.toFixed(2)),
-      snapshot_date: new Date()
+      bulk_used: data.bulkUsed || 0,
+      rack_used: data.rackUsed || 0,
+      source: data.source || "resync"
     }).returning();
 
     console.log(`[ZoneCapacity] Recorded history for zone ${zoneId}`);
@@ -235,22 +242,22 @@ export async function getZoneCapacityHistory(
         .from(warehouseZoneCapacityHistory)
         .where(and(
           eq(warehouseZoneCapacityHistory.zone_id, zoneId),
-          gte(warehouseZoneCapacityHistory.snapshot_date, startDate),
-          lte(warehouseZoneCapacityHistory.snapshot_date, endDate)
+          gte(warehouseZoneCapacityHistory.captured_at, startDate),
+          lte(warehouseZoneCapacityHistory.captured_at, endDate)
         ));
     } else if (startDate) {
       query = db.select()
         .from(warehouseZoneCapacityHistory)
         .where(and(
           eq(warehouseZoneCapacityHistory.zone_id, zoneId),
-          gte(warehouseZoneCapacityHistory.snapshot_date, startDate)
+          gte(warehouseZoneCapacityHistory.captured_at, startDate)
         ));
     } else if (endDate) {
       query = db.select()
         .from(warehouseZoneCapacityHistory)
         .where(and(
           eq(warehouseZoneCapacityHistory.zone_id, zoneId),
-          lte(warehouseZoneCapacityHistory.snapshot_date, endDate)
+          lte(warehouseZoneCapacityHistory.captured_at, endDate)
         ));
     }
 
