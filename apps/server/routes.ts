@@ -6883,6 +6883,159 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/warehouse/optimization-plans/:planId/target-date - Set target completion date
+  app.patch("/api/warehouse/optimization-plans/:planId/target-date", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const planId = parseInt(req.params.planId);
+      if (isNaN(planId)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+
+      const { target_completion_date } = req.body;
+      
+      // Validate date if provided
+      let parsedDate: Date | null = null;
+      if (target_completion_date) {
+        parsedDate = new Date(target_completion_date);
+        if (isNaN(parsedDate.getTime())) {
+          return res.status(400).json({ error: "Invalid date format. Use ISO 8601 format." });
+        }
+      }
+
+      // Fetch the plan
+      const [plan] = await db.select()
+        .from(warehouseOptimizationPlans)
+        .where(eq(warehouseOptimizationPlans.id, planId));
+
+      if (!plan) {
+        return res.status(404).json({ error: "Optimization plan not found" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, plan.site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Update the plan with the target date
+      const [updatedPlan] = await db.update(warehouseOptimizationPlans)
+        .set({
+          target_completion_date: parsedDate,
+          updated_at: new Date(),
+        })
+        .where(eq(warehouseOptimizationPlans.id, planId))
+        .returning();
+
+      // Create event for tracking
+      await db.insert(warehouseOptimizationEvents).values({
+        plan_id: planId,
+        user_id: req.user!.id,
+        event_type: "target_date_set",
+        payload: { target_completion_date: parsedDate?.toISOString() || null },
+      });
+
+      res.json(updatedPlan);
+    } catch (error) {
+      console.error("[Warehouse Optimization Plans] Failed to set target date:", error);
+      res.status(500).json({ error: "Failed to set target completion date" });
+    }
+  });
+
+  // POST /api/warehouse/optimization-plans/:planId/start-all - Start all pending actions
+  app.post("/api/warehouse/optimization-plans/:planId/start-all", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const planId = parseInt(req.params.planId);
+      if (isNaN(planId)) {
+        return res.status(400).json({ error: "Invalid plan ID" });
+      }
+
+      // Fetch the plan
+      const [plan] = await db.select()
+        .from(warehouseOptimizationPlans)
+        .where(eq(warehouseOptimizationPlans.id, planId));
+
+      if (!plan) {
+        return res.status(404).json({ error: "Optimization plan not found" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, plan.site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      if (plan.status === "completed" || plan.status === "cancelled") {
+        return res.status(400).json({ error: "Cannot start actions for completed or cancelled plans" });
+      }
+
+      // Use transaction to update all pending actions and plan status
+      const result = await db.transaction(async (tx) => {
+        // Update all pending actions to in_progress
+        const updatedActions = await tx.update(warehouseOptimizationActions)
+          .set({ status: "in_progress" })
+          .where(and(
+            eq(warehouseOptimizationActions.plan_id, planId),
+            eq(warehouseOptimizationActions.status, "pending")
+          ))
+          .returning();
+
+        const startedCount = updatedActions.length;
+
+        // Update plan status to in_progress if not already
+        let updatedPlan = plan;
+        if (plan.status !== "in_progress" && startedCount > 0) {
+          const [planUpdate] = await tx.update(warehouseOptimizationPlans)
+            .set({
+              status: "in_progress",
+              executed_at: plan.executed_at || new Date(),
+              executed_by: plan.executed_by || req.user!.id,
+              updated_at: new Date(),
+            })
+            .where(eq(warehouseOptimizationPlans.id, planId))
+            .returning();
+          updatedPlan = planUpdate;
+        }
+
+        // Create event for tracking
+        await tx.insert(warehouseOptimizationEvents).values({
+          plan_id: planId,
+          user_id: req.user!.id,
+          event_type: "start_all",
+          payload: { started_count: startedCount },
+        });
+
+        // Fetch all actions for the plan
+        const allActions = await tx.select()
+          .from(warehouseOptimizationActions)
+          .where(eq(warehouseOptimizationActions.plan_id, planId))
+          .orderBy(asc(warehouseOptimizationActions.sequence));
+
+        return {
+          plan: updatedPlan,
+          actions: allActions,
+          started_count: startedCount,
+        };
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("[Warehouse Optimization Plans] Failed to start all actions:", error);
+      res.status(500).json({ error: "Failed to start all actions" });
+    }
+  });
+
   // ============================================================================
   // LAND LOGISTICS API (PROTECTED)
   // ============================================================================

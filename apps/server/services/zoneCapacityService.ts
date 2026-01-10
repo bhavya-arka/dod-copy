@@ -334,22 +334,22 @@ export async function getZoneCapacityHistory(
         .from(warehouseZoneCapacityHistory)
         .where(and(
           eq(warehouseZoneCapacityHistory.zone_id, zoneId),
-          gte(warehouseZoneCapacityHistory.snapshot_date, startDate),
-          lte(warehouseZoneCapacityHistory.snapshot_date, endDate)
+          gte(warehouseZoneCapacityHistory.captured_at, startDate),
+          lte(warehouseZoneCapacityHistory.captured_at, endDate)
         ));
     } else if (startDate) {
       query = db.select()
         .from(warehouseZoneCapacityHistory)
         .where(and(
           eq(warehouseZoneCapacityHistory.zone_id, zoneId),
-          gte(warehouseZoneCapacityHistory.snapshot_date, startDate)
+          gte(warehouseZoneCapacityHistory.captured_at, startDate)
         ));
     } else if (endDate) {
       query = db.select()
         .from(warehouseZoneCapacityHistory)
         .where(and(
           eq(warehouseZoneCapacityHistory.zone_id, zoneId),
-          lte(warehouseZoneCapacityHistory.snapshot_date, endDate)
+          lte(warehouseZoneCapacityHistory.captured_at, endDate)
         ));
     }
 

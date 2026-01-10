@@ -1240,6 +1240,9 @@ export const warehouseOptimizationPlans = pgTable("warehouse_optimization_plans"
   // Comparison context
   comparison_context: jsonb("comparison_context"), // Base data snapshot hash or reference
   
+  // Target completion date for forecasting
+  target_completion_date: timestamp("target_completion_date"),
+  
   // Execution tracking
   executed_at: timestamp("executed_at"),
   executed_by: integer("executed_by"),

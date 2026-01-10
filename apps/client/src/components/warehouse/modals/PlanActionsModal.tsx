@@ -13,11 +13,15 @@ import {
   Calendar,
   Layers,
   CheckCircle2,
-  XCircle
+  XCircle,
+  PlayCircle,
+  Target
 } from "lucide-react";
 import { 
   updateOptimizationAction, 
   getOptimizationPlan,
+  setOptimizationPlanTargetDate,
+  startAllOptimizationActions,
   type OptimizationPlan, 
   type OptimizationPlanAction 
 } from "../../../services/warehouseService";
@@ -41,12 +45,25 @@ export default function PlanActionsModal({
   const [actionNotes, setActionNotes] = useState<Record<number, string>>({});
   const [activeNoteInput, setActiveNoteInput] = useState<number | null>(null);
   const [processingActions, setProcessingActions] = useState<Set<number>>(new Set());
+  const [startingAll, setStartingAll] = useState(false);
+  const [settingTargetDate, setSettingTargetDate] = useState(false);
+  const [editingTargetDate, setEditingTargetDate] = useState(false);
+  const [targetDateInput, setTargetDateInput] = useState<string>("");
 
   useEffect(() => {
     if (plan?.id) {
       refreshPlan();
     }
   }, [plan?.id]);
+
+  useEffect(() => {
+    if (currentPlan?.target_completion_date) {
+      const date = new Date(currentPlan.target_completion_date);
+      setTargetDateInput(date.toISOString().split('T')[0]);
+    } else {
+      setTargetDateInput("");
+    }
+  }, [currentPlan?.target_completion_date]);
 
   const refreshPlan = async () => {
     if (!plan?.id) return;
@@ -152,6 +169,59 @@ export default function PlanActionsModal({
       onShowToast(err instanceof Error ? err.message : "Failed to skip actions", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStartAll = async () => {
+    if (pendingCount === 0) return;
+    
+    setStartingAll(true);
+    try {
+      const result = await startAllOptimizationActions(currentPlan.id);
+      onShowToast(`Started ${result.started_count} actions`, "success");
+      setCurrentPlan({ ...result.plan, actions: result.actions });
+      onActionUpdate();
+    } catch (err) {
+      onShowToast(err instanceof Error ? err.message : "Failed to start all actions", "error");
+    } finally {
+      setStartingAll(false);
+    }
+  };
+
+  const handleSetTargetDate = async () => {
+    if (!targetDateInput) {
+      onShowToast("Please select a target date", "warning");
+      return;
+    }
+    
+    setSettingTargetDate(true);
+    try {
+      const targetDate = new Date(targetDateInput).toISOString();
+      const updatedPlan = await setOptimizationPlanTargetDate(currentPlan.id, targetDate);
+      setCurrentPlan({ ...currentPlan, target_completion_date: updatedPlan.target_completion_date });
+      setEditingTargetDate(false);
+      onShowToast("Target completion date set successfully", "success");
+      onActionUpdate();
+    } catch (err) {
+      onShowToast(err instanceof Error ? err.message : "Failed to set target date", "error");
+    } finally {
+      setSettingTargetDate(false);
+    }
+  };
+
+  const handleClearTargetDate = async () => {
+    setSettingTargetDate(true);
+    try {
+      const updatedPlan = await setOptimizationPlanTargetDate(currentPlan.id, null);
+      setCurrentPlan({ ...currentPlan, target_completion_date: null });
+      setTargetDateInput("");
+      setEditingTargetDate(false);
+      onShowToast("Target date cleared", "success");
+      onActionUpdate();
+    } catch (err) {
+      onShowToast(err instanceof Error ? err.message : "Failed to clear target date", "error");
+    } finally {
+      setSettingTargetDate(false);
     }
   };
 
@@ -302,6 +372,74 @@ export default function PlanActionsModal({
               style={{ width: `${progressPercent}%` }}
             />
           </div>
+
+          {/* Target Completion Date Section */}
+          <div className="mt-4 p-3 rounded-xl bg-background border border-border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">Target Completion Date</span>
+              </div>
+              {!isPlanFinalized && !editingTargetDate && (
+                <button
+                  onClick={() => setEditingTargetDate(true)}
+                  className="text-xs text-[#2563EB] hover:underline"
+                >
+                  {currentPlan.target_completion_date ? 'Edit' : 'Set Date'}
+                </button>
+              )}
+            </div>
+            
+            {editingTargetDate ? (
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="date"
+                  value={targetDateInput}
+                  onChange={(e) => setTargetDateInput(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-[#2563EB]/50"
+                />
+                <button
+                  onClick={handleSetTargetDate}
+                  disabled={settingTargetDate || !targetDateInput}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-[#2563EB] text-white hover:bg-[#2563EB]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {settingTargetDate ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  Save
+                </button>
+                {currentPlan.target_completion_date && (
+                  <button
+                    onClick={handleClearTargetDate}
+                    disabled={settingTargetDate}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+                <button
+                  onClick={() => setEditingTargetDate(false)}
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="mt-1">
+                {currentPlan.target_completion_date ? (
+                  <span className="text-sm text-foreground">
+                    {new Date(currentPlan.target_completion_date).toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </span>
+                ) : (
+                  <span className="text-sm text-muted-foreground italic">Not set</span>
+                )}
+              </div>
+            )}
+          </div>
           
           {isPlanFinalized ? (
             <div className="flex items-center gap-2 mt-4 p-3 rounded-xl bg-muted/50 border border-border">
@@ -311,7 +449,22 @@ export default function PlanActionsModal({
               </span>
             </div>
           ) : (currentPlan.status === 'in_progress' || currentPlan.status === 'pending') && (
-            <div className="flex gap-2 mt-4">
+            <div className="flex flex-wrap gap-2 mt-4">
+              {/* Start All Button */}
+              {pendingCount > 0 && (
+                <button
+                  onClick={handleStartAll}
+                  disabled={loading || startingAll || isPlanFinalized}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-[#2563EB] text-white hover:bg-[#2563EB]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {startingAll ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <PlayCircle className="w-4 h-4" />
+                  )}
+                  Start All ({pendingCount})
+                </button>
+              )}
               {inProgressCount > 0 && (
                 <button
                   onClick={handleBatchComplete}

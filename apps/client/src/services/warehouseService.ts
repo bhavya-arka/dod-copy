@@ -813,6 +813,7 @@ export interface OptimizationPlan {
   total_actions: number;
   completed_actions: number;
   comparison_context: any;
+  target_completion_date: string | null;
   executed_at: string | null;
   executed_by: number | null;
   cancelled_at: string | null;
@@ -985,6 +986,56 @@ export async function updateOptimizationAction(
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.error || "Failed to update optimization action");
+  }
+  return response.json();
+}
+
+/**
+ * Set target completion date for an optimization plan
+ * @param planId - Plan ID
+ * @param targetDate - Target completion date (ISO string) or null to clear
+ * @returns Updated optimization plan
+ */
+export async function setOptimizationPlanTargetDate(
+  planId: number,
+  targetDate: string | null
+): Promise<OptimizationPlan> {
+  const response = await fetch(`${API_BASE}/optimization-plans/${planId}/target-date`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ target_completion_date: targetDate }),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to set target completion date");
+  }
+  return response.json();
+}
+
+/** Result of starting all actions */
+export interface StartAllResult {
+  plan: OptimizationPlan;
+  actions: OptimizationPlanAction[];
+  started_count: number;
+}
+
+/**
+ * Start all pending optimization actions at once
+ * @param planId - Plan ID
+ * @returns Updated plan with actions and count of started actions
+ */
+export async function startAllOptimizationActions(planId: number): Promise<StartAllResult> {
+  const response = await fetch(`${API_BASE}/optimization-plans/${planId}/start-all`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to start all actions");
   }
   return response.json();
 }
