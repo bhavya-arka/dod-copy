@@ -306,8 +306,8 @@ export async function recordCapacityHistory(
     const [history] = await db.insert(warehouseZoneCapacityHistory).values({
       zone_id: zoneId,
       site_id: siteId,
-      item_count: data.itemCount,
-      total_weight_lbs: String(Math.round(data.totalWeightLbs)),
+      current_item_count: data.itemCount,
+      current_weight_lbs: Math.round(data.totalWeightLbs),
       total_capacity: data.totalCapacity || 0
     }).returning();
 
