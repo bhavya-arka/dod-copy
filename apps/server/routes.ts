@@ -25,6 +25,7 @@ import {
   warehouseOptimizationPlans,
   warehouseOptimizationActions,
   warehouseOptimizationEvents,
+  warehouseAlerts,
   landRoutes,
   landConvoys,
   landVehicleTypes,
@@ -63,6 +64,7 @@ import * as transportService from "./services/transportService";
 import * as transportStatsService from "./services/transportStatsService";
 import type { TransportMode, TransportStatus } from "../../packages/shared/transportTypes";
 import { matchLocationToZone, type ZoneMatchResult } from "./services/zoneMatchingService";
+import { warehouseAnalyticsService } from "./services/warehouseAnalyticsService";
 
 // Weather API cache with 10-minute TTL
 interface WeatherCacheEntry {
@@ -7172,6 +7174,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Warehouse Optimization Plans] Failed to start all actions:", error);
       res.status(500).json({ error: "Failed to start all actions" });
+    }
+  });
+
+  // ============================================================================
+  // WAREHOUSE ALERTS & ANALYTICS API (PROTECTED)
+  // ============================================================================
+
+  // GET /api/warehouse/sites/:siteId/alerts - Get active alerts for a site
+  app.get("/api/warehouse/sites/:siteId/alerts", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const severity = req.query.severity as string | undefined;
+      const limit = parseInt(req.query.limit as string) || 50;
+
+      let query = db.select()
+        .from(warehouseAlerts)
+        .where(and(
+          eq(warehouseAlerts.site_id, siteId),
+          eq(warehouseAlerts.is_resolved, false),
+          ...(severity ? [eq(warehouseAlerts.severity, severity as 'info' | 'warning' | 'critical')] : [])
+        ))
+        .orderBy(desc(warehouseAlerts.created_at))
+        .limit(limit);
+
+      const alerts = await query;
+      res.json(alerts);
+    } catch (error) {
+      console.error("[Warehouse Alerts] Failed to fetch alerts:", error);
+      res.status(500).json({ error: "Failed to fetch alerts" });
+    }
+  });
+
+  // POST /api/warehouse/sites/:siteId/alerts/:alertId/resolve - Resolve an alert
+  app.post("/api/warehouse/sites/:siteId/alerts/:alertId/resolve", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      const alertId = parseInt(req.params.alertId);
+      if (isNaN(siteId) || isNaN(alertId)) {
+        return res.status(400).json({ error: "Invalid site ID or alert ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const [alert] = await db.select()
+        .from(warehouseAlerts)
+        .where(and(
+          eq(warehouseAlerts.id, alertId),
+          eq(warehouseAlerts.site_id, siteId)
+        ));
+
+      if (!alert) {
+        return res.status(404).json({ error: "Alert not found" });
+      }
+
+      await db.update(warehouseAlerts)
+        .set({
+          is_resolved: true,
+          resolved_at: new Date(),
+        })
+        .where(eq(warehouseAlerts.id, alertId));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Warehouse Alerts] Failed to resolve alert:", error);
+      res.status(500).json({ error: "Failed to resolve alert" });
+    }
+  });
+
+  // POST /api/warehouse/sites/:siteId/analytics/run - Trigger analytics run for a site
+  app.post("/api/warehouse/sites/:siteId/analytics/run", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      await warehouseAnalyticsService.runAnalytics(siteId, req.user!.id);
+
+      res.json({ success: true, message: "Analytics completed" });
+    } catch (error) {
+      console.error("[Warehouse Analytics] Failed to run analytics:", error);
+      res.status(500).json({ error: "Failed to run analytics" });
+    }
+  });
+
+  // GET /api/warehouse/sites/:siteId/metrics/trends - Get trend metrics for a site
+  app.get("/api/warehouse/sites/:siteId/metrics/trends", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const trends = await warehouseAnalyticsService.getTrendMetrics(siteId);
+      res.json(trends);
+    } catch (error) {
+      console.error("[Warehouse Analytics] Failed to fetch trend metrics:", error);
+      res.status(500).json({ error: "Failed to fetch trend metrics" });
     }
   });
 

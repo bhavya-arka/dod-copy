@@ -696,17 +696,17 @@ export const warehouseZoneCapacityHistory = pgTable("warehouse_zone_capacity_his
   id: serial("id").primaryKey(),
   zone_id: integer("zone_id").notNull(),
   site_id: integer("site_id").notNull(),
-  item_count: integer("item_count").notNull().default(0),
-  total_weight_lbs: numeric("total_weight_lbs", { precision: 12, scale: 2 }).notNull().default("0"),
+  captured_at: timestamp("captured_at").defaultNow().notNull(),
   total_capacity: integer("total_capacity").default(0),
-  utilization_percent: numeric("utilization_percent", { precision: 5, scale: 2 }).default("0"),
-  snapshot_date: timestamp("snapshot_date").defaultNow().notNull(),
-  created_at: timestamp("created_at").defaultNow().notNull(),
+  current_item_count: integer("current_item_count").notNull().default(0),
+  current_weight_lbs: integer("current_weight_lbs").notNull().default(0),
+  bulk_used: integer("bulk_used").default(0),
+  rack_used: integer("rack_used").default(0),
+  source: text("source"),
 });
 
 export const insertWarehouseZoneCapacityHistorySchema = createInsertSchema(warehouseZoneCapacityHistory).omit({
   id: true,
-  created_at: true,
 });
 export type InsertWarehouseZoneCapacityHistory = z.infer<typeof insertWarehouseZoneCapacityHistorySchema>;
 export type WarehouseZoneCapacityHistory = typeof warehouseZoneCapacityHistory.$inferSelect;
@@ -1199,22 +1199,27 @@ export type WarehouseAgingThreshold = typeof warehouseAgingThresholds.$inferSele
 export const warehouseAlertSeverityEnum = ['info', 'warning', 'critical'] as const;
 export type WarehouseAlertSeverity = typeof warehouseAlertSeverityEnum[number];
 
-export const warehouseAlertTypeEnum = ['capacity', 'trend', 'aging', 'throughput'] as const;
+export const warehouseAlertTypeEnum = ['threshold_capacity', 'threshold_aging', 'trend_throughput', 'trend_dwell_time'] as const;
 export type WarehouseAlertType = typeof warehouseAlertTypeEnum[number];
+
+export const warehouseAlertEntityTypeEnum = ['zone', 'site', 'item'] as const;
+export type WarehouseAlertEntityType = typeof warehouseAlertEntityTypeEnum[number];
 
 export const warehouseAlerts = pgTable("warehouse_alerts", {
   id: serial("id").primaryKey(),
   site_id: integer("site_id").notNull(),
-  zone_id: integer("zone_id"),
-  user_id: integer("user_id").notNull(),
-  alert_type: text("alert_type").notNull(), // 'capacity', 'trend', 'aging', 'throughput'
+  alert_type: text("alert_type").notNull(), // 'threshold_capacity', 'threshold_aging', 'trend_throughput', 'trend_dwell_time'
   severity: text("severity").notNull().default("warning"), // 'info', 'warning', 'critical'
+  entity_type: text("entity_type").notNull(), // 'zone', 'site', 'item'
+  entity_id: integer("entity_id").notNull(),
+  entity_name: text("entity_name").notNull(),
   message: text("message").notNull(),
-  entity_key: text("entity_key").notNull(), // Unique key for deduplication (e.g., "zone_123_capacity")
+  metric_value: numeric("metric_value", { precision: 14, scale: 4 }),
+  threshold_value: numeric("threshold_value", { precision: 14, scale: 4 }),
+  trend_change_percent: numeric("trend_change_percent", { precision: 8, scale: 2 }),
+  metadata: jsonb("metadata").notNull().default({}),
   is_resolved: boolean("is_resolved").notNull().default(false),
   resolved_at: timestamp("resolved_at"),
-  resolved_by: integer("resolved_by"),
-  metadata: jsonb("metadata").notNull().default({}),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -1229,10 +1234,10 @@ export type WarehouseAlert = typeof warehouseAlerts.$inferSelect;
 export const warehouseMetricSnapshots = pgTable("warehouse_metric_snapshots", {
   id: serial("id").primaryKey(),
   site_id: integer("site_id").notNull(),
-  zone_id: integer("zone_id"),
-  metric_key: text("metric_key").notNull(), // 'daily_throughput', 'utilization', etc.
-  metric_value: numeric("metric_value", { precision: 12, scale: 4 }).notNull(),
-  snapshot_date: date("snapshot_date").notNull(),
+  metric_key: text("metric_key").notNull(), // 'capacity_utilization', 'throughput_inbound', etc.
+  period_start: timestamp("period_start").notNull(),
+  period_end: timestamp("period_end").notNull(),
+  value: numeric("value", { precision: 14, scale: 4 }).notNull(),
   metadata: jsonb("metadata").notNull().default({}),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });

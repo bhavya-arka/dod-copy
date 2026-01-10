@@ -27,7 +27,9 @@ export interface TrendMetric {
 
 async function checkDuplicateAlert(
   siteId: number, 
-  entityKey: string
+  entityType: string,
+  entityId: number,
+  alertType: string
 ): Promise<boolean> {
   const cutoffTime = new Date(Date.now() - DEDUP_HOURS * 60 * 60 * 1000);
   
@@ -35,7 +37,9 @@ async function checkDuplicateAlert(
     .from(warehouseAlerts)
     .where(and(
       eq(warehouseAlerts.site_id, siteId),
-      eq(warehouseAlerts.entity_key, entityKey),
+      eq(warehouseAlerts.entity_type, entityType),
+      eq(warehouseAlerts.entity_id, entityId),
+      eq(warehouseAlerts.alert_type, alertType),
       eq(warehouseAlerts.is_resolved, false),
       gte(warehouseAlerts.created_at, cutoffTime)
     ))
@@ -46,36 +50,47 @@ async function checkDuplicateAlert(
 
 async function createAlert(params: {
   siteId: number;
-  zoneId?: number;
-  userId: number;
-  alertType: 'capacity' | 'trend' | 'aging' | 'throughput';
+  alertType: 'threshold_capacity' | 'threshold_aging' | 'trend_throughput' | 'trend_dwell_time';
   severity: 'info' | 'warning' | 'critical';
+  entityType: 'zone' | 'site' | 'item';
+  entityId: number;
+  entityName: string;
   message: string;
-  entityKey: string;
+  metricValue?: number;
+  thresholdValue?: number;
+  trendChangePercent?: number;
   metadata?: Record<string, unknown>;
 }): Promise<void> {
-  const isDuplicate = await checkDuplicateAlert(params.siteId, params.entityKey);
+  const isDuplicate = await checkDuplicateAlert(
+    params.siteId, 
+    params.entityType, 
+    params.entityId, 
+    params.alertType
+  );
   
   if (isDuplicate) {
-    console.log(`[Analytics] Skipping duplicate alert: ${params.entityKey}`);
+    console.log(`[Analytics] Skipping duplicate alert: ${params.entityType}_${params.entityId}_${params.alertType}`);
     return;
   }
 
   await db.insert(warehouseAlerts).values({
     site_id: params.siteId,
-    zone_id: params.zoneId,
-    user_id: params.userId,
     alert_type: params.alertType,
     severity: params.severity,
+    entity_type: params.entityType,
+    entity_id: params.entityId,
+    entity_name: params.entityName,
     message: params.message,
-    entity_key: params.entityKey,
+    metric_value: params.metricValue !== undefined ? String(params.metricValue) : null,
+    threshold_value: params.thresholdValue !== undefined ? String(params.thresholdValue) : null,
+    trend_change_percent: params.trendChangePercent !== undefined ? String(params.trendChangePercent) : null,
     metadata: params.metadata || {},
   });
   
   console.log(`[Analytics] Created alert: ${params.message}`);
 }
 
-async function analyzeCapacityThresholds(siteId: number, userId: number): Promise<void> {
+async function analyzeCapacityThresholds(siteId: number): Promise<void> {
   const zones = await db.select()
     .from(warehouseZones)
     .where(eq(warehouseZones.site_id, siteId));
@@ -91,30 +106,34 @@ async function analyzeCapacityThresholds(siteId: number, userId: number): Promis
     if (utilization >= CAPACITY_CRITICAL_THRESHOLD) {
       await createAlert({
         siteId,
-        zoneId: zone.id,
-        userId,
-        alertType: 'capacity',
+        alertType: 'threshold_capacity',
         severity: 'critical',
+        entityType: 'zone',
+        entityId: zone.id,
+        entityName: zone.name,
         message: `Zone ${zone.name} at ${Math.round(utilization)}% capacity — consider redistributing inventory`,
-        entityKey: `zone_${zone.id}_capacity_critical`,
+        metricValue: utilization,
+        thresholdValue: CAPACITY_CRITICAL_THRESHOLD,
         metadata: { utilization, rackAvailable, rackOpen, rackUsed },
       });
     } else if (utilization >= CAPACITY_WARNING_THRESHOLD) {
       await createAlert({
         siteId,
-        zoneId: zone.id,
-        userId,
-        alertType: 'capacity',
+        alertType: 'threshold_capacity',
         severity: 'warning',
+        entityType: 'zone',
+        entityId: zone.id,
+        entityName: zone.name,
         message: `Zone ${zone.name} at ${Math.round(utilization)}% capacity — consider redistributing inventory`,
-        entityKey: `zone_${zone.id}_capacity_warning`,
+        metricValue: utilization,
+        thresholdValue: CAPACITY_WARNING_THRESHOLD,
         metadata: { utilization, rackAvailable, rackOpen, rackUsed },
       });
     }
   }
 }
 
-async function analyzeTrends(siteId: number, userId: number): Promise<void> {
+async function analyzeTrends(siteId: number): Promise<void> {
   const zones = await db.select()
     .from(warehouseZones)
     .where(eq(warehouseZones.site_id, siteId));
@@ -128,26 +147,32 @@ async function analyzeTrends(siteId: number, userId: number): Promise<void> {
       .from(warehouseZoneCapacityHistory)
       .where(and(
         eq(warehouseZoneCapacityHistory.zone_id, zone.id),
-        gte(warehouseZoneCapacityHistory.snapshot_date, sevenDaysAgo)
+        gte(warehouseZoneCapacityHistory.captured_at, sevenDaysAgo)
       ));
 
     const previousWeekHistory = await db.select()
       .from(warehouseZoneCapacityHistory)
       .where(and(
         eq(warehouseZoneCapacityHistory.zone_id, zone.id),
-        gte(warehouseZoneCapacityHistory.snapshot_date, fourteenDaysAgo),
-        lte(warehouseZoneCapacityHistory.snapshot_date, sevenDaysAgo)
+        gte(warehouseZoneCapacityHistory.captured_at, fourteenDaysAgo),
+        lte(warehouseZoneCapacityHistory.captured_at, sevenDaysAgo)
       ));
 
     if (currentWeekHistory.length === 0 || previousWeekHistory.length === 0) {
       continue;
     }
 
-    const avgCurrentUtil = currentWeekHistory.reduce((sum, h) => 
-      sum + parseFloat(String(h.utilization_percent || 0)), 0) / currentWeekHistory.length;
+    const avgCurrentUtil = currentWeekHistory.reduce((sum, h) => {
+      const capacity = h.total_capacity || 1;
+      const itemCount = h.current_item_count || 0;
+      return sum + (itemCount / capacity) * 100;
+    }, 0) / currentWeekHistory.length;
     
-    const avgPreviousUtil = previousWeekHistory.reduce((sum, h) => 
-      sum + parseFloat(String(h.utilization_percent || 0)), 0) / previousWeekHistory.length;
+    const avgPreviousUtil = previousWeekHistory.reduce((sum, h) => {
+      const capacity = h.total_capacity || 1;
+      const itemCount = h.current_item_count || 0;
+      return sum + (itemCount / capacity) * 100;
+    }, 0) / previousWeekHistory.length;
 
     if (avgPreviousUtil === 0) continue;
 
@@ -156,12 +181,14 @@ async function analyzeTrends(siteId: number, userId: number): Promise<void> {
     if (changePercent > TREND_ALERT_THRESHOLD) {
       await createAlert({
         siteId,
-        zoneId: zone.id,
-        userId,
-        alertType: 'trend',
+        alertType: 'trend_throughput',
         severity: 'warning',
+        entityType: 'zone',
+        entityId: zone.id,
+        entityName: zone.name,
         message: `Zone ${zone.name} capacity increased ${Math.round(changePercent)}% vs. last week`,
-        entityKey: `zone_${zone.id}_trend_increase`,
+        metricValue: avgCurrentUtil,
+        trendChangePercent: changePercent,
         metadata: { 
           avgCurrentUtil, 
           avgPreviousUtil, 
@@ -174,7 +201,7 @@ async function analyzeTrends(siteId: number, userId: number): Promise<void> {
   }
 }
 
-async function analyzeAgingItems(siteId: number, userId: number): Promise<void> {
+async function analyzeAgingItems(siteId: number): Promise<void> {
   const zones = await db.select()
     .from(warehouseZones)
     .where(eq(warehouseZones.site_id, siteId));
@@ -195,12 +222,14 @@ async function analyzeAgingItems(siteId: number, userId: number): Promise<void> 
     if (itemCount > 0) {
       await createAlert({
         siteId,
-        zoneId: zone.id,
-        userId,
-        alertType: 'aging',
+        alertType: 'threshold_aging',
         severity: 'critical',
+        entityType: 'zone',
+        entityId: zone.id,
+        entityName: zone.name,
         message: `${itemCount} items in ${zone.name} exceed 7-year aging threshold`,
-        entityKey: `zone_${zone.id}_aging`,
+        metricValue: itemCount,
+        thresholdValue: AGING_DAYS_THRESHOLD,
         metadata: { itemCount, thresholdDays: AGING_DAYS_THRESHOLD },
       });
     }
@@ -221,12 +250,14 @@ async function analyzeAgingItems(siteId: number, userId: number): Promise<void> 
   if (unassignedCount > 0) {
     await createAlert({
       siteId,
-      zoneId: undefined,
-      userId,
-      alertType: 'aging',
+      alertType: 'threshold_aging',
       severity: 'critical',
+      entityType: 'site',
+      entityId: siteId,
+      entityName: 'Unassigned',
       message: `${unassignedCount} items in unassigned locations exceed 7-year aging threshold`,
-      entityKey: `site_${siteId}_unassigned_aging`,
+      metricValue: unassignedCount,
+      thresholdValue: AGING_DAYS_THRESHOLD,
       metadata: { itemCount: unassignedCount, thresholdDays: AGING_DAYS_THRESHOLD },
     });
   }
@@ -234,7 +265,6 @@ async function analyzeAgingItems(siteId: number, userId: number): Promise<void> 
 
 async function calculateThroughputMetrics(siteId: number): Promise<void> {
   const now = new Date();
-  const today = now.toISOString().split('T')[0];
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const site = await db.select().from(warehouseSites).where(eq(warehouseSites.id, siteId)).limit(1);
@@ -252,26 +282,32 @@ async function calculateThroughputMetrics(siteId: number): Promise<void> {
   .groupBy(sql`DATE(${warehouseOptimizationEvents.created_at})`);
 
   for (const event of completedEvents) {
+    const periodStart = new Date(event.date);
+    periodStart.setHours(0, 0, 0, 0);
+    const periodEnd = new Date(event.date);
+    periodEnd.setHours(23, 59, 59, 999);
+
     const existingSnapshot = await db.select()
       .from(warehouseMetricSnapshots)
       .where(and(
         eq(warehouseMetricSnapshots.site_id, siteId),
-        eq(warehouseMetricSnapshots.metric_key, 'daily_throughput'),
-        eq(warehouseMetricSnapshots.snapshot_date, event.date)
+        eq(warehouseMetricSnapshots.metric_key, 'throughput_inbound'),
+        eq(warehouseMetricSnapshots.period_start, periodStart)
       ))
       .limit(1);
 
     if (existingSnapshot.length === 0) {
       await db.insert(warehouseMetricSnapshots).values({
         site_id: siteId,
-        metric_key: 'daily_throughput',
-        metric_value: String(event.count),
-        snapshot_date: event.date,
+        metric_key: 'throughput_inbound',
+        period_start: periodStart,
+        period_end: periodEnd,
+        value: String(event.count),
         metadata: { eventType: 'action_completed' },
       });
     } else {
       await db.update(warehouseMetricSnapshots)
-        .set({ metric_value: String(event.count) })
+        .set({ value: String(event.count) })
         .where(eq(warehouseMetricSnapshots.id, existingSnapshot[0].id));
     }
   }
@@ -280,20 +316,25 @@ async function calculateThroughputMetrics(siteId: number): Promise<void> {
     .from(warehouseMetricSnapshots)
     .where(and(
       eq(warehouseMetricSnapshots.site_id, siteId),
-      eq(warehouseMetricSnapshots.metric_key, 'daily_throughput'),
-      gte(warehouseMetricSnapshots.snapshot_date, sevenDaysAgo.toISOString().split('T')[0])
+      eq(warehouseMetricSnapshots.metric_key, 'throughput_inbound'),
+      gte(warehouseMetricSnapshots.period_start, sevenDaysAgo)
     ));
 
   if (recentMetrics.length > 0) {
     const movingAvg = recentMetrics.reduce((sum, m) => 
-      sum + parseFloat(String(m.metric_value)), 0) / recentMetrics.length;
+      sum + parseFloat(String(m.value)), 0) / recentMetrics.length;
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
 
     const existingAvgSnapshot = await db.select()
       .from(warehouseMetricSnapshots)
       .where(and(
         eq(warehouseMetricSnapshots.site_id, siteId),
         eq(warehouseMetricSnapshots.metric_key, 'throughput_7day_avg'),
-        eq(warehouseMetricSnapshots.snapshot_date, today)
+        eq(warehouseMetricSnapshots.period_start, todayStart)
       ))
       .limit(1);
 
@@ -301,14 +342,15 @@ async function calculateThroughputMetrics(siteId: number): Promise<void> {
       await db.insert(warehouseMetricSnapshots).values({
         site_id: siteId,
         metric_key: 'throughput_7day_avg',
-        metric_value: String(movingAvg.toFixed(4)),
-        snapshot_date: today,
+        period_start: todayStart,
+        period_end: todayEnd,
+        value: String(movingAvg.toFixed(4)),
         metadata: { dataPoints: recentMetrics.length },
       });
     } else {
       await db.update(warehouseMetricSnapshots)
         .set({ 
-          metric_value: String(movingAvg.toFixed(4)),
+          value: String(movingAvg.toFixed(4)),
           metadata: { dataPoints: recentMetrics.length },
         })
         .where(eq(warehouseMetricSnapshots.id, existingAvgSnapshot[0].id));
@@ -321,9 +363,9 @@ export const warehouseAnalyticsService = {
     console.log(`[Analytics] Running analytics for site ${siteId}`);
     
     try {
-      await analyzeCapacityThresholds(siteId, userId);
-      await analyzeTrends(siteId, userId);
-      await analyzeAgingItems(siteId, userId);
+      await analyzeCapacityThresholds(siteId);
+      await analyzeTrends(siteId);
+      await analyzeAgingItems(siteId);
       await calculateThroughputMetrics(siteId);
       
       console.log(`[Analytics] Completed analytics for site ${siteId}`);
@@ -352,9 +394,9 @@ export const warehouseAnalyticsService = {
       .from(warehouseMetricSnapshots)
       .where(and(
         eq(warehouseMetricSnapshots.site_id, siteId),
-        gte(warehouseMetricSnapshots.snapshot_date, thirtyDaysAgo.toISOString().split('T')[0])
+        gte(warehouseMetricSnapshots.period_start, thirtyDaysAgo)
       ))
-      .orderBy(desc(warehouseMetricSnapshots.snapshot_date));
+      .orderBy(desc(warehouseMetricSnapshots.period_start));
 
     const zones = await db.select()
       .from(warehouseZones)
@@ -363,11 +405,9 @@ export const warehouseAnalyticsService = {
     const zoneMap = new Map(zones.map(z => [z.id, z.name]));
 
     return metrics.map(m => ({
-      date: String(m.snapshot_date),
+      date: m.period_start instanceof Date ? m.period_start.toISOString() : String(m.period_start),
       metricKey: m.metric_key,
-      value: parseFloat(String(m.metric_value)),
-      zoneId: m.zone_id ?? undefined,
-      zoneName: m.zone_id ? zoneMap.get(m.zone_id) : undefined,
+      value: parseFloat(String(m.value)),
     }));
   },
 
