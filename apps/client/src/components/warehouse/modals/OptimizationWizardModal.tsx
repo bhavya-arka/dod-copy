@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { X, Loader2, ChevronRight, ChevronLeft, Check, Layers, Ruler, DollarSign, Box, FileDown, Play, Save, AlertCircle, Zap, MapPin } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { X, Loader2, ChevronRight, ChevronLeft, Check, Layers, Ruler, DollarSign, Box, FileDown, Play, Save, AlertCircle, Zap, MapPin, ChevronDown, ChevronUp } from "lucide-react";
 import type { WarehouseSite, WarehouseZone, ToastMessage } from "../types";
 import { runOptimizationWizard, runAllOptimizations, applyOptimizationPlan, createOptimizationPlan, fetchSiteZones, type OptimizationWizardResult, type CreatePlanData } from "../../../services/warehouseService";
 import { generateWarehouseOptimizationPDF } from "../../../lib/warehouseOptimizationPdfExport";
@@ -134,6 +134,8 @@ export default function OptimizationWizardModal({
   const [saving, setSaving] = useState(false);
   const [zones, setZones] = useState<WarehouseZone[]>([]);
   const [zonesLoading, setZonesLoading] = useState(true);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({ high: true, medium: false, low: false });
+  const [expandedActions, setExpandedActions] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (initialAlgorithm) {
@@ -824,84 +826,143 @@ export default function OptimizationWizardModal({
     </div>
   );
 
+  const groupedActions = useMemo(() => {
+    if (!result) return { high: [], medium: [], low: [] };
+    const groups: Record<string, typeof result.actions> = { high: [], medium: [], low: [] };
+    result.actions.forEach(action => {
+      const priority = action.priority || 'low';
+      if (!groups[priority]) groups[priority] = [];
+      groups[priority].push(action);
+    });
+    return groups;
+  }, [result?.actions]);
+
+  const toggleGroup = (priority: string) => {
+    setExpandedGroups(prev => ({ ...prev, [priority]: !prev[priority] }));
+  };
+
+  const toggleAction = (actionId: string) => {
+    setExpandedActions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(actionId)) {
+        newSet.delete(actionId);
+      } else {
+        newSet.add(actionId);
+      }
+      return newSet;
+    });
+  };
+
+  const priorityConfig: Record<string, { label: string; color: string; bgColor: string; borderColor: string }> = {
+    high: { label: 'High Priority', color: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-200' },
+    medium: { label: 'Medium Priority', color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200' },
+    low: { label: 'Low Priority', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
+  };
+
   const renderStep4 = () => {
     if (!result) return null;
 
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <div className="p-3 rounded-xl bg-[#16A34A]/10 text-center">
-            <p className="text-xl font-bold text-[#16A34A]">{result.summary.slotsFreed}</p>
-            <p className="text-xs text-muted-foreground">Slots Freed</p>
+      <div className="space-y-3">
+        <div className="grid grid-cols-4 gap-2 mb-4">
+          <div className="p-2 rounded-lg bg-[#16A34A]/10 text-center">
+            <p className="text-lg font-bold text-[#16A34A]">{result.summary.slotsFreed}</p>
+            <p className="text-[10px] text-muted-foreground">Slots Freed</p>
           </div>
-          <div className="p-3 rounded-xl bg-[#2563EB]/10 text-center">
-            <p className="text-xl font-bold text-[#2563EB]">{result.summary.zonesOptimized}</p>
-            <p className="text-xs text-muted-foreground">Zones Optimized</p>
+          <div className="p-2 rounded-lg bg-[#2563EB]/10 text-center">
+            <p className="text-lg font-bold text-[#2563EB]">{result.summary.zonesOptimized}</p>
+            <p className="text-[10px] text-muted-foreground">Zones</p>
           </div>
-          <div className="p-3 rounded-xl bg-[#7C3AED]/10 text-center">
-            <p className="text-sm font-bold text-[#7C3AED] leading-tight">{result.summary.consolidationWins}</p>
-            <p className="text-xs text-muted-foreground mt-1">Consolidated</p>
+          <div className="p-2 rounded-lg bg-[#7C3AED]/10 text-center">
+            <p className="text-xs font-bold text-[#7C3AED]">{result.summary.consolidationWins}</p>
+            <p className="text-[10px] text-muted-foreground">Consolidated</p>
           </div>
-          <div className="p-3 rounded-xl bg-[#F59E0B]/10 text-center">
-            <p className="text-sm font-bold text-[#F59E0B] leading-tight">{result.summary.pickEfficiencyGain}</p>
-            <p className="text-xs text-muted-foreground mt-1">Pick Efficiency</p>
-          </div>
-        </div>
-        <div className="mb-4 p-3 rounded-xl bg-muted/50 border border-border">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Total Actions:</span>
-            <span className="text-lg font-bold text-foreground">{result.actions.length}</span>
+          <div className="p-2 rounded-lg bg-[#F59E0B]/10 text-center">
+            <p className="text-xs font-bold text-[#F59E0B]">{result.summary.pickEfficiencyGain}</p>
+            <p className="text-[10px] text-muted-foreground">Efficiency</p>
           </div>
         </div>
 
-        <div className="border border-border rounded-xl overflow-hidden">
-          <div className="bg-muted/50 px-4 py-2 border-b border-border">
-            <p className="font-medium text-foreground">Recommended Actions</p>
-          </div>
-          <div className="max-h-80 overflow-y-auto">
-            {result.actions.map((action, index) => (
-              <div
-                key={action.id}
-                className="flex items-start gap-3 p-4 border-b border-border last:border-0 hover:bg-muted/30"
-              >
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#2563EB] text-white text-xs flex items-center justify-center">
-                  {index + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-sm font-medium text-foreground">{action.action}</p>
-                    {(action as any).value > 0 && (
-                      <span className="text-xs px-1.5 py-0.5 bg-green-100 text-green-700 rounded">
-                        ${((action as any).value || 0).toLocaleString()}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs font-medium text-[#2563EB]">
-                    {action.item} {(action as any).itemDescription && `- ${(action as any).itemDescription}`}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    <span className="font-medium">From:</span> {action.from} → <span className="font-medium">To:</span> {action.to}
-                  </p>
-                  {(action as any).reason && (
-                    <p className="text-xs text-muted-foreground mt-1 italic">
-                      {(action as any).reason}
-                    </p>
-                  )}
-                </div>
-                <span
-                  className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${
-                    action.priority === "high"
-                      ? "bg-red-100 text-red-700"
-                      : action.priority === "medium"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : "bg-green-100 text-green-700"
-                  }`}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-muted-foreground">Total: {result.actions.length} actions</span>
+          <button
+            onClick={() => setExpandedGroups({ high: true, medium: true, low: true })}
+            className="text-xs text-[#2563EB] hover:underline"
+          >
+            Expand All
+          </button>
+        </div>
+
+        <div className="space-y-2 max-h-72 overflow-y-auto">
+          {(['high', 'medium', 'low'] as const).map(priority => {
+            const actions = groupedActions[priority] || [];
+            if (actions.length === 0) return null;
+            
+            const config = priorityConfig[priority];
+            const isExpanded = expandedGroups[priority];
+
+            return (
+              <div key={priority} className={`border rounded-lg overflow-hidden ${config.borderColor}`}>
+                <button
+                  onClick={() => toggleGroup(priority)}
+                  className={`w-full flex items-center justify-between px-3 py-2 ${config.bgColor} hover:opacity-90 transition-opacity`}
                 >
-                  {action.priority}
-                </span>
+                  <div className="flex items-center gap-2">
+                    {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                    <span className={`text-xs font-semibold ${config.color}`}>{config.label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${config.bgColor} ${config.color} border ${config.borderColor}`}>
+                      {actions.length}
+                    </span>
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <div className="bg-background divide-y divide-border">
+                    {actions.map((action) => {
+                      const isActionExpanded = expandedActions.has(action.id);
+                      return (
+                        <div key={action.id} className="hover:bg-muted/30">
+                          <button
+                            onClick={() => toggleAction(action.id)}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left"
+                          >
+                            {isActionExpanded ? (
+                              <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                            ) : (
+                              <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                            )}
+                            <span className="text-[11px] font-medium text-foreground truncate flex-1">
+                              {action.item}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                              {action.from} → {action.to}
+                            </span>
+                          </button>
+                          
+                          {isActionExpanded && (
+                            <div className="px-3 pb-2 pl-8 space-y-1">
+                              <p className="text-[10px] text-foreground">{action.action}</p>
+                              {(action as any).itemDescription && (
+                                <p className="text-[10px] text-muted-foreground">{(action as any).itemDescription}</p>
+                              )}
+                              {(action as any).reason && (
+                                <p className="text-[10px] text-muted-foreground italic">{(action as any).reason}</p>
+                              )}
+                              {(action as any).value > 0 && (
+                                <span className="inline-block text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded">
+                                  ${((action as any).value || 0).toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
       </div>
     );
