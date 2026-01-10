@@ -62,19 +62,6 @@ export async function backfillZoneIds(siteId: number): Promise<BackfillResult> {
       return result;
     }
 
-    const zoneCache = new Map<string, { zoneId: number; pattern: RegExp | null }>();
-    for (const zone of zones) {
-      let pattern: RegExp | null = null;
-      if (zone.location_pattern) {
-        try {
-          pattern = new RegExp(zone.location_pattern, 'i');
-        } catch (e) {
-          console.warn(`[ZoneCapacity] Invalid regex pattern for zone ${zone.code}: ${zone.location_pattern}`);
-        }
-      }
-      zoneCache.set(zone.code, { zoneId: zone.id, pattern });
-    }
-
     const itemsWithNullZone = await db.select()
       .from(warehouseInventoryItems)
       .where(and(
