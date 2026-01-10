@@ -5162,6 +5162,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         bin_packing: userParams?.bin_packing || { maxItemsPerPallet: 15, prioritizeByValue: true },
       };
 
+      // Extract zone constraints for run-all mode
+      const zoneConstraints = userParams?.zoneConstraints || { sourceZoneIds: [], targetZoneIds: [], enableZoneFiltering: false };
+      const { sourceZoneIds = [], targetZoneIds = [], enableZoneFiltering = false } = zoneConstraints;
+
+      // Fetch zones for this site
+      const zones = await db.select()
+        .from(warehouseZones)
+        .where(eq(warehouseZones.site_id, siteId));
+
+      // Filter items by source zones if zone filtering is enabled
+      let filteredItems = itemsWithData;
+      if (enableZoneFiltering && sourceZoneIds.length > 0) {
+        filteredItems = itemsWithData.filter(item => {
+          // Match item location to zones
+          for (const zone of zones) {
+            if (zone.location_pattern && sourceZoneIds.includes(zone.id)) {
+              try {
+                const regex = new RegExp(zone.location_pattern);
+                if (regex.test(item.rack_location)) return true;
+              } catch { /* skip invalid regex */ }
+            }
+          }
+          return false;
+        });
+        console.log(`[OptimizeAll] Zone filtering enabled: ${filteredItems.length} items from ${sourceZoneIds.length} source zones (was ${itemsWithData.length})`);
+      }
+
+      // Get target zones for placement
+      const allowedTargetZones = enableZoneFiltering && targetZoneIds.length > 0
+        ? zones.filter(z => targetZoneIds.includes(z.id))
+        : zones;
+      console.log(`[OptimizeAll] Target zones: ${allowedTargetZones.length} zones available`);
+
       // Collect all actions from all algorithms
       const allActions: Array<{
         id: string;
@@ -5191,8 +5224,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Phase 1: CardStack - Consolidate items by ship class
       {
         const { minItemsToConsolidate = 2 } = defaultParams.cardstack;
-        const shipGroups: Map<string, typeof itemsWithData> = new Map();
-        for (const item of itemsWithData) {
+        // Use filteredItems for zone constraint support
+        const shipGroups: Map<string, typeof filteredItems> = new Map();
+        for (const item of filteredItems) {
           if (!item.ship_class) continue;
           if (!shipGroups.has(item.ship_class)) {
             shipGroups.set(item.ship_class, []);
@@ -5262,8 +5296,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Phase 2: Size Standardization - Group by program code
       {
         const { minProgramItems = 3 } = defaultParams.size_standardization;
-        const programGroups: Map<string, typeof itemsWithData> = new Map();
-        for (const item of itemsWithData) {
+        // Use filteredItems for zone constraint support
+        const programGroups: Map<string, typeof filteredItems> = new Map();
+        for (const item of filteredItems) {
           if (!item.program_code) continue;
           if (!programGroups.has(item.program_code)) {
             programGroups.set(item.program_code, []);
@@ -5322,7 +5357,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Phase 3: Value Density - Move high-value items to accessible zones
       {
         const { highValueThreshold = 1000 } = defaultParams.value_density;
-        const highValueItems = itemsWithData.filter(i => i.value >= highValueThreshold && i.rack_location);
+        // Use filteredItems for zone constraint support
+        const highValueItems = filteredItems.filter(i => i.value >= highValueThreshold && i.rack_location);
         
         let actionId = 1;
         let phaseActions = 0;
@@ -5409,9 +5445,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Phase 4: Bin Packing - Stage items by disposition
       {
         const { maxItemsPerPallet = 15, prioritizeByValue = true } = defaultParams.bin_packing;
-        const dispositionGroups: Map<string, typeof itemsWithData> = new Map();
+        // Use filteredItems for zone constraint support
+        const dispositionGroups: Map<string, typeof filteredItems> = new Map();
         
-        for (const item of itemsWithData) {
+        for (const item of filteredItems) {
           if (!item.mat_disposition) continue;
           if (!dispositionGroups.has(item.mat_disposition)) {
             dispositionGroups.set(item.mat_disposition, []);

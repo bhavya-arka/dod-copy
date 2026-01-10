@@ -215,7 +215,11 @@ export default function OptimizationWizardModal({
       if (selectedAlgorithm === "run_all") {
         optimizationResult = await runAllOptimizations(siteId, params);
       } else {
-        const algorithmParams = params[selectedAlgorithm];
+        // Merge algorithm-specific params with zone constraints
+        const algorithmParams = {
+          ...params[selectedAlgorithm],
+          zoneConstraints: params.zoneConstraints,
+        };
         optimizationResult = await runOptimizationWizard(siteId, selectedAlgorithm, algorithmParams);
       }
       
