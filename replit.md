@@ -34,6 +34,15 @@ The Air module implements a multi-stage pipeline for cargo planning, including C
 ## DLA-Compliant Warehouse Management System (WMS)
 The WMS provides multi-site inventory tracking, pallet-level location management, NSN validation, aging alerts, and DLA pallet standard adherence (4x4x4 ft, <=2,000 lbs). It includes site assignment logic, manifest parsers (CSV, MILSTRIP, FEDLOG), and a dynamic column system for inventory. Key features include zone management with PDF-style pallet position metrics, historical capacity tracking, and color-coded utilization indicators. An Optimization Wizard offers four algorithms (CardStack, Size Standardization, Value Density Analysis, Bin-Packing Order) with target completion dates and bulk start options. AI-powered analysis using AWS Bedrock provides insights for placement optimization and load balancing. The system also supports inter-warehouse transfers and 90-day predictive load planning. Smart Alerts & Analytics include threshold and trend-based capacity alerts, aging alerts, and throughput metrics.
 
+## Automatic Vehicle Allocation for Ground Transfers
+The system provides automatic vehicle calculation for ground transfers between warehouses:
+- **Vehicle Priority Settings**: Superadmins can configure which vehicle types to use and their priority order (lower number = higher priority). Managed via WMSAdmin panel.
+- **Greedy Allocation Algorithm**: Calculates minimum vehicles needed based on total cargo weight and priority-ordered vehicle types with their payload capacities.
+- **Transfer Preview**: Before creating a ground transfer, users see a vehicle allocation preview showing total weight, required vehicles by type, and capacity utilization percentage.
+- **Validation**: The system validates vehicle priority settings to prevent duplicate vehicle types, duplicate priority orders, and non-positive priority values.
+- **Graceful Fallback**: Transfers proceed even without configured priorities, with warnings displayed in the metadata for manual allocation.
+- **Ground Transport Metadata**: Stored in camelCase JSON format (totalWeightLbs, allocations, totalVehicles, totalCapacity, utilizationPercent, calculatedAt) with optional warning/error fields.
+
 ## Data Models
 Key data models support `MovementItem`, `Pallet463L`, `AircraftLoadPlan` for air operations, `warehouse_sites`, `warehouse_inventory_items` for WMS, and `land_routes`, `sea_voyages` for land and sea modules respectively.
 

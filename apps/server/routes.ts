@@ -41,7 +41,8 @@ import {
   insertManifestItemSchema,
   flightPlans,
   seaVoyages,
-  militaryInstallations
+  militaryInstallations,
+  vehiclePrioritySettings
 } from "@shared/schema";
 import { eq, and, or, like, ilike, sql, gt, lt, gte, lte, isNull, isNotNull, asc, desc, count, inArray } from "drizzle-orm";
 import {
@@ -67,6 +68,7 @@ import * as transportStatsService from "./services/transportStatsService";
 import type { TransportMode, TransportStatus } from "../../packages/shared/transportTypes";
 import { matchLocationToZone, type ZoneMatchResult } from "./services/zoneMatchingService";
 import { warehouseAnalyticsService } from "./services/warehouseAnalyticsService";
+import * as vehicleAllocationService from "./services/vehicleAllocationService";
 
 // Weather API cache with 10-minute TTL
 interface WeatherCacheEntry {
@@ -6284,6 +6286,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }, 0),
       };
 
+      // Build ground transport metadata for ground transfers
+      let groundTransportMetadata = null;
+      if (mode === "ground") {
+        try {
+          const { vehicleAllocationService } = await import('./services');
+          const allocations = await vehicleAllocationService.calculateVehicleAllocation(totals.total_weight_lb);
+          
+          if (allocations.length === 0 && totals.total_weight_lb > 0) {
+            // No vehicle priorities configured - provide a warning but allow transfer creation
+            // Use camelCase to match shared schema
+            groundTransportMetadata = {
+              totalWeightLbs: totals.total_weight_lb,
+              allocations: [],
+              totalVehicles: 0,
+              totalCapacity: 0,
+              utilizationPercent: 0,
+              warning: "No vehicle priorities configured - manual allocation required",
+              calculatedAt: new Date().toISOString(),
+            };
+            console.warn(`[Warehouse] Ground transfer created without vehicle allocation - no priorities configured`);
+          } else {
+            // Use camelCase to match shared schema
+            groundTransportMetadata = {
+              totalWeightLbs: totals.total_weight_lb,
+              allocations: allocations,
+              totalVehicles: allocations.reduce((sum, a) => sum + a.vehicleCount, 0),
+              totalCapacity: allocations.reduce((sum, a) => sum + a.totalCapacity, 0),
+              utilizationPercent: allocations.length > 0 
+                ? Math.round((totals.total_weight_lb / allocations.reduce((sum, a) => sum + a.totalCapacity, 0)) * 100)
+                : 0,
+              calculatedAt: new Date().toISOString(),
+            };
+            console.log(`[Warehouse] Ground transfer vehicle allocation: ${groundTransportMetadata.totalVehicles} vehicles for ${totals.total_weight_lb} lbs`);
+          }
+        } catch (allocErr) {
+          console.error("[Warehouse] Failed to calculate vehicle allocation:", allocErr);
+          // Still allow transfer creation but note the failure - use camelCase
+          groundTransportMetadata = {
+            totalWeightLbs: totals.total_weight_lb,
+            allocations: [],
+            totalVehicles: 0,
+            error: "Failed to calculate vehicle allocation",
+            calculatedAt: new Date().toISOString(),
+          };
+        }
+      }
+
       // Build air metadata and PACAF manifest for air transfers
       let airMetadata = null;
       let pacafManifest = null;
@@ -6339,9 +6388,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         transport_mode: mode,
         transfer_items: transferItems,
         air_metadata: airMetadata,
+        ground_transport_metadata: groundTransportMetadata,
         pacaf_manifest: pacafManifest,
         notes: notes || null,
         scheduled_date: scheduled_date ? new Date(scheduled_date) : null,
+        total_weight_lbs: String(totals.total_weight_lb),
       }).returning();
 
       // Update manifest with transfer ID
@@ -6360,6 +6411,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json({
         ...transfer,
         pacaf_manifest: pacafManifest,
+        ground_transport_metadata: groundTransportMetadata,
+        totals,
       });
     } catch (error) {
       console.error("[Warehouse] Failed to create transfer:", error);
@@ -9694,6 +9747,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Military Installations] Error seeding installations:", error);
       res.status(500).json({ error: "Failed to seed military installations" });
+    }
+  });
+
+  // ============================================================================
+  // VEHICLE PRIORITY SETTINGS API (SUPERADMIN ONLY)
+  // ============================================================================
+
+  // GET /api/admin/vehicle-priorities - Get all vehicle priority settings
+  app.get("/api/admin/vehicle-priorities", authMiddleware, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const priorities = await vehicleAllocationService.getAllVehiclePrioritySettings();
+      res.json(priorities);
+    } catch (error) {
+      console.error("[Vehicle Priorities] Error fetching priorities:", error);
+      res.status(500).json({ error: "Failed to fetch vehicle priorities" });
+    }
+  });
+
+  // POST /api/admin/vehicle-priorities - Create/update vehicle priority (supports single or bulk)
+  app.post("/api/admin/vehicle-priorities", authMiddleware, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      // Support bulk updates with priorities array
+      const priorities = req.body.priorities;
+      if (Array.isArray(priorities)) {
+        // Validate priorities - ensure positive values and check for duplicates
+        const seenVehicleTypes = new Set<number>();
+        const seenPriorityOrders = new Set<number>();
+        
+        for (const p of priorities) {
+          const vehicleTypeId = p.vehicleTypeId || p.vehicle_type_id;
+          const priorityOrder = p.priorityOrder ?? p.priority ?? 1;
+          const isEnabled = p.isEnabled ?? p.enabled ?? true;
+          
+          if (vehicleTypeId && isEnabled) {
+            if (seenVehicleTypes.has(vehicleTypeId)) {
+              return res.status(400).json({ error: `Duplicate vehicle type ID: ${vehicleTypeId}` });
+            }
+            seenVehicleTypes.add(vehicleTypeId);
+            
+            if (priorityOrder < 1) {
+              return res.status(400).json({ error: "Priority order must be a positive number" });
+            }
+            
+            // Check for duplicate priority orders among enabled entries
+            if (seenPriorityOrders.has(priorityOrder)) {
+              return res.status(400).json({ error: `Duplicate priority order: ${priorityOrder}. Each enabled vehicle must have a unique priority.` });
+            }
+            seenPriorityOrders.add(priorityOrder);
+          }
+        }
+        
+        const results = [];
+        for (const p of priorities) {
+          // Accept both camelCase and snake_case
+          const vehicleTypeId = p.vehicleTypeId || p.vehicle_type_id;
+          const priorityOrder = p.priorityOrder ?? p.priority ?? 1;
+          const isEnabled = p.isEnabled ?? p.enabled ?? true;
+          const payloadOverrideLbs = p.payloadOverrideLbs ?? p.payload_override_lbs ?? null;
+          const notes = p.notes ?? null;
+
+          if (vehicleTypeId) {
+            const result = await vehicleAllocationService.upsertVehiclePriority(
+              vehicleTypeId,
+              Math.max(1, priorityOrder), // Ensure positive priority
+              isEnabled,
+              payloadOverrideLbs,
+              notes,
+              req.user!.id
+            );
+            results.push(result);
+          }
+        }
+        return res.json({ success: true, message: "Vehicle priorities saved", count: results.length, results });
+      }
+
+      // Single update (legacy support)
+      const vehicleTypeId = req.body.vehicleTypeId || req.body.vehicle_type_id;
+      const priorityOrder = req.body.priorityOrder ?? req.body.priority ?? 1;
+      const isEnabled = req.body.isEnabled ?? req.body.enabled ?? true;
+      const payloadOverrideLbs = req.body.payloadOverrideLbs ?? req.body.payload_override_lbs ?? null;
+      const notes = req.body.notes ?? null;
+
+      if (!vehicleTypeId) {
+        return res.status(400).json({ error: "vehicleTypeId (or vehicle_type_id) is required" });
+      }
+
+      const result = await vehicleAllocationService.upsertVehiclePriority(
+        vehicleTypeId,
+        priorityOrder,
+        isEnabled,
+        payloadOverrideLbs,
+        notes,
+        req.user!.id
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error("[Vehicle Priorities] Error upserting priority:", error);
+      res.status(500).json({ error: "Failed to save vehicle priority" });
+    }
+  });
+
+  // DELETE /api/admin/vehicle-priorities/:id - Delete a vehicle priority
+  app.delete("/api/admin/vehicle-priorities/:id", authMiddleware, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid priority ID" });
+      }
+
+      const deleted = await vehicleAllocationService.deleteVehiclePriority(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Vehicle priority not found" });
+      }
+
+      res.json({ message: "Vehicle priority deleted", deleted });
+    } catch (error) {
+      console.error("[Vehicle Priorities] Error deleting priority:", error);
+      res.status(500).json({ error: "Failed to delete vehicle priority" });
+    }
+  });
+
+  // ============================================================================
+  // WAREHOUSE TRANSFER VEHICLE PREVIEW API
+  // ============================================================================
+
+  // POST /api/warehouse/transfers/preview-vehicles - Preview vehicle allocation for a transfer
+  app.post("/api/warehouse/transfers/preview-vehicles", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      // Accept both camelCase and snake_case for flexibility
+      const itemIds = req.body.itemIds || req.body.item_ids;
+      const siteId = req.body.siteId || req.body.site_id;
+
+      if (!Array.isArray(itemIds) || typeof siteId !== 'number') {
+        return res.status(400).json({ error: "item_ids (array) and site_id (number) are required" });
+      }
+
+      const preview = await vehicleAllocationService.previewTransferVehicles(itemIds, siteId);
+      res.json(preview);
+    } catch (error) {
+      console.error("[Transfer Preview] Error previewing vehicles:", error);
+      res.status(500).json({ error: "Failed to preview transfer vehicles" });
     }
   });
 

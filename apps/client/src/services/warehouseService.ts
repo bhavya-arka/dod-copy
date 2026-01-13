@@ -318,6 +318,25 @@ export async function fetchTransfers(): Promise<Transfer[]> {
 }
 
 /**
+ * Preview vehicle allocation for transfer items
+ * @param itemIds - Array of inventory item IDs
+ * @param siteId - Source site ID
+ * @returns Vehicle allocation preview
+ */
+export async function previewTransferVehicles(itemIds: number[], siteId: number) {
+  const response = await fetch(`${API_BASE}/transfers/preview-vehicles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ item_ids: itemIds, site_id: siteId })
+  });
+  if (!response.ok) {
+    throw new Error("Failed to preview vehicles");
+  }
+  return response.json();
+}
+
+/**
  * Create a new transfer order with item selection and optional air transport metadata
  * @param data - Transfer creation data
  * @returns Created transfer
@@ -1432,5 +1451,44 @@ export async function revertWarehouseVersion(siteId: number, versionId: number):
     const error = await response.json();
     throw new Error(error.error || "Failed to revert version");
   }
+  return response.json();
+}
+
+export interface VehicleType {
+  id: number;
+  code: string;
+  name: string;
+  payload_capacity_lbs: number;
+  max_volume_cuft?: number;
+  category?: string;
+}
+
+export interface VehiclePrioritySetting {
+  vehicle_type_id: number;
+  enabled: boolean;
+  priority: number;
+  payload_override_lbs?: number | null;
+}
+
+export async function getVehicleTypes(): Promise<VehicleType[]> {
+  const response = await fetch('/api/land/vehicle-types', { credentials: "include" });
+  if (!response.ok) throw new Error("Failed to fetch vehicle types");
+  return response.json();
+}
+
+export async function getVehiclePrioritySettings(): Promise<VehiclePrioritySetting[]> {
+  const response = await fetch('/api/admin/vehicle-priorities', { credentials: "include" });
+  if (!response.ok) throw new Error("Failed to fetch vehicle priorities");
+  return response.json();
+}
+
+export async function saveVehiclePrioritySettings(settings: VehiclePrioritySetting[]): Promise<{ success: boolean; message: string }> {
+  const response = await fetch('/api/admin/vehicle-priorities', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: "include",
+    body: JSON.stringify({ priorities: settings })
+  });
+  if (!response.ok) throw new Error("Failed to save vehicle priorities");
   return response.json();
 }

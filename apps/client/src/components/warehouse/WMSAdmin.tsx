@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Upload, Download, Settings, Calendar, Shield, FileText } from "lucide-react";
+import { Upload, Download, Settings, Calendar, Shield, FileText, Truck } from "lucide-react";
 import type { WarehouseSite, ToastMessage } from "./types";
 import InventoryFileImportModal from "./modals/InventoryFileImportModal";
 import SystemSettingsModal from "./modals/SystemSettingsModal";
 import AgingThresholdsModal from "./modals/AgingThresholdsModal";
 import AccessControlModal from "./modals/AccessControlModal";
+import VehiclePrioritySettingsModal from "./modals/VehiclePrioritySettingsModal";
 
 interface WMSAdminProps {
   sites: WarehouseSite[];
@@ -28,6 +29,7 @@ export default function WMSAdmin({
   const [showSystemSettingsModal, setShowSystemSettingsModal] = useState(false);
   const [showAgingThresholdsModal, setShowAgingThresholdsModal] = useState(false);
   const [showAccessControlModal, setShowAccessControlModal] = useState(false);
+  const [showVehiclePriorityModal, setShowVehiclePriorityModal] = useState(false);
 
   const handleImport = () => {
     if (!selectedSiteId) {
@@ -187,6 +189,22 @@ export default function WMSAdmin({
                 Manage
               </button>
             </div>
+
+            <div className="p-4 rounded-xl bg-muted/50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Truck className="w-5 h-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium text-foreground">Vehicle Priority</p>
+                  <p className="text-xs text-muted-foreground">Configure ground transport vehicles</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowVehiclePriorityModal(true)}
+                className="text-sm px-3 py-1.5 rounded-lg border border-border bg-white hover:bg-muted transition-colors"
+              >
+                Configure
+              </button>
+            </div>
           </div>
         </motion.div>
       </div>
@@ -217,6 +235,16 @@ export default function WMSAdmin({
       {showAccessControlModal && (
         <AccessControlModal
           onClose={() => setShowAccessControlModal(false)}
+        />
+      )}
+
+      {showVehiclePriorityModal && (
+        <VehiclePrioritySettingsModal
+          onClose={() => setShowVehiclePriorityModal(false)}
+          onSuccess={() => {
+            setShowVehiclePriorityModal(false);
+            onShowToast("Vehicle priorities saved successfully!", "success");
+          }}
         />
       )}
     </>

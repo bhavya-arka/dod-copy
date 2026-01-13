@@ -12,3 +12,4 @@ export * as zoneMatchingService from './zoneMatchingService';
 export * as zoneCapacityService from './zoneCapacityService';
 export * as palletPositionService from './palletPositionService';
 export { warehouseAnalyticsService } from './warehouseAnalyticsService';
+export * as vehicleAllocationService from './vehicleAllocationService';

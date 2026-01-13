@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Loader2, Truck, Plane, Ship, Search, Check, Package } from "lucide-react";
 import type { WarehouseSite, InventoryItem, AirTransportMetadata, CreateTransferPayload } from "../types";
-import { createTransfer, fetchInventory } from "../../../services/warehouseService";
+import { createTransfer, fetchInventory, previewTransferVehicles } from "../../../services/warehouseService";
 
 interface TransferModalProps {
   sites: WarehouseSite[];
@@ -37,6 +37,9 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
   const [aircraftType, setAircraftType] = useState<"C-17" | "C-130H" | "C-130J">("C-17");
   const [missionId, setMissionId] = useState("");
   const [priority, setPriority] = useState<"routine" | "priority" | "urgent">("routine");
+  
+  const [vehiclePreview, setVehiclePreview] = useState<any>(null);
+  const [loadingVehiclePreview, setLoadingVehiclePreview] = useState(false);
 
   useEffect(() => {
     if (sourceSiteId) {
@@ -59,6 +62,27 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
       setLoadingInventory(false);
     }
   };
+
+  const fetchVehiclePreview = async () => {
+    if (transportMode !== "ground" || selectedItemIds.size === 0 || !sourceSiteId) {
+      setVehiclePreview(null);
+      return;
+    }
+    setLoadingVehiclePreview(true);
+    try {
+      const data = await previewTransferVehicles(Array.from(selectedItemIds), Number(sourceSiteId));
+      setVehiclePreview(data);
+    } catch (err) {
+      console.error("Failed to fetch vehicle preview:", err);
+      setVehiclePreview(null);
+    } finally {
+      setLoadingVehiclePreview(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchVehiclePreview();
+  }, [selectedItemIds, transportMode, sourceSiteId]);
 
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return inventoryItems;
@@ -287,6 +311,88 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {transportMode === "ground" && selectedItemIds.size > 0 && (
+            <div className="p-4 rounded-xl bg-teal-50 border border-teal-200 space-y-4">
+              <h3 className="text-sm font-semibold text-teal-900 flex items-center gap-2">
+                <Truck className="w-4 h-4" />
+                Ground Transport Details
+              </h3>
+              
+              {loadingVehiclePreview ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-teal-600" />
+                  <span className="ml-2 text-sm text-teal-700">Loading vehicle plan...</span>
+                </div>
+              ) : vehiclePreview ? (
+                vehiclePreview.error || vehiclePreview.warning ? (
+                  <div className="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg border border-amber-200">
+                    {(vehiclePreview.error === "No vehicle priorities configured" || vehiclePreview.warning === "No vehicle priorities configured") ? (
+                      <>
+                        <strong>Configuration Required:</strong> No vehicle priorities are configured. 
+                        Please contact your superadmin to configure vehicle priorities in the Admin panel.
+                        Transfer will proceed but manual vehicle allocation may be needed.
+                      </>
+                    ) : (
+                      vehiclePreview.error || vehiclePreview.warning
+                    )}
+                    {vehiclePreview.totalWeightLbs > 0 && (
+                      <div className="mt-2 text-teal-700">
+                        Total weight to move: <strong>{vehiclePreview.totalWeightLbs.toLocaleString()} lbs</strong>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-white p-3 rounded-lg border border-teal-200">
+                        <div className="text-xs text-teal-600 uppercase tracking-wide">Total Weight</div>
+                        <div className="text-lg font-bold text-teal-800">
+                          {(vehiclePreview.totalWeightLbs ?? vehiclePreview.totalWeight ?? 0).toLocaleString()} lbs
+                        </div>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border border-teal-200">
+                        <div className="text-xs text-teal-600 uppercase tracking-wide">Utilization</div>
+                        <div className="text-lg font-bold text-teal-800">
+                          {(vehiclePreview.utilizationPercent ?? vehiclePreview.utilization ?? 0).toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {(vehiclePreview.allocations ?? vehiclePreview.vehicles)?.length > 0 && (
+                      <div>
+                        <div className="text-xs text-teal-600 uppercase tracking-wide mb-2">
+                          Vehicle Allocation ({vehiclePreview.totalVehicles ?? 0} vehicles)
+                        </div>
+                        <div className="space-y-2">
+                          {(vehiclePreview.allocations ?? vehiclePreview.vehicles ?? []).map((v: any, idx: number) => (
+                            <div key={idx} className="flex items-center justify-between bg-white p-2 rounded-lg border border-teal-200">
+                              <div className="flex items-center gap-2">
+                                <Truck className="w-4 h-4 text-teal-600" />
+                                <span className="text-sm font-medium text-teal-800">
+                                  {v.vehicleName || v.vehicleCode || v.type || v.name}
+                                </span>
+                              </div>
+                              <div className="text-right text-sm">
+                                <span className="font-semibold text-teal-700">{v.vehicleCount || v.count}x</span>
+                                <span className="text-teal-600 ml-2">
+                                  ({(v.payloadLbs || v.capacity || 0).toLocaleString()} lbs each)
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              ) : (
+                <div className="text-sm text-teal-700">
+                  Vehicle allocation preview will appear here once loaded.
+                </div>
+              )}
             </div>
           )}
 
