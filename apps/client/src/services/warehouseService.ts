@@ -357,6 +357,46 @@ export async function createTransfer(data: CreateTransferPayload): Promise<Trans
 }
 
 /**
+ * Update transfer status
+ * @param transferId - Transfer ID
+ * @param status - New status
+ * @returns Update result
+ */
+export async function updateTransferStatus(
+  transferId: number, 
+  status: string
+): Promise<{ message: string; transfer_id: number; status: string }> {
+  const response = await fetch(`${API_BASE}/transfers/${transferId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ status }),
+  });
+  if (!response.ok) throw new Error('Failed to update transfer status');
+  return response.json();
+}
+
+/**
+ * Update transfer details (arrival date, notes)
+ * @param transferId - Transfer ID
+ * @param data - Update data
+ * @returns Updated transfer
+ */
+export async function updateTransfer(
+  transferId: number, 
+  data: { scheduled_arrival_date?: string; notes?: string }
+): Promise<Transfer> {
+  const response = await fetch(`${API_BASE}/transfers/${transferId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error('Failed to update transfer');
+  return response.json();
+}
+
+/**
  * Run optimization analysis for a site
  * @param siteId - Site ID
  * @returns Optimization result

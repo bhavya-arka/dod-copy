@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Plus, RefreshCw, ArrowRightLeft, Plane, Truck, Ship, Box, FileText, Loader2 } from "lucide-react";
 import type { WarehouseSite, Transfer, ToastMessage } from "./types";
 import { getStatusColor } from "./utils";
+import TransferDetailsModal from "./modals/TransferDetailsModal";
 
 interface WMSOperationsProps {
   sites: WarehouseSite[];
@@ -13,9 +14,6 @@ interface WMSOperationsProps {
   onShowToast: (message: string, type?: ToastMessage["type"]) => void;
 }
 
-/**
- * Get the appropriate transport mode icon
- */
 function getTransportIcon(mode: string) {
   switch (mode?.toLowerCase()) {
     case "air":
@@ -27,9 +25,6 @@ function getTransportIcon(mode: string) {
   }
 }
 
-/**
- * Operations tab component - Transfer orders and shipment preparation
- */
 export default function WMSOperations({
   sites,
   transfers,
@@ -38,9 +33,22 @@ export default function WMSOperations({
   onRefresh,
   onShowToast,
 }: WMSOperationsProps) {
+  const [selectedTransfer, setSelectedTransfer] = useState<Transfer | null>(null);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+
   const getSiteName = (siteId: number) => {
     const site = sites.find((s) => s.id === siteId);
     return site ? site.name : `Site #${siteId}`;
+  };
+
+  const handleTransferClick = (transfer: Transfer) => {
+    setSelectedTransfer(transfer);
+    setShowTransferModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowTransferModal(false);
+    setSelectedTransfer(null);
   };
 
   return (
@@ -100,7 +108,8 @@ export default function WMSOperations({
               {transfers.map((transfer) => (
                 <div
                   key={transfer.id}
-                  className="flex items-center justify-between p-4 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                  onClick={() => handleTransferClick(transfer)}
+                  className="flex items-center justify-between p-4 rounded-xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-4">
                     <div className="p-2 rounded-lg bg-white border border-border">
@@ -172,6 +181,16 @@ export default function WMSOperations({
           </div>
         </motion.div>
       </div>
+
+      {showTransferModal && selectedTransfer && (
+        <TransferDetailsModal
+          transfer={selectedTransfer}
+          sites={sites}
+          onClose={handleCloseModal}
+          onRefresh={onRefresh}
+          onShowToast={onShowToast}
+        />
+      )}
     </>
   );
 }

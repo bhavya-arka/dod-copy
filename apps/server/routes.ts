@@ -6477,6 +6477,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PUT /api/warehouse/transfers/:id - Update transfer details (scheduled arrival date, notes)
+  app.put("/api/warehouse/transfers/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const transferId = parseInt(req.params.id);
+      const { scheduled_arrival_date, notes } = req.body;
+      
+      const [transfer] = await db.select()
+        .from(warehouseTransfers)
+        .where(and(
+          eq(warehouseTransfers.id, transferId),
+          eq(warehouseTransfers.user_id, req.user!.id)
+        ));
+      
+      if (!transfer) {
+        return res.status(404).json({ error: "Transfer not found" });
+      }
+      
+      const updateData: any = { updated_at: new Date() };
+      
+      if (scheduled_arrival_date !== undefined) {
+        updateData.scheduled_date = scheduled_arrival_date ? new Date(scheduled_arrival_date) : null;
+      }
+      
+      if (notes !== undefined) {
+        updateData.notes = notes || null;
+      }
+      
+      const [updated] = await db.update(warehouseTransfers)
+        .set(updateData)
+        .where(eq(warehouseTransfers.id, transferId))
+        .returning();
+      
+      console.log(`[Warehouse] Transfer ${transferId} updated`);
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("[Warehouse] Failed to update transfer:", error);
+      res.status(500).json({ error: "Failed to update transfer" });
+    }
+  });
+
   // POST /api/warehouse/transfers/:id/create-manifest - Create cross-modal manifest from transfer
   app.post("/api/warehouse/transfers/:id/create-manifest", authMiddleware, async (req: AuthRequest, res) => {
     try {
