@@ -1384,3 +1384,50 @@ export const insertWarehouseAlertSchema = createInsertSchema(warehouseAlerts).om
 });
 export type InsertWarehouseAlert = z.infer<typeof insertWarehouseAlertSchema>;
 export type WarehouseAlert = typeof warehouseAlerts.$inferSelect;
+
+// Warehouse State Versions - snapshots of warehouse state for rollback
+export const warehouseStateVersions = pgTable("warehouse_state_versions", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  user_id: integer("user_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  source_type: text("source_type").notNull(), // optimization, manual, import, revert
+  source_id: integer("source_id"), // reference to plan/run that created this version
+  parent_version_id: integer("parent_version_id"), // for tracking lineage
+  items_affected: integer("items_affected").notNull().default(0),
+  status: text("status").notNull().default("active"), // active, reverted
+  reverted_at: timestamp("reverted_at"),
+  reverted_by: integer("reverted_by"),
+  metadata: jsonb("metadata").notNull().default({}),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseStateVersionSchema = createInsertSchema(warehouseStateVersions).omit({
+  id: true,
+  created_at: true,
+  reverted_at: true,
+});
+export type InsertWarehouseStateVersion = z.infer<typeof insertWarehouseStateVersionSchema>;
+export type WarehouseStateVersion = typeof warehouseStateVersions.$inferSelect;
+
+// Warehouse Item Versions - individual item changes for each state version
+export const warehouseItemVersions = pgTable("warehouse_item_versions", {
+  id: serial("id").primaryKey(),
+  version_id: integer("version_id").notNull().references(() => warehouseStateVersions.id, { onDelete: 'cascade' }),
+  item_id: integer("item_id").notNull(),
+  requisition_no: text("requisition_no"),
+  from_location: text("from_location"),
+  to_location: text("to_location"),
+  from_zone_id: integer("from_zone_id"),
+  to_zone_id: integer("to_zone_id"),
+  raw_row_snapshot: jsonb("raw_row_snapshot"), // snapshot of raw_row before change
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseItemVersionSchema = createInsertSchema(warehouseItemVersions).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseItemVersion = z.infer<typeof insertWarehouseItemVersionSchema>;
+export type WarehouseItemVersion = typeof warehouseItemVersions.$inferSelect;
