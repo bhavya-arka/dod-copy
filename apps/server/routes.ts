@@ -9100,12 +9100,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const manifestNumber = manifest.manifest_number || `MAN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
       
       // Calculate totals from selected items
+      // Weight estimation: use explicit weight, or estimate from dimensions, or default 500 lbs
+      const DEFAULT_WEIGHT_LBS = 500;
+      const DENSITY_LBS_PER_CUBIC_INCH = 0.02;
+      
+      const estimateWeight = (item: any): number => {
+        if (item.weight_lbs && parseFloat(item.weight_lbs) > 0) {
+          return parseFloat(item.weight_lbs);
+        }
+        const l = parseFloat(item.length_in) || 0;
+        const w = parseFloat(item.width_in) || 0;
+        const h = parseFloat(item.height_in) || 0;
+        if (l > 0 && w > 0 && h > 0) {
+          return Math.round(l * w * h * DENSITY_LBS_PER_CUBIC_INCH);
+        }
+        return DEFAULT_WEIGHT_LBS;
+      };
+      
       let totalWeightLbs = 0;
       let totalCubeFt = 0;
       
       if (selectedItems && selectedItems.length > 0) {
         for (const item of selectedItems) {
-          totalWeightLbs += (item.weight_lbs || 0) * (item.quantity || 1);
+          totalWeightLbs += estimateWeight(item) * (item.quantity || 1);
           totalCubeFt += (item.cube_ft || 0) * (item.quantity || 1);
         }
       }
