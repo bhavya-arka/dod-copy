@@ -34,26 +34,13 @@ export interface TransferVehiclePreview {
 }
 
 const DEFAULT_WEIGHT_LBS = 500;
-const DENSITY_LBS_PER_CUBIC_INCH = 0.02;
 
 function estimateItemWeight(item: {
   weight_lbs: string | number | null;
-  length_in: string | number | null;
-  width_in: string | number | null;
-  height_in: string | number | null;
 }): number {
   if (item.weight_lbs) {
     const weight = parseFloat(String(item.weight_lbs));
     if (weight > 0) return weight;
-  }
-  
-  const length = item.length_in ? parseFloat(String(item.length_in)) : 0;
-  const width = item.width_in ? parseFloat(String(item.width_in)) : 0;
-  const height = item.height_in ? parseFloat(String(item.height_in)) : 0;
-  
-  if (length > 0 && width > 0 && height > 0) {
-    const volumeCubicIn = length * width * height;
-    return Math.round(volumeCubicIn * DENSITY_LBS_PER_CUBIC_INCH);
   }
   
   return DEFAULT_WEIGHT_LBS;
@@ -153,9 +140,6 @@ export async function previewTransferVehicles(
       id: warehouseInventoryItems.id,
       weight_lbs: warehouseInventoryItems.weight_lbs,
       quantity: warehouseInventoryItems.quantity,
-      length_in: warehouseInventoryItems.length_in,
-      width_in: warehouseInventoryItems.width_in,
-      height_in: warehouseInventoryItems.height_in,
     })
     .from(warehouseInventoryItems)
     .where(
