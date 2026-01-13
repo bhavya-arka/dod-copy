@@ -115,8 +115,8 @@ export default function VehiclePrioritySettingsModal({
     }
   };
 
-  const formatNumber = (num: number) => {
-    return num.toLocaleString();
+  const formatNumber = (num: number | null | undefined) => {
+    return num?.toLocaleString() ?? '0';
   };
 
   return (
