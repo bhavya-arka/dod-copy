@@ -6873,15 +6873,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .returning();
       
       // Add vehicles to convoy
+      let vehiclePosition = 1;
       for (const allocation of allocations) {
+        // Get vehicle type ID from code
+        const [vehicleType] = await db.select({ id: landVehicleTypes.id })
+          .from(landVehicleTypes)
+          .where(eq(landVehicleTypes.code, allocation.vehicleCode));
+        
+        if (!vehicleType) {
+          console.warn(`[Warehouse] Vehicle type not found: ${allocation.vehicleCode}`);
+          continue;
+        }
+        
         for (let i = 0; i < allocation.vehicleCount; i++) {
           await db.insert(landConvoyVehicles)
             .values({
-              user_id: userId,
               convoy_id: newConvoy.id,
-              vehicle_type: allocation.vehicleCode,
+              vehicle_type_id: vehicleType.id,
+              position_in_convoy: vehiclePosition++,
               callsign: `${allocation.vehicleCode}-${i + 1}`,
-              status: "assigned",
+              status: "ready",
             });
         }
       }
