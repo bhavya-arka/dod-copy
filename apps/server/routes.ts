@@ -26,6 +26,8 @@ import {
   warehouseOptimizationActions,
   warehouseOptimizationEvents,
   warehouseAlerts,
+  warehouseStateVersions,
+  warehouseItemVersions,
   landRoutes,
   landConvoys,
   landVehicleTypes,
@@ -5631,6 +5633,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[Optimize Apply] Processing ${actionPlan.actions.length} actions for run ${runId}`);
 
+      // Collect item states BEFORE updating for versioning
+      const itemSnapshots: Array<{
+        itemId: number;
+        requisitionNo: string;
+        fromLocation: string | null;
+        toLocation: string;
+        fromZoneId: number | null;
+        toZoneId: number | null;
+        rawRowSnapshot: any;
+      }> = [];
+
       // Apply each action by updating item locations
       let actionsApplied = 0;
       let errors: string[] = [];
@@ -5650,6 +5663,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             errors.push(`Item ${action.item} not found`);
             continue;
           }
+
+          // Capture snapshot before update for versioning
+          itemSnapshots.push({
+            itemId: item.id,
+            requisitionNo: action.item,
+            fromLocation: item.location,
+            toLocation: action.to,
+            fromZoneId: item.zone_id,
+            toZoneId: action.targetZoneId || null,
+            rawRowSnapshot: item.raw_row,
+          });
 
           // Update the item's location in raw_row
           const rawRow = (item.raw_row as Record<string, any>) || {};
@@ -5719,6 +5743,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
           });
           console.log(`[Optimize Apply] Created plan ${plan.id} and recorded execution event`);
+
+          // Create version snapshot for rollback support
+          if (itemSnapshots.length > 0) {
+            const [version] = await db.insert(warehouseStateVersions).values({
+              site_id: siteId,
+              user_id: req.user!.id,
+              name: `${run.algorithm} optimization`,
+              description: `Applied ${actionsApplied} item moves`,
+              source_type: 'optimization',
+              source_id: plan.id,
+              items_affected: itemSnapshots.length,
+              status: 'active',
+              metadata: {
+                algorithm: run.algorithm,
+                runId,
+                planId: plan.id,
+                actionsApplied,
+                totalActions: actionPlan.actions.length,
+              },
+            }).returning();
+
+            // Insert item version records
+            await db.insert(warehouseItemVersions).values(
+              itemSnapshots.map(snap => ({
+                version_id: version.id,
+                item_id: snap.itemId,
+                requisition_no: snap.requisitionNo,
+                from_location: snap.fromLocation,
+                to_location: snap.toLocation,
+                from_zone_id: snap.fromZoneId,
+                to_zone_id: snap.toZoneId,
+                raw_row_snapshot: snap.rawRowSnapshot,
+              }))
+            );
+            console.log(`[Optimize Apply] Created version ${version.id} with ${itemSnapshots.length} item snapshots`);
+          }
         } catch (historyError) {
           console.error(`[Optimize Apply] Failed to record history:`, historyError);
           // Don't fail the request, just log the error
@@ -5757,6 +5817,272 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Warehouse] Failed to apply optimization:", error);
       res.status(500).json({ error: "Failed to apply optimization plan" });
+    }
+  });
+
+  // GET /api/warehouse/sites/:siteId/versions - Get version history for a site
+  app.get("/api/warehouse/sites/:siteId/versions", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify ownership
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Site not found" });
+      }
+
+      // Get versions with item counts
+      const versions = await db.select()
+        .from(warehouseStateVersions)
+        .where(eq(warehouseStateVersions.site_id, siteId))
+        .orderBy(desc(warehouseStateVersions.created_at))
+        .limit(50);
+
+      res.json({ versions });
+    } catch (error) {
+      console.error("[Warehouse] Failed to get versions:", error);
+      res.status(500).json({ error: "Failed to get version history" });
+    }
+  });
+
+  // GET /api/warehouse/sites/:siteId/versions/:versionId - Get version details with item changes
+  app.get("/api/warehouse/sites/:siteId/versions/:versionId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      const versionId = parseInt(req.params.versionId);
+      
+      if (isNaN(siteId) || isNaN(versionId)) {
+        return res.status(400).json({ error: "Invalid site ID or version ID" });
+      }
+
+      // Verify ownership
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Site not found" });
+      }
+
+      // Get the version
+      const [version] = await db.select()
+        .from(warehouseStateVersions)
+        .where(and(
+          eq(warehouseStateVersions.id, versionId),
+          eq(warehouseStateVersions.site_id, siteId)
+        ));
+
+      if (!version) {
+        return res.status(404).json({ error: "Version not found" });
+      }
+
+      // Get item changes for this version
+      const itemChanges = await db.select()
+        .from(warehouseItemVersions)
+        .where(eq(warehouseItemVersions.version_id, versionId));
+
+      res.json({ version, itemChanges });
+    } catch (error) {
+      console.error("[Warehouse] Failed to get version details:", error);
+      res.status(500).json({ error: "Failed to get version details" });
+    }
+  });
+
+  // POST /api/warehouse/sites/:siteId/versions/:versionId/revert - Revert to a previous version
+  app.post("/api/warehouse/sites/:siteId/versions/:versionId/revert", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      const versionId = parseInt(req.params.versionId);
+      
+      if (isNaN(siteId) || isNaN(versionId)) {
+        return res.status(400).json({ error: "Invalid site ID or version ID" });
+      }
+
+      // Verify ownership
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Site not found" });
+      }
+
+      // Get the version to revert
+      const [version] = await db.select()
+        .from(warehouseStateVersions)
+        .where(and(
+          eq(warehouseStateVersions.id, versionId),
+          eq(warehouseStateVersions.site_id, siteId),
+          eq(warehouseStateVersions.status, 'active')
+        ));
+
+      if (!version) {
+        return res.status(404).json({ error: "Version not found or already reverted" });
+      }
+
+      // Get item changes for this version
+      const itemChanges = await db.select()
+        .from(warehouseItemVersions)
+        .where(eq(warehouseItemVersions.version_id, versionId));
+
+      if (itemChanges.length === 0) {
+        return res.status(400).json({ error: "No item changes to revert" });
+      }
+
+      console.log(`[Version Revert] Reverting version ${versionId} with ${itemChanges.length} item changes`);
+
+      // Create snapshots of current state before reverting (for redo capability)
+      const revertSnapshots: Array<{
+        itemId: number;
+        requisitionNo: string | null;
+        fromLocation: string | null;
+        toLocation: string | null;
+        fromZoneId: number | null;
+        toZoneId: number | null;
+        rawRowSnapshot: any;
+      }> = [];
+
+      let itemsReverted = 0;
+      let errors: string[] = [];
+
+      for (const change of itemChanges) {
+        try {
+          // Get current item state
+          const [item] = await db.select()
+            .from(warehouseInventoryItems)
+            .where(eq(warehouseInventoryItems.id, change.item_id));
+
+          if (!item) {
+            errors.push(`Item ${change.requisition_no || change.item_id} no longer exists`);
+            continue;
+          }
+
+          // Capture current state for the revert version record
+          revertSnapshots.push({
+            itemId: item.id,
+            requisitionNo: change.requisition_no,
+            fromLocation: item.location,
+            toLocation: change.from_location,
+            fromZoneId: item.zone_id,
+            toZoneId: change.from_zone_id,
+            rawRowSnapshot: item.raw_row,
+          });
+
+          // Restore item to previous location
+          const rawRow = (item.raw_row as Record<string, any>) || {};
+          const updatedRawRow = {
+            ...rawRow,
+            location: change.from_location,
+            reverted_from: change.to_location,
+            revert_applied: new Date().toISOString(),
+          };
+
+          await db.update(warehouseInventoryItems)
+            .set({
+              location: change.from_location,
+              zone_id: change.from_zone_id,
+              raw_row: updatedRawRow,
+              updated_at: new Date(),
+            })
+            .where(eq(warehouseInventoryItems.id, change.item_id));
+
+          itemsReverted++;
+        } catch (err) {
+          console.error(`[Version Revert] Failed to revert item ${change.item_id}:`, err);
+          errors.push(`Failed to revert item ${change.requisition_no || change.item_id}`);
+        }
+      }
+
+      console.log(`[Version Revert] Reverted ${itemsReverted}/${itemChanges.length} items`);
+
+      // Mark the original version as reverted
+      await db.update(warehouseStateVersions)
+        .set({
+          status: 'reverted',
+          reverted_at: new Date(),
+          reverted_by: req.user!.id,
+        })
+        .where(eq(warehouseStateVersions.id, versionId));
+
+      // Create a new version record for this revert action
+      if (revertSnapshots.length > 0) {
+        const [revertVersion] = await db.insert(warehouseStateVersions).values({
+          site_id: siteId,
+          user_id: req.user!.id,
+          name: `Reverted: ${version.name}`,
+          description: `Restored ${itemsReverted} items to their previous locations`,
+          source_type: 'revert',
+          source_id: versionId,
+          parent_version_id: versionId,
+          items_affected: revertSnapshots.length,
+          status: 'active',
+          metadata: {
+            originalVersionId: versionId,
+            originalVersionName: version.name,
+            itemsReverted,
+          },
+        }).returning();
+
+        // Insert item version records for the revert
+        await db.insert(warehouseItemVersions).values(
+          revertSnapshots.map(snap => ({
+            version_id: revertVersion.id,
+            item_id: snap.itemId,
+            requisition_no: snap.requisitionNo,
+            from_location: snap.fromLocation,
+            to_location: snap.toLocation,
+            from_zone_id: snap.fromZoneId,
+            to_zone_id: snap.toZoneId,
+            raw_row_snapshot: snap.rawRowSnapshot,
+          }))
+        );
+
+        console.log(`[Version Revert] Created revert version ${revertVersion.id}`);
+      }
+
+      // Resync zone capacities
+      if (itemsReverted > 0) {
+        try {
+          const { palletPositionService } = await import('./services');
+          const config = {
+            countBoxAsSeparate: false,
+            whseRule: 'ignore' as const,
+            bulkMode: 'estimate' as const,
+            bulkIdColumnName: null
+          };
+          await palletPositionService.updateZoneMetrics(siteId, config);
+          palletPositionService.invalidateMetricsCache(siteId);
+          console.log(`[Version Revert] Resynced zone capacities for site ${siteId}`);
+        } catch (syncError) {
+          console.error(`[Version Revert] Failed to resync zones:`, syncError);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Reverted ${itemsReverted} items to their previous locations`,
+        itemsReverted,
+        totalItems: itemChanges.length,
+        errors: errors.length > 0 ? errors : undefined
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to revert version:", error);
+      res.status(500).json({ error: "Failed to revert version" });
     }
   });
 

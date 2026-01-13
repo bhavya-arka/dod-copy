@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Building2, ChevronRight, ChevronDown, Move, Zap, Loader2, Trash2, Pencil, Grid3X3, Sprout, Sun, Home, RefreshCw, Filter, Package, Clock } from "lucide-react";
+import { Plus, Building2, ChevronRight, ChevronDown, Move, Zap, Loader2, Trash2, Pencil, Grid3X3, Sprout, Sun, Home, RefreshCw, Filter, Package, Clock, History } from "lucide-react";
 import type { WarehouseSite, WarehouseBuilding, WarehouseZone, ToastMessage } from "./types";
 import { deleteSite, getSiteBuildings, deleteBuilding, getWarehouseDeletionPreview, fetchSiteZones, deleteZone, seedDefaultZones, fetchZoneSummary, resyncZones, ZoneSummary } from "../../services/warehouseService";
 import ConfirmDestructiveModal from "./modals/ConfirmDestructiveModal";
 import TextConfirmationDialog from "../ui/TextConfirmationDialog";
 import MoveItemModal from "./modals/MoveItemModal";
 import OptimizationWizardModal from "./modals/OptimizationWizardModal";
+import { VersionHistoryModal } from "./modals/VersionHistoryModal";
 import AddBuildingModal from "./modals/AddBuildingModal";
 import AddZoneModal from "./modals/AddZoneModal";
 import EditZoneCapacityModal from "./modals/EditZoneCapacityModal";
@@ -66,6 +67,8 @@ export default function WMSSitesStorage({
   const [moveModalSiteId, setMoveModalSiteId] = useState<number | null>(null);
   const [optimizeModalOpen, setOptimizeModalOpen] = useState(false);
   const [optimizeModalSite, setOptimizeModalSite] = useState<{ id: number; name: string } | null>(null);
+  const [versionHistoryModalOpen, setVersionHistoryModalOpen] = useState(false);
+  const [versionHistoryModalSite, setVersionHistoryModalSite] = useState<{ id: number; name: string } | null>(null);
   const [addBuildingModalOpen, setAddBuildingModalOpen] = useState(false);
   const [addBuildingModalSite, setAddBuildingModalSite] = useState<{ id: number; name: string } | null>(null);
   const [editBuildingData, setEditBuildingData] = useState<WarehouseBuilding | undefined>(undefined);
@@ -883,6 +886,20 @@ export default function WMSSitesStorage({
                 e.stopPropagation();
                 const site = sites.find(s => siteBuildings[s.id]?.includes(building));
                 if (site) {
+                  setVersionHistoryModalSite({ id: site.id, name: site.name });
+                  setVersionHistoryModalOpen(true);
+                }
+              }}
+              className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+              title="Version History"
+            >
+              <History className="w-4 h-4 text-muted-foreground" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const site = sites.find(s => siteBuildings[s.id]?.includes(building));
+                if (site) {
                   handleDeleteBuildingClick(e, building, site.id);
                 }
               }}
@@ -1120,6 +1137,21 @@ export default function WMSSitesStorage({
           onSuccess={() => {
             setOptimizeModalOpen(false);
             setOptimizeModalSite(null);
+            onRefresh();
+          }}
+          onShowToast={onShowToast}
+        />
+      )}
+
+      {versionHistoryModalOpen && versionHistoryModalSite !== null && (
+        <VersionHistoryModal
+          siteId={versionHistoryModalSite.id}
+          siteName={versionHistoryModalSite.name}
+          onClose={() => {
+            setVersionHistoryModalOpen(false);
+            setVersionHistoryModalSite(null);
+          }}
+          onSuccess={() => {
             onRefresh();
           }}
           onShowToast={onShowToast}

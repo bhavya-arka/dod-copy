@@ -1311,3 +1311,95 @@ export async function getWarehouseTrendMetrics(siteId: number): Promise<TrendMet
   }
   return response.json();
 }
+
+export interface WarehouseStateVersion {
+  id: number;
+  site_id: number;
+  user_id: number;
+  name: string;
+  description: string | null;
+  source_type: string;
+  source_id: number | null;
+  parent_version_id: number | null;
+  items_affected: number;
+  status: string;
+  reverted_at: string | null;
+  reverted_by: number | null;
+  metadata: Record<string, any>;
+  created_at: string;
+}
+
+export interface WarehouseItemVersion {
+  id: number;
+  version_id: number;
+  item_id: number;
+  requisition_no: string | null;
+  from_location: string | null;
+  to_location: string | null;
+  from_zone_id: number | null;
+  to_zone_id: number | null;
+  raw_row_snapshot: any;
+  created_at: string;
+}
+
+/**
+ * Get version history for a warehouse site
+ * @param siteId - Site ID
+ * @returns Array of state versions
+ */
+export async function getWarehouseVersions(siteId: number): Promise<WarehouseStateVersion[]> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/versions`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to fetch version history");
+  }
+  const data = await response.json();
+  return data.versions;
+}
+
+/**
+ * Get version details with item changes
+ * @param siteId - Site ID
+ * @param versionId - Version ID
+ * @returns Version with item changes
+ */
+export async function getWarehouseVersionDetails(siteId: number, versionId: number): Promise<{
+  version: WarehouseStateVersion;
+  itemChanges: WarehouseItemVersion[];
+}> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/versions/${versionId}`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to fetch version details");
+  }
+  return response.json();
+}
+
+/**
+ * Revert a warehouse version
+ * @param siteId - Site ID
+ * @param versionId - Version ID to revert
+ * @returns Revert result
+ */
+export async function revertWarehouseVersion(siteId: number, versionId: number): Promise<{
+  success: boolean;
+  message: string;
+  itemsReverted: number;
+  totalItems: number;
+  errors?: string[];
+}> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/versions/${versionId}/revert`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to revert version");
+  }
+  return response.json();
+}
