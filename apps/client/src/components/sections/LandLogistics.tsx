@@ -418,9 +418,6 @@ function LandLogistics({
   ], []);
 
   const formatWeight = useCallback((lbs: number) => {
-    if (lbs >= 2000) {
-      return `${(lbs / 2000).toFixed(1)} tons`;
-    }
     return `${lbs.toLocaleString()} lbs`;
   }, []);
 

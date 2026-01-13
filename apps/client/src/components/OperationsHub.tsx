@@ -234,9 +234,6 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
   };
 
   const formatWeight = (lbs: number) => {
-    if (lbs >= 2000) {
-      return `${(lbs / 2000).toFixed(1)} tons`;
-    }
     return `${lbs.toLocaleString()} lbs`;
   };
 
@@ -642,7 +639,7 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                           <div className="text-sm text-slate-400">Expected flights</div>
                           <div className="mt-2 text-xs text-blue-300 flex items-center gap-1">
                             <Box className="w-3 h-3" />
-                            {summaries.air.totalCargoTons} tons cargo
+                            {formatWeight(summaries.air.totalCargoLbs)}
                           </div>
                         </div>
                       </motion.div>

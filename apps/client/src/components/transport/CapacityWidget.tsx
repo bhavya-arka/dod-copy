@@ -46,8 +46,8 @@ function getCapacityColor(percentage: number): {
 }
 
 function formatValue(value: number, unit?: string): string {
-  if (unit === 'lbs' && value >= 2000) {
-    return `${(value / 2000).toFixed(1)} tons`;
+  if (unit === 'lbs') {
+    return `${value.toLocaleString()} lbs`;
   }
   if (value >= 1000000) {
     return `${(value / 1000000).toFixed(1)}M`;

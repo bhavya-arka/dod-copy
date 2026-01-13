@@ -76,9 +76,6 @@ const statusTransitions: Record<string, { nextStatus: string; buttonLabel: strin
 };
 
 const formatWeight = (lbs: number): string => {
-  if (lbs >= 2000) {
-    return `${(lbs / 2000).toFixed(1)} tons`;
-  }
   return `${lbs.toLocaleString()} lbs`;
 };
 
