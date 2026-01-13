@@ -2,10 +2,10 @@ import React, { useState, useMemo } from "react";
 import { 
   X, Loader2, Plane, Truck, Ship, ArrowRightLeft, Calendar, Package, 
   CheckCircle, XCircle, Clock, Timer, AlertTriangle, FileText, 
-  Navigation, Anchor, Route
+  Navigation, Anchor, Route, Trash2
 } from "lucide-react";
 import type { WarehouseSite, Transfer, TransferItemDetail, ToastMessage } from "../types";
-import { updateTransferStatus, updateTransfer } from "../../../services/warehouseService";
+import { updateTransferStatus, updateTransfer, deleteTransfer } from "../../../services/warehouseService";
 import { 
   getStatusColor, getStatusBannerColor, getStatusLabel, 
   getAgeDays, getDaysBetween, isOverdue 
@@ -167,6 +167,25 @@ export default function TransferDetailsModal({
   const canMarkInTransit = transfer.status === "pending" || transfer.status === "manifest_created" || transfer.status === "transport_assigned";
   const canMarkComplete = transfer.status === "in_transit";
   const canCancel = transfer.status !== "completed" && transfer.status !== "cancelled";
+  const canDelete = transfer.status !== "completed";
+
+  const handleDelete = async () => {
+    if (!window.confirm("Are you sure you want to delete this transfer? This action cannot be undone.")) {
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      await deleteTransfer(transfer.id);
+      onShowToast("Transfer deleted successfully", "success");
+      onRefresh();
+      onClose();
+    } catch (err) {
+      onShowToast(err instanceof Error ? err.message : "Failed to delete transfer", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -466,6 +485,16 @@ export default function TransferDetailsModal({
               >
                 <XCircle className="w-4 h-4" />
                 Cancel Transfer
+              </button>
+            )}
+            {canDelete && (
+              <button
+                onClick={handleDelete}
+                disabled={loading}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-colors disabled:opacity-50 flex items-center gap-2 text-sm font-medium ml-auto"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Transfer
               </button>
             )}
             {loading && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />}

@@ -7062,6 +7062,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DELETE /api/warehouse/transfers/:id - Delete a transfer
+  app.delete("/api/warehouse/transfers/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const transferId = parseInt(req.params.id);
+      
+      // Verify transfer belongs to user
+      const [transfer] = await db.select()
+        .from(warehouseTransfers)
+        .where(and(
+          eq(warehouseTransfers.id, transferId),
+          eq(warehouseTransfers.user_id, req.user!.id)
+        ));
+      
+      if (!transfer) {
+        return res.status(404).json({ error: "Transfer not found" });
+      }
+      
+      // Don't allow deleting completed transfers
+      if (transfer.status === "completed") {
+        return res.status(400).json({ error: "Cannot delete completed transfers" });
+      }
+      
+      // Delete related manifest if exists
+      if (transfer.manifest_id) {
+        await db.delete(crossModalManifests).where(eq(crossModalManifests.id, transfer.manifest_id));
+      }
+      
+      // Delete the transfer
+      await db.delete(warehouseTransfers).where(eq(warehouseTransfers.id, transferId));
+      
+      console.log(`[Warehouse] Transfer ${transferId} deleted`);
+      res.json({ success: true, message: "Transfer deleted successfully" });
+    } catch (error) {
+      console.error("[Warehouse] Failed to delete transfer:", error);
+      res.status(500).json({ error: "Failed to delete transfer" });
+    }
+  });
+
   // GET /api/warehouse/optimization-events - Get optimization events for user's sites
   app.get("/api/warehouse/optimization-events", authMiddleware, async (req: AuthRequest, res) => {
     try {

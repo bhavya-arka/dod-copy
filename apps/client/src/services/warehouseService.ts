@@ -397,6 +397,23 @@ export async function updateTransfer(
 }
 
 /**
+ * Delete a transfer
+ * @param transferId - Transfer ID
+ * @returns Success response
+ */
+export async function deleteTransfer(transferId: number): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/transfers/${transferId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to delete transfer');
+  }
+  return response.json();
+}
+
+/**
  * Run optimization analysis for a site
  * @param siteId - Site ID
  * @returns Optimization result

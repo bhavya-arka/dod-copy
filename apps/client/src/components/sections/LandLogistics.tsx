@@ -16,6 +16,7 @@ import {
   Box,
   Clock,
   Navigation,
+  Trash2,
 } from "lucide-react";
 import { User } from "../../hooks/useAuth";
 import { StatusBadge, TransportTable, CapacityWidget, LocationAutocomplete, RouteMap, PlaceDetails, TransportAiInsights, MilitaryLocationSelect, MilitaryInstallation } from '../transport';
@@ -632,10 +633,12 @@ function LandLogistics({
                       {convoys.slice(0, 5).map((convoy) => (
                         <div 
                           key={convoy.id} 
-                          onClick={() => setSelectedConvoy(convoy)}
                           className="flex items-center justify-between p-3 rounded-xl bg-[#FAFAFA] hover:bg-white hover:shadow-sm border border-transparent hover:border-[#E5E7EB] transition-all cursor-pointer"
                         >
-                          <div className="flex items-center gap-3">
+                          <div 
+                            className="flex items-center gap-3 flex-1"
+                            onClick={() => setSelectedConvoy(convoy)}
+                          >
                             <div className="p-2 rounded-lg bg-amber-50">
                               <Truck className="w-4 h-4 text-amber-500" />
                             </div>
@@ -644,7 +647,23 @@ function LandLogistics({
                               <div className="text-sm text-[#6B7280]">{convoy.origin} → {convoy.destination}</div>
                             </div>
                           </div>
-                          <StatusBadge status={convoy.status as any} size="sm" showIcon />
+                          <div className="flex items-center gap-2">
+                            <StatusBadge status={convoy.status as any} size="sm" showIcon />
+                            {convoy.status !== 'completed' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm(`Are you sure you want to delete convoy "${convoy.name}"? This action cannot be undone.`)) {
+                                    landService.deleteConvoy(convoy.id).then(() => fetchData());
+                                  }
+                                }}
+                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+                                title="Delete convoy"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
