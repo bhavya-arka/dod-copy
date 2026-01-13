@@ -9629,7 +9629,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const msPerDay = 24 * 60 * 60 * 1000;
       const futureDate = new Date(now.getTime() + FORECAST_DAYS * msPerDay);
       
-      // Fetch everything in parallel including user sites and optimization plans
+      // Fetch everything in parallel including user sites, transport data, and optimization plans
       const t1 = Date.now();
       const [
         userSites,
@@ -9638,6 +9638,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         seaVoyagesData,
         siteCapacities,
         optimizationPlansData,
+        pendingTransfersData,
       ] = await Promise.all([
         db.query.warehouseSites.findMany({ where: eq(warehouseSites.user_id, userId) }),
         db.query.flightPlans.findMany({ 
@@ -9666,6 +9667,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             eq(warehouseOptimizationPlans.user_id, userId),
             sql`${warehouseOptimizationPlans.status} IN ('pending', 'in_progress')`
           )),
+        // Fetch pending and in-transit warehouse transfers for inbound cargo forecasting
+        db.query.warehouseTransfers.findMany({
+          where: and(
+            eq(warehouseTransfers.user_id, userId),
+            sql`${warehouseTransfers.status} IN ('pending', 'manifest_created', 'transport_assigned', 'in_transit')`
+          )
+        }),
       ]);
       timings['main_queries'] = Date.now() - t1;
       
@@ -9683,6 +9691,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate totals from actual scheduled data
       const totalAirCargoLbs = upcomingAir.reduce((sum, p) => sum + (p.total_weight_lb || 0), 0);
       const totalLandCargoLbs = upcomingLand.reduce((sum, c) => sum + (c.total_cargo_weight_lbs || 0), 0);
+      
+      // ============================================================================
+      // UNIFIED TRANSPORT DATA PIPELINE - Aggregate inbound cargo by destination
+      // ============================================================================
+      const UTILIZATION_THRESHOLD = 80; // 80% threshold for alerts
+      
+      // Create site lookup map for quick access
+      const siteMap = new Map(userSites.map(s => [s.id, s]));
+      
+      // Aggregate inbound cargo from warehouse transfers by destination and transport mode
+      type InboundByMode = { air: number; land: number; sea: number; total: number };
+      const inboundByDestination: Record<number, InboundByMode> = {};
+      
+      // Initialize inbound tracking for all sites
+      userSites.forEach(site => {
+        inboundByDestination[site.id] = { air: 0, land: 0, sea: 0, total: 0 };
+      });
+      
+      // Process pending/in-transit warehouse transfers
+      pendingTransfersData.forEach(transfer => {
+        const destId = transfer.destination_site_id;
+        const weightLbs = parseFloat(transfer.total_weight_lbs?.toString() || '0');
+        const mode = transfer.transport_mode as 'air' | 'ground' | 'sea';
+        
+        if (inboundByDestination[destId]) {
+          if (mode === 'air') {
+            inboundByDestination[destId].air += weightLbs;
+          } else if (mode === 'ground') {
+            inboundByDestination[destId].land += weightLbs;
+          } else if (mode === 'sea') {
+            inboundByDestination[destId].sea += weightLbs;
+          }
+          inboundByDestination[destId].total += weightLbs;
+        }
+      });
+      
+      // Generate standardized transport summary for each site
+      interface TransportForecast {
+        siteId: number;
+        siteName: string;
+        inboundCargo: InboundByMode;
+        currentUtilizationPercent: number;
+        projectedUtilizationPercent: number;
+        isAboveThreshold: boolean;
+        thresholdPercent: number;
+        pendingTransfers: number;
+        alerts: string[];
+      }
+      
+      const transportForecasts: TransportForecast[] = siteCapacities.map(site => {
+        const inbound = inboundByDestination[site.siteId] || { air: 0, land: 0, sea: 0, total: 0 };
+        const siteData = siteMap.get(site.siteId);
+        
+        // Calculate projected utilization after inbound cargo arrives
+        const maxWeightLbs = site.totalWeightCapacityLbs || 1;
+        const currentWeightLbs = site.currentWeightLbs || 0;
+        const projectedWeightLbs = currentWeightLbs + inbound.total;
+        const projectedUtilization = Math.min(100, (projectedWeightLbs / maxWeightLbs) * 100);
+        
+        const isAboveThreshold = site.utilizationPercent >= UTILIZATION_THRESHOLD;
+        const willExceedThreshold = projectedUtilization >= UTILIZATION_THRESHOLD;
+        
+        // Count pending transfers for this destination
+        const pendingCount = pendingTransfersData.filter(t => t.destination_site_id === site.siteId).length;
+        
+        // Generate alerts
+        const alerts: string[] = [];
+        if (isAboveThreshold) {
+          alerts.push(`Current utilization (${Math.round(site.utilizationPercent)}%) exceeds ${UTILIZATION_THRESHOLD}% threshold`);
+        }
+        if (!isAboveThreshold && willExceedThreshold) {
+          alerts.push(`Projected utilization (${Math.round(projectedUtilization)}%) will exceed ${UTILIZATION_THRESHOLD}% after inbound cargo`);
+        }
+        if (inbound.total > 0) {
+          alerts.push(`${Math.round(inbound.total).toLocaleString()} lbs inbound cargo pending`);
+        }
+        
+        return {
+          siteId: site.siteId,
+          siteName: site.siteName,
+          inboundCargo: {
+            air: Math.round(inbound.air),
+            land: Math.round(inbound.land),
+            sea: Math.round(inbound.sea),
+            total: Math.round(inbound.total),
+          },
+          currentUtilizationPercent: Math.round(site.utilizationPercent * 10) / 10,
+          projectedUtilizationPercent: Math.round(projectedUtilization * 10) / 10,
+          isAboveThreshold,
+          thresholdPercent: UTILIZATION_THRESHOLD,
+          pendingTransfers: pendingCount,
+          alerts,
+        };
+      });
+      
+      // Count sites above 80% threshold
+      const sitesAboveThreshold = transportForecasts.filter(f => f.isAboveThreshold).length;
+      const sitesWillExceedThreshold = transportForecasts.filter(f => 
+        !f.isAboveThreshold && f.projectedUtilizationPercent >= UTILIZATION_THRESHOLD
+      ).length;
       
       // Calculate current average utilization
       const currentUtilization = siteCapacities.length > 0
@@ -9776,6 +9884,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           warehouse: {
             avgUtilization: Math.round(currentUtilization * 10) / 10,
             sitesWithWarnings,
+            sitesAboveThreshold,
+            sitesWillExceedThreshold,
+            thresholdPercent: UTILIZATION_THRESHOLD,
+          },
+          transfers: {
+            pending: pendingTransfersData.filter(t => t.status === 'pending').length,
+            manifestCreated: pendingTransfersData.filter(t => t.status === 'manifest_created').length,
+            transportAssigned: pendingTransfersData.filter(t => t.status === 'transport_assigned').length,
+            inTransit: pendingTransfersData.filter(t => t.status === 'in_transit').length,
+            totalInboundLbs: Math.round(pendingTransfersData.reduce((sum, t) => sum + parseFloat(t.total_weight_lbs?.toString() || '0'), 0)),
           },
           optimization: {
             activePlans: optimizationPlansData.length,
@@ -9783,6 +9901,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             totalPendingMoves: optimizationPlansData.reduce((sum, p) => sum + (p.total_actions - p.completed_actions), 0),
           },
         },
+        // Transport-aware site forecasts with inbound cargo by mode
+        transportForecasts,
         siteForecasts,
         // Optimization plans with target completion dates for load forecasting
         optimizationForecasts: optimizationPlansData
@@ -9818,6 +9938,188 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Operations] Error generating predictive forecast:", error);
       res.status(500).json({ error: "Failed to generate predictive forecast" });
+    }
+  });
+
+  // ============================================================================
+  // UNIFIED TRANSPORT DATA PIPELINE - Standardized transport data per warehouse
+  // ============================================================================
+  
+  // GET /api/operations/transport-pipeline - Get standardized transport data for warehouse forecasting
+  app.get("/api/operations/transport-pipeline", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      const UTILIZATION_THRESHOLD = 80;
+      
+      // Fetch all transport data in parallel
+      const [
+        userSites,
+        pendingTransfers,
+        flightPlans,
+        convoys,
+        voyages,
+        siteCapacities,
+      ] = await Promise.all([
+        db.query.warehouseSites.findMany({ where: eq(warehouseSites.user_id, userId) }),
+        db.query.warehouseTransfers.findMany({
+          where: and(
+            eq(warehouseTransfers.user_id, userId),
+            sql`${warehouseTransfers.status} IN ('pending', 'manifest_created', 'transport_assigned', 'in_transit')`
+          )
+        }),
+        db.query.flightPlans.findMany({ where: eq(flightPlans.user_id, userId) }),
+        db.query.landConvoys.findMany({ where: eq(landConvoys.user_id, userId) }),
+        db.query.seaVoyages.findMany({ where: eq(seaVoyages.user_id, userId) }),
+        getAllSiteCapacities(userId),
+      ]);
+      
+      // Build standardized transport records per warehouse
+      type TransportRecord = {
+        id: number;
+        type: 'transfer' | 'flight' | 'convoy' | 'voyage';
+        transportMode: 'air' | 'land' | 'sea';
+        sourceSiteId: number | null;
+        sourceSiteName: string | null;
+        destinationSiteId: number | null;
+        destinationSiteName: string | null;
+        weightLbs: number;
+        status: string;
+        scheduledDate: string | null;
+        assignedTransportId: number | null;
+        assignedTransportName: string | null;
+      };
+      
+      const siteMap = new Map(userSites.map(s => [s.id, s.name]));
+      const transportRecords: TransportRecord[] = [];
+      
+      // Add warehouse transfers as standardized records
+      pendingTransfers.forEach(t => {
+        const mode = t.transport_mode === 'ground' ? 'land' : t.transport_mode as 'air' | 'sea';
+        let assignedId: number | null = null;
+        let assignedName: string | null = null;
+        
+        if (t.assigned_convoy_id) {
+          const convoy = convoys.find(c => c.id === t.assigned_convoy_id);
+          assignedId = t.assigned_convoy_id;
+          assignedName = convoy?.name || null;
+        } else if (t.assigned_flight_plan_id) {
+          const flight = flightPlans.find(f => f.id === t.assigned_flight_plan_id);
+          assignedId = t.assigned_flight_plan_id;
+          assignedName = flight?.name || null;
+        } else if (t.assigned_voyage_id) {
+          const voyage = voyages.find(v => v.id === t.assigned_voyage_id);
+          assignedId = t.assigned_voyage_id;
+          assignedName = voyage?.name || null;
+        }
+        
+        transportRecords.push({
+          id: t.id,
+          type: 'transfer',
+          transportMode: mode,
+          sourceSiteId: t.source_site_id,
+          sourceSiteName: siteMap.get(t.source_site_id) || null,
+          destinationSiteId: t.destination_site_id,
+          destinationSiteName: siteMap.get(t.destination_site_id) || null,
+          weightLbs: parseFloat(t.total_weight_lbs?.toString() || '0'),
+          status: t.status,
+          scheduledDate: t.scheduled_date?.toISOString() || null,
+          assignedTransportId: assignedId,
+          assignedTransportName: assignedName,
+        });
+      });
+      
+      // Aggregate by destination warehouse
+      type WarehouseInbound = {
+        siteId: number;
+        siteName: string;
+        currentUtilizationPercent: number;
+        currentWeightLbs: number;
+        totalCapacityLbs: number;
+        inboundByMode: {
+          air: { count: number; weightLbs: number };
+          land: { count: number; weightLbs: number };
+          sea: { count: number; weightLbs: number };
+        };
+        totalInboundLbs: number;
+        projectedWeightLbs: number;
+        projectedUtilizationPercent: number;
+        isAboveThreshold: boolean;
+        willExceedThreshold: boolean;
+        thresholdPercent: number;
+        transfers: TransportRecord[];
+      };
+      
+      const warehouseData: WarehouseInbound[] = siteCapacities.map(site => {
+        const inboundTransfers = transportRecords.filter(r => r.destinationSiteId === site.siteId);
+        
+        const airInbound = inboundTransfers.filter(r => r.transportMode === 'air');
+        const landInbound = inboundTransfers.filter(r => r.transportMode === 'land');
+        const seaInbound = inboundTransfers.filter(r => r.transportMode === 'sea');
+        
+        const totalInboundLbs = inboundTransfers.reduce((sum, r) => sum + r.weightLbs, 0);
+        const projectedWeightLbs = (site.currentWeightLbs || 0) + totalInboundLbs;
+        const projectedUtilization = Math.min(100, (projectedWeightLbs / Math.max(1, site.totalWeightCapacityLbs)) * 100);
+        
+        const isAboveThreshold = site.utilizationPercent >= UTILIZATION_THRESHOLD;
+        const willExceedThreshold = !isAboveThreshold && projectedUtilization >= UTILIZATION_THRESHOLD;
+        
+        return {
+          siteId: site.siteId,
+          siteName: site.siteName,
+          currentUtilizationPercent: Math.round(site.utilizationPercent * 10) / 10,
+          currentWeightLbs: site.currentWeightLbs || 0,
+          totalCapacityLbs: site.totalWeightCapacityLbs || 0,
+          inboundByMode: {
+            air: { count: airInbound.length, weightLbs: Math.round(airInbound.reduce((s, r) => s + r.weightLbs, 0)) },
+            land: { count: landInbound.length, weightLbs: Math.round(landInbound.reduce((s, r) => s + r.weightLbs, 0)) },
+            sea: { count: seaInbound.length, weightLbs: Math.round(seaInbound.reduce((s, r) => s + r.weightLbs, 0)) },
+          },
+          totalInboundLbs: Math.round(totalInboundLbs),
+          projectedWeightLbs: Math.round(projectedWeightLbs),
+          projectedUtilizationPercent: Math.round(projectedUtilization * 10) / 10,
+          isAboveThreshold,
+          willExceedThreshold,
+          thresholdPercent: UTILIZATION_THRESHOLD,
+          transfers: inboundTransfers,
+        };
+      });
+      
+      // Generate threshold alerts
+      const thresholdAlerts = warehouseData
+        .filter(w => w.isAboveThreshold || w.willExceedThreshold)
+        .map(w => ({
+          siteId: w.siteId,
+          siteName: w.siteName,
+          alertType: w.isAboveThreshold ? 'above_threshold' : 'will_exceed',
+          currentUtilization: w.currentUtilizationPercent,
+          projectedUtilization: w.projectedUtilizationPercent,
+          inboundLbs: w.totalInboundLbs,
+          message: w.isAboveThreshold
+            ? `${w.siteName} is currently at ${w.currentUtilizationPercent}% utilization (above ${UTILIZATION_THRESHOLD}% threshold)`
+            : `${w.siteName} will reach ${w.projectedUtilizationPercent}% utilization after ${w.totalInboundLbs.toLocaleString()} lbs of inbound cargo`,
+        }));
+      
+      res.json({
+        generatedAt: new Date().toISOString(),
+        thresholdPercent: UTILIZATION_THRESHOLD,
+        summary: {
+          totalWarehouses: warehouseData.length,
+          warehousesAboveThreshold: warehouseData.filter(w => w.isAboveThreshold).length,
+          warehousesWillExceedThreshold: warehouseData.filter(w => w.willExceedThreshold).length,
+          totalPendingTransfers: transportRecords.length,
+          totalInboundCargoLbs: Math.round(transportRecords.reduce((s, r) => s + r.weightLbs, 0)),
+          byMode: {
+            air: { transfers: transportRecords.filter(r => r.transportMode === 'air').length },
+            land: { transfers: transportRecords.filter(r => r.transportMode === 'land').length },
+            sea: { transfers: transportRecords.filter(r => r.transportMode === 'sea').length },
+          },
+        },
+        thresholdAlerts,
+        warehouses: warehouseData,
+      });
+    } catch (error) {
+      console.error("[Transport Pipeline] Error fetching transport data:", error);
+      res.status(500).json({ error: "Failed to fetch transport pipeline data" });
     }
   });
 
