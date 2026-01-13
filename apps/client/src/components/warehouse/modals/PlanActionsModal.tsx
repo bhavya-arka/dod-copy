@@ -57,10 +57,11 @@ export default function PlanActionsModal({
   const [showImpactMetrics, setShowImpactMetrics] = useState(true);
 
   useEffect(() => {
+    setCurrentPlan(plan);
     if (plan?.id) {
       refreshPlan();
     }
-  }, [plan?.id]);
+  }, [plan]);
 
   useEffect(() => {
     if (currentPlan?.target_completion_date) {
@@ -711,7 +712,13 @@ export default function PlanActionsModal({
 
         <div className="flex justify-end gap-3 p-6 border-t border-border">
           <button
-            onClick={onClose}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('[PlanActionsModal] Footer Close button clicked');
+              onClose();
+            }}
             className="px-4 py-2 text-sm font-medium rounded-xl bg-muted text-foreground hover:bg-muted/80 transition-colors"
           >
             Close
