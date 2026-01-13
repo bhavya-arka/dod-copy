@@ -79,7 +79,19 @@ Key data models support `MovementItem`, `Pallet463L`, `AircraftLoadPlan` for air
 The system supports National Stock Numbers (NSN), Commercial and Government Entity (CAGE) codes, and integrates with Military Sealift Command (MSC) vessel designations, aligning with Federal Logistics Information System (FLIS) standards.
 
 ## UI/UX Design
-The platform features a responsive, mobile-first design with a consistent navigation and a dark theme. Each section (Air, Land, Sea, Warehouse) utilizes distinct gradient accent colors.
+The platform features a responsive, mobile-first design with a consistent navigation and a dark theme.
+
+### Styling Guidelines (IMPORTANT)
+- **Table Headers**: Use subtle dark backgrounds (`bg-slate-800/80`) - NEVER use bright gradient headers like orange/red/blue gradients
+- **Dark Theme Components**: Use `bg-[#0f172a]` for dark cards, `border-white/10` for borders
+- **Light Theme Components**: Use `bg-white` or `bg-[#FAFAFA]` with `border-[#E5E7EB]`
+- **Accent Colors**: Use mode-specific colors subtly (borders, icons) not as full backgrounds
+  - Air: Blue (`text-blue-400`, `border-l-blue-500`)
+  - Land: Amber (`text-amber-400`, `border-l-amber-500`)
+  - Sea: Teal (`text-teal-400`, `border-l-teal-500`)
+- **Text Colors**: Dark theme uses `text-slate-300` for body, `text-white` for headers
+- **Weights**: All measurements in pounds (lbs) only - no metric conversions
+- **Professional Look**: Avoid flashy gradients in data tables; use clean, minimal styling
 
 ## Military Organization & Role-Based Access Control
 The system supports four military organizations (PACAF, DLA, MSC, TRANSCOM) with a role-based access control (RBAC) system. Roles include Superadmin, Admin (branch-specific), and User, managed through Department Access Codes (DACs) and an approval workflow.

@@ -26,28 +26,32 @@ export interface TransportTableProps<T> {
 }
 
 const modeConfig: Record<TransportMode, {
-  headerGradient: string;
+  headerBg: string;
   hoverBg: string;
   accentBorder: string;
   searchFocus: string;
+  accentColor: string;
 }> = {
   air: {
-    headerGradient: 'bg-gradient-to-r from-blue-600 to-cyan-600',
-    hoverBg: 'hover:bg-blue-500/10',
+    headerBg: 'bg-slate-800/80',
+    hoverBg: 'hover:bg-slate-700/50',
     accentBorder: 'border-l-blue-500',
     searchFocus: 'focus:ring-blue-500/50 focus:border-blue-500',
+    accentColor: 'text-blue-400',
   },
   land: {
-    headerGradient: 'bg-gradient-to-r from-amber-600 to-orange-600',
-    hoverBg: 'hover:bg-amber-500/10',
+    headerBg: 'bg-slate-800/80',
+    hoverBg: 'hover:bg-slate-700/50',
     accentBorder: 'border-l-amber-500',
     searchFocus: 'focus:ring-amber-500/50 focus:border-amber-500',
+    accentColor: 'text-amber-400',
   },
   sea: {
-    headerGradient: 'bg-gradient-to-r from-teal-600 to-emerald-600',
-    hoverBg: 'hover:bg-teal-500/10',
+    headerBg: 'bg-slate-800/80',
+    hoverBg: 'hover:bg-slate-700/50',
     accentBorder: 'border-l-teal-500',
     searchFocus: 'focus:ring-teal-500/50 focus:border-teal-500',
+    accentColor: 'text-teal-400',
   },
 };
 
@@ -158,13 +162,13 @@ function TransportTableInner<T extends { id?: number | string }>({
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className={config.headerGradient}>
+            <tr className={config.headerBg}>
               {columns.map((col) => (
                 <th
                   key={col.id}
                   className={cn(
-                    'px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider',
-                    col.sortable && 'cursor-pointer select-none hover:bg-white/10 transition-colors',
+                    'px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider',
+                    col.sortable && 'cursor-pointer select-none hover:bg-white/5 transition-colors',
                     col.className
                   )}
                   onClick={() => col.sortable && handleSort(col.id)}
