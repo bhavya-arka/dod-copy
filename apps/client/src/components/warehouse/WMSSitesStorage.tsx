@@ -409,7 +409,7 @@ export default function WMSSitesStorage({
     const siteId = zoneToDelete.siteId;
     setIsDeletingZone(true);
     try {
-      await deleteZone(zoneToDelete.zone.id);
+      await deleteZone(siteId, zoneToDelete.zone.id);
       onShowToast(`Zone "${zoneToDelete.zone.code}" deleted successfully`, "success");
       setDeleteZoneDialogOpen(false);
       setZoneToDelete(null);

@@ -127,7 +127,7 @@ export async function createZone(data: {
   bulk_available?: number;
   rack_available?: number;
 }): Promise<WarehouseZone> {
-  const response = await fetch(`${API_BASE}/zones`, {
+  const response = await fetch(`${API_BASE}/sites/${data.site_id}/zones`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -142,10 +142,11 @@ export async function createZone(data: {
 
 /**
  * Delete a zone
+ * @param siteId - Site ID
  * @param zoneId - Zone ID to delete
  */
-export async function deleteZone(zoneId: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/zones/${zoneId}`, {
+export async function deleteZone(siteId: number, zoneId: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/zones/${zoneId}`, {
     method: "DELETE",
     credentials: "include",
   });
