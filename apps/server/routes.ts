@@ -6646,6 +6646,213 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/warehouse/transfers/:id/propose-convoy - Auto-calculate and create a proposed convoy
+  app.post("/api/warehouse/transfers/:id/propose-convoy", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const transferId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      // Verify transfer exists and belongs to user
+      const transferResult = await db.select({
+        transfer: warehouseTransfers,
+        sourceSite: warehouseSites,
+      })
+        .from(warehouseTransfers)
+        .leftJoin(warehouseSites, eq(warehouseTransfers.source_site_id, warehouseSites.id))
+        .where(and(
+          eq(warehouseTransfers.id, transferId),
+          eq(warehouseTransfers.user_id, userId)
+        ));
+      
+      if (transferResult.length === 0) {
+        return res.status(404).json({ error: "Transfer not found" });
+      }
+      
+      const { transfer, sourceSite } = transferResult[0];
+      
+      if (transfer.transport_mode !== "ground") {
+        return res.status(400).json({ error: "Transfer is not a ground transport" });
+      }
+      
+      // Get destination site
+      const [destSite] = await db.select()
+        .from(warehouseSites)
+        .where(eq(warehouseSites.id, transfer.destination_site_id));
+      
+      // Calculate total weight from transfer items
+      const items = (transfer.transfer_items as any[]) || [];
+      const totalWeight = items.reduce((sum, item) => {
+        const weight = parseFloat(String(item.weight_lbs || 0)) || 0;
+        return sum + (weight * (item.quantity || 1));
+      }, 0);
+      
+      // Use vehicle allocation service to calculate required vehicles
+      const { calculateVehicleAllocation, getVehiclePriorityList } = await import("./services/vehicleAllocationService");
+      const allocations = await calculateVehicleAllocation(totalWeight);
+      const priorityList = await getVehiclePriorityList();
+      
+      // Build convoy proposal
+      const convoyName = `Transfer-${transferId}-Convoy`;
+      const origin = sourceSite?.name || `Site ${transfer.source_site_id}`;
+      const destination = destSite?.name || `Site ${transfer.destination_site_id}`;
+      
+      // Calculate totals
+      const totalVehicles = allocations.reduce((sum, a) => sum + a.vehicleCount, 0);
+      const totalCapacity = allocations.reduce((sum, a) => sum + a.totalCapacity, 0);
+      const utilizationPercent = totalCapacity > 0 ? Math.round((totalWeight / totalCapacity) * 100) : 0;
+      
+      res.json({
+        proposal: {
+          transferId,
+          convoyName,
+          origin,
+          destination,
+          totalWeightLbs: Math.round(totalWeight),
+          itemCount: items.length,
+          vehicleAllocations: allocations,
+          totalVehicles,
+          totalCapacity,
+          utilizationPercent,
+          scheduledDate: transfer.scheduled_date?.toISOString() || null,
+        },
+        hasPrioritySettings: priorityList.length > 0,
+        warning: priorityList.length === 0 
+          ? "No vehicle priority settings configured. Please configure vehicle priorities in WMS Admin."
+          : totalWeight <= 0 
+            ? "Transfer has no weight data. Vehicle allocation cannot be calculated."
+            : null,
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to propose convoy:", error);
+      res.status(500).json({ error: "Failed to calculate convoy proposal" });
+    }
+  });
+
+  // POST /api/warehouse/transfers/:id/auto-create-convoy - Create convoy and assign to transfer in one action
+  app.post("/api/warehouse/transfers/:id/auto-create-convoy", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const transferId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      // Verify transfer exists and belongs to user
+      const transferResult = await db.select({
+        transfer: warehouseTransfers,
+        sourceSite: warehouseSites,
+      })
+        .from(warehouseTransfers)
+        .leftJoin(warehouseSites, eq(warehouseTransfers.source_site_id, warehouseSites.id))
+        .where(and(
+          eq(warehouseTransfers.id, transferId),
+          eq(warehouseTransfers.user_id, userId)
+        ));
+      
+      if (transferResult.length === 0) {
+        return res.status(404).json({ error: "Transfer not found" });
+      }
+      
+      const { transfer, sourceSite } = transferResult[0];
+      
+      if (transfer.transport_mode !== "ground") {
+        return res.status(400).json({ error: "Transfer is not a ground transport" });
+      }
+      
+      if (transfer.assigned_convoy_id) {
+        return res.status(400).json({ error: "Transfer already has a convoy assigned" });
+      }
+      
+      // Get destination site
+      const [destSite] = await db.select()
+        .from(warehouseSites)
+        .where(eq(warehouseSites.id, transfer.destination_site_id));
+      
+      // Calculate total weight from transfer items
+      const items = (transfer.transfer_items as any[]) || [];
+      const totalWeight = items.reduce((sum, item) => {
+        const weight = parseFloat(String(item.weight_lbs || 0)) || 0;
+        return sum + (weight * (item.quantity || 1));
+      }, 0);
+      
+      // Use vehicle allocation service to calculate required vehicles
+      const { calculateVehicleAllocation } = await import("./services/vehicleAllocationService");
+      const allocations = await calculateVehicleAllocation(totalWeight);
+      
+      // Build convoy data
+      const convoyName = `Transfer-${transferId}-Convoy`;
+      const origin = sourceSite?.name || `Site ${transfer.source_site_id}`;
+      const destination = destSite?.name || `Site ${transfer.destination_site_id}`;
+      
+      // Create convoy
+      const [newConvoy] = await db.insert(landConvoys)
+        .values({
+          user_id: userId,
+          name: convoyName,
+          origin,
+          destination,
+          status: "planned",
+          vehicle_count: allocations.reduce((sum, a) => sum + a.vehicleCount, 0),
+          total_cargo_weight_lbs: Math.round(totalWeight),
+          cargo_manifest: items,
+          scheduled_departure: transfer.scheduled_date || new Date(),
+        })
+        .returning();
+      
+      // Add vehicles to convoy
+      for (const allocation of allocations) {
+        for (let i = 0; i < allocation.vehicleCount; i++) {
+          await db.insert(convoyVehicles)
+            .values({
+              user_id: userId,
+              convoy_id: newConvoy.id,
+              vehicle_type: allocation.vehicleCode,
+              callsign: `${allocation.vehicleCode}-${i + 1}`,
+              status: "assigned",
+            });
+        }
+      }
+      
+      // Update transfer with convoy assignment
+      await db.update(warehouseTransfers)
+        .set({ 
+          assigned_convoy_id: newConvoy.id,
+          status: "transport_assigned",
+          updated_at: new Date()
+        })
+        .where(eq(warehouseTransfers.id, transferId));
+      
+      // Update manifest if exists
+      if (transfer.manifest_id) {
+        await db.update(crossModalManifests)
+          .set({ 
+            convoy_id: newConvoy.id,
+            status: "assigned",
+            updated_at: new Date()
+          })
+          .where(eq(crossModalManifests.id, transfer.manifest_id));
+      }
+      
+      console.log(`[Warehouse] Auto-created convoy ${newConvoy.id} for transfer ${transferId}`);
+      
+      res.status(201).json({
+        message: "Convoy created and assigned successfully",
+        convoy: {
+          id: newConvoy.id,
+          name: newConvoy.name,
+          origin: newConvoy.origin,
+          destination: newConvoy.destination,
+          status: newConvoy.status,
+          vehicleCount: allocations.reduce((sum, a) => sum + a.vehicleCount, 0),
+          totalWeightLbs: Math.round(totalWeight),
+        },
+        vehicleAllocations: allocations,
+        transfer_id: transferId,
+        transfer_status: "transport_assigned"
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to auto-create convoy:", error);
+      res.status(500).json({ error: "Failed to create convoy for transfer" });
+    }
+  });
+
   // POST /api/warehouse/transfers/:id/assign-flight-plan - Assign a flight plan to an air transfer
   app.post("/api/warehouse/transfers/:id/assign-flight-plan", authMiddleware, async (req: AuthRequest, res) => {
     try {

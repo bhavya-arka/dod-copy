@@ -37,6 +37,7 @@ import type {
   LandStatistics,
   RouteInfo,
   PendingTransfer,
+  ConvoyProposal,
 } from '../../services/landService';
 
 interface LandLogisticsProps {
@@ -138,9 +139,13 @@ function LandLogistics({
   const [showVehicleSelectModal, setShowVehicleSelectModal] = useState(false);
   const [showAssignConvoyModal, setShowAssignConvoyModal] = useState(false);
   const [selectedTransferForAssignment, setSelectedTransferForAssignment] = useState<PendingTransfer | null>(null);
+  const [convoyProposal, setConvoyProposal] = useState<ConvoyProposal | null>(null);
+  const [proposalWarning, setProposalWarning] = useState<string | null>(null);
+  const [isLoadingProposal, setIsLoadingProposal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [isAutoCreating, setIsAutoCreating] = useState(false);
   
   const [formData, setFormData] = useState<ConvoyFormData>({
     name: '',
@@ -192,10 +197,41 @@ function LandLogistics({
     }
   }, [selectedTransferForAssignment, fetchData]);
 
-  const openAssignConvoyModal = useCallback((transfer: PendingTransfer) => {
+  const openAssignConvoyModal = useCallback(async (transfer: PendingTransfer) => {
     setSelectedTransferForAssignment(transfer);
+    setConvoyProposal(null);
+    setProposalWarning(null);
     setShowAssignConvoyModal(true);
+    setIsLoadingProposal(true);
+    
+    try {
+      const response = await landService.proposeConvoyForTransfer(transfer.id);
+      setConvoyProposal(response.proposal);
+      setProposalWarning(response.warning);
+    } catch (error) {
+      console.error('Error loading convoy proposal:', error);
+      setProposalWarning('Could not calculate vehicle requirements');
+    } finally {
+      setIsLoadingProposal(false);
+    }
   }, []);
+
+  const handleAutoCreateConvoy = useCallback(async () => {
+    if (!selectedTransferForAssignment) return;
+    
+    setIsAutoCreating(true);
+    try {
+      await landService.autoCreateConvoyForTransfer(selectedTransferForAssignment.id);
+      await fetchData();
+      setShowAssignConvoyModal(false);
+      setSelectedTransferForAssignment(null);
+      setConvoyProposal(null);
+    } catch (error) {
+      console.error('Error auto-creating convoy:', error);
+    } finally {
+      setIsAutoCreating(false);
+    }
+  }, [selectedTransferForAssignment, fetchData]);
 
   useEffect(() => {
     fetchData();
@@ -1238,9 +1274,11 @@ function LandLogistics({
         if (!open) {
           setShowAssignConvoyModal(false);
           setSelectedTransferForAssignment(null);
+          setConvoyProposal(null);
+          setProposalWarning(null);
         }
       }}>
-        <DialogContent className="bg-white border-[#E5E7EB] max-w-lg">
+        <DialogContent className="bg-white border-[#E5E7EB] max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-[#111827] flex items-center gap-2">
               <Truck className="w-5 h-5 text-amber-500" />
@@ -1253,42 +1291,129 @@ function LandLogistics({
             </DialogDescription>
           </DialogHeader>
           
-          <div className="py-4">
-            {convoys.filter(c => c.status === 'draft' || c.status === 'planned').length === 0 ? (
-              <div className="text-center py-8 bg-[#FAFAFA] rounded-xl border border-[#E5E7EB]">
-                <Truck className="w-10 h-10 text-[#E5E7EB] mx-auto mb-2" />
-                <p className="text-[#111827] font-medium">No Available Convoys</p>
-                <p className="text-sm text-[#6B7280] mt-1">Create a convoy first before assigning transfers</p>
+          <div className="py-4 space-y-4">
+            {isLoadingProposal ? (
+              <div className="flex items-center justify-center gap-2 py-8 bg-[#FAFAFA] rounded-xl border border-[#E5E7EB]">
+                <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
+                <span className="text-[#6B7280]">Calculating vehicle requirements...</span>
               </div>
-            ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {convoys.filter(c => c.status === 'draft' || c.status === 'planned').map((convoy) => (
-                  <motion.button
-                    key={convoy.id}
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    onClick={() => handleAssignConvoy(convoy.id)}
-                    disabled={isAssigning}
-                    className="w-full p-4 rounded-xl bg-white border border-[#E5E7EB] hover:border-amber-300 hover:shadow-md text-left transition-all disabled:opacity-50"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-semibold text-[#111827]">{convoy.name}</div>
-                      <StatusBadge status={convoy.status as any} size="sm" showIcon />
+            ) : convoyProposal ? (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200"
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-2 rounded-lg bg-amber-100">
+                    <Truck className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-[#111827]">Proposed Convoy</div>
+                    <div className="text-sm text-[#6B7280]">{convoyProposal.origin} → {convoyProposal.destination}</div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="p-3 rounded-lg bg-white/70">
+                    <div className="text-xs text-[#6B7280] mb-1">Total Weight</div>
+                    <div className="font-semibold text-[#111827]">{formatWeight(convoyProposal.totalWeightLbs)}</div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-white/70">
+                    <div className="text-xs text-[#6B7280] mb-1">Items</div>
+                    <div className="font-semibold text-[#111827]">{convoyProposal.itemCount} items</div>
+                  </div>
+                </div>
+                
+                {convoyProposal.vehicleAllocations.length > 0 ? (
+                  <>
+                    <div className="text-sm font-medium text-[#111827] mb-2">Calculated Vehicles</div>
+                    <div className="space-y-2 mb-4">
+                      {convoyProposal.vehicleAllocations.map((alloc, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-white/70">
+                          <div>
+                            <div className="font-medium text-[#111827]">{alloc.vehicleCode}</div>
+                            <div className="text-xs text-[#6B7280]">{alloc.vehicleName}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-semibold text-amber-600">{alloc.vehicleCount}x</div>
+                            <div className="text-xs text-[#6B7280]">{formatWeight(alloc.payloadLbs)} each</div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="text-sm text-[#6B7280] mb-2">{convoy.origin} → {convoy.destination}</div>
-                    <div className="flex items-center gap-4 text-xs text-[#6B7280]">
-                      <span className="flex items-center gap-1">
-                        <Truck className="w-3 h-3" />
-                        {convoy.vehicle_count || 0} vehicles
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Weight className="w-3 h-3" />
-                        {formatWeight(convoy.total_weight_lbs || 0)}
-                      </span>
+                    
+                    <div className="flex items-center justify-between text-sm mb-4 p-2 rounded-lg bg-white/70">
+                      <span className="text-[#6B7280]">Capacity Utilization</span>
+                      <span className="font-semibold text-amber-600">{convoyProposal.utilizationPercent}%</span>
                     </div>
-                  </motion.button>
-                ))}
+                    
+                    <button
+                      onClick={handleAutoCreateConvoy}
+                      disabled={isAutoCreating}
+                      className="w-full py-3 rounded-xl bg-amber-500 text-white font-semibold hover:bg-amber-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isAutoCreating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Creating Convoy...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4" />
+                          Create Convoy & Assign
+                        </>
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-center py-4 bg-white/70 rounded-lg">
+                    <p className="text-[#6B7280] text-sm">{proposalWarning || 'No vehicle priority settings configured'}</p>
+                  </div>
+                )}
+              </motion.div>
+            ) : proposalWarning ? (
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-center">
+                <p className="text-amber-700">{proposalWarning}</p>
               </div>
+            ) : null}
+            
+            {convoys.filter(c => c.status === 'draft' || c.status === 'planned').length > 0 && (
+              <>
+                <div className="flex items-center gap-2 text-sm text-[#6B7280]">
+                  <div className="flex-1 h-px bg-[#E5E7EB]"></div>
+                  <span>Or select existing convoy</span>
+                  <div className="flex-1 h-px bg-[#E5E7EB]"></div>
+                </div>
+                
+                <div className="space-y-3 max-h-48 overflow-y-auto">
+                  {convoys.filter(c => c.status === 'draft' || c.status === 'planned').map((convoy) => (
+                    <motion.button
+                      key={convoy.id}
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      onClick={() => handleAssignConvoy(convoy.id)}
+                      disabled={isAssigning}
+                      className="w-full p-4 rounded-xl bg-white border border-[#E5E7EB] hover:border-amber-300 hover:shadow-md text-left transition-all disabled:opacity-50"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-semibold text-[#111827]">{convoy.name}</div>
+                        <StatusBadge status={convoy.status as any} size="sm" showIcon />
+                      </div>
+                      <div className="text-sm text-[#6B7280] mb-2">{convoy.origin} → {convoy.destination}</div>
+                      <div className="flex items-center gap-4 text-xs text-[#6B7280]">
+                        <span className="flex items-center gap-1">
+                          <Truck className="w-3 h-3" />
+                          {convoy.vehicle_count || 0} vehicles
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Weight className="w-3 h-3" />
+                          {formatWeight(convoy.total_weight_lbs || 0)}
+                        </span>
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
           
@@ -1297,6 +1422,8 @@ function LandLogistics({
               onClick={() => {
                 setShowAssignConvoyModal(false);
                 setSelectedTransferForAssignment(null);
+                setConvoyProposal(null);
+                setProposalWarning(null);
               }}
               className="px-4 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#111827] hover:bg-[#FAFAFA] transition-colors"
             >

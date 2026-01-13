@@ -381,6 +381,69 @@ export async function assignConvoyToTransfer(
   return handleResponse<{ success: boolean }>(response);
 }
 
+export interface VehicleAllocation {
+  vehicleTypeId: number;
+  vehicleCode: string;
+  vehicleName: string;
+  payloadLbs: number;
+  vehicleCount: number;
+  totalCapacity: number;
+}
+
+export interface ConvoyProposal {
+  transferId: number;
+  convoyName: string;
+  origin: string;
+  destination: string;
+  totalWeightLbs: number;
+  itemCount: number;
+  vehicleAllocations: VehicleAllocation[];
+  totalVehicles: number;
+  totalCapacity: number;
+  utilizationPercent: number;
+  scheduledDate: string | null;
+}
+
+export interface ProposeConvoyResponse {
+  proposal: ConvoyProposal;
+  hasPrioritySettings: boolean;
+  warning: string | null;
+}
+
+export async function proposeConvoyForTransfer(transferId: number): Promise<ProposeConvoyResponse> {
+  const response = await fetch(`/api/warehouse/transfers/${transferId}/propose-convoy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+  });
+  return handleResponse<ProposeConvoyResponse>(response);
+}
+
+export interface AutoCreateConvoyResponse {
+  message: string;
+  convoy: {
+    id: number;
+    name: string;
+    origin: string;
+    destination: string;
+    status: string;
+    vehicleCount: number;
+    totalWeightLbs: number;
+  };
+  vehicleAllocations: VehicleAllocation[];
+  transfer_id: number;
+  transfer_status: string;
+}
+
+export async function autoCreateConvoyForTransfer(transferId: number): Promise<AutoCreateConvoyResponse> {
+  const response = await fetch(`/api/warehouse/transfers/${transferId}/auto-create-convoy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+  });
+  return handleResponse<AutoCreateConvoyResponse>(response);
+}
+
 export async function fetchAllData(): Promise<{
   statistics: LandStatistics | null;
   vehicleTypes: VehicleType[];
