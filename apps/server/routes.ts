@@ -6785,6 +6785,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(warehouseSites)
         .where(eq(warehouseSites.id, transfer.destination_site_id));
       
+      // Check for idempotency - if convoy already exists for this transfer, return it
+      const expectedConvoyName = `Transfer-${transferId}-Convoy`;
+      const [existingConvoy] = await db.select()
+        .from(landConvoys)
+        .where(and(
+          eq(landConvoys.user_id, userId),
+          eq(landConvoys.name, expectedConvoyName)
+        ));
+      
+      if (existingConvoy) {
+        // Get vehicles for existing convoy
+        const existingVehicles = await db.select()
+          .from(landConvoyVehicles)
+          .where(eq(landConvoyVehicles.convoy_id, existingConvoy.id));
+        
+        // Update transfer with convoy assignment if not already done
+        await db.update(warehouseTransfers)
+          .set({ 
+            assigned_convoy_id: existingConvoy.id,
+            status: "transport_assigned",
+            updated_at: new Date()
+          })
+          .where(eq(warehouseTransfers.id, transferId));
+        
+        console.log(`[Warehouse] Returning existing convoy ${existingConvoy.id} for transfer ${transferId}`);
+        
+        return res.status(200).json({
+          message: "Existing convoy found and assigned",
+          convoy: {
+            id: existingConvoy.id,
+            name: existingConvoy.name,
+            origin: existingConvoy.origin,
+            destination: existingConvoy.destination,
+            status: existingConvoy.status,
+            vehicleCount: existingConvoy.vehicle_count,
+            totalWeightLbs: existingConvoy.total_cargo_weight_lbs,
+          },
+          vehicleAllocations: existingVehicles.map(v => ({
+            vehicleCode: v.vehicle_type,
+            vehicleCount: 1,
+          })),
+          transfer_id: transferId,
+          transfer_status: "transport_assigned",
+          existing: true
+        });
+      }
+      
       // Calculate total weight from transfer items with estimation for missing weights
       const DEFAULT_WEIGHT_LBS = 500;
       const DENSITY_LBS_PER_CUBIC_INCH = 0.02;
@@ -6834,7 +6881,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Add vehicles to convoy
       for (const allocation of allocations) {
         for (let i = 0; i < allocation.vehicleCount; i++) {
-          await db.insert(convoyVehicles)
+          await db.insert(landConvoyVehicles)
             .values({
               user_id: userId,
               convoy_id: newConvoy.id,
@@ -8803,7 +8850,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const convoys = await db.select().from(landConvoys)
         .where(eq(landConvoys.user_id, req.user!.id))
         .orderBy(desc(landConvoys.created_at));
-      res.json(convoys);
+      
+      // Map field names for frontend compatibility
+      const mappedConvoys = convoys.map(c => ({
+        id: c.id,
+        name: c.name,
+        route_id: c.route_id,
+        origin: c.origin || "",
+        destination: c.destination || "",
+        status: c.status,
+        vehicle_count: c.vehicle_count,
+        total_weight_lbs: c.total_cargo_weight_lbs || 0,
+        departure_time: c.departure_time,
+        arrival_time: c.arrival_time,
+        scheduled_departure: c.scheduled_departure,
+        scheduled_arrival: c.scheduled_arrival,
+        actual_departure: c.actual_departure,
+        actual_arrival: c.actual_arrival,
+        cargo_manifest: c.cargo_manifest,
+        created_at: c.created_at,
+        updated_at: c.updated_at,
+      }));
+      
+      res.json(mappedConvoys);
     } catch (error) {
       console.error("[Land] Error fetching convoys:", error);
       res.status(500).json({ error: "Failed to fetch convoys" });
@@ -8825,7 +8894,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(landConvoyVehicles.convoy_id, parseInt(id)))
         .orderBy(asc(landConvoyVehicles.position_in_convoy));
       
-      res.json({ ...convoy, vehicles });
+      // Map field names for frontend compatibility
+      const mappedConvoy = {
+        id: convoy.id,
+        name: convoy.name,
+        route_id: convoy.route_id,
+        origin: convoy.origin || "",
+        destination: convoy.destination || "",
+        status: convoy.status,
+        vehicle_count: convoy.vehicle_count,
+        total_weight_lbs: convoy.total_cargo_weight_lbs || 0,
+        departure_time: convoy.departure_time,
+        arrival_time: convoy.arrival_time,
+        scheduled_departure: convoy.scheduled_departure,
+        scheduled_arrival: convoy.scheduled_arrival,
+        actual_departure: convoy.actual_departure,
+        actual_arrival: convoy.actual_arrival,
+        cargo_manifest: convoy.cargo_manifest,
+        created_at: convoy.created_at,
+        updated_at: convoy.updated_at,
+        vehicles,
+      };
+      
+      res.json(mappedConvoy);
     } catch (error) {
       console.error("[Land] Error fetching convoy:", error);
       res.status(500).json({ error: "Failed to fetch convoy" });

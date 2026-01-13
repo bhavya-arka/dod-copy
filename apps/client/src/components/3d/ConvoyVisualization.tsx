@@ -342,13 +342,24 @@ const ConvoyVisualization: React.FC<ConvoyVisualizationProps> = memo(({
 
       <Canvas
         shadows
-        dpr={[1, 2]}
+        dpr={[1, 1.5]}
         gl={{ 
           antialias: true,
           alpha: false,
-          powerPreference: 'high-performance',
+          powerPreference: 'default',
+          preserveDrawingBuffer: true,
+          failIfMajorPerformanceCaveat: false,
         }}
         style={{ background: '#0a0a0a' }}
+        onCreated={({ gl }) => {
+          gl.domElement.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault();
+            console.warn('[ConvoyVisualization] WebGL context lost, will attempt recovery');
+          });
+          gl.domElement.addEventListener('webglcontextrestored', () => {
+            console.log('[ConvoyVisualization] WebGL context restored');
+          });
+        }}
       >
         <ConvoyScene
           vehicles={vehicles}

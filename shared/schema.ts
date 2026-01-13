@@ -810,6 +810,8 @@ export const landConvoys = pgTable("land_convoys", {
   user_id: integer("user_id").notNull(),
   route_id: integer("route_id"),
   name: text("name").notNull(),
+  origin: text("origin").notNull().default(""),
+  destination: text("destination").notNull().default(""),
   vehicle_count: integer("vehicle_count").notNull().default(0),
   total_cargo_weight_lbs: integer("total_cargo_weight_lbs").default(0),
   departure_time: timestamp("departure_time"),
