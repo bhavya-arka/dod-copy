@@ -19,7 +19,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { User } from "../../hooks/useAuth";
-import { StatusBadge, TransportTable, CapacityWidget, LocationAutocomplete, RouteMap, PlaceDetails, TransportAiInsights, MilitaryLocationSelect, MilitaryInstallation } from '../transport';
+import { StatusBadge, TransportTable, CapacityWidget, LocationAutocomplete, RouteMap, PlaceDetails, TransportAiInsights } from '../transport';
+import * as warehouseService from '../../services/warehouseService';
 import { ConvoyVisualization } from '../3d/ConvoyVisualization';
 import {
   Dialog,
@@ -63,8 +64,8 @@ interface ConvoyFormData {
   destination: string;
   origin_coords?: LocationCoords;
   destination_coords?: LocationCoords;
-  origin_installation?: MilitaryInstallation | null;
-  destination_installation?: MilitaryInstallation | null;
+  origin_site_id?: number;
+  destination_site_id?: number;
   route_id?: number;
   scheduled_departure: string;
   scheduled_arrival: string;
@@ -133,6 +134,7 @@ function LandLogistics({
   const [routes, setRoutes] = useState<RouteType[]>([]);
   const [convoys, setConvoys] = useState<Convoy[]>([]);
   const [pendingTransfers, setPendingTransfers] = useState<PendingTransfer[]>([]);
+  const [warehouseSites, setWarehouseSites] = useState<{id: number; name: string; code: string; address?: string}[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [selectedConvoy, setSelectedConvoy] = useState<Convoy | null>(null);
@@ -239,6 +241,15 @@ function LandLogistics({
 
   useEffect(() => {
     fetchData();
+    const fetchSites = async () => {
+      try {
+        const sites = await warehouseService.fetchSites();
+        setWarehouseSites(sites);
+      } catch (err) {
+        console.error("Failed to fetch warehouse sites:", err);
+      }
+    };
+    fetchSites();
   }, [fetchData]);
 
   const handleCreateConvoy = useCallback(async () => {
@@ -257,8 +268,8 @@ function LandLogistics({
         name: '', 
         origin: '', 
         destination: '', 
-        origin_installation: null,
-        destination_installation: null,
+        origin_site_id: undefined,
+        destination_site_id: undefined,
         origin_coords: undefined,
         destination_coords: undefined,
         scheduled_departure: '', 
@@ -367,62 +378,6 @@ function LandLogistics({
         setConvoyRouteInfo,
         setIsCalculatingRoute
       );
-    }
-  }, [formData.origin_coords, calculateRouteHandler]);
-
-  const handleOriginInstallationChange = useCallback((installation: MilitaryInstallation | null) => {
-    if (installation) {
-      const coords: LocationCoords = {
-        lat: parseFloat(installation.latitude),
-        lng: parseFloat(installation.longitude),
-        formattedAddress: installation.address || `${installation.name}, ${installation.city}, ${installation.state || installation.country}`,
-      };
-      setFormData(prev => ({
-        ...prev,
-        origin: installation.name,
-        origin_installation: installation,
-        origin_coords: coords,
-      }));
-
-      if (formData.destination_coords) {
-        calculateRouteHandler(coords, formData.destination_coords, setConvoyRouteInfo, setIsCalculatingRoute);
-      }
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        origin: '',
-        origin_installation: null,
-        origin_coords: undefined,
-      }));
-      setConvoyRouteInfo(null);
-    }
-  }, [formData.destination_coords, calculateRouteHandler]);
-
-  const handleDestinationInstallationChange = useCallback((installation: MilitaryInstallation | null) => {
-    if (installation) {
-      const coords: LocationCoords = {
-        lat: parseFloat(installation.latitude),
-        lng: parseFloat(installation.longitude),
-        formattedAddress: installation.address || `${installation.name}, ${installation.city}, ${installation.state || installation.country}`,
-      };
-      setFormData(prev => ({
-        ...prev,
-        destination: installation.name,
-        destination_installation: installation,
-        destination_coords: coords,
-      }));
-
-      if (formData.origin_coords) {
-        calculateRouteHandler(formData.origin_coords, coords, setConvoyRouteInfo, setIsCalculatingRoute);
-      }
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        destination: '',
-        destination_installation: null,
-        destination_coords: undefined,
-      }));
-      setConvoyRouteInfo(null);
     }
   }, [formData.origin_coords, calculateRouteHandler]);
 
@@ -1058,21 +1013,59 @@ function LandLogistics({
               />
             </div>
             
-            <MilitaryLocationSelect
-              value={formData.origin_installation || null}
-              onChange={handleOriginInstallationChange}
-              placeholder="Select origin installation..."
-              label="Origin Installation"
-              required
-            />
-            
-            <MilitaryLocationSelect
-              value={formData.destination_installation || null}
-              onChange={handleDestinationInstallationChange}
-              placeholder="Select destination installation..."
-              label="Destination Installation"
-              required
-            />
+            <div>
+              <label className="block text-sm font-medium text-[#111827] mb-1">
+                Origin Site <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.origin_site_id || ''}
+                onChange={(e) => {
+                  const siteId = Number(e.target.value);
+                  const site = warehouseSites.find(s => s.id === siteId);
+                  setFormData(prev => ({
+                    ...prev,
+                    origin_site_id: siteId || undefined,
+                    origin: site?.name || '',
+                    origin_coords: site?.address ? { lat: 0, lng: 0, formattedAddress: site.address } : undefined
+                  }));
+                }}
+                className="w-full px-3 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#111827] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/30 outline-none transition-all"
+              >
+                <option value="">Select origin warehouse...</option>
+                {warehouseSites.map(site => (
+                  <option key={site.id} value={site.id}>
+                    {site.name} ({site.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-[#111827] mb-1">
+                Destination Site <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.destination_site_id || ''}
+                onChange={(e) => {
+                  const siteId = Number(e.target.value);
+                  const site = warehouseSites.find(s => s.id === siteId);
+                  setFormData(prev => ({
+                    ...prev,
+                    destination_site_id: siteId || undefined,
+                    destination: site?.name || '',
+                    destination_coords: site?.address ? { lat: 0, lng: 0, formattedAddress: site.address } : undefined
+                  }));
+                }}
+                className="w-full px-3 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#111827] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/30 outline-none transition-all"
+              >
+                <option value="">Select destination warehouse...</option>
+                {warehouseSites.filter(s => s.id !== formData.origin_site_id).map(site => (
+                  <option key={site.id} value={site.id}>
+                    {site.name} ({site.code})
+                  </option>
+                ))}
+              </select>
+            </div>
             
             {(isCalculatingRoute || convoyRouteInfo) && (
               <div className="p-3 rounded-xl bg-[#FAFAFA] border border-[#E5E7EB]">
