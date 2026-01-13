@@ -445,7 +445,8 @@ export default function WMSInventory({
   useEffect(() => {
     const cleanupInterval = setInterval(() => {
       const now = Date.now();
-      for (const [key, entry] of pageCacheRef.current.entries()) {
+      const entries = Array.from(pageCacheRef.current.entries());
+      for (const [key, entry] of entries) {
         if (now - entry.timestamp > CACHE_TTL_MS) {
           pageCacheRef.current.delete(key);
           const idx = cacheOrderRef.current.indexOf(key);
