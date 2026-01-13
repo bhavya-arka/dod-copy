@@ -43,6 +43,16 @@ The system provides automatic vehicle calculation for ground transfers between w
 - **Graceful Fallback**: Transfers proceed even without configured priorities, with warnings displayed in the metadata for manual allocation.
 - **Ground Transport Metadata**: Stored in camelCase JSON format (totalWeightLbs, allocations, totalVehicles, totalCapacity, utilizationPercent, calculatedAt) with optional warning/error fields.
 
+## Unified Transport Data Pipeline
+The system provides standardized transport data aggregation for warehouse forecasting:
+- **Cross-Modal Manifest System**: Links warehouse transfers to convoys, flight plans, and voyages with manifest creation and transport assignment workflows.
+- **Transfer Workflow**: Transfers follow a lifecycle: `pending → manifest_created → transport_assigned → in_transit → completed`.
+- **Inbound Cargo Tracking**: Aggregates inbound cargo by destination warehouse for each transport mode (air, land, sea).
+- **80% Utilization Threshold Alerts**: Tracks warehouse utilization and generates alerts when sites exceed or will exceed 80% capacity.
+- **Predictive Forecasting**: Enhanced predictive forecast endpoint includes warehouse transfers and threshold-based capacity warnings.
+- **Transport Pipeline API**: Dedicated `/api/operations/transport-pipeline` endpoint provides standardized transport data per warehouse with inbound cargo breakdown by mode.
+- **Pending Transfers in Logistics Modules**: Land Logistics and Air Operations show pending warehouse transfers that can be assigned to convoys or flight plans.
+
 ## Data Models
 Key data models support `MovementItem`, `Pallet463L`, `AircraftLoadPlan` for air operations, `warehouse_sites`, `warehouse_inventory_items` for WMS, and `land_routes`, `sea_voyages` for land and sea modules respectively.
 

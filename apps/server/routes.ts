@@ -9745,13 +9745,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const siteData = siteMap.get(site.siteId);
         
         // Calculate projected utilization after inbound cargo arrives
-        const maxWeightLbs = site.totalWeightCapacityLbs || 1;
-        const currentWeightLbs = site.currentWeightLbs || 0;
+        // Guard against null/undefined capacity values to prevent NaN
+        const maxWeightLbs = Math.max(1, site.totalWeightCapacityLbs ?? 0);
+        const currentWeightLbs = site.currentWeightLbs ?? 0;
         const projectedWeightLbs = currentWeightLbs + inbound.total;
         const projectedUtilization = Math.min(100, (projectedWeightLbs / maxWeightLbs) * 100);
         
-        const isAboveThreshold = site.utilizationPercent >= UTILIZATION_THRESHOLD;
-        const willExceedThreshold = projectedUtilization >= UTILIZATION_THRESHOLD;
+        // Use raw floats for threshold comparison to avoid rounding errors
+        const isAboveThreshold = (site.utilizationPercent ?? 0) >= UTILIZATION_THRESHOLD;
+        const willExceedThreshold = !isAboveThreshold && projectedUtilization >= UTILIZATION_THRESHOLD;
         
         // Count pending transfers for this destination
         const pendingCount = pendingTransfersData.filter(t => t.destination_site_id === site.siteId).length;
@@ -9786,11 +9788,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
       
-      // Count sites above 80% threshold
+      // Count sites above 80% threshold using raw boolean values (not rounded percentages)
       const sitesAboveThreshold = transportForecasts.filter(f => f.isAboveThreshold).length;
-      const sitesWillExceedThreshold = transportForecasts.filter(f => 
-        !f.isAboveThreshold && f.projectedUtilizationPercent >= UTILIZATION_THRESHOLD
-      ).length;
+      // Create a map to track which sites will exceed threshold based on raw calculation
+      const willExceedMap = new Map(siteCapacities.map(site => {
+        const inbound = inboundByDestination[site.siteId] || { air: 0, land: 0, sea: 0, total: 0 };
+        const maxWeightLbs = Math.max(1, site.totalWeightCapacityLbs ?? 0);
+        const currentWeightLbs = site.currentWeightLbs ?? 0;
+        const projectedUtilization = Math.min(100, ((currentWeightLbs + inbound.total) / maxWeightLbs) * 100);
+        const isAbove = (site.utilizationPercent ?? 0) >= UTILIZATION_THRESHOLD;
+        const willExceed = !isAbove && projectedUtilization >= UTILIZATION_THRESHOLD;
+        return [site.siteId, willExceed];
+      }));
+      const sitesWillExceedThreshold = [...willExceedMap.values()].filter(Boolean).length;
       
       // Calculate current average utilization
       const currentUtilization = siteCapacities.length > 0
@@ -10057,10 +10067,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const seaInbound = inboundTransfers.filter(r => r.transportMode === 'sea');
         
         const totalInboundLbs = inboundTransfers.reduce((sum, r) => sum + r.weightLbs, 0);
-        const projectedWeightLbs = (site.currentWeightLbs || 0) + totalInboundLbs;
-        const projectedUtilization = Math.min(100, (projectedWeightLbs / Math.max(1, site.totalWeightCapacityLbs)) * 100);
+        const projectedWeightLbs = (site.currentWeightLbs ?? 0) + totalInboundLbs;
+        // Guard against null/undefined capacity values to prevent NaN
+        const maxCapacity = Math.max(1, site.totalWeightCapacityLbs ?? 0);
+        const projectedUtilization = Math.min(100, (projectedWeightLbs / maxCapacity) * 100);
         
-        const isAboveThreshold = site.utilizationPercent >= UTILIZATION_THRESHOLD;
+        // Use raw values for threshold comparison to avoid rounding errors
+        const isAboveThreshold = (site.utilizationPercent ?? 0) >= UTILIZATION_THRESHOLD;
         const willExceedThreshold = !isAboveThreshold && projectedUtilization >= UTILIZATION_THRESHOLD;
         
         return {
