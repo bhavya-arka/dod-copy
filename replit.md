@@ -42,6 +42,7 @@ The system provides automatic vehicle calculation for ground transfers between w
 - **Validation**: The system validates vehicle priority settings to prevent duplicate vehicle types, duplicate priority orders, and non-positive priority values.
 - **Graceful Fallback**: Transfers proceed even without configured priorities, with warnings displayed in the metadata for manual allocation.
 - **Ground Transport Metadata**: Stored in camelCase JSON format (totalWeightLbs, allocations, totalVehicles, totalCapacity, utilizationPercent, calculatedAt) with optional warning/error fields.
+- **Automatic Weight Estimation**: Items without explicit weight data receive estimated weights: 500 lbs default per unit, or dimensions-based calculation (L×W×H × 0.02 lbs/in³ density) when dimensions are available. The UI displays "(estimated)" indicators and informational messages when weights are calculated.
 
 ## Unified Transport Data Pipeline
 The system provides standardized transport data aggregation for warehouse forecasting:
