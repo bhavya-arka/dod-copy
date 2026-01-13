@@ -5687,6 +5687,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .where(eq(warehouseOptimizationRuns.id, runId));
 
+      // Create a plan record and event for history tracking
+      if (actionsApplied > 0) {
+        try {
+          const runResults = run.results as any || {};
+          const [plan] = await db.insert(warehouseOptimizationPlans).values({
+            site_id: siteId,
+            user_id: req.user!.id,
+            name: `Applied ${run.algorithm} optimization`,
+            algorithm: run.algorithm,
+            status: 'executed',
+            version: 1,
+            diff_patch: actionPlan,
+            summary: runResults.summary || {},
+            total_actions: actionPlan.actions.length,
+            completed_actions: actionsApplied,
+            created_at: new Date(),
+            updated_at: new Date(),
+          }).returning();
+
+          // Record the execution event
+          await db.insert(warehouseOptimizationEvents).values({
+            plan_id: plan.id,
+            user_id: req.user!.id,
+            event_type: 'executed',
+            payload: {
+              actionsApplied,
+              totalActions: actionPlan.actions.length,
+              algorithm: run.algorithm,
+              errors: errors.length > 0 ? errors.slice(0, 5) : undefined,
+            },
+          });
+          console.log(`[Optimize Apply] Created plan ${plan.id} and recorded execution event`);
+        } catch (historyError) {
+          console.error(`[Optimize Apply] Failed to record history:`, historyError);
+          // Don't fail the request, just log the error
+        }
+      }
+
       // Resync zone capacities to reflect the moved items
       if (actionsApplied > 0) {
         try {
