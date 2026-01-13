@@ -6679,11 +6679,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(warehouseSites)
         .where(eq(warehouseSites.id, transfer.destination_site_id));
       
-      // Calculate total weight from transfer items
+      // Calculate total weight from transfer items with estimation for missing weights
+      const DEFAULT_WEIGHT_LBS = 500;
+      const DENSITY_LBS_PER_CUBIC_INCH = 0.02;
+      
+      const estimateWeight = (item: any): number => {
+        if (item.weight_lbs && parseFloat(String(item.weight_lbs)) > 0) {
+          return parseFloat(String(item.weight_lbs));
+        }
+        const l = parseFloat(String(item.length_in)) || 0;
+        const w = parseFloat(String(item.width_in)) || 0;
+        const h = parseFloat(String(item.height_in)) || 0;
+        if (l > 0 && w > 0 && h > 0) {
+          return Math.round(l * w * h * DENSITY_LBS_PER_CUBIC_INCH);
+        }
+        return DEFAULT_WEIGHT_LBS;
+      };
+      
       const items = (transfer.transfer_items as any[]) || [];
+      const hasEstimatedWeights = items.some(item => !item.weight_lbs || parseFloat(String(item.weight_lbs)) <= 0);
       const totalWeight = items.reduce((sum, item) => {
-        const weight = parseFloat(String(item.weight_lbs || 0)) || 0;
-        return sum + (weight * (item.quantity || 1));
+        return sum + (estimateWeight(item) * (item.quantity || 1));
       }, 0);
       
       // Use vehicle allocation service to calculate required vehicles
@@ -6714,13 +6730,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalCapacity,
           utilizationPercent,
           scheduledDate: transfer.scheduled_date?.toISOString() || null,
+          hasEstimatedWeights,
         },
         hasPrioritySettings: priorityList.length > 0,
         warning: priorityList.length === 0 
           ? "No vehicle priority settings configured. Please configure vehicle priorities in WMS Admin."
-          : totalWeight <= 0 
-            ? "Transfer has no weight data. Vehicle allocation cannot be calculated."
-            : null,
+          : null,
+        info: hasEstimatedWeights
+          ? `Weights estimated for ${items.filter(i => !i.weight_lbs || parseFloat(String(i.weight_lbs)) <= 0).length} items using 500 lbs default per unit.`
+          : null,
       });
     } catch (error) {
       console.error("[Warehouse] Failed to propose convoy:", error);
@@ -6765,11 +6783,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(warehouseSites)
         .where(eq(warehouseSites.id, transfer.destination_site_id));
       
-      // Calculate total weight from transfer items
+      // Calculate total weight from transfer items with estimation for missing weights
+      const DEFAULT_WEIGHT_LBS = 500;
+      const DENSITY_LBS_PER_CUBIC_INCH = 0.02;
+      
+      const estimateWeight = (item: any): number => {
+        if (item.weight_lbs && parseFloat(String(item.weight_lbs)) > 0) {
+          return parseFloat(String(item.weight_lbs));
+        }
+        const l = parseFloat(String(item.length_in)) || 0;
+        const w = parseFloat(String(item.width_in)) || 0;
+        const h = parseFloat(String(item.height_in)) || 0;
+        if (l > 0 && w > 0 && h > 0) {
+          return Math.round(l * w * h * DENSITY_LBS_PER_CUBIC_INCH);
+        }
+        return DEFAULT_WEIGHT_LBS;
+      };
+      
       const items = (transfer.transfer_items as any[]) || [];
       const totalWeight = items.reduce((sum, item) => {
-        const weight = parseFloat(String(item.weight_lbs || 0)) || 0;
-        return sum + (weight * (item.quantity || 1));
+        return sum + (estimateWeight(item) * (item.quantity || 1));
       }, 0);
       
       // Use vehicle allocation service to calculate required vehicles

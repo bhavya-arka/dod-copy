@@ -141,6 +141,7 @@ function LandLogistics({
   const [selectedTransferForAssignment, setSelectedTransferForAssignment] = useState<PendingTransfer | null>(null);
   const [convoyProposal, setConvoyProposal] = useState<ConvoyProposal | null>(null);
   const [proposalWarning, setProposalWarning] = useState<string | null>(null);
+  const [proposalInfo, setProposalInfo] = useState<string | null>(null);
   const [isLoadingProposal, setIsLoadingProposal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -201,6 +202,7 @@ function LandLogistics({
     setSelectedTransferForAssignment(transfer);
     setConvoyProposal(null);
     setProposalWarning(null);
+    setProposalInfo(null);
     setShowAssignConvoyModal(true);
     setIsLoadingProposal(true);
     
@@ -208,6 +210,7 @@ function LandLogistics({
       const response = await landService.proposeConvoyForTransfer(transfer.id);
       setConvoyProposal(response.proposal);
       setProposalWarning(response.warning);
+      setProposalInfo(response.info);
     } catch (error) {
       console.error('Error loading convoy proposal:', error);
       setProposalWarning('Could not calculate vehicle requirements');
@@ -1315,7 +1318,7 @@ function LandLogistics({
                 
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   <div className="p-3 rounded-lg bg-white/70">
-                    <div className="text-xs text-[#6B7280] mb-1">Total Weight</div>
+                    <div className="text-xs text-[#6B7280] mb-1">Total Weight {convoyProposal.hasEstimatedWeights && <span className="text-amber-600">(estimated)</span>}</div>
                     <div className="font-semibold text-[#111827]">{formatWeight(convoyProposal.totalWeightLbs)}</div>
                   </div>
                   <div className="p-3 rounded-lg bg-white/70">
@@ -1323,6 +1326,12 @@ function LandLogistics({
                     <div className="font-semibold text-[#111827]">{convoyProposal.itemCount} items</div>
                   </div>
                 </div>
+                
+                {proposalInfo && (
+                  <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                    <p className="text-xs text-blue-700">{proposalInfo}</p>
+                  </div>
+                )}
                 
                 {convoyProposal.vehicleAllocations.length > 0 ? (
                   <>

@@ -402,12 +402,14 @@ export interface ConvoyProposal {
   totalCapacity: number;
   utilizationPercent: number;
   scheduledDate: string | null;
+  hasEstimatedWeights?: boolean;
 }
 
 export interface ProposeConvoyResponse {
   proposal: ConvoyProposal;
   hasPrioritySettings: boolean;
   warning: string | null;
+  info: string | null;
 }
 
 export async function proposeConvoyForTransfer(transferId: number): Promise<ProposeConvoyResponse> {
