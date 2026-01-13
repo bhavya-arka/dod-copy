@@ -48,6 +48,7 @@ The system provides automatic vehicle calculation for ground transfers between w
 The system provides standardized transport data aggregation for warehouse forecasting:
 - **Cross-Modal Manifest System**: Links warehouse transfers to convoys, flight plans, and voyages with manifest creation and transport assignment workflows.
 - **Transfer Workflow**: Transfers follow a lifecycle: `pending → manifest_created → transport_assigned → in_transit → completed`.
+- **Transfer Order Management**: Interactive TransferDetailsModal allows users to view transfer details, set expected arrival dates, add notes, and update status (mark in transit, complete, or cancel).
 - **Inbound Cargo Tracking**: Aggregates inbound cargo by destination warehouse for each transport mode (air, land, sea).
 - **80% Utilization Threshold Alerts**: Tracks warehouse utilization and generates alerts when sites exceed or will exceed 80% capacity.
 - **Predictive Forecasting**: Enhanced predictive forecast endpoint includes warehouse transfers and threshold-based capacity warnings.
