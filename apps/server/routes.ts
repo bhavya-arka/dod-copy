@@ -6777,60 +6777,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (transfer.assigned_convoy_id) {
-        return res.status(400).json({ error: "Transfer already has a convoy assigned" });
+        return res.status(400).json({ error: "Transfer already has convoy assigned" });
       }
       
       // Get destination site
       const [destSite] = await db.select()
         .from(warehouseSites)
         .where(eq(warehouseSites.id, transfer.destination_site_id));
-      
-      // Check for idempotency - if convoy already exists for this transfer, return it
-      const expectedConvoyName = `Transfer-${transferId}-Convoy`;
-      const [existingConvoy] = await db.select()
-        .from(landConvoys)
-        .where(and(
-          eq(landConvoys.user_id, userId),
-          eq(landConvoys.name, expectedConvoyName)
-        ));
-      
-      if (existingConvoy) {
-        // Get vehicles for existing convoy
-        const existingVehicles = await db.select()
-          .from(landConvoyVehicles)
-          .where(eq(landConvoyVehicles.convoy_id, existingConvoy.id));
-        
-        // Update transfer with convoy assignment if not already done
-        await db.update(warehouseTransfers)
-          .set({ 
-            assigned_convoy_id: existingConvoy.id,
-            status: "transport_assigned",
-            updated_at: new Date()
-          })
-          .where(eq(warehouseTransfers.id, transferId));
-        
-        console.log(`[Warehouse] Returning existing convoy ${existingConvoy.id} for transfer ${transferId}`);
-        
-        return res.status(200).json({
-          message: "Existing convoy found and assigned",
-          convoy: {
-            id: existingConvoy.id,
-            name: existingConvoy.name,
-            origin: existingConvoy.origin,
-            destination: existingConvoy.destination,
-            status: existingConvoy.status,
-            vehicleCount: existingConvoy.vehicle_count,
-            totalWeightLbs: existingConvoy.total_cargo_weight_lbs,
-          },
-          vehicleAllocations: existingVehicles.map(v => ({
-            vehicleCode: v.vehicle_type,
-            vehicleCount: 1,
-          })),
-          transfer_id: transferId,
-          transfer_status: "transport_assigned",
-          existing: true
-        });
-      }
       
       // Calculate total weight from transfer items with estimation for missing weights
       const DEFAULT_WEIGHT_LBS = 500;

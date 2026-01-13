@@ -37,21 +37,17 @@ interface DustParticle {
 
 const LANE_OFFSETS = [-4, 0, 4];
 const CONVOY_SPEED = 2;
+const DUST_PARTICLE_COUNT = 50;
 
 function DustParticles({ isMoving, convoyPosition }: { isMoving: boolean; convoyPosition: number }) {
   const particlesRef = useRef<THREE.Points>(null);
   const particleData = useRef<DustParticle[]>([]);
   const geometryRef = useRef<THREE.BufferGeometry>(null);
   
-  const particleCount = 100;
-  
-  const positions = useMemo(() => {
-    return new Float32Array(particleCount * 3);
-  }, []);
-  
-  const sizes = useMemo(() => {
-    return new Float32Array(particleCount);
-  }, []);
+  const { positions, sizes } = useMemo(() => ({
+    positions: new Float32Array(DUST_PARTICLE_COUNT * 3),
+    sizes: new Float32Array(DUST_PARTICLE_COUNT),
+  }), []);
 
   useFrame((_, delta) => {
     if (!geometryRef.current || !isMoving) return;
@@ -73,7 +69,7 @@ function DustParticles({ isMoving, convoyPosition }: { isMoving: boolean; convoy
         maxLife: 1 + Math.random() * 2,
       };
       
-      if (particleData.current.length < particleCount) {
+      if (particleData.current.length < DUST_PARTICLE_COUNT) {
         particleData.current.push(newParticle);
       } else {
         const deadIndex = particleData.current.findIndex(p => p.life >= p.maxLife);
@@ -107,13 +103,13 @@ function DustParticles({ isMoving, convoyPosition }: { isMoving: boolean; convoy
       <bufferGeometry ref={geometryRef}>
         <bufferAttribute
           attach="attributes-position"
-          count={particleCount}
+          count={DUST_PARTICLE_COUNT}
           array={positions}
           itemSize={3}
         />
         <bufferAttribute
           attach="attributes-size"
-          count={particleCount}
+          count={DUST_PARTICLE_COUNT}
           array={sizes}
           itemSize={1}
         />
@@ -327,6 +323,35 @@ const ConvoyVisualization: React.FC<ConvoyVisualizationProps> = memo(({
   autoRotate = false,
   height = 400,
 }) => {
+  const [contextLost, setContextLost] = useState(false);
+  const [canvasKey, setCanvasKey] = useState(0);
+
+  const handleContextLost = (e: Event) => {
+    e.preventDefault();
+    setContextLost(true);
+    console.warn('[ConvoyVisualization] WebGL context lost');
+  };
+
+  const handleContextRestored = () => {
+    setContextLost(false);
+    console.log('[ConvoyVisualization] WebGL context restored');
+  };
+
+  const handleReloadCanvas = () => {
+    setContextLost(false);
+    setCanvasKey(prev => prev + 1);
+  };
+
+  if (vehicles.length === 0) {
+    return (
+      <div className="relative w-full flex items-center justify-center bg-[#0a0a0a] rounded-lg" style={{ height }}>
+        <div className="text-center text-gray-400">
+          <p className="text-sm">No vehicles in convoy</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full" style={{ height }}>
       <div className="absolute top-3 left-3 z-10">
@@ -340,35 +365,45 @@ const ConvoyVisualization: React.FC<ConvoyVisualizationProps> = memo(({
         </div>
       </div>
 
-      <Canvas
-        shadows
-        dpr={[1, 1.5]}
-        gl={{ 
-          antialias: true,
-          alpha: false,
-          powerPreference: 'default',
-          preserveDrawingBuffer: true,
-          failIfMajorPerformanceCaveat: false,
-        }}
-        style={{ background: '#0a0a0a' }}
-        onCreated={({ gl }) => {
-          gl.domElement.addEventListener('webglcontextlost', (e) => {
-            e.preventDefault();
-            console.warn('[ConvoyVisualization] WebGL context lost, will attempt recovery');
-          });
-          gl.domElement.addEventListener('webglcontextrestored', () => {
-            console.log('[ConvoyVisualization] WebGL context restored');
-          });
-        }}
-      >
-        <ConvoyScene
-          vehicles={vehicles}
-          convoyStatus={convoyStatus}
-          onVehicleClick={onVehicleClick}
-          showGrid={showGrid}
-          autoRotate={autoRotate}
-        />
-      </Canvas>
+      {contextLost ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a0a] rounded-lg">
+          <div className="text-center">
+            <p className="text-gray-400 mb-3">3D view temporarily unavailable</p>
+            <button
+              onClick={handleReloadCanvas}
+              className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors text-sm font-medium"
+            >
+              Reload View
+            </button>
+          </div>
+        </div>
+      ) : (
+        <Canvas
+          key={canvasKey}
+          shadows
+          dpr={[1, 1.5]}
+          gl={{ 
+            antialias: true,
+            alpha: false,
+            powerPreference: 'default',
+            preserveDrawingBuffer: true,
+            failIfMajorPerformanceCaveat: false,
+          }}
+          style={{ background: '#0a0a0a' }}
+          onCreated={({ gl }) => {
+            gl.domElement.addEventListener('webglcontextlost', handleContextLost);
+            gl.domElement.addEventListener('webglcontextrestored', handleContextRestored);
+          }}
+        >
+          <ConvoyScene
+            vehicles={vehicles}
+            convoyStatus={convoyStatus}
+            onVehicleClick={onVehicleClick}
+            showGrid={showGrid}
+            autoRotate={autoRotate}
+          />
+        </Canvas>
+      )}
     </div>
   );
 });
