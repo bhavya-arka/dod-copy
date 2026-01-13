@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Loader2, Truck, Plane, Ship, Search, Check, Package } from "lucide-react";
+import { X, Loader2, Truck, Plane, Ship, Search, Check, Package, AlertTriangle, MapPin, ArrowRight } from "lucide-react";
 import type { WarehouseSite, InventoryItem, AirTransportMetadata, CreateTransferPayload } from "../types";
-import { createTransfer, fetchInventory, previewTransferVehicles } from "../../../services/warehouseService";
+import { createTransfer, fetchInventory, previewTransferVehicles, planMultiModalRoute, type MultiModalRoute } from "../../../services/warehouseService";
 
 interface TransferModalProps {
   sites: WarehouseSite[];
@@ -40,6 +40,9 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
   
   const [vehiclePreview, setVehiclePreview] = useState<any>(null);
   const [loadingVehiclePreview, setLoadingVehiclePreview] = useState(false);
+  
+  const [routeSuggestion, setRouteSuggestion] = useState<MultiModalRoute | null>(null);
+  const [loadingRoute, setLoadingRoute] = useState(false);
 
   useEffect(() => {
     if (sourceSiteId) {
@@ -49,6 +52,39 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
       setSelectedItemIds(new Set());
     }
   }, [sourceSiteId]);
+
+  useEffect(() => {
+    const fetchRouteSuggestion = async () => {
+      if (!sourceSiteId || !destSiteId || sourceSiteId === destSiteId) {
+        setRouteSuggestion(null);
+        return;
+      }
+      setLoadingRoute(true);
+      try {
+        const itemsToTransfer = inventoryItems.filter(item => selectedItemIds.has(item.id));
+        const totalWeight = itemsToTransfer.reduce((sum, item) => {
+          const weight = parseFloat(item.weight_lb || item.weight_lbs || "0") || 500;
+          return sum + (weight * item.quantity);
+        }, 0);
+        const route = await planMultiModalRoute(
+          Number(sourceSiteId),
+          Number(destSiteId),
+          totalWeight
+        );
+        setRouteSuggestion(route);
+        if (route.requiresMultiModal && route.suggestedMode !== "ground") {
+          setTransportMode(route.suggestedMode);
+        }
+      } catch (err) {
+        console.error("Failed to fetch route suggestion:", err);
+        setRouteSuggestion(null);
+      } finally {
+        setLoadingRoute(false);
+      }
+    };
+    const debounceTimer = setTimeout(fetchRouteSuggestion, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [sourceSiteId, destSiteId, inventoryItems, selectedItemIds]);
 
   const loadSourceInventory = async (siteId: number) => {
     setLoadingInventory(true);
@@ -235,6 +271,69 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
               </select>
             </div>
           </div>
+
+          {loadingRoute && sourceSiteId && destSiteId && sourceSiteId !== destSiteId && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-100 border border-slate-200">
+              <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
+              <span className="text-sm text-slate-600">Analyzing route...</span>
+            </div>
+          )}
+
+          {routeSuggestion?.requiresMultiModal && (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-900">Ocean Crossing Detected</h3>
+                  <p className="text-xs text-amber-700 mt-1">
+                    Direct ground transport is not possible. The system has planned a multi-modal route:
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 ml-7">
+                {routeSuggestion.legs.map((leg, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-sm">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold ${
+                      leg.mode === "ground" ? "bg-amber-500" :
+                      leg.mode === "air" ? "bg-blue-500" : "bg-teal-500"
+                    }`}>
+                      {leg.legNumber}
+                    </div>
+                    <div className="flex items-center gap-1 flex-1">
+                      {leg.mode === "ground" && <Truck className="w-3.5 h-3.5 text-amber-600" />}
+                      {leg.mode === "air" && <Plane className="w-3.5 h-3.5 text-blue-600" />}
+                      {leg.mode === "sea" && <Ship className="w-3.5 h-3.5 text-teal-600" />}
+                      <span className="text-amber-900 capitalize">{leg.mode}</span>
+                      <span className="text-amber-700 mx-1">:</span>
+                      <span className="text-amber-800 truncate">{leg.origin.name}</span>
+                      <ArrowRight className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                      <span className="text-amber-800 truncate">{leg.destination.name}</span>
+                    </div>
+                    {leg.distanceMiles && (
+                      <span className="text-xs text-amber-600 flex-shrink-0">
+                        {Math.round(leg.distanceMiles).toLocaleString()} mi
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-4 pt-2 ml-7 text-xs text-amber-700 border-t border-amber-200">
+                <span>Total: {routeSuggestion.totalDistanceMiles.toLocaleString()} miles</span>
+                <span>Est. {routeSuggestion.totalEstimatedHours.toFixed(1)} hours</span>
+              </div>
+            </div>
+          )}
+
+          {routeSuggestion && !routeSuggestion.feasible && (
+            <div className="p-3 rounded-xl bg-red-50 border border-red-200">
+              <div className="flex items-center gap-2 text-red-700 text-sm">
+                <AlertTriangle className="w-4 h-4" />
+                <span>{routeSuggestion.reason || "Route planning failed"}</span>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">Transport Mode</label>

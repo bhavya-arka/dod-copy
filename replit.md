@@ -28,6 +28,23 @@ The system incorporates 3D visualization capabilities using Three.js, with reusa
 ## Google Maps Integration (Land Logistics)
 The backend integrates with Google Maps API for geocoding, route calculation, distance matrix computations, and place autocomplete. Frontend components like `LocationAutocomplete` and `RouteMap` provide interactive map functionalities.
 
+## Intelligent Multi-Modal Routing
+The system provides automatic route planning that detects ocean crossings and suggests multi-modal transport:
+- **Route Feasibility Check**: Uses Google Maps Directions API to validate if ground transport is possible between two locations
+- **Ocean Crossing Detection**: Automatically detects when routes require ferry crossings or are not possible by road
+- **Multi-Leg Route Planning**: When ground transport isn't feasible, the system plans a multi-leg route:
+  - Leg 1: Ground convoy from origin to nearest military airport/seaport
+  - Leg 2: Air flight or sea voyage across the ocean
+  - Leg 3: Ground convoy from destination airport/seaport to final destination
+- **Military Facility Database**: Includes coordinates for 10+ military airports (Travis AFB, Hickam AFB, Kadena AB, etc.) and 8+ seaports (Pearl Harbor, San Diego NAS, Norfolk, etc.)
+- **Smart Mode Selection**: Chooses between air and sea transport based on distance and cargo weight:
+  - Distances >2000 miles: Prefer air
+  - Cargo >100,000 lbs: Prefer sea
+  - Default: Air for faster delivery
+- **Haversine Distance Calculation**: Accurate great-circle distance for flight/voyage estimation
+- **API Endpoints**: `/api/routing/plan-multi-modal` for route planning, `/api/routing/execute-multi-modal` for creating transport assets
+- **Transfer Modal Integration**: Shows visual route breakdown with leg-by-leg display including distances and estimated hours
+
 ## PACAF Air Operations Pipeline
 The Air module implements a multi-stage pipeline for cargo planning, including CSV/JSON uploads, data parsing and validation, classification, 463L palletization using a bin-packing algorithm, aircraft allocation solving based on weight and Center of Balance (CoB), and 2D ICODES visualization for C-17 and C-130 aircraft.
 

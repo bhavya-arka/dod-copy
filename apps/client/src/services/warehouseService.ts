@@ -337,6 +337,58 @@ export async function previewTransferVehicles(itemIds: number[], siteId: number)
   return response.json();
 }
 
+export interface TransportLeg {
+  legNumber: number;
+  mode: "ground" | "air" | "sea";
+  origin: {
+    name: string;
+    lat: number;
+    lng: number;
+    type: "warehouse" | "airport" | "seaport";
+  };
+  destination: {
+    name: string;
+    lat: number;
+    lng: number;
+    type: "warehouse" | "airport" | "seaport";
+  };
+  distanceMiles?: number;
+  estimatedHours?: number;
+  vehicleCount?: number;
+}
+
+export interface MultiModalRoute {
+  feasible: boolean;
+  requiresMultiModal: boolean;
+  reason?: string;
+  legs: TransportLeg[];
+  totalDistanceMiles: number;
+  totalEstimatedHours: number;
+  suggestedMode: "ground" | "air" | "sea";
+}
+
+/**
+ * Plan a multi-modal route between two warehouse sites
+ * Uses Google Maps to check ground route viability
+ * Auto-suggests air/sea legs for ocean crossings
+ */
+export async function planMultiModalRoute(
+  sourceSiteId: number,
+  destinationSiteId: number,
+  cargoWeightLbs: number
+): Promise<MultiModalRoute> {
+  const response = await fetch("/api/routing/plan-multi-modal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ sourceSiteId, destinationSiteId, cargoWeightLbs })
+  });
+  if (!response.ok) {
+    throw new Error("Failed to plan route");
+  }
+  return response.json();
+}
+
 /**
  * Create a new transfer order with item selection and optional air transport metadata
  * @param data - Transfer creation data
