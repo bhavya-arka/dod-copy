@@ -6874,28 +6874,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Add vehicles to convoy
       let vehiclePosition = 1;
+      let vehiclesInserted = 0;
+      console.log(`[Warehouse] Adding vehicles for ${allocations.length} allocation(s)`);
+      
       for (const allocation of allocations) {
-        // Get vehicle type ID from code
-        const [vehicleType] = await db.select({ id: landVehicleTypes.id })
-          .from(landVehicleTypes)
-          .where(eq(landVehicleTypes.code, allocation.vehicleCode));
+        console.log(`[Warehouse] Processing allocation: ${allocation.vehicleCode} x ${allocation.vehicleCount}`);
         
-        if (!vehicleType) {
-          console.warn(`[Warehouse] Vehicle type not found: ${allocation.vehicleCode}`);
-          continue;
-        }
+        // Use vehicleTypeId directly from allocation (more reliable than code lookup)
+        const vehicleTypeId = allocation.vehicleTypeId;
         
         for (let i = 0; i < allocation.vehicleCount; i++) {
-          await db.insert(landConvoyVehicles)
-            .values({
-              convoy_id: newConvoy.id,
-              vehicle_type_id: vehicleType.id,
-              position_in_convoy: vehiclePosition++,
-              callsign: `${allocation.vehicleCode}-${i + 1}`,
-              status: "ready",
-            });
+          try {
+            await db.insert(landConvoyVehicles)
+              .values({
+                convoy_id: newConvoy.id,
+                vehicle_type_id: vehicleTypeId,
+                position_in_convoy: vehiclePosition++,
+                callsign: `${allocation.vehicleCode}-${i + 1}`,
+                status: "ready",
+              });
+            vehiclesInserted++;
+          } catch (insertError) {
+            console.error(`[Warehouse] Failed to insert vehicle ${i+1} of ${allocation.vehicleCode}:`, insertError);
+          }
         }
       }
+      
+      console.log(`[Warehouse] Inserted ${vehiclesInserted} vehicles into convoy ${newConvoy.id}`);
       
       // Update transfer with convoy assignment
       await db.update(warehouseTransfers)
