@@ -6256,7 +6256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(warehouseInventoryItems)
         .where(and(
           eq(warehouseInventoryItems.site_id, source_site_id),
-          sql`${warehouseInventoryItems.id} = ANY(${item_ids})`
+          inArray(warehouseInventoryItems.id, item_ids)
         ));
 
       if (selectedItems.length === 0) {
