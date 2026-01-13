@@ -4715,7 +4715,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { algorithm, params } = req.body;
       
-      const validAlgorithms = ['cardstack', 'size_standardization', 'value_density', 'bin_packing'];
+      const validAlgorithms = ['cardstack', 'size_standardization', 'value_density', 'bin_packing', 'name_consolidation'];
       if (!algorithm || !validAlgorithms.includes(algorithm)) {
         return res.status(400).json({ error: "Invalid algorithm. Must be one of: " + validAlgorithms.join(", ") });
       }
@@ -5237,6 +5237,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
           zonesOptimized: affectedZoneIds.size,
           pickEfficiencyGain: `${palletLocations.size} pallets ready for shipment`,
           itemsAffected: totalStaged,
+          actionsGenerated: actions.length,
+        };
+      } else if (algorithm === 'name_consolidation') {
+        // Name Consolidation: Group items with identical or similar names together
+        // Reduces scattered storage and improves picking efficiency for same-name items
+        const { minItemsToConsolidate = 2, maxActionsToGenerate = 50, useFuzzyMatching = false } = params || {};
+        
+        // Normalize item names for grouping
+        const normalizeName = (name: string): string => {
+          return name
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9\s]/g, '') // Remove special chars
+            .replace(/\s+/g, ' '); // Normalize whitespace
+        };
+        
+        // Group items by normalized name
+        const nameGroups: Map<string, typeof filteredItems> = new Map();
+        for (const item of filteredItems) {
+          if (!item.description) continue;
+          const normalizedName = normalizeName(item.description);
+          if (normalizedName.length < 3) continue; // Skip very short names
+          
+          if (!nameGroups.has(normalizedName)) {
+            nameGroups.set(normalizedName, []);
+          }
+          nameGroups.get(normalizedName)!.push(item);
+        }
+        
+        let actionId = 1;
+        let consolidatedItems = 0;
+        let consolidatedValue = 0;
+        const affectedZoneIds = new Set<number>();
+        const consolidatedNames = new Set<string>();
+        
+        // Sort by group size (largest groups first) for maximum impact
+        const sortedGroups = Array.from(nameGroups.entries())
+          .filter(([, items]) => items.length >= minItemsToConsolidate)
+          .sort((a, b) => b[1].length - a[1].length);
+        
+        for (const [normalizedName, nameItems] of sortedGroups) {
+          if (actions.length >= maxActionsToGenerate) break;
+          
+          // Find the most common zone for this name's items
+          const zoneCounts: Map<number, number> = new Map();
+          for (const item of nameItems) {
+            if (item.matched_zone_id !== null) {
+              if (enableZoneFiltering && targetZoneIds.length > 0) {
+                if (targetZoneIds.includes(item.matched_zone_id)) {
+                  zoneCounts.set(item.matched_zone_id, (zoneCounts.get(item.matched_zone_id) || 0) + 1);
+                }
+              } else {
+                zoneCounts.set(item.matched_zone_id, (zoneCounts.get(item.matched_zone_id) || 0) + 1);
+              }
+            }
+          }
+          
+          // Determine primary zone (most common)
+          let primaryZoneId: number | null = null;
+          let maxCount = 0;
+          for (const [zoneId, count] of Array.from(zoneCounts.entries())) {
+            if (count > maxCount) {
+              maxCount = count;
+              primaryZoneId = zoneId;
+            }
+          }
+          
+          // If no primary zone found, use first available target zone
+          if (primaryZoneId === null && allowedTargetZones.length > 0) {
+            primaryZoneId = allowedTargetZones[0].id;
+          }
+          
+          if (primaryZoneId === null) continue;
+          
+          const primaryZone = zones.find(z => z.id === primaryZoneId);
+          if (!primaryZone) continue;
+          
+          // Find items NOT in the primary zone - these need to move
+          const itemsToMove = nameItems.filter(item => 
+            item.matched_zone_id !== null && item.matched_zone_id !== primaryZoneId
+          );
+          
+          if (itemsToMove.length === 0) continue;
+          
+          // Calculate new location in primary zone
+          const baseLocation = primaryZone.code || `Z${primaryZoneId}`;
+          let slotNum = 1;
+          
+          for (const item of itemsToMove) {
+            if (actions.length >= maxActionsToGenerate) break;
+            
+            // Track source zone
+            if (item.matched_zone_id !== null) {
+              affectedZoneIds.add(item.matched_zone_id);
+            }
+            
+            const targetLocation = `${baseLocation}-CONS-${String(slotNum++).padStart(2, '0')}`;
+            const displayName = nameItems[0].description.substring(0, 40);
+            
+            actions.push({
+              id: `NC-${actionId++}`,
+              action: `Consolidate by name`,
+              item: item.requisition_no,
+              itemDescription: item.description.substring(0, 50),
+              from: item.rack_location,
+              to: targetLocation,
+              targetZoneId: primaryZoneId,
+              targetZoneName: primaryZone.name,
+              priority: itemsToMove.length >= 5 ? 'high' : itemsToMove.length >= 3 ? 'medium' : 'low',
+              estimatedBenefit: `Group "${displayName}" items together (${nameItems.length} total)`,
+              quantity: item.quantity,
+              value: item.value,
+              reason: `Item "${item.description.substring(0, 30)}..." scattered in ${zoneCounts.size} zones - consolidate to ${primaryZone.name}`,
+            });
+            
+            consolidatedItems++;
+            consolidatedValue += item.value;
+          }
+          
+          if (itemsToMove.length > 0) {
+            consolidatedNames.add(normalizedName);
+          }
+        }
+        
+        summary = {
+          slotsFreed: consolidatedItems,
+          consolidationWins: `${consolidatedNames.size} item groups consolidated`,
+          zonesOptimized: affectedZoneIds.size,
+          pickEfficiencyGain: `${consolidatedItems} items moved to shared locations`,
+          itemsAffected: consolidatedItems,
           actionsGenerated: actions.length,
         };
       }

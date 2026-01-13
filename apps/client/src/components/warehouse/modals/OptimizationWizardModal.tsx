@@ -4,7 +4,7 @@ import type { WarehouseSite, WarehouseZone, ToastMessage } from "../types";
 import { runOptimizationWizard, runAllOptimizations, applyOptimizationPlan, createOptimizationPlan, fetchSiteZones, type OptimizationWizardResult, type CreatePlanData } from "../../../services/warehouseService";
 import { generateWarehouseOptimizationPDF } from "../../../lib/warehouseOptimizationPdfExport";
 
-export type Algorithm = "cardstack" | "size_standardization" | "value_density" | "bin_packing" | "run_all";
+export type Algorithm = "cardstack" | "size_standardization" | "value_density" | "bin_packing" | "name_consolidation" | "run_all";
 
 interface OptimizationWizardModalProps {
   siteId: number;
@@ -84,6 +84,18 @@ const ALGORITHMS: AlgorithmOption[] = [
     ],
     icon: <Box className="w-6 h-6" />,
   },
+  {
+    id: "name_consolidation",
+    name: "Name Consolidation",
+    description: "Group items with identical names together for easier picking.",
+    bullets: [
+      "Finds items with the same name scattered across zones",
+      "Consolidates matching items to a single location",
+      "Reduces travel time for picking duplicate items",
+      "Improves inventory visibility for same-name products",
+    ],
+    icon: <Layers className="w-6 h-6" />,
+  },
 ];
 
 interface ZoneConstraints {
@@ -97,6 +109,7 @@ interface AlgorithmParams {
   size_standardization: { minProgramItems: number; maxActionsToGenerate: number };
   value_density: { highValueThreshold: number; zoneDistanceMultiplier: number };
   bin_packing: { maxItemsPerPallet: number; prioritizeByValue: boolean };
+  name_consolidation: { minItemsToConsolidate: number; maxActionsToGenerate: number };
   zoneConstraints: ZoneConstraints;
 }
 
@@ -111,6 +124,7 @@ const DEFAULT_PARAMS: AlgorithmParams = {
   size_standardization: { minProgramItems: 3, maxActionsToGenerate: 50 },
   value_density: { highValueThreshold: 1000, zoneDistanceMultiplier: 1.5 },
   bin_packing: { maxItemsPerPallet: 15, prioritizeByValue: true },
+  name_consolidation: { minItemsToConsolidate: 2, maxActionsToGenerate: 50 },
   zoneConstraints: DEFAULT_ZONE_CONSTRAINTS,
 };
 
@@ -270,6 +284,7 @@ export default function OptimizationWizardModal({
       size_standardization: "Size Standardization",
       value_density: "Value Density",
       bin_packing: "Bin-Packing",
+      name_consolidation: "Name Consolidation",
       run_all: "Full Optimization",
     };
     return names[algorithm] || algorithm;
@@ -554,6 +569,49 @@ export default function OptimizationWizardModal({
       </div>
     );
 
+    const renderNameConsolidationParams = () => (
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Finds items with identical names scattered across multiple zones and consolidates them to a single location.
+        </p>
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-2">
+            Minimum Items to Consolidate
+          </label>
+          <input
+            type="range"
+            min="2"
+            max="10"
+            value={params.name_consolidation.minItemsToConsolidate}
+            onChange={(e) => updateParam("name_consolidation", "minItemsToConsolidate", parseInt(e.target.value))}
+            className="w-full"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+            <span>2 (More suggestions)</span>
+            <span className="font-medium text-foreground">{params.name_consolidation.minItemsToConsolidate} items</span>
+            <span>10 (Only large groups)</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Only suggest consolidation if this many items share the same name across different zones.
+          </p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-2">
+            Max Actions to Generate
+          </label>
+          <input
+            type="number"
+            min="10"
+            max="100"
+            value={params.name_consolidation.maxActionsToGenerate}
+            onChange={(e) => updateParam("name_consolidation", "maxActionsToGenerate", parseInt(e.target.value))}
+            className="w-full px-4 py-2 rounded-xl bg-muted border border-border text-foreground text-sm"
+          />
+          <p className="text-xs text-muted-foreground mt-1">Limit recommendations to focus on highest-impact moves.</p>
+        </div>
+      </div>
+    );
+
     const renderRunAllParams = () => (
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
@@ -613,6 +671,7 @@ export default function OptimizationWizardModal({
         {selectedAlgorithm === "size_standardization" && renderSizeStandardizationParams()}
         {selectedAlgorithm === "value_density" && renderValueDensityParams()}
         {selectedAlgorithm === "bin_packing" && renderBinPackingParams()}
+        {selectedAlgorithm === "name_consolidation" && renderNameConsolidationParams()}
 
         {/* Zone Constraints Section */}
         <div className="mt-6 pt-6 border-t border-border">
