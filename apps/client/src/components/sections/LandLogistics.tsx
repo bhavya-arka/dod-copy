@@ -36,6 +36,7 @@ import type {
   ConvoyVehicle,
   LandStatistics,
   RouteInfo,
+  PendingTransfer,
 } from '../../services/landService';
 
 interface LandLogisticsProps {
@@ -129,13 +130,17 @@ function LandLogistics({
   const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
   const [routes, setRoutes] = useState<RouteType[]>([]);
   const [convoys, setConvoys] = useState<Convoy[]>([]);
+  const [pendingTransfers, setPendingTransfers] = useState<PendingTransfer[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [selectedConvoy, setSelectedConvoy] = useState<Convoy | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showVehicleSelectModal, setShowVehicleSelectModal] = useState(false);
+  const [showAssignConvoyModal, setShowAssignConvoyModal] = useState(false);
+  const [selectedTransferForAssignment, setSelectedTransferForAssignment] = useState<PendingTransfer | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
   
   const [formData, setFormData] = useState<ConvoyFormData>({
     name: '',
@@ -163,11 +168,33 @@ function LandLogistics({
       setVehicleTypes(data.vehicleTypes);
       setRoutes(data.routes);
       setConvoys(data.convoys);
+      setPendingTransfers(data.pendingTransfers);
     } catch (error) {
       console.error('Error fetching land logistics data:', error);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const handleAssignConvoy = useCallback(async (convoyId: number) => {
+    if (!selectedTransferForAssignment) return;
+    
+    setIsAssigning(true);
+    try {
+      await landService.assignConvoyToTransfer(selectedTransferForAssignment.id, convoyId);
+      await fetchData();
+      setShowAssignConvoyModal(false);
+      setSelectedTransferForAssignment(null);
+    } catch (error) {
+      console.error('Error assigning convoy to transfer:', error);
+    } finally {
+      setIsAssigning(false);
+    }
+  }, [selectedTransferForAssignment, fetchData]);
+
+  const openAssignConvoyModal = useCallback((transfer: PendingTransfer) => {
+    setSelectedTransferForAssignment(transfer);
+    setShowAssignConvoyModal(true);
   }, []);
 
   useEffect(() => {
@@ -584,6 +611,66 @@ function LandLogistics({
                     </div>
                   )}
                 </div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-2xl bg-white border border-[#E5E7EB] shadow-sm p-6 mt-6"
+                >
+                  <div className="flex items-center gap-2 mb-4">
+                    <Box className="w-5 h-5 text-amber-500" />
+                    <h2 className="text-lg font-semibold text-[#111827]">Pending Warehouse Transfers</h2>
+                  </div>
+                  {pendingTransfers.length === 0 ? (
+                    <p className="text-[#6B7280] text-center py-8">No pending transfers awaiting convoy assignment.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {pendingTransfers.map((transfer) => (
+                        <motion.div
+                          key={transfer.id}
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="p-4 rounded-xl bg-[#FAFAFA] border border-[#E5E7EB] hover:border-amber-300 transition-all"
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <div className="text-xs text-[#6B7280] mb-1">Transfer #{transfer.id}</div>
+                              <div className="font-medium text-[#111827]">
+                                {transfer.source_site_name} → {transfer.destination_site_name}
+                              </div>
+                            </div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              transfer.status === 'pending' 
+                                ? 'bg-amber-50 text-amber-700' 
+                                : 'bg-blue-50 text-blue-700'
+                            }`}>
+                              {transfer.status === 'manifest_created' ? 'Manifest Created' : 'Pending'}
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2 text-sm mb-4">
+                            <div className="flex items-center gap-1 text-[#6B7280]">
+                              <Weight className="w-3 h-3 text-amber-500" />
+                              <span>{formatWeight(transfer.total_weight_lbs || 0)}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-[#6B7280]">
+                              <Box className="w-3 h-3 text-amber-500" />
+                              <span>{transfer.transfer_items?.length || 0} items</span>
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={() => openAssignConvoyModal(transfer)}
+                            className="w-full py-2 rounded-lg bg-amber-500 text-white font-medium hover:bg-amber-600 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Truck className="w-4 h-4" />
+                            Assign Convoy
+                          </button>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
 
                 {convoys.length > 0 && (
                   <TransportAiInsights
@@ -1144,6 +1231,78 @@ function LandLogistics({
               </button>
             ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAssignConvoyModal} onOpenChange={(open) => {
+        if (!open) {
+          setShowAssignConvoyModal(false);
+          setSelectedTransferForAssignment(null);
+        }
+      }}>
+        <DialogContent className="bg-white border-[#E5E7EB] max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-[#111827] flex items-center gap-2">
+              <Truck className="w-5 h-5 text-amber-500" />
+              Assign Convoy to Transfer
+            </DialogTitle>
+            <DialogDescription className="text-[#6B7280]">
+              {selectedTransferForAssignment && (
+                <>Transfer #{selectedTransferForAssignment.id}: {selectedTransferForAssignment.source_site_name} → {selectedTransferForAssignment.destination_site_name}</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            {convoys.filter(c => c.status === 'draft' || c.status === 'planned').length === 0 ? (
+              <div className="text-center py-8 bg-[#FAFAFA] rounded-xl border border-[#E5E7EB]">
+                <Truck className="w-10 h-10 text-[#E5E7EB] mx-auto mb-2" />
+                <p className="text-[#111827] font-medium">No Available Convoys</p>
+                <p className="text-sm text-[#6B7280] mt-1">Create a convoy first before assigning transfers</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {convoys.filter(c => c.status === 'draft' || c.status === 'planned').map((convoy) => (
+                  <motion.button
+                    key={convoy.id}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    onClick={() => handleAssignConvoy(convoy.id)}
+                    disabled={isAssigning}
+                    className="w-full p-4 rounded-xl bg-white border border-[#E5E7EB] hover:border-amber-300 hover:shadow-md text-left transition-all disabled:opacity-50"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-semibold text-[#111827]">{convoy.name}</div>
+                      <StatusBadge status={convoy.status as any} size="sm" showIcon />
+                    </div>
+                    <div className="text-sm text-[#6B7280] mb-2">{convoy.origin} → {convoy.destination}</div>
+                    <div className="flex items-center gap-4 text-xs text-[#6B7280]">
+                      <span className="flex items-center gap-1">
+                        <Truck className="w-3 h-3" />
+                        {convoy.vehicle_count || 0} vehicles
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Weight className="w-3 h-3" />
+                        {formatWeight(convoy.total_weight_lbs || 0)}
+                      </span>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <button
+              onClick={() => {
+                setShowAssignConvoyModal(false);
+                setSelectedTransferForAssignment(null);
+              }}
+              className="px-4 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#111827] hover:bg-[#FAFAFA] transition-colors"
+            >
+              Cancel
+            </button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

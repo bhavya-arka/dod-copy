@@ -342,17 +342,58 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
   return handleResponse<PlaceDetails>(response);
 }
 
+export interface PendingTransferItem {
+  id: number;
+  item_id: number;
+  quantity: number;
+}
+
+export interface PendingTransfer {
+  id: number;
+  source_site_id: number;
+  destination_site_id: number;
+  source_site_name: string;
+  destination_site_name: string;
+  status: 'pending' | 'manifest_created' | 'in_transit' | 'completed';
+  total_weight_lbs: number;
+  transfer_items: PendingTransferItem[];
+  created_at?: string;
+  convoy_id?: number;
+}
+
+export async function getPendingTransfers(): Promise<PendingTransfer[]> {
+  const response = await fetch(`${API_BASE}/pending-transfers`, {
+    credentials: 'include',
+  });
+  return handleResponse<PendingTransfer[]>(response);
+}
+
+export async function assignConvoyToTransfer(
+  transferId: number,
+  convoyId: number
+): Promise<{ success: boolean }> {
+  const response = await fetch(`/api/warehouse/transfers/${transferId}/assign-convoy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ convoy_id: convoyId }),
+  });
+  return handleResponse<{ success: boolean }>(response);
+}
+
 export async function fetchAllData(): Promise<{
   statistics: LandStatistics | null;
   vehicleTypes: VehicleType[];
   routes: LandRoute[];
   convoys: Convoy[];
+  pendingTransfers: PendingTransfer[];
 }> {
-  const [statsRes, vehiclesRes, routesRes, convoysRes] = await Promise.all([
+  const [statsRes, vehiclesRes, routesRes, convoysRes, transfersRes] = await Promise.all([
     fetch(`${API_BASE}/statistics`, { credentials: 'include' }),
     fetch(`${API_BASE}/vehicle-types`, { credentials: 'include' }),
     fetch(`${API_BASE}/routes`, { credentials: 'include' }),
     fetch(`${API_BASE}/convoys`, { credentials: 'include' }),
+    fetch(`${API_BASE}/pending-transfers`, { credentials: 'include' }),
   ]);
 
   return {
@@ -360,5 +401,6 @@ export async function fetchAllData(): Promise<{
     vehicleTypes: vehiclesRes.ok ? await vehiclesRes.json() : [],
     routes: routesRes.ok ? await routesRes.json() : [],
     convoys: convoysRes.ok ? await convoysRes.json() : [],
+    pendingTransfers: transfersRes.ok ? await transfersRes.json() : [],
   };
 }

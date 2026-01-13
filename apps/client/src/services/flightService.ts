@@ -147,3 +147,56 @@ export async function createFlightSchedule(planId: number, data: any): Promise<F
   }
   return response.json();
 }
+
+/**
+ * Pending air transfer awaiting flight plan assignment
+ */
+export interface PendingAirTransfer {
+  id: number;
+  source_site_id: number;
+  destination_site_id: number;
+  status: string;
+  transport_mode: string;
+  air_metadata?: {
+    aircraft_type?: string;
+    mission_id?: string;
+    priority?: 'routine' | 'priority' | 'urgent';
+  };
+  total_weight_lb?: number;
+  item_count?: number;
+  notes?: string;
+  created_at: string;
+  source_site?: { id: number; code: string; name: string } | null;
+  destination_site?: { id: number; code: string; name: string } | null;
+}
+
+/**
+ * Get pending air transfers that need flight plan assignment
+ */
+export async function getPendingAirTransfers(): Promise<PendingAirTransfer[]> {
+  const response = await fetch("/api/air/pending-transfers", {
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Failed to fetch pending air transfers");
+  return response.json();
+}
+
+/**
+ * Assign a flight plan to an air transfer
+ */
+export async function assignFlightPlanToTransfer(
+  transferId: number,
+  flightPlanId: number
+): Promise<{ message: string; transfer_id: number; flight_plan_id: number; status: string }> {
+  const response = await fetch(`/api/warehouse/transfers/${transferId}/assign-flight-plan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ flight_plan_id: flightPlanId }),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to assign flight plan to transfer");
+  }
+  return response.json();
+}

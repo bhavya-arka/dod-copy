@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { User } from "../hooks/useAuth";
-import { Plane, CheckCircle, FileText, Check, Pencil } from "lucide-react";
+import { Plane, CheckCircle, FileText, Check, Pencil, Package, ArrowRight, AlertCircle } from "lucide-react";
 import { 
   getFlightPlans, 
   deleteFlightPlan, 
   updateFlightPlanStatus, 
   getFlightSchedules,
+  getPendingAirTransfers,
   FlightPlan,
-  FlightSchedule
+  FlightSchedule,
+  PendingAirTransfer
 } from "../services/flightService";
+import AssignFlightPlanModal from "./AssignFlightPlanModal";
 
 interface DashboardProps {
   user: User;
