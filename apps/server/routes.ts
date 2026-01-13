@@ -5687,6 +5687,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .where(eq(warehouseOptimizationRuns.id, runId));
 
+      // Resync zone capacities to reflect the moved items
+      if (actionsApplied > 0) {
+        try {
+          const { palletPositionService } = await import('./services');
+          const config = {
+            countBoxAsSeparate: false,
+            whseRule: 'ignore' as const,
+            bulkMode: 'estimate' as const,
+            bulkIdColumnName: null
+          };
+          await palletPositionService.updateZoneMetrics(siteId, config);
+          palletPositionService.invalidateMetricsCache(siteId);
+          console.log(`[Optimize Apply] Resynced zone capacities for site ${siteId}`);
+        } catch (syncError) {
+          console.error(`[Optimize Apply] Failed to resync zones:`, syncError);
+          // Don't fail the request, just log the error
+        }
+      }
+
       res.json({ 
         success: true, 
         message: actionsApplied === actionPlan.actions.length 
