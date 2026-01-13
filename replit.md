@@ -54,8 +54,19 @@ The system provides standardized transport data aggregation for warehouse foreca
 - **Transport Pipeline API**: Dedicated `/api/operations/transport-pipeline` endpoint provides standardized transport data per warehouse with inbound cargo breakdown by mode.
 - **Pending Transfers in Logistics Modules**: Land Logistics and Air Operations show pending warehouse transfers that can be assigned to convoys or flight plans.
 
+## Military Sealift Command (MSC) Sea Freight Operations
+The Sea Freight module provides comprehensive maritime logistics:
+- **Vessel Types Database**: 10 authentic MSC vessel types including Henry J. Kaiser-class oilers (T-AO), Bob Hope/Watson-class LMSR, Spearhead-class EPF, hospital ships, and more with full specifications (cargo capacity, TEU, speed, crew).
+- **Tab-Based Navigation**: Overview, Voyages, Containers, Transfers, and Schedule tabs for intuitive workflow.
+- **Voyage Management**: Full CRUD with vessel type selection, hull number, IMO, and status lifecycle (draft → planned → loading → underway → completed).
+- **Container Management**: Container tracking with status badges (Empty, Loading, Loaded, Unloading, Discharged) and voyage assignment.
+- **Port Schedule**: Dynamic display of upcoming arrivals/departures computed from voyage data.
+- **Voyage Proposal System**: Recommends suitable vessel types based on total cargo weight when assigning warehouse transfers.
+- **Weight Estimation**: Auto-calculates 500 lbs default or dimensions-based (L×W×H × 0.02 lbs/in³) for items without explicit weights.
+- **API Endpoints**: 16+ routes at `/api/sea/*` for vessel types, voyages, containers, statistics, port schedule, and warehouse transfer integration.
+
 ## Data Models
-Key data models support `MovementItem`, `Pallet463L`, `AircraftLoadPlan` for air operations, `warehouse_sites`, `warehouse_inventory_items` for WMS, and `land_routes`, `sea_voyages` for land and sea modules respectively.
+Key data models support `MovementItem`, `Pallet463L`, `AircraftLoadPlan` for air operations, `warehouse_sites`, `warehouse_inventory_items` for WMS, `land_routes`, `land_convoys` for ground transport, and `sea_voyages`, `sea_containers`, `sea_vessel_types` for maritime operations.
 
 ## Government Compliance & Federal Standards
 The system supports National Stock Numbers (NSN), Commercial and Government Entity (CAGE) codes, and integrates with Military Sealift Command (MSC) vessel designations, aligning with Federal Logistics Information System (FLIS) standards.
