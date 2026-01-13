@@ -6723,6 +6723,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(warehouseSites)
         .where(eq(warehouseSites.id, transfer.destination_site_id));
       
+      // Check if ground route is feasible using multi-modal routing service
+      const routeCheck = await multiModalRoutingService.planMultiModalRoute(
+        transfer.source_site_id,
+        transfer.destination_site_id,
+        0
+      );
+      
+      if (routeCheck.requiresMultiModal) {
+        return res.status(400).json({ 
+          error: "Ground transport not possible for this route",
+          reason: routeCheck.reason || "Route requires ocean crossing - please use Air or Sea transport",
+          suggestedMode: routeCheck.suggestedMode,
+          multiModalRoute: routeCheck.legs.map(leg => ({
+            legNumber: leg.legNumber,
+            mode: leg.mode,
+            from: leg.origin.name,
+            to: leg.destination.name,
+            distanceMiles: leg.distanceMiles
+          }))
+        });
+      }
+      
       // Calculate total weight from transfer items with estimation for missing weights
       const DEFAULT_WEIGHT_LBS = 500;
       const DENSITY_LBS_PER_CUBIC_INCH = 0.02;
@@ -6822,10 +6844,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Transfer already has convoy assigned" });
       }
       
-      // Get destination site
+      // Get destination site and check route feasibility
       const [destSite] = await db.select()
         .from(warehouseSites)
         .where(eq(warehouseSites.id, transfer.destination_site_id));
+      
+      // Check if ground route is feasible using multi-modal routing service
+      const routeCheck = await multiModalRoutingService.planMultiModalRoute(
+        transfer.source_site_id,
+        transfer.destination_site_id,
+        0
+      );
+      
+      if (routeCheck.requiresMultiModal) {
+        return res.status(400).json({ 
+          error: "Ground transport not possible for this route",
+          reason: routeCheck.reason || "Route requires ocean crossing - please use Air or Sea transport",
+          suggestedMode: routeCheck.suggestedMode,
+          multiModalRoute: routeCheck.legs.map(leg => ({
+            legNumber: leg.legNumber,
+            mode: leg.mode,
+            from: leg.origin.name,
+            to: leg.destination.name,
+            distanceMiles: leg.distanceMiles
+          }))
+        });
+      }
       
       // Calculate total weight from transfer items with estimation for missing weights
       const DEFAULT_WEIGHT_LBS = 500;
