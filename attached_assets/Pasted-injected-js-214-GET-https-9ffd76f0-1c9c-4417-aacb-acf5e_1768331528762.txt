@@ -1,0 +1,54 @@
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/operations/summary 500 (Internal Server Error)
+apply @ injected.js:214
+fetchSummary @ OperationsHub.tsx:205
+(anonymous) @ OperationsHub.tsx:199
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+commitRootImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19416
+commitRoot @ chunk-RMMLNMNQ.js?v=b7c9a66d:19277
+performSyncWorkOnRoot @ chunk-RMMLNMNQ.js?v=b7c9a66d:18895
+flushSyncCallbacks @ chunk-RMMLNMNQ.js?v=b7c9a66d:9119
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:18627Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/transfers 500 (Internal Server Error)
+apply @ injected.js:214
+fetchTransfers @ warehouseService.ts:314
+(anonymous) @ WarehouseManagement.tsx:93
+(anonymous) @ WarehouseManagement.tsx:104
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+commitRootImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19416
+commitRoot @ chunk-RMMLNMNQ.js?v=b7c9a66d:19277
+performSyncWorkOnRoot @ chunk-RMMLNMNQ.js?v=b7c9a66d:18895
+flushSyncCallbacks @ chunk-RMMLNMNQ.js?v=b7c9a66d:9119
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:18627Understand this error
+injected.js:37 Failed to fetch transfers: Error: Failed to fetch transfers
+    at Module.fetchTransfers (warehouseService.ts:317:27)
+    at async WarehouseManagement.tsx:93:20
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WarehouseManagement.tsx:96
+await in (anonymous)
+(anonymous) @ WarehouseManagement.tsx:104
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+commitRootImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19416
+commitRoot @ chunk-RMMLNMNQ.js?v=b7c9a66d:19277
+performSyncWorkOnRoot @ chunk-RMMLNMNQ.js?v=b7c9a66d:18895
+flushSyncCallbacks @ chunk-RMMLNMNQ.js?v=b7c9a66d:9119
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:18627Understand this error
