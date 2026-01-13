@@ -1066,6 +1066,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // FLIGHT PLANS API (PROTECTED)
   // ============================================================================
 
+  // GET /api/air/pending-transfers - Get pending air transfers awaiting flight plan assignment
+  app.get("/api/air/pending-transfers", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      // Get all air transfers that need flight plan assignment
+      const transfers = await db.select({
+        transfer: warehouseTransfers,
+        source_site: warehouseSites,
+      })
+        .from(warehouseTransfers)
+        .leftJoin(warehouseSites, eq(warehouseTransfers.source_site_id, warehouseSites.id))
+        .where(and(
+          eq(warehouseTransfers.user_id, req.user!.id),
+          eq(warehouseTransfers.transport_mode, "air"),
+          or(
+            eq(warehouseTransfers.status, "pending"),
+            eq(warehouseTransfers.status, "manifest_created")
+          ),
+          isNull(warehouseTransfers.assigned_flight_plan_id)
+        ))
+        .orderBy(desc(warehouseTransfers.created_at));
+
+      // Get destination sites
+      const destSiteIds = transfers.map(t => t.transfer.destination_site_id);
+      const destSites = destSiteIds.length > 0 
+        ? await db.select().from(warehouseSites).where(inArray(warehouseSites.id, destSiteIds))
+        : [];
+      const destSiteMap = new Map(destSites.map(s => [s.id, s]));
+
+      const enrichedTransfers = transfers.map(t => ({
+        ...t.transfer,
+        source_site: t.source_site,
+        destination_site: destSiteMap.get(t.transfer.destination_site_id) || null,
+      }));
+
+      res.json(enrichedTransfers);
+    } catch (error) {
+      console.error("[Air] Error fetching pending transfers:", error);
+      res.status(500).json({ error: "Failed to fetch pending air transfers" });
+    }
+  });
+
   app.get("/api/flight-plans", authMiddleware, async (req: AuthRequest, res) => {
     try {
       const plans = await storage.getFlightPlans(req.user!.id);
@@ -6434,6 +6475,310 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/warehouse/transfers/:id/create-manifest - Create cross-modal manifest from transfer
+  app.post("/api/warehouse/transfers/:id/create-manifest", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const transferId = parseInt(req.params.id);
+      
+      // Fetch the transfer
+      const [transfer] = await db.select()
+        .from(warehouseTransfers)
+        .where(and(
+          eq(warehouseTransfers.id, transferId),
+          eq(warehouseTransfers.user_id, req.user!.id)
+        ));
+      
+      if (!transfer) {
+        return res.status(404).json({ error: "Transfer not found" });
+      }
+      
+      if (transfer.manifest_id) {
+        return res.status(400).json({ error: "Manifest already exists for this transfer" });
+      }
+      
+      // Generate manifest number
+      const manifestNumber = `MNF-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+      
+      // Get source and destination site info
+      const [sourceSite] = await db.select().from(warehouseSites).where(eq(warehouseSites.id, transfer.source_site_id));
+      const [destSite] = await db.select().from(warehouseSites).where(eq(warehouseSites.id, transfer.destination_site_id));
+      
+      // Calculate totals from transfer items
+      const items = (transfer.transfer_items as any[]) || [];
+      const totalWeight = items.reduce((sum, item) => {
+        const weight = parseFloat(String(item.weight_lbs || 0)) || 0;
+        return sum + (weight * (item.quantity || 1));
+      }, 0);
+      
+      // Create the cross-modal manifest
+      const [manifest] = await db.insert(crossModalManifests).values({
+        user_id: req.user!.id,
+        warehouse_transfer_id: transferId,
+        source_site_id: transfer.source_site_id,
+        destination_site_id: transfer.destination_site_id,
+        manifest_number: manifestNumber,
+        name: `Transfer ${transferId}: ${sourceSite?.name || 'Unknown'} → ${destSite?.name || 'Unknown'}`,
+        priority: "routine",
+        classification: "unclassified",
+        transport_mode: transfer.transport_mode,
+        total_weight_lbs: Math.round(totalWeight),
+        total_items: items.length,
+        status: "pending_transport",
+      }).returning();
+      
+      // Create manifest items from transfer items
+      for (const item of items) {
+        await db.insert(manifestItems).values({
+          manifest_id: manifest.id,
+          inventory_item_id: item.id,
+          nomenclature: item.description || 'Unknown Item',
+          quantity: item.quantity || 1,
+          weight_lbs: Math.round(parseFloat(String(item.weight_lbs || 0)) || 0),
+        });
+      }
+      
+      // Update transfer with manifest_id and status
+      await db.update(warehouseTransfers)
+        .set({ 
+          manifest_id: manifest.id,
+          status: "manifest_created",
+          updated_at: new Date()
+        })
+        .where(eq(warehouseTransfers.id, transferId));
+      
+      console.log(`[Warehouse] Manifest ${manifestNumber} created for transfer ${transferId}`);
+      
+      res.status(201).json({
+        message: "Manifest created successfully",
+        manifest,
+        transfer_status: "manifest_created"
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to create manifest:", error);
+      res.status(500).json({ error: "Failed to create manifest from transfer" });
+    }
+  });
+
+  // POST /api/warehouse/transfers/:id/assign-convoy - Assign a convoy to a ground transfer
+  app.post("/api/warehouse/transfers/:id/assign-convoy", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const transferId = parseInt(req.params.id);
+      const { convoy_id } = req.body;
+      
+      if (!convoy_id) {
+        return res.status(400).json({ error: "convoy_id is required" });
+      }
+      
+      // Verify transfer exists and belongs to user
+      const [transfer] = await db.select()
+        .from(warehouseTransfers)
+        .where(and(
+          eq(warehouseTransfers.id, transferId),
+          eq(warehouseTransfers.user_id, req.user!.id)
+        ));
+      
+      if (!transfer) {
+        return res.status(404).json({ error: "Transfer not found" });
+      }
+      
+      if (transfer.transport_mode !== "ground") {
+        return res.status(400).json({ error: "Transfer is not a ground transport" });
+      }
+      
+      // Verify convoy exists and belongs to user
+      const [convoy] = await db.select()
+        .from(landConvoys)
+        .where(and(
+          eq(landConvoys.id, convoy_id),
+          eq(landConvoys.user_id, req.user!.id)
+        ));
+      
+      if (!convoy) {
+        return res.status(404).json({ error: "Convoy not found" });
+      }
+      
+      // Update transfer with convoy assignment
+      await db.update(warehouseTransfers)
+        .set({ 
+          assigned_convoy_id: convoy_id,
+          status: "transport_assigned",
+          updated_at: new Date()
+        })
+        .where(eq(warehouseTransfers.id, transferId));
+      
+      // Update manifest if exists
+      if (transfer.manifest_id) {
+        await db.update(crossModalManifests)
+          .set({ 
+            convoy_id: convoy_id,
+            status: "assigned",
+            updated_at: new Date()
+          })
+          .where(eq(crossModalManifests.id, transfer.manifest_id));
+      }
+      
+      // Update convoy with transfer cargo
+      const items = (transfer.transfer_items as any[]) || [];
+      const totalWeight = items.reduce((sum, item) => {
+        const weight = parseFloat(String(item.weight_lbs || 0)) || 0;
+        return sum + (weight * (item.quantity || 1));
+      }, 0);
+      
+      await db.update(landConvoys)
+        .set({ 
+          cargo_manifest: items,
+          total_cargo_weight_lbs: Math.round(totalWeight),
+          updated_at: new Date()
+        })
+        .where(eq(landConvoys.id, convoy_id));
+      
+      console.log(`[Warehouse] Transfer ${transferId} assigned to convoy ${convoy_id}`);
+      
+      res.json({
+        message: "Transfer assigned to convoy successfully",
+        transfer_id: transferId,
+        convoy_id: convoy_id,
+        status: "transport_assigned"
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to assign convoy:", error);
+      res.status(500).json({ error: "Failed to assign convoy to transfer" });
+    }
+  });
+
+  // POST /api/warehouse/transfers/:id/assign-flight-plan - Assign a flight plan to an air transfer
+  app.post("/api/warehouse/transfers/:id/assign-flight-plan", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const transferId = parseInt(req.params.id);
+      const { flight_plan_id } = req.body;
+      
+      if (!flight_plan_id) {
+        return res.status(400).json({ error: "flight_plan_id is required" });
+      }
+      
+      // Verify transfer exists and belongs to user
+      const [transfer] = await db.select()
+        .from(warehouseTransfers)
+        .where(and(
+          eq(warehouseTransfers.id, transferId),
+          eq(warehouseTransfers.user_id, req.user!.id)
+        ));
+      
+      if (!transfer) {
+        return res.status(404).json({ error: "Transfer not found" });
+      }
+      
+      if (transfer.transport_mode !== "air") {
+        return res.status(400).json({ error: "Transfer is not an air transport" });
+      }
+      
+      // Verify flight plan exists and belongs to user
+      const [flightPlan] = await db.select()
+        .from(flightPlans)
+        .where(and(
+          eq(flightPlans.id, flight_plan_id),
+          eq(flightPlans.user_id, req.user!.id)
+        ));
+      
+      if (!flightPlan) {
+        return res.status(404).json({ error: "Flight plan not found" });
+      }
+      
+      // Update transfer with flight plan assignment
+      await db.update(warehouseTransfers)
+        .set({ 
+          assigned_flight_plan_id: flight_plan_id,
+          status: "transport_assigned",
+          updated_at: new Date()
+        })
+        .where(eq(warehouseTransfers.id, transferId));
+      
+      // Update manifest if exists
+      if (transfer.manifest_id) {
+        await db.update(crossModalManifests)
+          .set({ 
+            flight_plan_id: flight_plan_id,
+            status: "assigned",
+            updated_at: new Date()
+          })
+          .where(eq(crossModalManifests.id, transfer.manifest_id));
+      }
+      
+      console.log(`[Warehouse] Transfer ${transferId} assigned to flight plan ${flight_plan_id}`);
+      
+      res.json({
+        message: "Transfer assigned to flight plan successfully",
+        transfer_id: transferId,
+        flight_plan_id: flight_plan_id,
+        status: "transport_assigned"
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to assign flight plan:", error);
+      res.status(500).json({ error: "Failed to assign flight plan to transfer" });
+    }
+  });
+
+  // PATCH /api/warehouse/transfers/:id/status - Update transfer status
+  app.patch("/api/warehouse/transfers/:id/status", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const transferId = parseInt(req.params.id);
+      const { status } = req.body;
+      
+      const validStatuses = ['pending', 'manifest_created', 'transport_assigned', 'in_transit', 'completed', 'cancelled'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+      }
+      
+      const [transfer] = await db.select()
+        .from(warehouseTransfers)
+        .where(and(
+          eq(warehouseTransfers.id, transferId),
+          eq(warehouseTransfers.user_id, req.user!.id)
+        ));
+      
+      if (!transfer) {
+        return res.status(404).json({ error: "Transfer not found" });
+      }
+      
+      const updateData: any = { 
+        status,
+        updated_at: new Date()
+      };
+      
+      if (status === 'completed') {
+        updateData.completed_date = new Date();
+      }
+      
+      await db.update(warehouseTransfers)
+        .set(updateData)
+        .where(eq(warehouseTransfers.id, transferId));
+      
+      // Update manifest status if exists
+      if (transfer.manifest_id) {
+        const manifestStatus = status === 'in_transit' ? 'in_transit' 
+          : status === 'completed' ? 'delivered' 
+          : status === 'cancelled' ? 'cancelled' 
+          : 'assigned';
+        
+        await db.update(crossModalManifests)
+          .set({ 
+            status: manifestStatus,
+            updated_at: new Date(),
+            ...(status === 'completed' ? { actual_arrival: new Date() } : {}),
+            ...(status === 'in_transit' ? { actual_departure: new Date() } : {})
+          })
+          .where(eq(crossModalManifests.id, transfer.manifest_id));
+      }
+      
+      console.log(`[Warehouse] Transfer ${transferId} status updated to ${status}`);
+      
+      res.json({ message: "Transfer status updated", transfer_id: transferId, status });
+    } catch (error) {
+      console.error("[Warehouse] Failed to update transfer status:", error);
+      res.status(500).json({ error: "Failed to update transfer status" });
+    }
+  });
+
   // GET /api/warehouse/optimization-events - Get optimization events for user's sites
   app.get("/api/warehouse/optimization-events", authMiddleware, async (req: AuthRequest, res) => {
     try {
@@ -8099,6 +8444,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Land] Error fetching vehicle type:", error);
       res.status(500).json({ error: "Failed to fetch vehicle type" });
+    }
+  });
+
+  // GET /api/land/pending-transfers - Get pending ground transfers awaiting convoy assignment
+  app.get("/api/land/pending-transfers", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      // Get all ground transfers that need convoy assignment
+      const transfers = await db.select({
+        transfer: warehouseTransfers,
+        source_site: warehouseSites,
+      })
+        .from(warehouseTransfers)
+        .leftJoin(warehouseSites, eq(warehouseTransfers.source_site_id, warehouseSites.id))
+        .where(and(
+          eq(warehouseTransfers.user_id, req.user!.id),
+          eq(warehouseTransfers.transport_mode, "ground"),
+          or(
+            eq(warehouseTransfers.status, "pending"),
+            eq(warehouseTransfers.status, "manifest_created")
+          ),
+          isNull(warehouseTransfers.assigned_convoy_id)
+        ))
+        .orderBy(desc(warehouseTransfers.created_at));
+
+      // Get destination sites
+      const destSiteIds = transfers.map(t => t.transfer.destination_site_id);
+      const destSites = destSiteIds.length > 0 
+        ? await db.select().from(warehouseSites).where(inArray(warehouseSites.id, destSiteIds))
+        : [];
+      const destSiteMap = new Map(destSites.map(s => [s.id, s]));
+
+      const enrichedTransfers = transfers.map(t => ({
+        ...t.transfer,
+        source_site: t.source_site,
+        destination_site: destSiteMap.get(t.transfer.destination_site_id) || null,
+      }));
+
+      res.json(enrichedTransfers);
+    } catch (error) {
+      console.error("[Land] Error fetching pending transfers:", error);
+      res.status(500).json({ error: "Failed to fetch pending transfers" });
     }
   });
 

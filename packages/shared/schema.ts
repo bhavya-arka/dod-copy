@@ -1024,18 +1024,33 @@ export type SeaContainer = typeof seaContainers.$inferSelect;
 // WAREHOUSE TRANSFERS TABLE
 // ============================================================================
 
+// Transfer status workflow: pending -> manifest_created -> transport_assigned -> in_transit -> completed
+export const transferStatusEnum = ['pending', 'manifest_created', 'transport_assigned', 'in_transit', 'completed', 'cancelled'] as const;
+export type TransferStatus = typeof transferStatusEnum[number];
+
 export const warehouseTransfers = pgTable("warehouse_transfers", {
   id: serial("id").primaryKey(),
   user_id: integer("user_id").notNull(),
   source_site_id: integer("source_site_id").notNull(),
   destination_site_id: integer("destination_site_id").notNull(),
-  status: text("status").notNull().default("pending"),
-  transport_mode: text("transport_mode").notNull().default("land"),
+  status: text("status").notNull().default("pending"), // pending, manifest_created, transport_assigned, in_transit, completed, cancelled
+  transport_mode: text("transport_mode").notNull().default("ground"), // air, ground, sea
   transfer_items: jsonb("transfer_items").notNull().default([]),
+  
+  // Link to cross-modal manifest (created when transfer is approved for transport)
+  manifest_id: integer("manifest_id"), // FK to crossModalManifests
+  
+  // Transport metadata
   air_metadata: jsonb("air_metadata"),
   ground_transport_metadata: jsonb("ground_transport_metadata"),
   sea_transport_metadata: jsonb("sea_transport_metadata"),
   pacaf_manifest: jsonb("pacaf_manifest"),
+  
+  // Assignment info
+  assigned_convoy_id: integer("assigned_convoy_id"), // FK to landConvoys
+  assigned_flight_plan_id: integer("assigned_flight_plan_id"), // FK to flightPlans
+  assigned_voyage_id: integer("assigned_voyage_id"), // FK to seaVoyages
+  
   notes: text("notes"),
   scheduled_date: timestamp("scheduled_date"),
   completed_date: timestamp("completed_date"),
@@ -1082,10 +1097,13 @@ export type VehiclePrioritySetting = typeof vehiclePrioritySettings.$inferSelect
 // ============================================================================
 
 // Unified manifests that can be used across Air, Land, and Sea operations
-// Created from WMS inventory selection
+// Created from WMS inventory selection or warehouse transfers
 export const crossModalManifests = pgTable("cross_modal_manifests", {
   id: serial("id").primaryKey(),
   user_id: integer("user_id").notNull(),
+  
+  // Link to warehouse transfer (if created from transfer)
+  warehouse_transfer_id: integer("warehouse_transfer_id"), // FK to warehouseTransfers
   
   // Source
   source_site_id: integer("source_site_id").notNull(), // Origin warehouse
