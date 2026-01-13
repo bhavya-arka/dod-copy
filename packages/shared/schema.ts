@@ -1033,10 +1033,13 @@ export const warehouseTransfers = pgTable("warehouse_transfers", {
   transport_mode: text("transport_mode").notNull().default("land"),
   transfer_items: jsonb("transfer_items").notNull().default([]),
   air_metadata: jsonb("air_metadata"),
+  ground_transport_metadata: jsonb("ground_transport_metadata"),
+  sea_transport_metadata: jsonb("sea_transport_metadata"),
   pacaf_manifest: jsonb("pacaf_manifest"),
   notes: text("notes"),
   scheduled_date: timestamp("scheduled_date"),
   completed_date: timestamp("completed_date"),
+  total_weight_lbs: numeric("total_weight_lbs", { precision: 12, scale: 2 }),
   created_at: timestamp("created_at").defaultNow().notNull(),
   updated_at: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1048,6 +1051,31 @@ export const insertWarehouseTransferSchema = createInsertSchema(warehouseTransfe
 });
 export type InsertWarehouseTransfer = z.infer<typeof insertWarehouseTransferSchema>;
 export type WarehouseTransfer = typeof warehouseTransfers.$inferSelect;
+
+// ============================================================================
+// VEHICLE PRIORITY SETTINGS TABLE
+// ============================================================================
+
+// Superadmin-managed priority list for vehicle types used in ground transfers
+export const vehiclePrioritySettings = pgTable("vehicle_priority_settings", {
+  id: serial("id").primaryKey(),
+  vehicle_type_id: integer("vehicle_type_id").notNull(), // FK to landVehicleTypes
+  priority_order: integer("priority_order").notNull().default(1), // Lower = higher priority
+  is_enabled: boolean("is_enabled").notNull().default(true),
+  payload_override_lbs: integer("payload_override_lbs"), // Optional override for calculations
+  notes: text("notes"),
+  updated_by: integer("updated_by"), // User ID of superadmin who made the change
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertVehiclePrioritySettingSchema = createInsertSchema(vehiclePrioritySettings).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertVehiclePrioritySetting = z.infer<typeof insertVehiclePrioritySettingSchema>;
+export type VehiclePrioritySetting = typeof vehiclePrioritySettings.$inferSelect;
 
 // ============================================================================
 // CROSS-MODAL MANIFESTS TABLE
