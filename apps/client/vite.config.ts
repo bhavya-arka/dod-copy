@@ -47,6 +47,7 @@ export default defineConfig({
         target: `http://localhost:${SERVER_PORT}`,
         changeOrigin: true,
         secure: false,
+        cookieDomainRewrite: "",
       },
     },
   },

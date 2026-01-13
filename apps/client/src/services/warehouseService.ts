@@ -404,10 +404,11 @@ export async function updateTransfer(
 export async function deleteTransfer(transferId: number): Promise<{ success: boolean; message: string }> {
   const response = await fetch(`${API_BASE}/transfers/${transferId}`, {
     method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
   });
   if (!response.ok) {
-    const error = await response.json();
+    const error = await response.json().catch(() => ({ error: 'Failed to delete transfer' }));
     throw new Error(error.error || 'Failed to delete transfer');
   }
   return response.json();
