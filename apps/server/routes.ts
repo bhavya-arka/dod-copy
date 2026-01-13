@@ -3407,8 +3407,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { zoneCapacityService } = await import('./services');
       const summary = await zoneCapacityService.getZoneCapacitySummary(siteId);
 
+      // Return empty summary instead of 404 for sites without zones
       if (!summary) {
-        return res.status(404).json({ error: "No zones found for site" });
+        return res.json({
+          site_id: siteId,
+          zones: [],
+          totals: {
+            total_zones: 0,
+            total_capacity: 0,
+            total_used: 0,
+            utilization_percent: 0
+          }
+        });
       }
 
       res.json(summary);

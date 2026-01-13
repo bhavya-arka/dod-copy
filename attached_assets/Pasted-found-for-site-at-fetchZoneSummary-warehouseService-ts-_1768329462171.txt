@@ -1,0 +1,516 @@
+found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/sites/7/zones/summary 404 (Not Found)
+apply @ injected.js:214
+fetchZoneSummary @ warehouseService.ts:1111
+(anonymous) @ WMSSitesStorage.tsx:149
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:37 Failed to fetch zone summary: Error: No zones found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/sites/7/zones/summary 404 (Not Found)
+apply @ injected.js:214
+fetchZoneSummary @ warehouseService.ts:1111
+(anonymous) @ WMSSitesStorage.tsx:149
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:37 Failed to fetch zone summary: Error: No zones found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/sites/7/zones/summary 404 (Not Found)
+apply @ injected.js:214
+fetchZoneSummary @ warehouseService.ts:1111
+(anonymous) @ WMSSitesStorage.tsx:149
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:37 Failed to fetch zone summary: Error: No zones found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/sites/7/zones/summary 404 (Not Found)
+apply @ injected.js:214
+fetchZoneSummary @ warehouseService.ts:1111
+(anonymous) @ WMSSitesStorage.tsx:149
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:37 Failed to fetch zone summary: Error: No zones found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/sites/7/zones/summary 404 (Not Found)
+apply @ injected.js:214
+fetchZoneSummary @ warehouseService.ts:1111
+(anonymous) @ WMSSitesStorage.tsx:149
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:37 Failed to fetch zone summary: Error: No zones found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/sites/7/zones/summary 404 (Not Found)
+apply @ injected.js:214
+fetchZoneSummary @ warehouseService.ts:1111
+(anonymous) @ WMSSitesStorage.tsx:149
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:37 Failed to fetch zone summary: Error: No zones found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/sites/7/zones/summary 404 (Not Found)
+apply @ injected.js:214
+fetchZoneSummary @ warehouseService.ts:1111
+(anonymous) @ WMSSitesStorage.tsx:149
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:37 Failed to fetch zone summary: Error: No zones found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/sites/7/zones/summary 404 (Not Found)
+apply @ injected.js:214
+fetchZoneSummary @ warehouseService.ts:1111
+(anonymous) @ WMSSitesStorage.tsx:149
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:37 Failed to fetch zone summary: Error: No zones found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/sites/7/zones/summary 404 (Not Found)
+apply @ injected.js:214
+fetchZoneSummary @ warehouseService.ts:1111
+(anonymous) @ WMSSitesStorage.tsx:149
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:37 Failed to fetch zone summary: Error: No zones found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/sites/7/zones/summary 404 (Not Found)
+apply @ injected.js:214
+fetchZoneSummary @ warehouseService.ts:1111
+(anonymous) @ WMSSitesStorage.tsx:149
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:37 Failed to fetch zone summary: Error: No zones found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/sites/7/zones/summary 404 (Not Found)
+apply @ injected.js:214
+fetchZoneSummary @ warehouseService.ts:1111
+(anonymous) @ WMSSitesStorage.tsx:149
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:37 Failed to fetch zone summary: Error: No zones found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/sites/7/zones/summary 404 (Not Found)
+apply @ injected.js:214
+fetchZoneSummary @ warehouseService.ts:1111
+(anonymous) @ WMSSitesStorage.tsx:149
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:37 Failed to fetch zone summary: Error: No zones found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/sites/7/zones/summary 404 (Not Found)
+apply @ injected.js:214
+fetchZoneSummary @ warehouseService.ts:1111
+(anonymous) @ WMSSitesStorage.tsx:149
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:37 Failed to fetch zone summary: Error: No zones found for site
+    at fetchZoneSummary (warehouseService.ts:1116:11)
+    at async WMSSitesStorage.tsx:149:23
+(anonymous) @ injected.js:37
+console.error @ chunk-WVNV7HT3.js?v=b7c9a66d:18167
+(anonymous) @ injected.js:37
+(anonymous) @ WMSSitesStorage.tsx:152
+await in (anonymous)
+(anonymous) @ WMSSitesStorage.tsx:273
+(anonymous) @ WMSSitesStorage.tsx:265
+commitHookEffectListMount @ chunk-RMMLNMNQ.js?v=b7c9a66d:16915
+commitPassiveMountOnFiber @ chunk-RMMLNMNQ.js?v=b7c9a66d:18156
+commitPassiveMountEffects_complete @ chunk-RMMLNMNQ.js?v=b7c9a66d:18129
+commitPassiveMountEffects_begin @ chunk-RMMLNMNQ.js?v=b7c9a66d:18119
+commitPassiveMountEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:18109
+flushPassiveEffectsImpl @ chunk-RMMLNMNQ.js?v=b7c9a66d:19490
+flushPassiveEffects @ chunk-RMMLNMNQ.js?v=b7c9a66d:19447
+(anonymous) @ chunk-RMMLNMNQ.js?v=b7c9a66d:19328
+workLoop @ chunk-RMMLNMNQ.js?v=b7c9a66d:197
+flushWork @ chunk-RMMLNMNQ.js?v=b7c9a66d:176
+performWorkUntilDeadline @ chunk-RMMLNMNQ.js?v=b7c9a66d:384Understand this error
+injected.js:214  GET 
