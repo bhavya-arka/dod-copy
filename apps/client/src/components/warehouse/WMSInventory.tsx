@@ -18,7 +18,8 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Trash2
+  Trash2,
+  MapPin
 } from "lucide-react";
 import type { 
   WarehouseSite, 
@@ -42,6 +43,7 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import ConfirmDestructiveModal from "./modals/ConfirmDestructiveModal";
+import MoveToZoneModal from "./modals/MoveToZoneModal";
 
 const PREFETCH_AHEAD = 5;
 const PREFETCH_BEHIND = 2;
@@ -234,6 +236,7 @@ export default function WMSInventory({
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [showMoveToZoneModal, setShowMoveToZoneModal] = useState(false);
 
   const filterRef = useRef<HTMLDivElement>(null);
   const columnSettingsRef = useRef<HTMLDivElement>(null);
@@ -785,14 +788,24 @@ export default function WMSInventory({
           </div>
           <div className="flex items-center gap-2">
             {selectedItems.size > 0 && (
-              <button
-                onClick={handleBulkDeleteClick}
-                disabled={isDeleting}
-                className="text-sm px-3 py-2 rounded-lg border border-red-300 bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex items-center gap-2 disabled:opacity-50"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete Selected ({selectedItems.size})
-              </button>
+              <>
+                <button
+                  onClick={() => setShowMoveToZoneModal(true)}
+                  disabled={!selectedSiteId}
+                  className="text-sm px-3 py-2 rounded-lg border border-[#2563EB]/30 bg-[#2563EB]/5 text-[#2563EB] hover:bg-[#2563EB]/10 transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <MapPin className="w-4 h-4" />
+                  Move to Zone ({selectedItems.size})
+                </button>
+                <button
+                  onClick={handleBulkDeleteClick}
+                  disabled={isDeleting}
+                  className="text-sm px-3 py-2 rounded-lg border border-red-300 bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete Selected ({selectedItems.size})
+                </button>
+              </>
             )}
             <button
               onClick={handleDeleteAllClick}
@@ -1264,6 +1277,20 @@ export default function WMSInventory({
         confirmText="permanently delete"
         isLoading={isDeletingAll}
       />
+
+      {showMoveToZoneModal && selectedSiteId && (
+        <MoveToZoneModal
+          siteId={selectedSiteId}
+          siteName={sites.find(s => s.id === selectedSiteId)?.name || ""}
+          selectedItemIds={Array.from(selectedItems)}
+          onClose={() => setShowMoveToZoneModal(false)}
+          onSuccess={() => {
+            setSelectedItems(new Set());
+            onRefresh();
+          }}
+          onShowToast={onShowToast}
+        />
+      )}
     </>
   );
 }

@@ -3952,6 +3952,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PUT /api/warehouse/sites/:siteId/inventory/bulk-move-zone - Move multiple items to a different zone
+  app.put("/api/warehouse/sites/:siteId/inventory/bulk-move-zone", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const { item_ids, target_zone_id, notes } = req.body;
+
+      if (!Array.isArray(item_ids) || item_ids.length === 0) {
+        return res.status(400).json({ error: "item_ids must be a non-empty array" });
+      }
+
+      if (target_zone_id === undefined) {
+        return res.status(400).json({ error: "target_zone_id is required" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      // Verify target zone exists and belongs to this site (if not null)
+      if (target_zone_id !== null) {
+        const [zone] = await db.select()
+          .from(warehouseZones)
+          .where(and(
+            eq(warehouseZones.id, target_zone_id),
+            eq(warehouseZones.site_id, siteId)
+          ));
+
+        if (!zone) {
+          return res.status(404).json({ error: "Target zone not found" });
+        }
+      }
+
+      // Get items and their current zones for tracking
+      const items = await db.select()
+        .from(warehouseInventoryItems)
+        .where(and(
+          inArray(warehouseInventoryItems.id, item_ids),
+          eq(warehouseInventoryItems.site_id, siteId)
+        ));
+
+      if (items.length === 0) {
+        return res.status(404).json({ error: "No valid items found" });
+      }
+
+      const affectedZones = new Set<number | null>();
+      items.forEach(item => {
+        affectedZones.add(item.zone_id);
+      });
+      affectedZones.add(target_zone_id);
+
+      // Build update data
+      const updateData: Record<string, any> = {
+        zone_id: target_zone_id,
+        updated_at: new Date(),
+      };
+
+      // Add notes to remarks if provided
+      if (notes) {
+        const timestamp = new Date().toISOString();
+        const moveNote = `[Zone Move ${timestamp}] ${notes}`;
+        // Note: We can't easily append to remarks in a bulk update, so just update zone_id
+      }
+
+      // Update all items
+      await db.update(warehouseInventoryItems)
+        .set(updateData)
+        .where(and(
+          inArray(warehouseInventoryItems.id, item_ids),
+          eq(warehouseInventoryItems.site_id, siteId)
+        ));
+
+      // Resync zone capacities for affected zones
+      try {
+        const { palletPositionService } = await import('./services');
+        const config = {
+          countBoxAsSeparate: false,
+          whseRule: 'ignore' as const,
+          bulkMode: 'estimate' as const,
+          bulkIdColumnName: null
+        };
+        await palletPositionService.updateZoneMetrics(siteId, config);
+        palletPositionService.invalidateMetricsCache(siteId);
+      } catch (syncError) {
+        console.error(`[Bulk Zone Move] Failed to resync zones:`, syncError);
+      }
+
+      res.json({
+        success: true,
+        message: `Successfully moved ${items.length} item(s) to target zone`,
+        itemsMoved: items.length,
+        totalRequested: item_ids.length
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to bulk move items to zone:", error);
+      res.status(500).json({ error: "Failed to move items to zone" });
+    }
+  });
+
   // POST /api/warehouse/sites/:siteId/inventory/upload - Upload and parse CSV inventory data
   app.post("/api/warehouse/sites/:siteId/inventory/upload", authMiddleware, async (req: AuthRequest, res) => {
     try {

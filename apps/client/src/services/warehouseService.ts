@@ -538,6 +538,37 @@ export async function moveInventoryItem(
   return response.json();
 }
 
+/**
+ * Bulk move inventory items to a different zone
+ * @param siteId - Site ID
+ * @param itemIds - Array of item IDs to move
+ * @param targetZoneId - Target zone ID (or null to unassign zone)
+ * @param notes - Optional notes for the move
+ */
+export async function bulkMoveItemsToZone(
+  siteId: number,
+  itemIds: number[],
+  targetZoneId: number | null,
+  notes?: string
+): Promise<{ success: boolean; message: string; itemsMoved: number }> {
+  const response = await fetch(`${API_BASE}/sites/${siteId}/inventory/bulk-move-zone`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      item_ids: itemIds,
+      target_zone_id: targetZoneId,
+      notes,
+    }),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to move items to zone");
+  }
+  return response.json();
+}
+
 /** Optimization action from wizard */
 export interface OptimizationAction {
   id: string;
