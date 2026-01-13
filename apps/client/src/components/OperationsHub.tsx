@@ -622,71 +622,62 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                   <div className="p-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                       <motion.div 
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        className="relative p-5 rounded-xl bg-gradient-to-br from-blue-600/20 to-cyan-600/20 border border-blue-500/30 backdrop-blur-sm overflow-hidden group"
+                        whileHover={{ scale: 1.01 }}
+                        className="relative p-5 rounded-xl bg-slate-800/80 border-l-4 border-l-blue-500 border border-slate-700 overflow-hidden"
                       >
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="relative">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="p-2 rounded-lg bg-blue-500/20">
-                              <Plane className="w-5 h-5 text-blue-400" />
-                            </div>
-                            <span className="text-xs font-medium text-blue-400 bg-blue-500/20 px-2 py-1 rounded-full">AIR</span>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="p-2 rounded-lg bg-slate-700">
+                            <Plane className="w-5 h-5 text-blue-400" />
                           </div>
-                          <div className="text-3xl font-bold text-white mb-1">
-                            {summaries.air.expectedFlights}
-                          </div>
-                          <div className="text-sm text-slate-400">Expected flights</div>
-                          <div className="mt-2 text-xs text-blue-300 flex items-center gap-1">
-                            <Box className="w-3 h-3" />
-                            {formatWeight(summaries.air.totalCargoLbs)}
-                          </div>
+                          <span className="text-xs font-medium text-blue-400 bg-slate-700 px-2 py-1 rounded-full">AIR</span>
+                        </div>
+                        <div className="text-3xl font-bold text-white mb-1">
+                          {summaries.air.expectedFlights}
+                        </div>
+                        <div className="text-sm text-slate-400">Expected flights</div>
+                        <div className="mt-2 text-xs text-slate-400 flex items-center gap-1">
+                          <Box className="w-3 h-3" />
+                          {formatWeight(summaries.air.totalCargoLbs)}
                         </div>
                       </motion.div>
 
                       <motion.div 
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        className="relative p-5 rounded-xl bg-gradient-to-br from-amber-600/20 to-orange-600/20 border border-amber-500/30 backdrop-blur-sm overflow-hidden group"
+                        whileHover={{ scale: 1.01 }}
+                        className="relative p-5 rounded-xl bg-slate-800/80 border-l-4 border-l-amber-500 border border-slate-700 overflow-hidden"
                       >
-                        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="relative">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="p-2 rounded-lg bg-amber-500/20">
-                              <Truck className="w-5 h-5 text-amber-400" />
-                            </div>
-                            <span className="text-xs font-medium text-amber-400 bg-amber-500/20 px-2 py-1 rounded-full">LAND</span>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="p-2 rounded-lg bg-slate-700">
+                            <Truck className="w-5 h-5 text-amber-400" />
                           </div>
-                          <div className="text-3xl font-bold text-white mb-1">
-                            {summaries.land.expectedConvoys}
-                          </div>
-                          <div className="text-sm text-slate-400">Expected convoys</div>
-                          <div className="mt-2 text-xs text-amber-300 flex items-center gap-1">
-                            <Box className="w-3 h-3" />
-                            {formatWeight(summaries.land.totalCargoLbs)}
-                          </div>
+                          <span className="text-xs font-medium text-amber-400 bg-slate-700 px-2 py-1 rounded-full">LAND</span>
+                        </div>
+                        <div className="text-3xl font-bold text-white mb-1">
+                          {summaries.land.expectedConvoys}
+                        </div>
+                        <div className="text-sm text-slate-400">Expected convoys</div>
+                        <div className="mt-2 text-xs text-slate-400 flex items-center gap-1">
+                          <Box className="w-3 h-3" />
+                          {formatWeight(summaries.land.totalCargoLbs)}
                         </div>
                       </motion.div>
 
                       <motion.div 
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        className="relative p-5 rounded-xl bg-gradient-to-br from-teal-600/20 to-emerald-600/20 border border-teal-500/30 backdrop-blur-sm overflow-hidden group"
+                        whileHover={{ scale: 1.01 }}
+                        className="relative p-5 rounded-xl bg-slate-800/80 border-l-4 border-l-teal-500 border border-slate-700 overflow-hidden"
                       >
-                        <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="relative">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="p-2 rounded-lg bg-teal-500/20">
-                              <Ship className="w-5 h-5 text-teal-400" />
-                            </div>
-                            <span className="text-xs font-medium text-teal-400 bg-teal-500/20 px-2 py-1 rounded-full">SEA</span>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="p-2 rounded-lg bg-slate-700">
+                            <Ship className="w-5 h-5 text-teal-400" />
                           </div>
-                          <div className="text-3xl font-bold text-white mb-1">
-                            {summaries.sea.expectedVoyages}
-                          </div>
-                          <div className="text-sm text-slate-400">Expected voyages</div>
-                          <div className="mt-2 text-xs text-teal-300 flex items-center gap-1">
-                            <Ship className="w-3 h-3" />
-                            Maritime operations
-                          </div>
+                          <span className="text-xs font-medium text-teal-400 bg-slate-700 px-2 py-1 rounded-full">SEA</span>
+                        </div>
+                        <div className="text-3xl font-bold text-white mb-1">
+                          {summaries.sea.expectedVoyages}
+                        </div>
+                        <div className="text-sm text-slate-400">Expected voyages</div>
+                        <div className="mt-2 text-xs text-slate-400 flex items-center gap-1">
+                          <Ship className="w-3 h-3" />
+                          Maritime operations
                         </div>
                       </motion.div>
                     </div>
