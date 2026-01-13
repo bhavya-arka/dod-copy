@@ -961,6 +961,56 @@ export type LandConvoyVehicle = typeof landConvoyVehicles.$inferSelect;
 // SEA FREIGHT TABLES
 // ============================================================================
 
+// MSC Vessel Types - Military Sealift Command vessel specifications
+// Hull designations: T-AO (Oiler), T-AKR (Cargo), T-EPF (Fast Transport), etc.
+export const seaVesselTypes = pgTable("sea_vessel_types", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(), // e.g., "T-AO-187", "T-AKR", "T-EPF", "LMSR-BOB_HOPE"
+  name: text("name").notNull(), // e.g., "Henry J. Kaiser-class Fleet Replenishment Oiler"
+  hull_prefix: text("hull_prefix").notNull(), // T-AO, T-AKR, T-EPF, etc.
+  category: text("category").notNull(), // oiler, cargo, transport, combat_logistics, medical, support
+  
+  // Capacity specifications
+  cargo_capacity_lbs: integer("cargo_capacity_lbs").notNull(), // Max cargo weight
+  teu_capacity: integer("teu_capacity").default(0), // Twenty-foot Equivalent Units for containers
+  fuel_capacity_barrels: integer("fuel_capacity_barrels").default(0), // For oilers
+  vehicle_capacity: integer("vehicle_capacity").default(0), // For RO/RO ships
+  lane_meters: integer("lane_meters").default(0), // For vehicle deck space
+  
+  // Physical specifications
+  displacement_tons: integer("displacement_tons"),
+  deadweight_tons: integer("deadweight_tons"),
+  length_ft: integer("length_ft"),
+  beam_ft: integer("beam_ft"),
+  draft_ft: integer("draft_ft"),
+  
+  // Performance
+  max_speed_knots: integer("max_speed_knots"),
+  cruise_speed_knots: integer("cruise_speed_knots"),
+  range_nm: integer("range_nm"), // Nautical miles
+  
+  // Crew and capabilities
+  crew_size: integer("crew_size"),
+  has_crane: boolean("has_crane").default(false),
+  crane_capacity_tons: integer("crane_capacity_tons"),
+  has_roro_capability: boolean("has_roro_capability").default(false),
+  has_helicopter_deck: boolean("has_helicopter_deck").default(false),
+  
+  // Status
+  active_fleet_count: integer("active_fleet_count").default(0),
+  
+  // Metadata
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSeaVesselTypeSchema = createInsertSchema(seaVesselTypes).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertSeaVesselType = z.infer<typeof insertSeaVesselTypeSchema>;
+export type SeaVesselType = typeof seaVesselTypes.$inferSelect;
+
 // Sea Voyages
 // Supports Military Sealift Command (MSC) vessel designations
 // Hull numbers: T-AO (Oiler), T-AKR (Cargo), T-EPF (Fast Transport), etc.
@@ -968,6 +1018,7 @@ export const seaVoyages = pgTable("sea_voyages", {
   id: serial("id").primaryKey(),
   user_id: integer("user_id").notNull(),
   name: text("name").notNull(),
+  vessel_type_id: integer("vessel_type_id"), // FK to seaVesselTypes
   vessel_name: text("vessel_name"),
   vessel_imo: text("vessel_imo"),
   // MSC vessel hull designation (e.g., T-AO 205, T-AKR 313, T-EPF 5)
