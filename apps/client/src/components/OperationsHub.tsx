@@ -18,6 +18,7 @@ import {
   BarChart3,
   Weight,
   Box,
+  CheckCircle,
 } from "lucide-react";
 import { User } from "../hooks/useAuth";
 
@@ -589,128 +590,200 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="p-6 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm"
+                className="rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-slate-700 shadow-xl overflow-hidden"
               >
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-[#111827] flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-[#2563EB]" />
-                    90-Day Forecast
-                  </h3>
-                  <div className="flex gap-2">
-                    {([30, 60, 90] as const).map((days) => (
-                      <button
-                        key={days}
-                        onClick={() => handleForecastPeriodChange(days)}
-                        className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                          selectedForecastDays === days
-                            ? 'bg-[#2563EB] text-white'
-                            : 'bg-[#FAFAFA] text-[#6B7280] hover:bg-[#E5E7EB]'
-                        }`}
-                      >
-                        {days} Days
-                      </button>
-                    ))}
+                <div className="p-6 border-b border-slate-700/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/20">
+                        <Calendar className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-white">Transport Forecast</h3>
+                        <p className="text-xs text-slate-400">Predictive operations outlook</p>
+                      </div>
+                    </div>
+                    <div className="flex bg-slate-800 rounded-xl p-1 gap-1">
+                      {([30, 60, 90] as const).map((days) => (
+                        <button
+                          key={days}
+                          onClick={() => handleForecastPeriodChange(days)}
+                          className={`px-4 py-2 text-xs font-medium rounded-lg transition-all ${
+                            selectedForecastDays === days
+                              ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg'
+                              : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                          }`}
+                        >
+                          {days}D
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
                 {summaries && (
-                  <>
+                  <div className="p-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                      <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Plane className="w-4 h-4 text-[#2563EB]" />
-                          <span className="text-sm text-blue-700">Air Operations</span>
+                      <motion.div 
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        className="relative p-5 rounded-xl bg-gradient-to-br from-blue-600/20 to-cyan-600/20 border border-blue-500/30 backdrop-blur-sm overflow-hidden group"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="relative">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="p-2 rounded-lg bg-blue-500/20">
+                              <Plane className="w-5 h-5 text-blue-400" />
+                            </div>
+                            <span className="text-xs font-medium text-blue-400 bg-blue-500/20 px-2 py-1 rounded-full">AIR</span>
+                          </div>
+                          <div className="text-3xl font-bold text-white mb-1">
+                            {summaries.air.expectedFlights}
+                          </div>
+                          <div className="text-sm text-slate-400">Expected flights</div>
+                          <div className="mt-2 text-xs text-blue-300 flex items-center gap-1">
+                            <Box className="w-3 h-3" />
+                            {summaries.air.totalCargoTons} tons cargo
+                          </div>
                         </div>
-                        <div className="text-2xl font-bold text-[#111827] mb-1">
-                          {summaries.air.expectedFlights}
-                        </div>
-                        <div className="text-xs text-[#6B7280]">
-                          Expected flights • {summaries.air.totalCargoTons} tons cargo
-                        </div>
-                      </div>
+                      </motion.div>
 
-                      <div className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Truck className="w-4 h-4 text-[#D97706]" />
-                          <span className="text-sm text-amber-700">Land Logistics</span>
+                      <motion.div 
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        className="relative p-5 rounded-xl bg-gradient-to-br from-amber-600/20 to-orange-600/20 border border-amber-500/30 backdrop-blur-sm overflow-hidden group"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="relative">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="p-2 rounded-lg bg-amber-500/20">
+                              <Truck className="w-5 h-5 text-amber-400" />
+                            </div>
+                            <span className="text-xs font-medium text-amber-400 bg-amber-500/20 px-2 py-1 rounded-full">LAND</span>
+                          </div>
+                          <div className="text-3xl font-bold text-white mb-1">
+                            {summaries.land.expectedConvoys}
+                          </div>
+                          <div className="text-sm text-slate-400">Expected convoys</div>
+                          <div className="mt-2 text-xs text-amber-300 flex items-center gap-1">
+                            <Box className="w-3 h-3" />
+                            {formatWeight(summaries.land.totalCargoLbs)}
+                          </div>
                         </div>
-                        <div className="text-2xl font-bold text-[#111827] mb-1">
-                          {summaries.land.expectedConvoys}
-                        </div>
-                        <div className="text-xs text-[#6B7280]">
-                          Expected convoys • {formatWeight(summaries.land.totalCargoLbs)} cargo
-                        </div>
-                      </div>
+                      </motion.div>
 
-                      <div className="p-4 rounded-xl bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Ship className="w-4 h-4 text-teal-600" />
-                          <span className="text-sm text-teal-700">Sea Freight</span>
+                      <motion.div 
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        className="relative p-5 rounded-xl bg-gradient-to-br from-teal-600/20 to-emerald-600/20 border border-teal-500/30 backdrop-blur-sm overflow-hidden group"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="relative">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="p-2 rounded-lg bg-teal-500/20">
+                              <Ship className="w-5 h-5 text-teal-400" />
+                            </div>
+                            <span className="text-xs font-medium text-teal-400 bg-teal-500/20 px-2 py-1 rounded-full">SEA</span>
+                          </div>
+                          <div className="text-3xl font-bold text-white mb-1">
+                            {summaries.sea.expectedVoyages}
+                          </div>
+                          <div className="text-sm text-slate-400">Expected voyages</div>
+                          <div className="mt-2 text-xs text-teal-300 flex items-center gap-1">
+                            <Ship className="w-3 h-3" />
+                            Maritime operations
+                          </div>
                         </div>
-                        <div className="text-2xl font-bold text-[#111827] mb-1">
-                          {summaries.sea.expectedVoyages}
-                        </div>
-                        <div className="text-xs text-[#6B7280]">
-                          Expected voyages
-                        </div>
-                      </div>
+                      </motion.div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="p-4 rounded-xl bg-[#FAFAFA] border border-[#E5E7EB]">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Warehouse className="w-4 h-4 text-purple-500" />
-                          <span className="text-sm text-[#111827]">Projected Warehouse Utilization</span>
+                      <div className="p-5 rounded-xl bg-slate-800/50 border border-slate-700">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="p-2 rounded-lg bg-purple-500/20">
+                              <Warehouse className="w-4 h-4 text-purple-400" />
+                            </div>
+                            <span className="text-sm font-medium text-white">Warehouse Utilization</span>
+                          </div>
+                          <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                            summaries.warehouse.avgUtilization >= 85 ? 'bg-red-500/20 text-red-400' :
+                            summaries.warehouse.avgUtilization >= 60 ? 'bg-amber-500/20 text-amber-400' :
+                            'bg-emerald-500/20 text-emerald-400'
+                          }`}>
+                            {summaries.warehouse.avgUtilization >= 85 ? 'HIGH' :
+                             summaries.warehouse.avgUtilization >= 60 ? 'MODERATE' : 'OPTIMAL'}
+                          </span>
                         </div>
-                        <div className="flex items-baseline gap-2">
-                          <span className={`text-3xl font-bold ${
-                            summaries.warehouse.avgUtilization >= 85 ? 'text-[#DC2626]' :
-                            summaries.warehouse.avgUtilization >= 60 ? 'text-[#D97706]' :
-                            'text-[#16A34A]'
+                        <div className="flex items-baseline gap-2 mb-3">
+                          <span className={`text-4xl font-bold ${
+                            summaries.warehouse.avgUtilization >= 85 ? 'text-red-400' :
+                            summaries.warehouse.avgUtilization >= 60 ? 'text-amber-400' :
+                            'text-emerald-400'
                           }`}>
                             {summaries.warehouse.avgUtilization}%
                           </span>
-                          <span className="text-[#6B7280] text-sm">average</span>
+                          <span className="text-slate-400 text-sm">average capacity</span>
                         </div>
-                        <div className="mt-3 h-2 rounded-full bg-[#E5E7EB] overflow-hidden">
-                          <div 
-                            className={`h-full transition-all ${getUtilizationBg(summaries.warehouse.avgUtilization)}`}
-                            style={{ width: `${Math.min(100, summaries.warehouse.avgUtilization)}%` }}
+                        <div className="h-3 rounded-full bg-slate-700 overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.min(100, summaries.warehouse.avgUtilization)}%` }}
+                            transition={{ duration: 1, ease: "easeOut" }}
+                            className={`h-full rounded-full ${
+                              summaries.warehouse.avgUtilization >= 85 ? 'bg-gradient-to-r from-red-500 to-red-400' :
+                              summaries.warehouse.avgUtilization >= 60 ? 'bg-gradient-to-r from-amber-500 to-amber-400' :
+                              'bg-gradient-to-r from-emerald-500 to-emerald-400'
+                            }`}
                           />
                         </div>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-[#FAFAFA] border border-[#E5E7EB]">
-                        <div className="flex items-center gap-2 mb-3">
-                          <AlertTriangle className="w-4 h-4 text-[#D97706]" />
-                          <span className="text-sm text-[#111827]">Capacity Warnings</span>
+                      <div className="p-5 rounded-xl bg-slate-800/50 border border-slate-700">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className={`p-2 rounded-lg ${
+                              summaries.warehouse.sitesWithWarnings > 0 ? 'bg-amber-500/20' : 'bg-emerald-500/20'
+                            }`}>
+                              <AlertTriangle className={`w-4 h-4 ${
+                                summaries.warehouse.sitesWithWarnings > 0 ? 'text-amber-400' : 'text-emerald-400'
+                              }`} />
+                            </div>
+                            <span className="text-sm font-medium text-white">Capacity Alerts</span>
+                          </div>
+                          {summaries.warehouse.sitesWithWarnings === 0 && (
+                            <span className="text-xs font-bold px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" />
+                              ALL CLEAR
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-baseline gap-2">
-                          <span className={`text-3xl font-bold ${
-                            summaries.warehouse.sitesWithWarnings > 3 ? 'text-[#DC2626]' :
-                            summaries.warehouse.sitesWithWarnings > 0 ? 'text-[#D97706]' :
-                            'text-[#16A34A]'
+                        <div className="flex items-baseline gap-2 mb-2">
+                          <span className={`text-4xl font-bold ${
+                            summaries.warehouse.sitesWithWarnings > 3 ? 'text-red-400' :
+                            summaries.warehouse.sitesWithWarnings > 0 ? 'text-amber-400' :
+                            'text-emerald-400'
                           }`}>
                             {summaries.warehouse.sitesWithWarnings}
                           </span>
-                          <span className="text-[#6B7280] text-sm">sites with warnings</span>
+                          <span className="text-slate-400 text-sm">sites flagged</span>
                         </div>
-                        <p className="text-xs text-[#6B7280] mt-2">
+                        <p className="text-xs text-slate-500 leading-relaxed">
                           {summaries.warehouse.sitesWithWarnings === 0 
-                            ? 'No capacity issues expected in forecast period'
-                            : `${summaries.warehouse.sitesWithWarnings} sites may require capacity attention`
+                            ? 'No capacity issues projected for the forecast period. All warehouse sites operating within normal parameters.'
+                            : `${summaries.warehouse.sitesWithWarnings} warehouse site${summaries.warehouse.sitesWithWarnings > 1 ? 's' : ''} may require capacity attention during this period.`
                           }
                         </p>
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-4 border-t border-[#E5E7EB]">
-                      <div className="flex items-center justify-between text-xs text-[#6B7280]">
-                        <span>Showing {selectedForecastDays}-day forecast for scheduled future transports</span>
-                        <span>Generated {new Date(forecast.generatedAt).toLocaleString()}</span>
+                    <div className="mt-6 pt-4 border-t border-slate-700/50">
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          <span>Live {selectedForecastDays}-day projection</span>
+                        </div>
+                        <span>Updated {new Date(forecast.generatedAt).toLocaleString()}</span>
                       </div>
                     </div>
-                  </>
+                  </div>
                 )}
               </motion.div>
             )}

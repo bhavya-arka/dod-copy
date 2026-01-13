@@ -1,0 +1,26 @@
+    at async fetchVehiclePreview (9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/components/warehouse/modals/TransferModal.tsx:75:20)
+(anonymous) @ injected.js:37Understand this error
+9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/transfers/preview-vehicles:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+injected.js:37 Failed to fetch vehicle preview: Error: Failed to preview vehicles
+    at previewTransferVehicles (9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/services/warehouseService.ts:173:11)
+    at async fetchVehiclePreview (9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/components/warehouse/modals/TransferModal.tsx:75:20)
+(anonymous) @ injected.js:37Understand this error
+9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/transfers/preview-vehicles:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+injected.js:37 Failed to fetch vehicle preview: Error: Failed to preview vehicles
+    at previewTransferVehicles (9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/services/warehouseService.ts:173:11)
+    at async fetchVehiclePreview (9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/components/warehouse/modals/TransferModal.tsx:75:20)
+(anonymous) @ injected.js:37Understand this error
+9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/transfers/preview-vehicles:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+injected.js:37 Failed to fetch vehicle preview: Error: Failed to preview vehicles
+    at previewTransferVehicles (9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/services/warehouseService.ts:173:11)
+    at async fetchVehiclePreview (9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/components/warehouse/modals/TransferModal.tsx:75:20)
+(anonymous) @ injected.js:37Understand this error
+9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/transfers/2/auto-create-convoy:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+injected.js:37 Error auto-creating convoy: LandServiceError: Failed to create convoy for transfer
+    at handleResponse (9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/services/landService.ts:12:11)
+    at async 9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/components/sections/LandLogistics.tsx:289:7
+(anonymous) @ injected.js:37Understand this error
+9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/transfers/2/auto-create-convoy:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+injected.js:37 Error auto-creating convoy: LandServiceError: Failed to create convoy for transfer
+    at handleResponse (9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/services/landService.ts:12:11)
+    at async 9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/components/sections/LandLogistics.tsx:289:7
