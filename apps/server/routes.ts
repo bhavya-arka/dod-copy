@@ -71,6 +71,7 @@ import type { TransportMode, TransportStatus } from "../../packages/shared/trans
 import { matchLocationToZone, type ZoneMatchResult } from "./services/zoneMatchingService";
 import { warehouseAnalyticsService } from "./services/warehouseAnalyticsService";
 import * as vehicleAllocationService from "./services/vehicleAllocationService";
+import * as multiModalRoutingService from "./services/multiModalRoutingService";
 
 // Weather API cache with 10-minute TTL
 interface WeatherCacheEntry {
@@ -11858,6 +11859,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Transfer Preview] Error previewing vehicles:", error);
       res.status(500).json({ error: "Failed to preview transfer vehicles" });
+    }
+  });
+
+  // ============================================================================
+  // MULTI-MODAL ROUTE PLANNING API
+  // ============================================================================
+
+  // POST /api/routing/plan-multi-modal - Plan a multi-modal route between sites
+  app.post("/api/routing/plan-multi-modal", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { sourceSiteId, destinationSiteId, cargoWeightLbs } = req.body;
+
+      if (!sourceSiteId || !destinationSiteId) {
+        return res.status(400).json({ error: "sourceSiteId and destinationSiteId are required" });
+      }
+
+      const route = await multiModalRoutingService.planMultiModalRoute(
+        sourceSiteId,
+        destinationSiteId,
+        cargoWeightLbs || 0
+      );
+
+      res.json(route);
+    } catch (error) {
+      console.error("[Multi-Modal Routing] Error planning route:", error);
+      res.status(500).json({ error: "Failed to plan multi-modal route" });
+    }
+  });
+
+  // POST /api/routing/execute-multi-modal - Create transport assets for a multi-modal route
+  app.post("/api/routing/execute-multi-modal", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.userId;
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const { route, transferId, cargoWeightLbs, cargoManifest } = req.body;
+
+      if (!route || !transferId) {
+        return res.status(400).json({ error: "route and transferId are required" });
+      }
+
+      const result = await multiModalRoutingService.createTransportAssetsForRoute(
+        route,
+        transferId,
+        userId,
+        cargoWeightLbs || 0,
+        cargoManifest || []
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error("[Multi-Modal Routing] Error executing route:", error);
+      res.status(500).json({ error: "Failed to execute multi-modal route" });
     }
   });
 
