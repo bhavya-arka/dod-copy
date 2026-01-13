@@ -178,6 +178,11 @@ export interface Transfer {
   scheduled_date?: string;
   completed_date?: string;
   created_at: string;
+  manifest_id?: string;
+  assigned_convoy_id?: number;
+  assigned_flight_plan_id?: number;
+  assigned_voyage_id?: number;
+  in_transit_since?: string;
 }
 
 /** Create transfer request payload */
