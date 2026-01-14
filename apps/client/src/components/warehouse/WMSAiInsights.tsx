@@ -41,6 +41,7 @@ import {
 import OptimizationWizardModal, { type Algorithm } from "./modals/OptimizationWizardModal";
 import PlanActionsModal from "./modals/PlanActionsModal";
 import TextConfirmationDialog from "../ui/TextConfirmationDialog";
+import WMSSolutionDashboard from "./WMSSolutionDashboard";
 
 interface WMSAiInsightsProps {
   sites: WarehouseSite[];
@@ -120,6 +121,7 @@ export default function WMSAiInsights({
   const [optimizationLoading, setOptimizationLoading] = useState(false);
   const [optimization, setOptimization] = useState<OptimizationResult | null>(null);
   const [showWizard, setShowWizard] = useState(false);
+  const [showSolutionDashboard, setShowSolutionDashboard] = useState(false);
   const [preselectedAlgorithm, setPreselectedAlgorithm] = useState<Algorithm | null>(null);
   const [aiInsightLoading, setAiInsightLoading] = useState(false);
   const [aiInsight, setAiInsight] = useState<WarehouseAiInsight | null>(null);
@@ -439,6 +441,35 @@ export default function WMSAiInsights({
             </div>
           )}
         </div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="mb-6"
+      >
+        <button
+          onClick={() => setShowSolutionDashboard(true)}
+          className="w-full p-4 rounded-2xl bg-gradient-to-r from-blue-600/20 to-teal-600/20 border border-blue-500/30 hover:border-blue-400/50 transition-all group"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-blue-500/20 group-hover:scale-110 transition-transform">
+                <Sparkles className="w-6 h-6 text-blue-400" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-lg font-semibold text-white group-hover:text-blue-300 transition-colors">
+                  Solution Dashboard
+                </h3>
+                <p className="text-sm text-slate-400">
+                  Dynamic layouts, load balancing, density mapping, predictive forecasting & integrations
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-6 h-6 text-blue-400 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </button>
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -888,6 +919,18 @@ export default function WMSAiInsights({
           onShowToast={onShowToast}
           initialAlgorithm={preselectedAlgorithm}
         />
+      )}
+
+      {showSolutionDashboard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-5xl max-h-[90vh] overflow-auto">
+            <WMSSolutionDashboard
+              siteId={selectedSiteId || undefined}
+              siteName={selectedSite?.name}
+              onClose={() => setShowSolutionDashboard(false)}
+            />
+          </div>
+        </div>
       )}
 
       <TextConfirmationDialog

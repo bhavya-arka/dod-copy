@@ -10,6 +10,7 @@ export { default as WMSSitesStorage } from "./WMSSitesStorage";
 export { default as WMSAiInsights } from "./WMSAiInsights";
 export { default as WMSHistory } from "./WMSHistory";
 export { default as WMSAdmin } from "./WMSAdmin";
+export { default as WMSSolutionDashboard } from "./WMSSolutionDashboard";
 export { default as Toast } from "./Toast";
 
 export { default as AddSiteModal } from "./modals/AddSiteModal";
