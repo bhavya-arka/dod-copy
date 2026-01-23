@@ -42,6 +42,7 @@ import OptimizationWizardModal, { type Algorithm } from "./modals/OptimizationWi
 import PlanActionsModal from "./modals/PlanActionsModal";
 import TextConfirmationDialog from "../ui/TextConfirmationDialog";
 import WMSSolutionDashboard from "./WMSSolutionDashboard";
+import WMSAnalyticsDashboard from "./WMSAnalyticsDashboard";
 
 interface WMSAiInsightsProps {
   sites: WarehouseSite[];
@@ -122,6 +123,7 @@ export default function WMSAiInsights({
   const [optimization, setOptimization] = useState<OptimizationResult | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const [showSolutionDashboard, setShowSolutionDashboard] = useState(false);
+  const [showAnalyticsDashboard, setShowAnalyticsDashboard] = useState(false);
   const [preselectedAlgorithm, setPreselectedAlgorithm] = useState<Algorithm | null>(null);
   const [aiInsightLoading, setAiInsightLoading] = useState(false);
   const [aiInsight, setAiInsight] = useState<WarehouseAiInsight | null>(null);
@@ -472,6 +474,36 @@ export default function WMSAiInsights({
         </button>
       </motion.div>
 
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.18 }}
+        className="mb-6"
+      >
+        <button
+          onClick={() => setShowAnalyticsDashboard(true)}
+          disabled={!selectedSiteId}
+          className="w-full p-4 rounded-2xl bg-gradient-to-r from-emerald-600/20 to-blue-600/20 border border-emerald-500/30 hover:border-emerald-400/50 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-emerald-500/20 group-hover:scale-110 transition-transform">
+                <Activity className="w-6 h-6 text-emerald-400" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-lg font-semibold text-white group-hover:text-emerald-300 transition-colors">
+                  Analytics Dashboard
+                </h3>
+                <p className="text-sm text-slate-400">
+                  Movement tracking, growth insights, velocity analysis & zone heatmaps
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-6 h-6 text-emerald-400 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </button>
+      </motion.div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {insightCards.map((card, i) => (
           <motion.button
@@ -589,15 +621,14 @@ export default function WMSAiInsights({
                       )}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      {(plan.status === 'in_progress' || plan.status === 'completed') && (
-                        <button
-                          onClick={() => setViewingPlan(plan)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-[#2563EB] hover:bg-[#2563EB]/10 transition-colors"
-                          title="View details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      )}
+                      {/* Preview button for all plans */}
+                      <button
+                        onClick={() => setViewingPlan(plan)}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-[#2563EB] hover:bg-[#2563EB]/10 transition-colors"
+                        title={plan.status === 'pending' ? "Preview plan" : "View details"}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                       {plan.status === 'pending' && (
                         <button
                           onClick={() => {
@@ -931,6 +962,15 @@ export default function WMSAiInsights({
             />
           </div>
         </div>
+      )}
+
+      {showAnalyticsDashboard && selectedSiteId && (
+        <WMSAnalyticsDashboard
+          siteId={selectedSiteId}
+          siteName={selectedSite?.name || "Warehouse"}
+          onClose={() => setShowAnalyticsDashboard(false)}
+          onShowToast={onShowToast}
+        />
       )}
 
       <TextConfirmationDialog
