@@ -17,113 +17,54 @@ The project utilizes a Turborepo monorepo structure:
 - **`apps/server/`**: Express.js backend providing RESTful API endpoints.
 - **`packages/shared/`**: Shared schemas, types, and transport definitions.
 - **`packages/config/`**: Shared configurations.
-- **`shared/`**: Drizzle schema for database definitions.
+
+## Security Architecture
+- **Authentication**: JWT tokens stored in httpOnly secure cookies with session expiration validation.
+- **Rate Limiting**: Three tiers for general API, auth endpoints, and AI/insights.
+- **Input Validation**: All route parameters validated, SQL queries use Drizzle ORM parameterization.
+- **Error Codes**: Structured auth errors for various scenarios.
+
+## Frontend API Client
+A centralized API client provides typed errors, typed helpers for HTTP methods, automatic 5xx retry logic, and a request timeout with AbortController.
 
 ## Modular Transport Architecture
-A unified, mode-agnostic transport layer handles Air, Land, and Sea operations, featuring shared TypeScript types for `TransportMode`, `TransportStatus`, `TransportPlan`, and `TransportAsset`, along with mode-agnostic CRUD operations on the backend. All transport modes follow a unified lifecycle: `draft → planned → loading → underway → completed`, with status transitions validated and WMS integration upon completion.
+A unified, mode-agnostic transport layer handles Air, Land, and Sea operations, featuring shared TypeScript types and mode-agnostic CRUD operations. All transport modes follow a unified lifecycle: `draft → planned → loading → underway → completed`, with status transitions validated and WMS integration upon completion.
 
 ## 3D Visualization Infrastructure
-The system incorporates 3D visualization capabilities using Three.js, with reusable components for military vehicle meshes and convoy scene rendering, including accurate proportions and status-based animations.
+The system incorporates 3D visualization capabilities using Three.js, with reusable components for military vehicle meshes and convoy scene rendering.
 
 ## Google Maps Integration (Land Logistics)
-The backend integrates with Google Maps API for geocoding, route calculation, distance matrix computations, and place autocomplete. Frontend components like `LocationAutocomplete` and `RouteMap` provide interactive map functionalities.
+The backend integrates with Google Maps API for geocoding, route calculation, distance matrix computations, and place autocomplete. Frontend components provide interactive map functionalities.
 
 ## Intelligent Multi-Modal Routing
-The system provides automatic route planning that detects ocean crossings and suggests multi-modal transport:
-- **Route Feasibility Check**: Uses Google Maps Directions API to validate if ground transport is possible between two locations
-- **Ocean Crossing Detection**: Automatically detects when routes require ferry crossings or are not possible by road
-- **Multi-Leg Route Planning**: When ground transport isn't feasible, the system plans a multi-leg route:
-  - Leg 1: Ground convoy from origin to nearest military airport/seaport
-  - Leg 2: Air flight or sea voyage across the ocean
-  - Leg 3: Ground convoy from destination airport/seaport to final destination
-- **Military Facility Database**: Includes coordinates for 10+ military airports (Travis AFB, Hickam AFB, Kadena AB, etc.) and 8+ seaports (Pearl Harbor, San Diego NAS, Norfolk, etc.)
-- **Smart Mode Selection**: Chooses between air and sea transport based on distance and cargo weight:
-  - Distances >2000 miles: Prefer air
-  - Cargo >100,000 lbs: Prefer sea
-  - Default: Air for faster delivery
-- **Haversine Distance Calculation**: Accurate great-circle distance for flight/voyage estimation
-- **API Endpoints**: `/api/routing/plan-multi-modal` for route planning, `/api/routing/execute-multi-modal` for creating transport assets
-- **Transfer Modal Integration**: Shows visual route breakdown with leg-by-leg display including distances and estimated hours
+The system provides automatic route planning that detects ocean crossings and suggests multi-modal transport. It includes route feasibility checks, ocean crossing detection, multi-leg route planning using military facility databases, and smart mode selection based on distance and cargo weight, utilizing Haversine distance calculation.
 
 ## PACAF Air Operations Pipeline
-The Air module implements a multi-stage pipeline for cargo planning, including CSV/JSON uploads, data parsing and validation, classification, 463L palletization using a bin-packing algorithm, aircraft allocation solving based on weight and Center of Balance (CoB), and 2D ICODES visualization for C-17 and C-130 aircraft.
+The Air module implements a multi-stage pipeline for cargo planning, including data upload, parsing, validation, classification, 463L palletization using a bin-packing algorithm, aircraft allocation solving, and 2D ICODES visualization for C-17 and C-130 aircraft.
 
 ## DLA-Compliant Warehouse Management System (WMS)
-The WMS provides multi-site inventory tracking, pallet-level location management, NSN validation, aging alerts, and DLA pallet standard adherence (4x4x4 ft, <=2,000 lbs). It includes site assignment logic, manifest parsers (CSV, MILSTRIP, FEDLOG), and a dynamic column system for inventory. Key features include zone management with PDF-style pallet position metrics, historical capacity tracking, and color-coded utilization indicators. An Optimization Wizard offers four algorithms (CardStack, Size Standardization, Value Density Analysis, Bin-Packing Order) with target completion dates and bulk start options. AI-powered analysis using AWS Bedrock provides insights for placement optimization and load balancing. The system also supports inter-warehouse transfers and 90-day predictive load planning. Smart Alerts & Analytics include threshold and trend-based capacity alerts, aging alerts, and throughput metrics.
+The WMS provides multi-site inventory tracking, pallet-level location management, NSN validation, aging alerts, and DLA pallet standard adherence. Key features include zone management, manifest parsers, historical capacity tracking, an Optimization Wizard with four algorithms, and AI-powered analysis for placement optimization and load balancing. It also supports inter-warehouse transfers and 90-day predictive load planning with smart alerts and analytics.
 
 ## Automatic Vehicle Allocation for Ground Transfers
-The system provides automatic vehicle calculation for ground transfers between warehouses:
-- **Vehicle Priority Settings**: Superadmins can configure which vehicle types to use and their priority order (lower number = higher priority). Managed via WMSAdmin panel.
-- **Greedy Allocation Algorithm**: Calculates minimum vehicles needed based on total cargo weight and priority-ordered vehicle types with their payload capacities.
-- **Transfer Preview**: Before creating a ground transfer, users see a vehicle allocation preview showing total weight, required vehicles by type, and capacity utilization percentage.
-- **Validation**: The system validates vehicle priority settings to prevent duplicate vehicle types, duplicate priority orders, and non-positive priority values.
-- **Graceful Fallback**: Transfers proceed even without configured priorities, with warnings displayed in the metadata for manual allocation.
-- **Ground Transport Metadata**: Stored in camelCase JSON format (totalWeightLbs, allocations, totalVehicles, totalCapacity, utilizationPercent, calculatedAt) with optional warning/error fields.
-- **Automatic Weight Estimation**: Items without explicit weight data receive estimated weights: 500 lbs default per unit, or dimensions-based calculation (L×W×H × 0.02 lbs/in³ density) when dimensions are available. The UI displays "(estimated)" indicators and informational messages when weights are calculated.
+The system provides automatic vehicle calculation for ground transfers between warehouses using a greedy allocation algorithm based on configurable vehicle priorities. It includes a transfer preview, validation of priority settings, graceful fallback, and automatic weight estimation for items without explicit weight data.
 
 ## Unified Transport Data Pipeline
-The system provides standardized transport data aggregation for warehouse forecasting:
-- **Cross-Modal Manifest System**: Links warehouse transfers to convoys, flight plans, and voyages with manifest creation and transport assignment workflows.
-- **Transfer Workflow**: Transfers follow a lifecycle: `pending → manifest_created → transport_assigned → in_transit → completed`.
-- **Transfer Order Management**: Interactive TransferDetailsModal with comprehensive lifecycle tracking:
-  - Lifecycle timers: Age (days since creation), days in transit, ETA countdown
-  - Overdue alerts with animated red badge when past scheduled date
-  - Transport assignment display: linked convoy, flight plan, or voyage IDs
-  - Destination site utilization preview with color-coded progress bar
-  - Status management: mark in transit, complete, or cancel transfers
-  - Expected arrival date and notes editing
-- **Inbound Cargo Tracking**: Aggregates inbound cargo by destination warehouse for each transport mode (air, land, sea).
-- **80% Utilization Threshold Alerts**: Tracks warehouse utilization and generates alerts when sites exceed or will exceed 80% capacity.
-- **Predictive Forecasting**: Enhanced predictive forecast endpoint includes warehouse transfers and threshold-based capacity warnings.
-- **Transport Pipeline API**: Dedicated `/api/operations/transport-pipeline` endpoint provides standardized transport data per warehouse with inbound cargo breakdown by mode.
-- **Pending Transfers in Logistics Modules**: Land Logistics and Air Operations show pending warehouse transfers that can be assigned to convoys or flight plans.
+The system provides standardized transport data aggregation for warehouse forecasting with a cross-modal manifest system. It includes a transfer workflow with lifecycle tracking, inbound cargo tracking, 80% utilization threshold alerts, and predictive forecasting that incorporates warehouse transfers.
 
 ## Military Sealift Command (MSC) Sea Freight Operations
-The Sea Freight module provides comprehensive maritime logistics:
-- **Vessel Types Database**: 10 authentic MSC vessel types including Henry J. Kaiser-class oilers (T-AO), Bob Hope/Watson-class LMSR, Spearhead-class EPF, hospital ships, and more with full specifications (cargo capacity, TEU, speed, crew).
-- **Tab-Based Navigation**: Overview, Voyages, Containers, Transfers, and Schedule tabs for intuitive workflow.
-- **Voyage Management**: Full CRUD with vessel type selection, hull number, IMO, and status lifecycle (draft → planned → loading → underway → completed).
-- **Container Management**: Container tracking with status badges (Empty, Loading, Loaded, Unloading, Discharged) and voyage assignment.
-- **Port Schedule**: Dynamic display of upcoming arrivals/departures computed from voyage data.
-- **Voyage Proposal System**: Recommends suitable vessel types based on total cargo weight when assigning warehouse transfers.
-- **Weight Estimation**: Auto-calculates 500 lbs default or dimensions-based (L×W×H × 0.02 lbs/in³) for items without explicit weights.
-- **API Endpoints**: 16+ routes at `/api/sea/*` for vessel types, voyages, containers, statistics, port schedule, and warehouse transfer integration.
-
-## Data Models
-Key data models support `MovementItem`, `Pallet463L`, `AircraftLoadPlan` for air operations, `warehouse_sites`, `warehouse_inventory_items` for WMS, `land_routes`, `land_convoys` for ground transport, and `sea_voyages`, `sea_containers`, `sea_vessel_types` for maritime operations.
+The Sea Freight module provides comprehensive maritime logistics, including a database of authentic MSC vessel types, tab-based navigation for managing voyages, containers, transfers, and schedules. It features voyage management with a status lifecycle, container tracking, a dynamic port schedule, and a voyage proposal system for recommending vessels.
 
 ## Government Compliance & Federal Standards
 The system supports National Stock Numbers (NSN), Commercial and Government Entity (CAGE) codes, and integrates with Military Sealift Command (MSC) vessel designations, aligning with Federal Logistics Information System (FLIS) standards.
 
 ## UI/UX Design
-The platform features a responsive, mobile-first design with a consistent navigation and a dark theme.
-
-### Styling Guidelines (IMPORTANT)
-- **Table Headers**: Use subtle dark backgrounds (`bg-slate-800/80`) - NEVER use bright gradient headers like orange/red/blue gradients
-- **Dark Theme Components**: Use `bg-[#0f172a]` for dark cards, `border-white/10` for borders
-- **Light Theme Components**: Use `bg-white` or `bg-[#FAFAFA]` with `border-[#E5E7EB]`
-- **Accent Colors**: Use mode-specific colors subtly (borders, icons) not as full backgrounds
-  - Air: Blue (`text-blue-400`, `border-l-blue-500`)
-  - Land: Amber (`text-amber-400`, `border-l-amber-500`)
-  - Sea: Teal (`text-teal-400`, `border-l-teal-500`)
-- **Text Colors**: Dark theme uses `text-slate-300` for body, `text-white` for headers
-- **Weights**: All measurements in pounds (lbs) only - no metric conversions
-- **Professional Look**: Avoid flashy gradients in data tables; use clean, minimal styling
+The platform features a responsive, mobile-first design with a consistent navigation and a dark theme. Styling guidelines prioritize subtle colors, dark theme components, mode-specific accent colors, and professional, minimal styling, with all weights in pounds (lbs).
 
 ## Military Organization & Role-Based Access Control
 The system supports four military organizations (PACAF, DLA, MSC, TRANSCOM) with a role-based access control (RBAC) system. Roles include Superadmin, Admin (branch-specific), and User, managed through Department Access Codes (DACs) and an approval workflow.
 
 ## AI Insights Configuration
-AI insights are generated using AWS Bedrock with the Nova Lite model and structured prompts, covering various insight types for Air Operations, Land Logistics, Sea Freight, Cross-Modal analysis, and Warehouse management.
-
-### Warehouse AI Analytics
-The WMS includes advanced AI-powered analytics:
-- **WMSAnalyticsDashboard**: 4-tab dashboard (Movement Analytics, Growth Insights, Velocity Analysis, Zone Heatmap) accessible from AI Insights section
-- **AI Recommendations Panel**: Bedrock-powered insights for demand forecasting, anomaly detection, smart placement, and inventory velocity analysis
-- **New AI Insight Types**: `warehouse_demand_forecast`, `warehouse_anomaly_detection`, `warehouse_smart_placement`, `warehouse_inventory_velocity`
-- **Analytics Tables**: `warehouse_item_movements` and `warehouse_capacity_snapshots` for granular tracking
-- **API Endpoints**: `/api/warehouse/sites/:siteId/analytics/*` for movements, growth, velocity, and heatmap data
-- **Optimization Plan Preview**: Saved optimization plans can be previewed before execution using the Eye button
+AI insights are generated using AWS Bedrock with the Nova Lite model and structured prompts, covering various insight types for Air Operations, Land Logistics, Sea Freight, Cross-Modal analysis, and Warehouse management. The WMS includes an analytics dashboard, AI recommendations panel for demand forecasting, anomaly detection, smart placement, and inventory velocity analysis.
 
 # External Dependencies
 
@@ -137,8 +78,8 @@ The WMS includes advanced AI-powered analytics:
 - Three.js
 
 **Maps & Geolocation**:
-- Google Maps API (via GOOGLE_API_KEY secret)
-- Leaflet (route visualization)
+- Google Maps API
+- Leaflet
 
 **UI Framework**:
 - Radix UI components
