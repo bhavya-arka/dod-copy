@@ -10,7 +10,7 @@ import {
   warehouseItemMovements,
   warehouseCapacitySnapshots
 } from '@shared/schema';
-import type { WarehouseAlert, WarehouseMetricSnapshot } from '@shared/schema';
+import type { WarehouseAlert } from '@shared/schema';
 import { eq, and, gte, lte, sql, desc, isNull, count } from 'drizzle-orm';
 
 const CAPACITY_WARNING_THRESHOLD = 85;

@@ -316,7 +316,7 @@ export default function Dashboard({
                                     <div className="text-xs text-neutral-500 mb-2 font-medium">
                                       Mission Itinerary:
                                     </div>
-                                    <div className="flex items-center gap-1 flex-wrap bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-2">
+                                    <div className="flex items-center gap-1 flex-wrap bg-blue-50 rounded-lg p-2">
                                       {routeChain.map((base, idx) => (
                                         <React.Fragment key={idx}>
                                           <span

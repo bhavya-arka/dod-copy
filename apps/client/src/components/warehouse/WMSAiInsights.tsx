@@ -402,7 +402,7 @@ export default function WMSAiInsights({
           <button
             onClick={handleOpenWizard}
             disabled={!selectedSiteId}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#2563EB] to-[#1d4ed8] text-white hover:from-[#1d4ed8] hover:to-[#2563EB] transition-all flex items-center gap-2 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-md"
+            className="px-5 py-2.5 rounded-xl bg-[#2563EB] text-white hover:bg-[#1d4ed8] transition-all flex items-center gap-2 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-md"
           >
             <Wand2 className="w-5 h-5" />
             <span className="font-medium">Optimization Wizard</span>
@@ -414,7 +414,7 @@ export default function WMSAiInsights({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="rounded-2xl bg-gradient-to-r from-[#2563EB]/10 to-[#1d4ed8]/10 border border-[#2563EB]/20 p-4 mb-6"
+        className="rounded-2xl bg-blue-50 border border-[#2563EB]/20 p-4 mb-6"
       >
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex items-center gap-2">
@@ -454,23 +454,23 @@ export default function WMSAiInsights({
       >
         <button
           onClick={() => setShowSolutionDashboard(true)}
-          className="w-full p-4 rounded-2xl bg-gradient-to-r from-blue-600/20 to-teal-600/20 border border-blue-500/30 hover:border-blue-400/50 transition-all group"
+          className="w-full p-4 rounded-2xl bg-blue-50 border border-blue-200 hover:border-blue-300 transition-all group"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-blue-500/20 group-hover:scale-110 transition-transform">
-                <Sparkles className="w-6 h-6 text-blue-400" />
+              <div className="p-3 rounded-xl bg-blue-100 group-hover:scale-110 transition-transform">
+                <Sparkles className="w-6 h-6 text-blue-600" />
               </div>
               <div className="text-left">
-                <h3 className="text-lg font-semibold text-white group-hover:text-blue-300 transition-colors">
+                <h3 className="text-lg font-semibold text-[#111827] group-hover:text-blue-600 transition-colors">
                   Solution Dashboard
                 </h3>
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-[#6B7280]">
                   Dynamic layouts, load balancing, density mapping, predictive forecasting & integrations
                 </p>
               </div>
             </div>
-            <ChevronRight className="w-6 h-6 text-blue-400 group-hover:translate-x-1 transition-transform" />
+            <ChevronRight className="w-6 h-6 text-blue-600 group-hover:translate-x-1 transition-transform" />
           </div>
         </button>
       </motion.div>
@@ -484,23 +484,23 @@ export default function WMSAiInsights({
         <button
           onClick={() => setShowAnalyticsDashboard(true)}
           disabled={!selectedSiteId}
-          className="w-full p-4 rounded-2xl bg-gradient-to-r from-emerald-600/20 to-blue-600/20 border border-emerald-500/30 hover:border-emerald-400/50 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full p-4 rounded-2xl bg-emerald-50 border border-emerald-200 hover:border-emerald-300 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-emerald-500/20 group-hover:scale-110 transition-transform">
-                <Activity className="w-6 h-6 text-emerald-400" />
+              <div className="p-3 rounded-xl bg-emerald-100 group-hover:scale-110 transition-transform">
+                <Activity className="w-6 h-6 text-emerald-600" />
               </div>
               <div className="text-left">
-                <h3 className="text-lg font-semibold text-white group-hover:text-emerald-300 transition-colors">
+                <h3 className="text-lg font-semibold text-[#111827] group-hover:text-emerald-600 transition-colors">
                   Analytics Dashboard
                 </h3>
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-[#6B7280]">
                   Movement tracking, growth insights, velocity analysis & zone heatmaps
                 </p>
               </div>
             </div>
-            <ChevronRight className="w-6 h-6 text-emerald-400 group-hover:translate-x-1 transition-transform" />
+            <ChevronRight className="w-6 h-6 text-emerald-600 group-hover:translate-x-1 transition-transform" />
           </div>
         </button>
       </motion.div>
@@ -778,7 +778,7 @@ export default function WMSAiInsights({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
-        className="rounded-2xl bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 shadow-sm p-6 mb-6"
+        className="rounded-2xl bg-purple-50 border border-purple-200 shadow-sm p-6 mb-6"
       >
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 bg-purple-100 rounded-xl">
@@ -794,7 +794,7 @@ export default function WMSAiInsights({
           <button
             onClick={() => handleGenerateAiInsights(false)}
             disabled={!selectedSiteId || aiInsightLoading}
-            className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-2.5 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {aiInsightLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />

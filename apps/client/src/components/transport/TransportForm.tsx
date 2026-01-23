@@ -15,7 +15,8 @@ export interface TransportFormProps {
 type FormErrors = Partial<Record<keyof TransportPlan | 'general', string>>;
 
 const modeConfig: Record<TransportMode, {
-  gradient: string;
+  iconBg: string;
+  iconColor: string;
   buttonBg: string;
   buttonHover: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -23,9 +24,10 @@ const modeConfig: Record<TransportMode, {
   specificFields: { key: string; label: string; type: string; placeholder?: string }[];
 }> = {
   air: {
-    gradient: 'from-blue-500 to-cyan-500',
-    buttonBg: 'bg-gradient-to-r from-blue-600 to-cyan-600',
-    buttonHover: 'hover:from-blue-700 hover:to-cyan-700',
+    iconBg: 'bg-blue-500/20',
+    iconColor: 'text-blue-400',
+    buttonBg: 'bg-blue-600',
+    buttonHover: 'hover:bg-blue-700',
     icon: Plane,
     label: 'Flight',
     specificFields: [
@@ -35,9 +37,10 @@ const modeConfig: Record<TransportMode, {
     ],
   },
   land: {
-    gradient: 'from-amber-500 to-orange-500',
-    buttonBg: 'bg-gradient-to-r from-amber-600 to-orange-600',
-    buttonHover: 'hover:from-amber-700 hover:to-orange-700',
+    iconBg: 'bg-amber-500/20',
+    iconColor: 'text-amber-400',
+    buttonBg: 'bg-amber-600',
+    buttonHover: 'hover:bg-amber-700',
     icon: Truck,
     label: 'Convoy',
     specificFields: [
@@ -47,9 +50,10 @@ const modeConfig: Record<TransportMode, {
     ],
   },
   sea: {
-    gradient: 'from-teal-500 to-emerald-500',
-    buttonBg: 'bg-gradient-to-r from-teal-600 to-emerald-600',
-    buttonHover: 'hover:from-teal-700 hover:to-emerald-700',
+    iconBg: 'bg-teal-500/20',
+    iconColor: 'text-teal-400',
+    buttonBg: 'bg-teal-600',
+    buttonHover: 'hover:bg-teal-700',
     icon: Ship,
     label: 'Voyage',
     specificFields: [
@@ -145,8 +149,8 @@ export function TransportForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="flex items-center gap-3 pb-4 border-b border-white/10">
-        <div className={cn('p-2.5 rounded-xl bg-gradient-to-r', config.gradient)}>
-          <Icon className="w-5 h-5 text-white" />
+        <div className={cn('p-2.5 rounded-xl', config.iconBg)}>
+          <Icon className={cn('w-5 h-5', config.iconColor)} />
         </div>
         <div>
           <h3 className="text-lg font-semibold text-white">

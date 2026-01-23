@@ -131,7 +131,7 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
 
   return (
     <div className="bg-[#0f172a] rounded-2xl border border-white/10 overflow-hidden">
-      <div className="p-4 border-b border-white/10 bg-gradient-to-r from-blue-600/20 to-teal-600/20">
+      <div className="p-4 border-b border-white/10 bg-slate-800/80">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-blue-500/20">

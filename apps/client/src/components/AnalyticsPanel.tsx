@@ -1036,7 +1036,7 @@ function AircraftDetailView({ aircraft }: { aircraft: AircraftCostBreakdown }) {
   ];
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 mt-4 border border-blue-200/50">
+    <div className="bg-blue-50 rounded-xl p-4 mt-4 border border-blue-200">
       <div className="flex items-center justify-between mb-4">
         <h4 className="text-neutral-900 font-bold">
           {aircraft.aircraft_id} Details

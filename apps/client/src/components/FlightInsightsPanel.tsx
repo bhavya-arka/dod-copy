@@ -357,7 +357,7 @@ export default function FlightInsightsPanel({
               exit={{ opacity: 0, y: -10 }}
               className="space-y-4"
             >
-              <div className="p-3 rounded-xl bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20">
+              <div className="p-3 rounded-xl bg-primary/5 border border-primary/20">
                 <p className="text-neutral-700 text-sm leading-relaxed">
                   {safeAnalysis.executive_summary}
                 </p>

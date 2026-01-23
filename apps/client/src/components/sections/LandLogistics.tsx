@@ -458,8 +458,8 @@ function LandLogistics({
               </button>
               <div className="h-6 w-px bg-[#E5E7EB]" />
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500">
-                  <Truck className="w-5 h-5 text-white" />
+                <div className="p-1.5 rounded-lg bg-amber-500/20 border border-amber-500/30">
+                  <Truck className="w-5 h-5 text-amber-600" />
                 </div>
                 <span className="font-semibold text-[#111827]">Land Logistics</span>
               </div>
@@ -1313,7 +1313,7 @@ function LandLogistics({
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200"
+                className="p-4 rounded-xl bg-amber-50 border border-amber-200"
               >
                 <div className="flex items-center gap-2 mb-3">
                   <div className="p-2 rounded-lg bg-amber-100">

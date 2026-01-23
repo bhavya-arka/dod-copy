@@ -72,10 +72,10 @@ const modeConfig = {
   land: {
     cards: landInsightCards,
     primaryColor: "amber",
-    gradientFrom: "from-amber-500",
-    gradientTo: "to-orange-500",
+    headerBg: "bg-slate-800/80",
+    borderAccent: "border-l-amber-500",
+    iconColor: "text-amber-400",
     bgLight: "bg-amber-50",
-    borderAccent: "border-amber-200",
     textColor: "text-amber-600",
     hoverBg: "hover:bg-amber-50",
     icon: Truck,
@@ -84,10 +84,10 @@ const modeConfig = {
   sea: {
     cards: seaInsightCards,
     primaryColor: "teal",
-    gradientFrom: "from-teal-500",
-    gradientTo: "to-emerald-500",
+    headerBg: "bg-slate-800/80",
+    borderAccent: "border-l-teal-500",
+    iconColor: "text-teal-400",
     bgLight: "bg-teal-50",
-    borderAccent: "border-teal-200",
     textColor: "text-teal-600",
     hoverBg: "hover:bg-teal-50",
     icon: Ship,
@@ -225,14 +225,14 @@ export function TransportAiInsights({
       animate={{ opacity: 1, y: 0 }}
       className={`rounded-2xl bg-white border border-[#E5E7EB] shadow-sm overflow-hidden ${className}`}
     >
-      <div className={`px-6 py-4 bg-gradient-to-r ${config.gradientFrom} ${config.gradientTo}`}>
+      <div className={`px-6 py-4 ${config.headerBg} border-l-4 ${config.borderAccent}`}>
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
-            <Brain className="w-5 h-5 text-white" />
+          <div className={`p-2 rounded-xl ${config.primaryColor === 'amber' ? 'bg-amber-500/20' : 'bg-teal-500/20'}`}>
+            <Brain className={`w-5 h-5 ${config.iconColor}`} />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-white">{config.title}</h2>
-            <p className="text-sm text-white/80">AI-powered analysis and recommendations</p>
+            <p className="text-sm text-slate-400">AI-powered analysis and recommendations</p>
           </div>
         </div>
       </div>

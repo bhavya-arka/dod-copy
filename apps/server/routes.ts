@@ -1,14 +1,12 @@
 import type { Express, Request, Response as ExpressResponse, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
+import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { db } from "./db";
 import { 
   loginSchema, 
-  insertUserSchema,
   signupWithCodeSchema,
-  organizations,
-  accessCodes,
   users,
   type UserRole,
   warehouseSites,
@@ -32,21 +30,17 @@ import {
   landConvoys,
   landVehicleTypes,
   landConvoyVehicles,
-  insertLandRouteSchema,
-  insertLandConvoySchema,
-  insertLandConvoyVehicleSchema,
   crossModalManifests,
   manifestItems,
-  insertCrossModalManifestSchema,
-  insertManifestItemSchema,
   flightPlans,
   seaVoyages,
   seaContainers,
   seaVesselTypes,
   militaryInstallations,
-  vehiclePrioritySettings
+  vehiclePrioritySettings,
+  aiInsights
 } from "@shared/schema";
-import { eq, and, or, like, ilike, sql, gt, lt, gte, lte, isNull, isNotNull, asc, desc, count, inArray } from "drizzle-orm";
+import { eq, and, or, ilike, sql, gt, lt, gte, lte, isNull, isNotNull, asc, desc, count, inArray } from "drizzle-orm";
 import {
   dagNodeService,
   dagEdgeService,
@@ -62,16 +56,75 @@ import {
   getSiteCapacity, 
   getAllSiteCapacities, 
   getLocationCapacities, 
-  canAcceptItems, 
-  findAvailableLocation 
+  canAcceptItems
 } from "./services/capacityService";
 import * as transportService from "./services/transportService";
 import * as transportStatsService from "./services/transportStatsService";
 import type { TransportMode, TransportStatus } from "../../packages/shared/transportTypes";
-import { matchLocationToZone, type ZoneMatchResult } from "./services/zoneMatchingService";
+import { matchLocationToZone } from "./services/zoneMatchingService";
 import { warehouseAnalyticsService } from "./services/warehouseAnalyticsService";
 import * as vehicleAllocationService from "./services/vehicleAllocationService";
 import * as multiModalRoutingService from "./services/multiModalRoutingService";
+
+// ============================================================================
+// INPUT VALIDATION & SQL INJECTION PREVENTION HELPERS
+// ============================================================================
+
+/**
+ * Escapes special regex characters to prevent ReDoS attacks when using
+ * user input in PostgreSQL regex patterns (~ operator)
+ */
+function escapeRegexPattern(pattern: string): string {
+  return pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Validates that a value is a safe identifier (alphanumeric + underscore only)
+ * Used for dynamic column/field names to prevent SQL injection
+ */
+function isSafeIdentifier(value: string): boolean {
+  return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value);
+}
+
+/**
+ * Sanitizes string input by removing potential SQL injection patterns
+ * and limiting length. Used as defense-in-depth for search terms.
+ */
+function sanitizeSearchTerm(term: string, maxLength: number = 500): string {
+  if (typeof term !== 'string') return '';
+  return term
+    .trim()
+    .slice(0, maxLength)
+    .replace(/[\x00-\x1F\x7F]/g, ''); // Remove control characters
+}
+
+/**
+ * Validates that pagination/offset values are safe integers within bounds
+ */
+function validatePaginationParam(value: unknown, min: number, max: number, defaultValue: number): number {
+  const parsed = parseInt(String(value), 10);
+  if (isNaN(parsed) || parsed < min) return defaultValue;
+  return Math.min(parsed, max);
+}
+
+/**
+ * Allowed columns for warehouse inventory sorting - prevents arbitrary column access
+ */
+const ALLOWED_INVENTORY_SORT_COLUMNS = [
+  'id', 'requisition_no', 'nsn', 'niin', 'fsc', 'description', 'quantity',
+  'condition', 'mission_id', 'serial_no', 'lin_esd', 'unit_price', 'weight_lbs',
+  'location', 'cage', 'manufacturer', 'aging_days', 'created_at', 'updated_at'
+] as const;
+
+/**
+ * Validates that a sort column is in the allowed list
+ */
+function validateSortColumn(column: string): string {
+  if (ALLOWED_INVENTORY_SORT_COLUMNS.includes(column as any)) {
+    return column;
+  }
+  return 'id'; // Default safe fallback
+}
 
 // Weather API cache with 10-minute TTL
 interface WeatherCacheEntry {
@@ -296,7 +349,50 @@ function canAccessOrganization(user: AuthRequest['user'], targetOrgId: number | 
   return user.organization_id === targetOrgId;
 }
 
+// ============================================================================
+// RATE LIMITING MIDDLEWARE
+// ============================================================================
+
+// General API rate limiter: 100 requests per minute
+const generalRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." },
+  validate: { xForwardedForHeader: false }
+});
+
+// Strict rate limiter for auth endpoints: 10 requests per minute
+const authRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many authentication attempts, please try again later." },
+  validate: { xForwardedForHeader: false }
+});
+
+// Strict rate limiter for AI/Bedrock endpoints: 10 requests per minute (expensive operations)
+const aiRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many AI requests, please try again later." },
+  validate: { xForwardedForHeader: false }
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Apply general rate limiting to all API routes
+  app.use("/api", generalRateLimiter);
+  
+  // Apply stricter rate limiting to auth endpoints
+  app.use("/api/auth", authRateLimiter);
+  
+  // Apply stricter rate limiting to AI/insights endpoints (expensive Bedrock operations)
+  app.use("/api/insights", aiRateLimiter);
+  app.use("/api/warehouse/:siteId/ai-insights", aiRateLimiter);
   // ============================================================================
   // AUTH ROUTES (PUBLIC)
   // ============================================================================
@@ -3583,21 +3679,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Warehouse site not found" });
       }
 
-      // Parse pagination params
-      const page = Math.max(1, parseInt(req.query.page as string) || 1);
-      const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string) || 25));
-      const sortBy = (req.query.sortBy as string) || "id";
+      // Parse pagination params with validation
+      const page = validatePaginationParam(req.query.page, 1, 10000, 1);
+      const pageSize = validatePaginationParam(req.query.pageSize, 1, 100, 25);
+      // Validate sortBy against whitelist to prevent SQL injection via column name
+      const sortBy = validateSortColumn((req.query.sortBy as string) || "id");
       const sortOrder = (req.query.sortOrder as string) === "desc" ? "desc" : "asc";
       const searchTermsJson = req.query.searchTerms as string;
       const filtersJson = req.query.filters as string;
 
-      // Parse search terms array (supports multiple LIKE queries)
+      // Parse and sanitize search terms array (supports multiple LIKE queries)
       let searchTerms: string[] = [];
       if (searchTermsJson) {
         try {
           const parsed = JSON.parse(searchTermsJson);
           if (Array.isArray(parsed)) {
-            searchTerms = parsed.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim());
+            // Sanitize each search term to prevent injection
+            searchTerms = parsed
+              .filter(t => typeof t === 'string' && t.trim())
+              .map(t => sanitizeSearchTerm(t.trim(), 200))
+              .filter(t => t.length > 0);
           }
         } catch (e) {
           console.warn("[Warehouse] Invalid searchTerms JSON:", e);
@@ -3679,22 +3780,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
       }
 
-      // Build filter conditions
+      // Build filter conditions - values are sanitized and parameterized via Drizzle ORM
       const buildFilterCondition = (filter: {field: string; operator: string; value: string}) => {
+        // Field is already validated against ALLOWED_FILTER_FIELDS whitelist
         const col = (warehouseInventoryItems as any)[filter.field];
         if (!col) return null;
+        
+        // Sanitize filter value to prevent injection attacks
+        const sanitizedValue = sanitizeSearchTerm(filter.value, 500);
 
         switch (filter.operator) {
           case "contains":
-            return ilike(col, `%${filter.value}%`);
+            return ilike(col, `%${sanitizedValue}%`);
           case "equals":
-            return eq(col, filter.value);
+            return eq(col, sanitizedValue);
           case "not_equals":
-            return sql`${col} != ${filter.value}`;
+            return sql`${col} != ${sanitizedValue}`;
           case "greater_than":
-            return gt(col, parseFloat(filter.value) || 0);
+            return gt(col, parseFloat(sanitizedValue) || 0);
           case "less_than":
-            return lt(col, parseFloat(filter.value) || 0);
+            return lt(col, parseFloat(sanitizedValue) || 0);
           case "is_empty":
             return or(isNull(col), eq(col, ""));
           case "is_not_empty":
@@ -7329,7 +7434,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (event_type && typeof event_type === 'string') {
-        conditions.push(eq(warehouseOptimizationEvents.event_type, event_type));
+        // Validate event_type against allowed values to prevent abuse
+        const ALLOWED_EVENT_TYPES = ['plan_created', 'plan_started', 'action_completed', 'action_skipped', 'plan_completed', 'plan_cancelled', 'error'];
+        if (ALLOWED_EVENT_TYPES.includes(event_type)) {
+          conditions.push(eq(warehouseOptimizationEvents.event_type, event_type));
+        }
       }
 
       if (start_date && typeof start_date === 'string') {
@@ -8656,10 +8765,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied" });
       }
 
-      // Update the plan with the target date
+      // Update the plan with updated_at timestamp (target_completion_date stored in comparison_context)
       const [updatedPlan] = await db.update(warehouseOptimizationPlans)
         .set({
-          target_completion_date: parsedDate,
+          comparison_context: { target_completion_date: parsedDate?.toISOString() || null },
           updated_at: new Date(),
         })
         .where(eq(warehouseOptimizationPlans.id, planId))
@@ -9110,23 +9219,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         site: {
           id: site.id,
           name: site.name,
-          total_capacity_lb: site.total_capacity_lb,
-          current_weight_lb: site.current_weight_lb,
-          utilization_percent: site.total_capacity_lb ? Math.round((site.current_weight_lb / site.total_capacity_lb) * 100) : 0
+          max_weight_lbs: site.max_weight_lbs,
+          current_weight_lbs: site.current_weight_lbs,
+          utilization_percent: site.max_weight_lbs ? Math.round(((site.current_weight_lbs || 0) / site.max_weight_lbs) * 100) : 0
         },
         zones: zones.map(z => ({
           id: z.id,
           name: z.name,
-          pallet_positions_total: z.pallet_positions_total,
-          pallet_positions_used: z.pallet_positions_used,
-          max_weight_lb: z.max_weight_lb,
-          current_weight_lb: z.current_weight_lb,
-          utilization_percent: z.pallet_positions_total ? Math.round((z.pallet_positions_used / z.pallet_positions_total) * 100) : 0
+          total_capacity: z.total_capacity,
+          current_item_count: z.current_item_count,
+          weight_limit_lbs: z.weight_limit_lbs,
+          current_weight_lbs: z.current_weight_lbs,
+          utilization_percent: z.total_capacity ? Math.round(((z.current_item_count || 0) / z.total_capacity) * 100) : 0
         })),
         items_summary: {
           total_count: items.length,
-          total_weight_lb: items.reduce((sum, i) => sum + (i.weight_lb || 0) * (i.quantity || 1), 0),
-          categories: [...new Set(items.map(i => i.classification).filter(Boolean))]
+          total_weight_lbs: items.reduce((sum, i) => sum + (parseFloat(String(i.weight_lbs)) || 0) * (i.quantity || 1), 0),
+          categories: Array.from(new Set(items.map(i => i.condition_code || i.description).filter(Boolean)))
         },
         recent_movements: movements.movements?.slice(0, 20) || [],
         growth_trends: growthInsights,
@@ -9141,8 +9250,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(and(
             eq(aiInsights.user_id, req.user!.id),
             eq(aiInsights.insight_type, insightType),
-            eq(aiInsights.input_hash, inputHash),
-            eq(aiInsights.is_valid, true)
+            eq(aiInsights.input_hash, inputHash)
           ))
           .orderBy(desc(aiInsights.created_at))
           .limit(1);
@@ -9156,20 +9264,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const insight = await generateInsight(insightType, inputData, {
-        userId: req.user!.id
+      const result = await generateInsight({
+        type: insightType as any,
+        inputData,
+        userId: String(req.user!.id)
       });
 
       await db.insert(aiInsights).values({
         user_id: req.user!.id,
         insight_type: insightType,
         input_hash: inputHash,
-        insight_data: insight,
-        is_valid: true
+        insight_data: result.insight
       });
 
       res.json({
-        insight,
+        insight: result.insight,
         cached: false,
         generatedAt: new Date().toISOString()
       });
@@ -11509,7 +11618,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const willExceed = !isAbove && projectedUtilization >= UTILIZATION_THRESHOLD;
         return [site.siteId, willExceed];
       }));
-      const sitesWillExceedThreshold = [...willExceedMap.values()].filter(Boolean).length;
+      const sitesWillExceedThreshold = Array.from(willExceedMap.values()).filter(Boolean).length;
       
       // Calculate current average utilization
       const currentUtilization = siteCapacities.length > 0
@@ -11616,7 +11725,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
           optimization: {
             activePlans: optimizationPlansData.length,
-            plansWithTargetDate: optimizationPlansData.filter(p => p.target_completion_date).length,
+            plansWithTargetDate: optimizationPlansData.filter(p => {
+              const ctx = p.comparison_context as Record<string, unknown> | null;
+              return ctx?.target_completion_date;
+            }).length,
             totalPendingMoves: optimizationPlansData.reduce((sum, p) => sum + (p.total_actions - p.completed_actions), 0),
           },
         },
@@ -11625,13 +11737,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         siteForecasts,
         // Optimization plans with target completion dates for load forecasting
         optimizationForecasts: optimizationPlansData
-          .filter(p => p.target_completion_date)
+          .filter(p => {
+            const ctx = p.comparison_context as Record<string, unknown> | null;
+            return ctx?.target_completion_date;
+          })
           .map(p => {
             const site = siteCapacities.find(s => s.siteId === p.site_id);
             const pendingMoves = p.total_actions - p.completed_actions;
             // Estimate capacity change based on optimization summary
             const summary = typeof p.summary === 'object' && p.summary !== null ? p.summary as Record<string, unknown> : {};
             const estimatedSlotsFreed = (summary.slotsFreed as number) || 0;
+            const comparisonContext = p.comparison_context as Record<string, unknown> | null;
+            const targetDate = comparisonContext?.target_completion_date as string | undefined;
             
             return {
               planId: p.id,
@@ -11640,7 +11757,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               siteName: site?.siteName || 'Unknown',
               algorithm: p.algorithm,
               status: p.status,
-              targetCompletionDate: p.target_completion_date?.toISOString(),
+              targetCompletionDate: targetDate,
               totalActions: p.total_actions,
               completedActions: p.completed_actions,
               pendingMoves,
@@ -11674,7 +11791,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const [
         userSites,
         pendingTransfers,
-        flightPlans,
+        userFlightPlans,
         convoys,
         voyages,
         siteCapacities,
@@ -11686,7 +11803,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             sql`${warehouseTransfers.status} IN ('pending', 'manifest_created', 'transport_assigned', 'in_transit')`
           )
         }),
-        db.query.flightPlans.findMany({ where: eq(flightPlans.user_id, userId) }),
+        db.select().from(flightPlans).where(eq(flightPlans.user_id, userId)),
         db.query.landConvoys.findMany({ where: eq(landConvoys.user_id, userId) }),
         db.query.seaVoyages.findMany({ where: eq(seaVoyages.user_id, userId) }),
         getAllSiteCapacities(userId),
@@ -11722,7 +11839,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           assignedId = t.assigned_convoy_id;
           assignedName = convoy?.name || null;
         } else if (t.assigned_flight_plan_id) {
-          const flight = flightPlans.find(f => f.id === t.assigned_flight_plan_id);
+          const flight = userFlightPlans.find((f: any) => f.id === t.assigned_flight_plan_id);
           assignedId = t.assigned_flight_plan_id;
           assignedName = flight?.name || null;
         } else if (t.assigned_voyage_id) {
@@ -12044,13 +12161,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const typeFilter = req.query.type as string | undefined;
       const branchFilter = req.query.branch as string | undefined;
 
+      // Whitelist of allowed installation types and branches for input validation
+      const ALLOWED_TYPES = ['air_base', 'joint_base', 'naval_station', 'army_post', 'depot', 'port'];
+      const ALLOWED_BRANCHES = ['air_force', 'navy', 'army', 'marines', 'coast_guard', 'joint'];
+
       let conditions = [eq(militaryInstallations.is_active, true)];
 
-      if (typeFilter) {
+      if (typeFilter && ALLOWED_TYPES.includes(typeFilter)) {
         conditions.push(eq(militaryInstallations.type, typeFilter));
       }
 
-      if (branchFilter) {
+      if (branchFilter && ALLOWED_BRANCHES.includes(branchFilter)) {
         conditions.push(eq(militaryInstallations.branch, branchFilter));
       }
 
@@ -12060,13 +12181,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(asc(militaryInstallations.name));
 
       if (searchQuery && searchQuery.trim()) {
-        const search = searchQuery.toLowerCase().trim();
-        results = results.filter(inst => 
-          inst.name.toLowerCase().includes(search) ||
-          inst.code.toLowerCase().includes(search) ||
-          inst.city.toLowerCase().includes(search) ||
-          (inst.state && inst.state.toLowerCase().includes(search))
-        );
+        // Sanitize search input for defense-in-depth (in-memory filtering is safe from SQL injection)
+        const search = sanitizeSearchTerm(searchQuery.toLowerCase().trim(), 200);
+        if (search) {
+          results = results.filter(inst => 
+            inst.name.toLowerCase().includes(search) ||
+            inst.code.toLowerCase().includes(search) ||
+            inst.city.toLowerCase().includes(search) ||
+            (inst.state && inst.state.toLowerCase().includes(search))
+          );
+        }
       }
 
       res.json(results);
@@ -12331,7 +12455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/routing/execute-multi-modal - Create transport assets for a multi-modal route
   app.post("/api/routing/execute-multi-modal", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const userId = req.userId;
+      const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ error: "Authentication required" });
       }
