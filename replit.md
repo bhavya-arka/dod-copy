@@ -116,6 +116,15 @@ The system supports four military organizations (PACAF, DLA, MSC, TRANSCOM) with
 ## AI Insights Configuration
 AI insights are generated using AWS Bedrock with the Nova Lite model and structured prompts, covering various insight types for Air Operations, Land Logistics, Sea Freight, Cross-Modal analysis, and Warehouse management.
 
+### Warehouse AI Analytics
+The WMS includes advanced AI-powered analytics:
+- **WMSAnalyticsDashboard**: 4-tab dashboard (Movement Analytics, Growth Insights, Velocity Analysis, Zone Heatmap) accessible from AI Insights section
+- **AI Recommendations Panel**: Bedrock-powered insights for demand forecasting, anomaly detection, smart placement, and inventory velocity analysis
+- **New AI Insight Types**: `warehouse_demand_forecast`, `warehouse_anomaly_detection`, `warehouse_smart_placement`, `warehouse_inventory_velocity`
+- **Analytics Tables**: `warehouse_item_movements` and `warehouse_capacity_snapshots` for granular tracking
+- **API Endpoints**: `/api/warehouse/sites/:siteId/analytics/*` for movements, growth, velocity, and heatmap data
+- **Optimization Plan Preview**: Saved optimization plans can be previewed before execution using the Eye button
+
 # External Dependencies
 
 **Database Services**:
