@@ -1,0 +1,160 @@
+14The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.Understand this error
+14The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?Understand this error
+14The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.Understand this error
+dod-copy:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.Understand this error
+dod-copy:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?Understand this error
+dod-copy:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.Understand this error
+d754a1ab9637c72a.js:2 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+d754a1ab9637c72a.js:2 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+d754a1ab9637c72a.js:2 [ai-chat] Creating connection with chat proxy enabled
+(anonymous) @ d754a1ab9637c72a.js:2Understand this warning
+d754a1ab9637c72a.js:2 Cache data may be lost when replacing the dealContext field of a Org object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgDealContext have an ID or a custom merge function, or define a custom merge function for the Org.dealContext field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgDealContext","dealType":"sales_led","salesContactEmail":null}
+  incoming: {"__typename":"OrgDealContext","dealType":"sales_led"}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ d754a1ab9637c72a.js:2Understand this warning
+d754a1ab9637c72a.js:2 [LaunchDarkly] LaunchDarkly client initialized
+dod-copy:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+/graphql:1  Failed to load resource: net::ERR_NETWORK_CHANGEDUnderstand this error
+analytics.google.com/g/collect?v=2&tid=G-MPJY3F1YEL&gtm=45je61m0v9135634466za20g&_p=1769201229254&gcd=13l3l3l3l2l1&npa=0&dma=0&ul=en-us&sr=2992x1934&cid=210539446.1764874943&ecid=1127713217&ir=1&uaa=arm&uab=64&uafvl=Not(A%253ABrand%3B8.0.0.0%7CChromium%3B144.0.7559.97%7CGoogle%2520Chrome%3B144.0.7559.97&uamb=0&uam=&uap=macOS&uapv=26.1.0&uaw=0&are=1&frm=0&pscdl=noapi&_eu=EBAIAGQ&tag_exp=103116026~103200004~104527906~104528501~104684208~104684211~105391253~115616986~115938466~115938468~116682876~117025848~117041587~117042505&dl=https%3A%2F%2Freplit.com%2Ft%2Farka-yc%2Frepls%2Fdod-copy&dp=%2Ft%2Farka-yc%2Frepls%2Fdod-copy&dt=replEnvironmentDesktop&sid=1769198914&sct=155&seg=1&_tu=wAQ&_s=2&tfd=10707:1  Failed to load resource: net::ERR_NETWORK_CHANGEDUnderstand this error
+/graphql:1  Failed to load resource: net::ERR_NETWORK_CHANGEDUnderstand this error
+r.stripe.com/b:1  Failed to load resource: net::ERR_NETWORK_CHANGEDUnderstand this error
+r.stripe.com/b:1  Failed to load resource: net::ERR_NETWORK_CHANGEDUnderstand this error
+ingest.app.coframe.com/ingest/v2/batched_events/68c9ad4d4cddb58cf3a1f93d/:1  Failed to load resource: net::ERR_NETWORK_CHANGEDUnderstand this error
+shared-327e805a8dd14a1c046a470d2265f6ad.js:1 Uncaught (in promise) FetchError: Error fetching https://r.stripe.com/b: Failed to fetch
+    at shared-327e805a8dd14a1c046a470d2265f6ad.js:1:232605Understand this error
+ed1e693c96a75807.js:2 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2Understand this error
+ed1e693c96a75807.js:2 Unrecognized feature: 'ambient-light-sensor'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Unrecognized feature: 'battery'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Unrecognized feature: 'execution-while-not-rendered'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Unrecognized feature: 'execution-while-out-of-viewport'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Unrecognized feature: 'layout-animations'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Unrecognized feature: 'legacy-image-formats'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Unrecognized feature: 'navigation-override'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Unrecognized feature: 'oversized-images'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Unrecognized feature: 'publickey-credentials'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Unrecognized feature: 'speaker-selection'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Unrecognized feature: 'unoptimized-images'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Unrecognized feature: 'unsized-media'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Unrecognized feature: 'pointer-lock'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Allow attribute will take precedence over 'allowfullscreen'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Allow attribute will take precedence over 'allowpaymentrequest'.
+z @ ed1e693c96a75807.js:2Understand this warning
+ed1e693c96a75807.js:2 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2Understand this error
+analytics.google.com/g/collect?v=2&tid=G-MPJY3F1YEL&gtm=45je61m0v9135634466za20g&_p=1769201229254&gcd=13l3l3l3l2l1&npa=0&dma=0&ul=en-us&sr=2992x1934&cid=210539446.1764874943&ecid=1127713217&ir=1&uaa=arm&uab=64&uafvl=Not(A%253ABrand%3B8.0.0.0%7CChromium%3B144.0.7559.97%7CGoogle%2520Chrome%3B144.0.7559.97&uamb=0&uam=&uap=macOS&uapv=26.1.0&uaw=0&are=1&frm=0&pscdl=noapi&_eu=EBAIAGQ&tag_exp=103116026~103200004~104527906~104528501~104684208~104684211~105391253~115616986~115938466~115938468~116682876~117025848~117041587~117042505&dl=https%3A%2F%2Freplit.com%2Ft%2Farka-yc%2Frepls%2Fdod-copy&dp=%2Ft%2Farka-yc%2Frepls%2Fdod-copy&dt=replEnvironmentDesktop&sid=1769198914&sct=155&seg=1&_tu=wAQ&_s=23&tfd=1114754:1  Failed to load resource: net::ERR_NETWORK_CHANGEDUnderstand this error
+/graphql:1  Failed to load resource: net::ERR_NETWORK_CHANGEDUnderstand this error
+/graphql:1  Failed to load resource: net::ERR_NETWORK_CHANGEDUnderstand this error
+803eec1bacc00e5f.js:2 WebSocket connection to 'wss://eval.spock.platform.replit.com/wsv2/v2.public.Q2dZSTQ3elB5d1lTQmdpQzJjL0xCaUlGYzNCdlkyc3dBRHJHQVFva09XWm1aRGMyWmpBdE1XTTVZeTAwTkRFM0xXRmhZMkl0WVdObU5XVm1ZV0pqT1RWakVnTnVhWGdhRjNKbGNHeHBkQzF5WlhCc0xXWnBiR1Z6TFhOd2IyTnJJZ2hrYjJRdFkyOXdlU29JWW1oaGRubGhNemxDVVFvWWNtVndiR2wwTFhKbGNHd3RZbXh2WTJ0ekxYTndiMk5yRWhaeVpYQnNhWFF0Y21Wd2JDMXRaWFJoTFhOd2IyTnJHaDF5WlhCc2FYUXRiV0Z5WjJGeWFXNWxMV0pzYjJOcmN5MXpjRzlqYTBvSENOS2NtaGdRQVZBQWNnd0tCblZ3YW1WdGN4QUNJQUI0QUZJbENBRVFnSUNBZ0VBWkFBQUFBQUFBSUVBaEFBQUFBQUFBSUVBb2dJQ0FnSUFJTUFJNEFHQUFhZzhJMHB5YUdCSUlZbWhoZG5saE16bUNBUUlxQUlJQkFqSUFtZ0VLQ2dnd0xqQXVNamsyTmFBQkFRPT2XnniFukcso4l_sYvyQ39EJlqtQnB_TQSqceaFLhjGCOlvOhnmlGSGTQpMazYddxk40Wsdc6ec7FoJQJT3fKoF.Q2dad2NtOWtPak1pQ25KbGNHeHBkQzVqYjIwPQ' failed: 
+(anonymous) @ 803eec1bacc00e5f.js:2Understand this error
+stallwart.build.js:1 stallwart: failed ping 1
+stallwart.build.js:1 stallwart: failed ping 2
+stallwart.build.js:1 stallwart: failed ping 3
+stallwart.build.js:1 stallwart: failed ping 4
+stallwart.build.js:1 stallwart: failed ping 5
+ed1e693c96a75807.js:2 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2Understand this error
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.Understand this error
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Unrecognized feature: 'ambient-light-sensor'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Unrecognized feature: 'battery'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Unrecognized feature: 'execution-while-not-rendered'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Unrecognized feature: 'layout-animations'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Unrecognized feature: 'legacy-image-formats'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Unrecognized feature: 'navigation-override'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Unrecognized feature: 'oversized-images'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Unrecognized feature: 'publickey-credentials'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Unrecognized feature: 'speaker-selection'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Unrecognized feature: 'unoptimized-images'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Unrecognized feature: 'unsized-media'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Allow attribute will take precedence over 'allowfullscreen'.Understand this warning
+workspace_iframe.html?initialPath=%2F&id=%3Ar2ik%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.Understand this warning
+9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/6/ai-insights:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/6/ai-insights:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/6/ai-insights:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/6/ai-insights:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+injected.js:37 Warning: Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.%s 1769202869180 
+    at AnimatePresence (framer-motion.js?v=b7c9a66d:7826:26)
+    at 9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/__replco/div
+    at 9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/__replco/div
+    at WarehouseManagement (9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/components/sections/WarehouseManagement.tsx?t=1769202352274:48:3)
+    at AppContent (9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/App.tsx?t=1769202352274:39:16)
+    at QueryClientProvider (@tanstack_react-query.js?v=b7c9a66d:2805:3)
+    at 9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/__replco/App
+(anonymous) @ injected.js:37Understand this error
+2WMSAnalyticsDashboard.tsx:186 Uncaught TypeError: Cannot read properties of undefined (reading 'toLocaleString')Understand this error
+injected.js:37 The above error occurred in the <WMSAnalyticsDashboard> component:
+
+    at WMSAnalyticsDashboard (https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/components/warehouse/WMSAnalyticsDashboard.tsx:37:3)
+    at WMSAiInsights (https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/components/warehouse/WMSAiInsights.tsx?t=1769202352274:109:3)
+    at main
+    at div
+    at WarehouseManagement (https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/components/sections/WarehouseManagement.tsx?t=1769202352274:48:3)
+    at AppContent (https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/App.tsx?t=1769202352274:39:16)
+    at QueryClientProvider (https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/node_modules/.vite/deps/@tanstack_react-query.js?v=b7c9a66d:2805:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+(anonymous) @ injected.js:37Understand this error
+chunk-RMMLNMNQ.js?v=b7c9a66d:19413 Uncaught TypeError: Cannot read properties of undefined (reading 'toLocaleString')Understand this error
+9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/6/ai-insights:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/6/ai-insights:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/6/ai-insights:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/api/warehouse/6/ai-insights:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+injected.js:37 Warning: Encountered two children with the same key, `1769203874986`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at AnimatePresence (https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/node_modules/.vite/deps/framer-motion.js?v=b7c9a66d:7826:26)
+    at div
+    at div
+    at WarehouseManagement (https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/components/sections/WarehouseManagement.tsx?t=1769202901894:48:3)
+    at AppContent (https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/App.tsx?t=1769202901894:39:16)
+    at QueryClientProvider (https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/node_modules/.vite/deps/@tanstack_react-query.js?v=b7c9a66d:2805:3)
+    at App
+(anonymous) @ injected.js:37Understand this error
+injected.js:37 Warning: Encountered two children with the same key, `1769203874986`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at AnimatePresence (https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/node_modules/.vite/deps/framer-motion.js?v=b7c9a66d:7826:26)
+    at div
+    at div
+    at WarehouseManagement (https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/components/sections/WarehouseManagement.tsx?t=1769202901894:48:3)
+    at AppContent (https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/src/App.tsx?t=1769202901894:39:16)
+    at QueryClientProvider (https://9ffd76f0-1c9c-4417-aacb-acf5efabc95c-00-2akxsi9nfa897.spock.replit.dev/node_modules/.vite/deps/@tanstack_react-query.js?v=b7c9a66d:2805:3)
+    at App
