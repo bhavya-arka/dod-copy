@@ -347,6 +347,43 @@ const JSON_SCHEMAS: Record<AiInsightType, string> = {
   "optimization_recommendations": [{ "action": "string", "expected_impact": "string", "priority": "high|medium|low" }],
   "resource_planning": { "additional_storage_needed_sqft": number, "recommended_actions": ["string"] }
 }`,
+
+  warehouse_demand_forecast: `{
+  "demand_overview": { "forecast_period_days": number, "total_projected_inbound_lb": number, "total_projected_outbound_lb": number, "confidence_score": number },
+  "high_demand_items": [{ "item_description": "string", "nsn": "string", "projected_demand_units": number, "current_stock": number, "reorder_recommended": boolean, "urgency": "low|medium|high" }],
+  "seasonal_patterns": [{ "period": "string", "expected_trend": "increase|decrease|stable", "confidence": "low|medium|high", "factors": ["string"] }],
+  "stockout_risks": [{ "item_description": "string", "days_until_stockout": number, "recommended_action": "string" }],
+  "procurement_recommendations": [{ "item_description": "string", "quantity_to_order": number, "lead_time_days": number, "priority": "high|medium|low" }],
+  "summary": "string"
+}`,
+
+  warehouse_anomaly_detection: `{
+  "anomalies_detected": [{ "type": "unusual_movement|inventory_discrepancy|capacity_spike|aging_alert", "severity": "low|medium|high|critical", "description": "string", "affected_items": ["string"], "affected_zones": ["string"], "detected_at": "string", "recommended_action": "string" }],
+  "movement_anomalies": [{ "item_description": "string", "normal_movement_rate": number, "current_rate": number, "deviation_percent": number, "possible_causes": ["string"] }],
+  "inventory_discrepancies": [{ "zone": "string", "expected_count": number, "actual_count": number, "discrepancy_type": "shortage|overage", "investigation_priority": "high|medium|low" }],
+  "pattern_insights": { "unusual_activity_zones": ["string"], "time_based_patterns": ["string"], "correlation_findings": ["string"] },
+  "risk_score": { "overall": number, "breakdown": { "inventory_accuracy": number, "movement_consistency": number, "capacity_stability": number } },
+  "summary": "string"
+}`,
+
+  warehouse_smart_placement: `{
+  "placement_recommendations": [{ "item_id": number, "item_description": "string", "current_zone": "string", "current_location": "string", "recommended_zone": "string", "recommended_location": "string", "reason": "string", "expected_benefit": "string", "priority": "high|medium|low" }],
+  "zone_optimization": [{ "zone": "string", "current_utilization_percent": number, "recommended_utilization_percent": number, "items_to_relocate": number, "expected_efficiency_gain": "string" }],
+  "accessibility_improvements": [{ "high_velocity_items_misplaced": number, "recommended_moves": number, "expected_pick_time_reduction_percent": number }],
+  "consolidation_opportunities": [{ "item_group": "string", "current_locations": number, "recommended_locations": number, "positions_freed": number }],
+  "implementation_plan": { "phase_1_moves": number, "phase_2_moves": number, "estimated_completion_hours": number, "priority_sequence": ["string"] },
+  "summary": "string"
+}`,
+
+  warehouse_inventory_velocity: `{
+  "velocity_overview": { "total_items_tracked": number, "high_velocity_count": number, "medium_velocity_count": number, "low_velocity_count": number, "stale_inventory_count": number },
+  "fast_movers": [{ "item_description": "string", "nsn": "string", "turns_per_month": number, "avg_days_in_stock": number, "placement_score": "optimal|suboptimal|poor", "recommendation": "string" }],
+  "slow_movers": [{ "item_description": "string", "nsn": "string", "days_static": number, "last_movement_date": "string", "recommended_action": "dispose|transfer|reposition|hold" }],
+  "velocity_trends": [{ "period": "string", "avg_daily_movements": number, "trend": "increasing|decreasing|stable" }],
+  "zone_velocity_analysis": [{ "zone": "string", "avg_item_velocity": number, "optimal_for": "fast_movers|slow_movers|mixed", "current_alignment": "good|poor" }],
+  "throughput_metrics": { "daily_average_lb": number, "weekly_peak_lb": number, "bottleneck_zones": ["string"] },
+  "summary": "string"
+}`,
 };
 
 // Required fields for response validation
@@ -419,6 +456,29 @@ const RESPONSE_SCHEMAS: Record<string, string[]> = {
     "capacity_alerts",
     "optimization_recommendations",
   ],
+  warehouse_demand_forecast: [
+    "demand_overview",
+    "high_demand_items",
+    "seasonal_patterns",
+    "summary",
+  ],
+  warehouse_anomaly_detection: [
+    "anomalies_detected",
+    "risk_score",
+    "summary",
+  ],
+  warehouse_smart_placement: [
+    "placement_recommendations",
+    "zone_optimization",
+    "implementation_plan",
+    "summary",
+  ],
+  warehouse_inventory_velocity: [
+    "velocity_overview",
+    "fast_movers",
+    "slow_movers",
+    "summary",
+  ],
 };
 
 // Knowledge base query mappings per insight type
@@ -445,6 +505,14 @@ const KB_QUERIES: Record<AiInsightType, string> = {
     "intermodal cargo transfer air land sea logistics optimization",
   warehouse_capacity_forecast:
     "warehouse capacity planning inventory forecasting storage optimization",
+  warehouse_demand_forecast:
+    "inventory demand forecasting military supply chain procurement planning",
+  warehouse_anomaly_detection:
+    "inventory anomaly detection discrepancy management audit procedures",
+  warehouse_smart_placement:
+    "warehouse slotting optimization item placement velocity-based storage",
+  warehouse_inventory_velocity:
+    "inventory turnover analysis ABC classification stock movement metrics",
 };
 
 // Validate response against expected schema fields

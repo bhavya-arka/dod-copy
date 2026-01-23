@@ -497,7 +497,18 @@ export const aiInsightTypeEnum = [
   'route_planning',
   'compliance',
   'mission_briefing',
-  'mission_analytics'
+  'mission_analytics',
+  'flight_allocation_analysis',
+  'land_convoy_analysis',
+  'land_route_optimization',
+  'sea_voyage_analysis',
+  'sea_container_optimization',
+  'cross_modal_manifest_analysis',
+  'warehouse_capacity_forecast',
+  'warehouse_demand_forecast',
+  'warehouse_anomaly_detection',
+  'warehouse_smart_placement',
+  'warehouse_inventory_velocity'
 ] as const;
 export type AiInsightType = typeof aiInsightTypeEnum[number];
 
