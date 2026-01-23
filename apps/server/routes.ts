@@ -8913,6 +8913,143 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/warehouse/sites/:siteId/analytics/movements - Get movement analytics
+  app.get("/api/warehouse/sites/:siteId/analytics/movements", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      const days = parseInt(req.query.days as string) || 30;
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const analytics = await warehouseAnalyticsService.getMovementAnalytics(siteId, days);
+      res.json(analytics);
+    } catch (error) {
+      console.error("[Warehouse Analytics] Failed to fetch movement analytics:", error);
+      res.status(500).json({ error: "Failed to fetch movement analytics" });
+    }
+  });
+
+  // GET /api/warehouse/sites/:siteId/analytics/growth - Get growth insights
+  app.get("/api/warehouse/sites/:siteId/analytics/growth", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      const days = parseInt(req.query.days as string) || 90;
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const insights = await warehouseAnalyticsService.getGrowthInsights(siteId, days);
+      res.json(insights);
+    } catch (error) {
+      console.error("[Warehouse Analytics] Failed to fetch growth insights:", error);
+      res.status(500).json({ error: "Failed to fetch growth insights" });
+    }
+  });
+
+  // GET /api/warehouse/sites/:siteId/analytics/velocity - Get velocity analytics
+  app.get("/api/warehouse/sites/:siteId/analytics/velocity", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const analytics = await warehouseAnalyticsService.getVelocityAnalytics(siteId);
+      res.json(analytics);
+    } catch (error) {
+      console.error("[Warehouse Analytics] Failed to fetch velocity analytics:", error);
+      res.status(500).json({ error: "Failed to fetch velocity analytics" });
+    }
+  });
+
+  // GET /api/warehouse/sites/:siteId/analytics/heatmap - Get zone heatmap
+  app.get("/api/warehouse/sites/:siteId/analytics/heatmap", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const heatmap = await warehouseAnalyticsService.getZoneHeatmap(siteId);
+      res.json(heatmap);
+    } catch (error) {
+      console.error("[Warehouse Analytics] Failed to fetch zone heatmap:", error);
+      res.status(500).json({ error: "Failed to fetch zone heatmap" });
+    }
+  });
+
+  // POST /api/warehouse/sites/:siteId/analytics/generate-demo-data - Generate demo movement data
+  app.post("/api/warehouse/sites/:siteId/analytics/generate-demo-data", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const result = await warehouseAnalyticsService.generateDemoMovementData(siteId);
+      res.json(result);
+    } catch (error) {
+      console.error("[Warehouse Analytics] Failed to generate demo data:", error);
+      res.status(500).json({ error: "Failed to generate demo data" });
+    }
+  });
+
   // ============================================================================
   // LAND LOGISTICS API (PROTECTED)
   // ============================================================================

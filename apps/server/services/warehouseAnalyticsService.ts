@@ -6,10 +6,12 @@ import {
   warehouseOptimizationEvents,
   warehouseMetricSnapshots,
   warehouseAlerts,
-  warehouseSites
+  warehouseSites,
+  warehouseItemMovements,
+  warehouseCapacitySnapshots
 } from '@shared/schema';
 import type { WarehouseAlert, WarehouseMetricSnapshot } from '@shared/schema';
-import { eq, and, gte, lte, sql, desc, isNull } from 'drizzle-orm';
+import { eq, and, gte, lte, sql, desc, isNull, count } from 'drizzle-orm';
 
 const CAPACITY_WARNING_THRESHOLD = 85;
 const CAPACITY_CRITICAL_THRESHOLD = 95;
@@ -433,5 +435,529 @@ export const warehouseAnalyticsService = {
       .where(eq(warehouseAlerts.id, alertId));
     
     console.log(`[Analytics] Resolved alert ${alertId}`);
+  },
+
+  async getMovementAnalytics(siteId: number, days: number = 30) {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const mostMovingQuery = await db
+      .select({
+        itemId: warehouseItemMovements.item_id,
+        description: warehouseItemMovements.item_description,
+        nsn: warehouseItemMovements.nsn,
+        totalMoves: count(warehouseItemMovements.id),
+        totalQuantityMoved: sql<number>`SUM(${warehouseItemMovements.quantity_moved})`,
+        lastMoved: sql<Date>`MAX(${warehouseItemMovements.moved_at})`,
+      })
+      .from(warehouseItemMovements)
+      .where(and(
+        eq(warehouseItemMovements.site_id, siteId),
+        gte(warehouseItemMovements.moved_at, startDate)
+      ))
+      .groupBy(
+        warehouseItemMovements.item_id,
+        warehouseItemMovements.item_description,
+        warehouseItemMovements.nsn
+      )
+      .orderBy(desc(sql`COUNT(${warehouseItemMovements.id})`))
+      .limit(10);
+
+    const recentMovesQuery = await db
+      .select()
+      .from(warehouseItemMovements)
+      .where(eq(warehouseItemMovements.site_id, siteId))
+      .orderBy(desc(warehouseItemMovements.moved_at))
+      .limit(20);
+
+    const movementsByTypeQuery = await db
+      .select({
+        movementType: warehouseItemMovements.movement_type,
+        count: count(warehouseItemMovements.id),
+      })
+      .from(warehouseItemMovements)
+      .where(and(
+        eq(warehouseItemMovements.site_id, siteId),
+        gte(warehouseItemMovements.moved_at, startDate)
+      ))
+      .groupBy(warehouseItemMovements.movement_type);
+
+    const zoneInboundQuery = await db
+      .select({
+        zoneName: warehouseItemMovements.to_zone_name,
+        count: count(warehouseItemMovements.id),
+      })
+      .from(warehouseItemMovements)
+      .where(and(
+        eq(warehouseItemMovements.site_id, siteId),
+        gte(warehouseItemMovements.moved_at, startDate)
+      ))
+      .groupBy(warehouseItemMovements.to_zone_name);
+
+    const zoneOutboundQuery = await db
+      .select({
+        zoneName: warehouseItemMovements.from_zone_name,
+        count: count(warehouseItemMovements.id),
+      })
+      .from(warehouseItemMovements)
+      .where(and(
+        eq(warehouseItemMovements.site_id, siteId),
+        gte(warehouseItemMovements.moved_at, startDate)
+      ))
+      .groupBy(warehouseItemMovements.from_zone_name);
+
+    const movementsByType: Record<string, number> = {};
+    movementsByTypeQuery.forEach((row) => {
+      movementsByType[row.movementType || 'unknown'] = Number(row.count);
+    });
+
+    const zoneMap = new Map<string, { inbound: number; outbound: number }>();
+    zoneInboundQuery.forEach((row) => {
+      if (row.zoneName) {
+        const existing = zoneMap.get(row.zoneName) || { inbound: 0, outbound: 0 };
+        existing.inbound = Number(row.count);
+        zoneMap.set(row.zoneName, existing);
+      }
+    });
+    zoneOutboundQuery.forEach((row) => {
+      if (row.zoneName) {
+        const existing = zoneMap.get(row.zoneName) || { inbound: 0, outbound: 0 };
+        existing.outbound = Number(row.count);
+        zoneMap.set(row.zoneName, existing);
+      }
+    });
+
+    return {
+      mostMovingItems: mostMovingQuery.map((row) => ({
+        itemId: row.itemId,
+        description: row.description || 'Unknown',
+        nsn: row.nsn,
+        totalMoves: Number(row.totalMoves),
+        totalQuantityMoved: Number(row.totalQuantityMoved) || 0,
+        lastMoved: row.lastMoved,
+      })),
+      recentlyMovedItems: recentMovesQuery.map((row) => ({
+        id: row.id,
+        itemId: row.item_id,
+        description: row.item_description,
+        fromZone: row.from_zone_name,
+        toZone: row.to_zone_name,
+        fromLocation: row.from_location,
+        toLocation: row.to_location,
+        quantityMoved: row.quantity_moved,
+        movedAt: row.moved_at,
+        movementType: row.movement_type,
+        movementReason: row.movement_reason,
+      })),
+      movementsByType,
+      movementsByZone: Array.from(zoneMap.entries()).map(([zoneName, data]) => ({
+        zoneName,
+        inboundCount: data.inbound,
+        outboundCount: data.outbound,
+        netChange: data.inbound - data.outbound,
+      })),
+    };
+  },
+
+  async getGrowthInsights(siteId: number, days: number = 90) {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const capacitySnapshots = await db
+      .select()
+      .from(warehouseCapacitySnapshots)
+      .where(and(
+        eq(warehouseCapacitySnapshots.site_id, siteId),
+        gte(warehouseCapacitySnapshots.snapshot_date, startDate.toISOString().split('T')[0])
+      ))
+      .orderBy(warehouseCapacitySnapshots.snapshot_date);
+
+    const site = await db
+      .select()
+      .from(warehouseSites)
+      .where(eq(warehouseSites.id, siteId))
+      .limit(1);
+
+    const currentSite = site[0];
+    const totalPositions = currentSite?.total_pallet_positions || 100;
+    const openPositions = currentSite?.open_pallet_positions || 0;
+    const usedPositions = totalPositions - openPositions;
+    const currentUtilization = currentSite
+      ? (usedPositions / totalPositions) * 100
+      : 0;
+
+    let dailyGrowth = 0;
+    let weeklyGrowth = 0;
+    let monthlyGrowth = 0;
+
+    if (capacitySnapshots.length >= 2) {
+      const latest = capacitySnapshots[capacitySnapshots.length - 1];
+      const yesterday = capacitySnapshots.find((s, i) => i === capacitySnapshots.length - 2);
+      const lastWeek = capacitySnapshots.find((s) => {
+        const diff = (new Date().getTime() - new Date(s.snapshot_date).getTime()) / (1000 * 60 * 60 * 24);
+        return diff >= 6 && diff <= 8;
+      });
+      const lastMonth = capacitySnapshots.find((s) => {
+        const diff = (new Date().getTime() - new Date(s.snapshot_date).getTime()) / (1000 * 60 * 60 * 24);
+        return diff >= 28 && diff <= 32;
+      });
+
+      if (yesterday) {
+        dailyGrowth = Number(latest.utilization_percent) - Number(yesterday.utilization_percent);
+      }
+      if (lastWeek) {
+        weeklyGrowth = Number(latest.utilization_percent) - Number(lastWeek.utilization_percent);
+      }
+      if (lastMonth) {
+        monthlyGrowth = Number(latest.utilization_percent) - Number(lastMonth.utilization_percent);
+      }
+    }
+
+    let daysUntilFull: number | null = null;
+    let projectedDate: string | null = null;
+
+    if (dailyGrowth > 0 && currentUtilization < 100) {
+      daysUntilFull = Math.ceil((100 - currentUtilization) / dailyGrowth);
+      const projected = new Date();
+      projected.setDate(projected.getDate() + daysUntilFull);
+      projectedDate = projected.toISOString().split('T')[0];
+    }
+
+    return {
+      capacityTrend: capacitySnapshots.map((s) => ({
+        date: s.snapshot_date,
+        utilizationPercent: Number(s.utilization_percent),
+        totalItems: s.total_items,
+        usedCapacity: s.used_capacity,
+      })),
+      growthRate: {
+        daily: dailyGrowth,
+        weekly: weeklyGrowth,
+        monthly: monthlyGrowth,
+      },
+      projectedCapacity: {
+        daysUntilFull,
+        projectedDate,
+        currentUtilization,
+      },
+      itemCountTrend: capacitySnapshots.map((s) => ({
+        date: s.snapshot_date,
+        count: s.total_items,
+      })),
+    };
+  },
+
+  async getVelocityAnalytics(siteId: number) {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const fastMoversQuery = await db
+      .select({
+        itemId: warehouseItemMovements.item_id,
+        description: warehouseItemMovements.item_description,
+        nsn: warehouseItemMovements.nsn,
+        moveCount: count(warehouseItemMovements.id),
+      })
+      .from(warehouseItemMovements)
+      .where(and(
+        eq(warehouseItemMovements.site_id, siteId),
+        gte(warehouseItemMovements.moved_at, thirtyDaysAgo)
+      ))
+      .groupBy(
+        warehouseItemMovements.item_id,
+        warehouseItemMovements.item_description,
+        warehouseItemMovements.nsn
+      )
+      .orderBy(desc(sql`COUNT(${warehouseItemMovements.id})`))
+      .limit(10);
+
+    const slowMoversQuery = await db
+      .select({
+        id: warehouseInventoryItems.id,
+        description: warehouseInventoryItems.description,
+        nsn: warehouseInventoryItems.nsn,
+        lastMoved: warehouseInventoryItems.last_moved,
+        quantity: warehouseInventoryItems.quantity,
+      })
+      .from(warehouseInventoryItems)
+      .where(eq(warehouseInventoryItems.site_id, siteId))
+      .orderBy(warehouseInventoryItems.last_moved)
+      .limit(10);
+
+    const dailyInboundQuery = await db
+      .select({ count: count(warehouseItemMovements.id) })
+      .from(warehouseItemMovements)
+      .where(and(
+        eq(warehouseItemMovements.site_id, siteId),
+        eq(warehouseItemMovements.movement_type, 'inbound'),
+        gte(warehouseItemMovements.moved_at, thirtyDaysAgo)
+      ));
+
+    const dailyOutboundQuery = await db
+      .select({ count: count(warehouseItemMovements.id) })
+      .from(warehouseItemMovements)
+      .where(and(
+        eq(warehouseItemMovements.site_id, siteId),
+        eq(warehouseItemMovements.movement_type, 'outbound'),
+        gte(warehouseItemMovements.moved_at, thirtyDaysAgo)
+      ));
+
+    const dailyInbound = Math.round(Number(dailyInboundQuery[0]?.count || 0) / 30);
+    const dailyOutbound = Math.round(Number(dailyOutboundQuery[0]?.count || 0) / 30);
+
+    return {
+      fastMovers: fastMoversQuery.map((row) => ({
+        itemId: row.itemId,
+        description: row.description || 'Unknown',
+        nsn: row.nsn,
+        velocity: Number(row.moveCount),
+        avgDwellDays: Math.round(30 / Math.max(1, Number(row.moveCount))),
+        turnoverRate: Number(row.moveCount) / 30,
+      })),
+      slowMovers: slowMoversQuery.map((row) => ({
+        itemId: row.id,
+        description: row.description,
+        nsn: row.nsn,
+        daysSinceLastMove: row.lastMoved
+          ? Math.floor((Date.now() - new Date(row.lastMoved).getTime()) / (1000 * 60 * 60 * 24))
+          : 999,
+        quantity: row.quantity,
+      })),
+      averageVelocity: (dailyInbound + dailyOutbound) / 2,
+      throughputMetrics: {
+        dailyInbound,
+        dailyOutbound,
+        avgTurnaround: dailyInbound + dailyOutbound > 0 ? 30 / ((dailyInbound + dailyOutbound) / 2) : 0,
+      },
+    };
+  },
+
+  async getZoneHeatmap(siteId: number) {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const zones = await db
+      .select()
+      .from(warehouseZones)
+      .where(eq(warehouseZones.site_id, siteId));
+
+    const movementCounts = await db
+      .select({
+        zoneId: warehouseItemMovements.to_zone_id,
+        count: count(warehouseItemMovements.id),
+      })
+      .from(warehouseItemMovements)
+      .where(and(
+        eq(warehouseItemMovements.site_id, siteId),
+        gte(warehouseItemMovements.moved_at, thirtyDaysAgo)
+      ))
+      .groupBy(warehouseItemMovements.to_zone_id);
+
+    const movementMap = new Map<number, number>();
+    movementCounts.forEach((row) => {
+      if (row.zoneId) {
+        movementMap.set(row.zoneId, Number(row.count));
+      }
+    });
+
+    const maxMovements = Math.max(...Array.from(movementMap.values()), 1);
+
+    return {
+      zones: zones.map((zone) => {
+        const movementCount = movementMap.get(zone.id) || 0;
+        const rackAvailable = zone.rack_available || zone.total_capacity || 100;
+        const rackOpen = zone.rack_open || 0;
+        const rackUsed = rackAvailable - rackOpen;
+        const utilization = (rackUsed / rackAvailable) * 100;
+        const itemCount = zone.current_item_count || 0;
+        const intensityScore = (movementCount / maxMovements) * 0.5 + (utilization / 100) * 0.5;
+
+        let intensity: 'low' | 'medium' | 'high' | 'critical' = 'low';
+        if (intensityScore > 0.8) intensity = 'critical';
+        else if (intensityScore > 0.6) intensity = 'high';
+        else if (intensityScore > 0.3) intensity = 'medium';
+
+        return {
+          zoneId: zone.id,
+          zoneName: zone.name,
+          movementCount,
+          utilizationPercent: utilization,
+          itemCount,
+          intensity,
+        };
+      }),
+    };
+  },
+
+  async recordItemMovement(
+    siteId: number,
+    itemId: number,
+    data: {
+      description?: string;
+      nsn?: string;
+      fromZoneId?: number;
+      fromZoneName?: string;
+      fromLocation?: string;
+      toZoneId?: number;
+      toZoneName?: string;
+      toLocation?: string;
+      quantityMoved?: number;
+      weightLbs?: number;
+      movementType: string;
+      movementReason?: string;
+      sourceType?: string;
+      sourceId?: number;
+      userId?: number;
+    }
+  ): Promise<void> {
+    await db.insert(warehouseItemMovements).values({
+      site_id: siteId,
+      item_id: itemId,
+      item_description: data.description,
+      nsn: data.nsn,
+      from_zone_id: data.fromZoneId,
+      from_zone_name: data.fromZoneName,
+      from_location: data.fromLocation,
+      to_zone_id: data.toZoneId,
+      to_zone_name: data.toZoneName,
+      to_location: data.toLocation,
+      quantity_moved: data.quantityMoved || 1,
+      weight_lbs: data.weightLbs?.toString(),
+      movement_type: data.movementType,
+      movement_reason: data.movementReason,
+      source_type: data.sourceType,
+      source_id: data.sourceId,
+      user_id: data.userId,
+      moved_at: new Date(),
+    });
+  },
+
+  async captureCapacitySnapshot(siteId: number): Promise<void> {
+    const site = await db
+      .select()
+      .from(warehouseSites)
+      .where(eq(warehouseSites.id, siteId))
+      .limit(1);
+
+    if (!site[0]) return;
+
+    const zones = await db
+      .select()
+      .from(warehouseZones)
+      .where(eq(warehouseZones.site_id, siteId));
+
+    const itemCount = await db
+      .select({ count: count(warehouseInventoryItems.id) })
+      .from(warehouseInventoryItems)
+      .where(eq(warehouseInventoryItems.site_id, siteId));
+
+    const totalWeight = await db
+      .select({ total: sql<number>`SUM(CAST(${warehouseInventoryItems.weight_lbs} AS NUMERIC))` })
+      .from(warehouseInventoryItems)
+      .where(eq(warehouseInventoryItems.site_id, siteId));
+
+    const zoneBreakdown: Record<string, { items: number; utilization: number }> = {};
+    zones.forEach((zone) => {
+      const rackAvailable = zone.rack_available || zone.total_capacity || 100;
+      const rackOpen = zone.rack_open || 0;
+      const rackUsed = rackAvailable - rackOpen;
+      zoneBreakdown[zone.name] = {
+        items: zone.current_item_count || 0,
+        utilization: (rackUsed / rackAvailable) * 100,
+      };
+    });
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const existing = await db
+      .select()
+      .from(warehouseCapacitySnapshots)
+      .where(and(
+        eq(warehouseCapacitySnapshots.site_id, siteId),
+        eq(warehouseCapacitySnapshots.snapshot_date, today)
+      ))
+      .limit(1);
+
+    const totalPositions = site[0].total_pallet_positions || 100;
+    const openPositions = site[0].open_pallet_positions || 0;
+    const usedPositions = totalPositions - openPositions;
+    const utilizationPercent = (usedPositions / totalPositions) * 100;
+
+    if (existing.length === 0) {
+      await db.insert(warehouseCapacitySnapshots).values({
+        site_id: siteId,
+        snapshot_date: today,
+        total_capacity: totalPositions,
+        used_capacity: usedPositions,
+        utilization_percent: utilizationPercent.toFixed(2),
+        total_items: Number(itemCount[0]?.count || 0),
+        total_weight_lbs: totalWeight[0]?.total?.toString() || '0',
+        zone_breakdown: zoneBreakdown,
+        inbound_count: 0,
+        outbound_count: 0,
+      });
+    }
+  },
+
+  async generateDemoMovementData(siteId: number): Promise<{ message: string; recordsCreated: number }> {
+    const items = await db
+      .select()
+      .from(warehouseInventoryItems)
+      .where(eq(warehouseInventoryItems.site_id, siteId))
+      .limit(50);
+
+    const zones = await db
+      .select()
+      .from(warehouseZones)
+      .where(eq(warehouseZones.site_id, siteId));
+
+    if (items.length === 0 || zones.length === 0) {
+      return { message: "No items or zones found for this site", recordsCreated: 0 };
+    }
+
+    const movementTypes = ['internal', 'inbound', 'outbound', 'optimization', 'transfer'];
+    const movementReasons = ['optimization', 'receiving', 'shipping', 'reorganization', 'transfer'];
+    let recordsCreated = 0;
+
+    for (let day = 30; day >= 0; day--) {
+      const movementsPerDay = Math.floor(Math.random() * 10) + 3;
+      
+      for (let i = 0; i < movementsPerDay; i++) {
+        const item = items[Math.floor(Math.random() * items.length)];
+        const fromZone = zones[Math.floor(Math.random() * zones.length)];
+        const toZone = zones[Math.floor(Math.random() * zones.length)];
+        const movementType = movementTypes[Math.floor(Math.random() * movementTypes.length)];
+        const movementReason = movementReasons[Math.floor(Math.random() * movementReasons.length)];
+        
+        const movedAt = new Date();
+        movedAt.setDate(movedAt.getDate() - day);
+        movedAt.setHours(Math.floor(Math.random() * 10) + 7);
+        movedAt.setMinutes(Math.floor(Math.random() * 60));
+
+        await db.insert(warehouseItemMovements).values({
+          site_id: siteId,
+          item_id: item.id,
+          item_description: item.description,
+          nsn: item.nsn,
+          from_zone_id: fromZone.id,
+          from_zone_name: fromZone.name,
+          from_location: item.location,
+          to_zone_id: toZone.id,
+          to_zone_name: toZone.name,
+          to_location: `${toZone.name}-${String(Math.floor(Math.random() * 20) + 1).padStart(2, '0')}`,
+          quantity_moved: Math.floor(Math.random() * 5) + 1,
+          weight_lbs: item.weight_lbs?.toString() || '100',
+          movement_type: movementType,
+          movement_reason: movementReason,
+          source_type: 'demo',
+          moved_at: movedAt,
+        });
+        recordsCreated++;
+      }
+
+      await this.captureCapacitySnapshot(siteId);
+    }
+
+    return { message: "Demo movement data generated successfully", recordsCreated };
   },
 };

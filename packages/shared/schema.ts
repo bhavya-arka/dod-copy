@@ -1582,3 +1582,61 @@ export const insertWarehouseItemVersionSchema = createInsertSchema(warehouseItem
 });
 export type InsertWarehouseItemVersion = z.infer<typeof insertWarehouseItemVersionSchema>;
 export type WarehouseItemVersion = typeof warehouseItemVersions.$inferSelect;
+
+// ============================================================================
+// WAREHOUSE ANALYTICS TABLES
+// ============================================================================
+
+// Item Movements - granular tracking of all inventory movements for analytics
+export const warehouseItemMovements = pgTable("warehouse_item_movements", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  item_id: integer("item_id").notNull(),
+  item_description: text("item_description"),
+  nsn: text("nsn"),
+  from_zone_id: integer("from_zone_id"),
+  from_zone_name: text("from_zone_name"),
+  from_location: text("from_location"),
+  to_zone_id: integer("to_zone_id"),
+  to_zone_name: text("to_zone_name"),
+  to_location: text("to_location"),
+  quantity_moved: integer("quantity_moved").notNull().default(1),
+  weight_lbs: numeric("weight_lbs", { precision: 12, scale: 2 }),
+  movement_type: text("movement_type").notNull().default("internal"),
+  movement_reason: text("movement_reason"),
+  source_type: text("source_type"),
+  source_id: integer("source_id"),
+  user_id: integer("user_id"),
+  moved_at: timestamp("moved_at").defaultNow().notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseItemMovementSchema = createInsertSchema(warehouseItemMovements).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseItemMovement = z.infer<typeof insertWarehouseItemMovementSchema>;
+export type WarehouseItemMovement = typeof warehouseItemMovements.$inferSelect;
+
+// Capacity Snapshots - daily warehouse capacity tracking for trend analysis
+export const warehouseCapacitySnapshots = pgTable("warehouse_capacity_snapshots", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  snapshot_date: date("snapshot_date").notNull(),
+  total_capacity: integer("total_capacity").notNull(),
+  used_capacity: integer("used_capacity").notNull(),
+  utilization_percent: numeric("utilization_percent", { precision: 5, scale: 2 }).notNull(),
+  total_items: integer("total_items").notNull().default(0),
+  total_weight_lbs: numeric("total_weight_lbs", { precision: 14, scale: 2 }),
+  zone_breakdown: jsonb("zone_breakdown").notNull().default({}),
+  inbound_count: integer("inbound_count").notNull().default(0),
+  outbound_count: integer("outbound_count").notNull().default(0),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWarehouseCapacitySnapshotSchema = createInsertSchema(warehouseCapacitySnapshots).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertWarehouseCapacitySnapshot = z.infer<typeof insertWarehouseCapacitySnapshotSchema>;
+export type WarehouseCapacitySnapshot = typeof warehouseCapacitySnapshots.$inferSelect;
