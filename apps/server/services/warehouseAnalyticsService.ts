@@ -960,4 +960,34 @@ export const warehouseAnalyticsService = {
 
     return { message: "Demo movement data generated successfully", recordsCreated };
   },
+
+  async getMovements(siteId: number, options: { limit?: number } = {}) {
+    const limit = options.limit || 100;
+    
+    const movements = await db
+      .select({
+        id: warehouseItemMovements.id,
+        itemId: warehouseItemMovements.item_id,
+        itemDescription: warehouseItemMovements.item_description,
+        fromZoneId: warehouseItemMovements.from_zone_id,
+        fromZoneName: warehouseItemMovements.from_zone_name,
+        toZoneId: warehouseItemMovements.to_zone_id,
+        toZoneName: warehouseItemMovements.to_zone_name,
+        fromLocation: warehouseItemMovements.from_location,
+        toLocation: warehouseItemMovements.to_location,
+        quantityMoved: warehouseItemMovements.quantity_moved,
+        movedAt: warehouseItemMovements.moved_at,
+        movementType: warehouseItemMovements.movement_type,
+        movementReason: warehouseItemMovements.movement_reason,
+      })
+      .from(warehouseItemMovements)
+      .where(eq(warehouseItemMovements.site_id, siteId))
+      .orderBy(desc(warehouseItemMovements.moved_at))
+      .limit(limit);
+
+    return {
+      movements,
+      total: movements.length,
+    };
+  },
 };

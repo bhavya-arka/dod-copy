@@ -222,8 +222,8 @@ export default function WMSAnalyticsDashboard({
               <ArrowRightLeft className="w-5 h-5 text-blue-600" />
               <span className="text-sm font-medium text-blue-700 dark:text-blue-400">Total Movements</span>
             </div>
-            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{movementData.totalMovements.toLocaleString()}</p>
-            <p className="text-xs text-blue-600 dark:text-blue-400">Last {movementData.periodDays} days</p>
+            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{(movementData.totalMovements || 0).toLocaleString()}</p>
+            <p className="text-xs text-blue-600 dark:text-blue-400">Last {movementData.periodDays || 30} days</p>
           </div>
 
           <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
@@ -231,7 +231,7 @@ export default function WMSAnalyticsDashboard({
               <Package className="w-5 h-5 text-emerald-600" />
               <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Most Active Items</span>
             </div>
-            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{movementData.mostMovingItems.length}</p>
+            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{(movementData.mostMovingItems || []).length}</p>
             <p className="text-xs text-emerald-600 dark:text-emerald-400">Tracked items</p>
           </div>
 
@@ -240,18 +240,18 @@ export default function WMSAnalyticsDashboard({
               <MapPin className="w-5 h-5 text-purple-600" />
               <span className="text-sm font-medium text-purple-700 dark:text-purple-400">Active Zones</span>
             </div>
-            <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{movementData.movementsByZone.length}</p>
+            <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{(movementData.movementsByZone || []).length}</p>
             <p className="text-xs text-purple-600 dark:text-purple-400">With activity</p>
           </div>
         </div>
 
-        {movementData.mostMovingItems.length > 0 && (
+        {(movementData.mostMovingItems || []).length > 0 && (
           <div className="rounded-xl border border-border overflow-hidden">
             <div className="p-3 bg-slate-800/80 border-b border-border">
               <h3 className="font-medium text-white">Most Moving Items</h3>
             </div>
             <div className="divide-y divide-border max-h-64 overflow-y-auto">
-              {movementData.mostMovingItems.slice(0, 10).map((item, idx) => (
+              {(movementData.mostMovingItems || []).slice(0, 10).map((item, idx) => (
                 <div key={item.itemId} className="flex items-center justify-between p-3 hover:bg-muted/30">
                   <div className="flex items-center gap-3">
                     <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-medium flex items-center justify-center">
@@ -272,13 +272,13 @@ export default function WMSAnalyticsDashboard({
           </div>
         )}
 
-        {movementData.recentlyMoved.length > 0 && (
+        {(movementData.recentlyMoved || []).length > 0 && (
           <div className="rounded-xl border border-border overflow-hidden">
             <div className="p-3 bg-slate-800/80 border-b border-border">
               <h3 className="font-medium text-white">Recent Movements</h3>
             </div>
             <div className="divide-y divide-border max-h-64 overflow-y-auto">
-              {movementData.recentlyMoved.slice(0, 10).map((movement) => (
+              {(movementData.recentlyMoved || []).slice(0, 10).map((movement) => (
                 <div key={movement.id} className="p-3 hover:bg-muted/30">
                   <div className="flex items-center justify-between mb-1">
                     <p className="text-sm font-medium text-foreground">{movement.itemDescription}</p>
@@ -318,15 +318,19 @@ export default function WMSAnalyticsDashboard({
       );
     }
 
-    const trendIcon = growthData.growthRate.direction === "up" 
+    const growthRate = growthData.growthRate || { direction: "stable", percentChange: 0, periodDays: 30 };
+    const projectedCapacity = growthData.projectedCapacity || { projectedUtilization30Days: 0, projectedUtilization90Days: 0, daysUntilFull: null };
+    const capacityTrends = growthData.capacityTrends || [];
+    
+    const trendIcon = growthRate.direction === "up" 
       ? <ArrowUp className="w-4 h-4" />
-      : growthData.growthRate.direction === "down"
+      : growthRate.direction === "down"
       ? <ArrowDown className="w-4 h-4" />
       : <Minus className="w-4 h-4" />;
     
-    const trendColor = growthData.growthRate.direction === "up"
+    const trendColor = growthRate.direction === "up"
       ? "text-amber-600 bg-amber-50 border-amber-200"
-      : growthData.growthRate.direction === "down"
+      : growthRate.direction === "down"
       ? "text-emerald-600 bg-emerald-50 border-emerald-200"
       : "text-slate-600 bg-slate-50 border-slate-200";
 
@@ -339,10 +343,10 @@ export default function WMSAnalyticsDashboard({
               <span className="text-sm font-medium">Growth Rate</span>
             </div>
             <p className="text-2xl font-bold">
-              {growthData.growthRate.direction === "up" ? "+" : ""}
-              {growthData.growthRate.percentChange.toFixed(1)}%
+              {growthRate.direction === "up" ? "+" : ""}
+              {(growthRate.percentChange || 0).toFixed(1)}%
             </p>
-            <p className="text-xs opacity-80">Last {growthData.growthRate.periodDays} days</p>
+            <p className="text-xs opacity-80">Last {growthRate.periodDays || 30} days</p>
           </div>
 
           <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
@@ -351,7 +355,7 @@ export default function WMSAnalyticsDashboard({
               <span className="text-sm font-medium text-blue-700 dark:text-blue-400">30-Day Projection</span>
             </div>
             <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
-              {growthData.projectedCapacity.projectedUtilization30Days.toFixed(1)}%
+              {(projectedCapacity.projectedUtilization30Days || 0).toFixed(1)}%
             </p>
             <p className="text-xs text-blue-600 dark:text-blue-400">Projected utilization</p>
           </div>
@@ -362,33 +366,33 @@ export default function WMSAnalyticsDashboard({
               <span className="text-sm font-medium text-purple-700 dark:text-purple-400">90-Day Projection</span>
             </div>
             <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">
-              {growthData.projectedCapacity.projectedUtilization90Days.toFixed(1)}%
+              {(projectedCapacity.projectedUtilization90Days || 0).toFixed(1)}%
             </p>
             <p className="text-xs text-purple-600 dark:text-purple-400">Projected utilization</p>
           </div>
 
-          {growthData.projectedCapacity.daysUntilFull !== null && (
+          {projectedCapacity.daysUntilFull !== null && (
             <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
               <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle className="w-4 h-4 text-red-600" />
                 <span className="text-sm font-medium text-red-700 dark:text-red-400">Days Until Full</span>
               </div>
               <p className="text-2xl font-bold text-red-700 dark:text-red-300">
-                {growthData.projectedCapacity.daysUntilFull}
+                {projectedCapacity.daysUntilFull}
               </p>
               <p className="text-xs text-red-600 dark:text-red-400">At current rate</p>
             </div>
           )}
         </div>
 
-        {growthData.capacityTrends.length > 0 && (
+        {capacityTrends.length > 0 && (
           <div className="rounded-xl border border-border overflow-hidden">
             <div className="p-3 bg-slate-800/80 border-b border-border">
               <h3 className="font-medium text-white">Capacity Trends</h3>
             </div>
             <div className="p-4">
               <div className="h-48 flex items-end gap-1">
-                {growthData.capacityTrends.slice(-30).map((trend, idx) => {
+                {capacityTrends.slice(-30).map((trend, idx) => {
                   const height = Math.max(4, (trend.utilizationPercent / 100) * 100);
                   const barColor = trend.utilizationPercent > 80 
                     ? "bg-red-500" 
@@ -411,7 +415,7 @@ export default function WMSAnalyticsDashboard({
                 })}
               </div>
               <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-                <span>{growthData.capacityTrends.length > 0 && new Date(growthData.capacityTrends[0].date).toLocaleDateString()}</span>
+                <span>{capacityTrends.length > 0 && new Date(capacityTrends[0].date).toLocaleDateString()}</span>
                 <span>Today</span>
               </div>
             </div>
@@ -451,6 +455,10 @@ export default function WMSAnalyticsDashboard({
       );
     }
 
+    const throughputMetrics = velocityData.throughputMetrics || { dailyAverage: 0, weeklyAverage: 0, monthlyTotal: 0 };
+    const fastMovers = velocityData.fastMovers || [];
+    const slowMovers = velocityData.slowMovers || [];
+
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -460,7 +468,7 @@ export default function WMSAnalyticsDashboard({
               <span className="text-sm font-medium text-blue-700 dark:text-blue-400">Daily Average</span>
             </div>
             <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
-              {velocityData.throughputMetrics.dailyAverage.toFixed(1)}
+              {(throughputMetrics.dailyAverage || 0).toFixed(1)}
             </p>
             <p className="text-xs text-blue-600 dark:text-blue-400">Movements per day</p>
           </div>
@@ -471,7 +479,7 @@ export default function WMSAnalyticsDashboard({
               <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Weekly Average</span>
             </div>
             <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
-              {velocityData.throughputMetrics.weeklyAverage.toFixed(1)}
+              {(throughputMetrics.weeklyAverage || 0).toFixed(1)}
             </p>
             <p className="text-xs text-emerald-600 dark:text-emerald-400">Movements per week</p>
           </div>
@@ -482,14 +490,14 @@ export default function WMSAnalyticsDashboard({
               <span className="text-sm font-medium text-purple-700 dark:text-purple-400">Monthly Total</span>
             </div>
             <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">
-              {velocityData.throughputMetrics.monthlyTotal.toLocaleString()}
+              {(throughputMetrics.monthlyTotal || 0).toLocaleString()}
             </p>
             <p className="text-xs text-purple-600 dark:text-purple-400">Total movements</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {velocityData.fastMovers.length > 0 && (
+          {fastMovers.length > 0 && (
             <div className="rounded-xl border border-border overflow-hidden">
               <div className="p-3 bg-emerald-600 border-b border-border">
                 <h3 className="font-medium text-white flex items-center gap-2">
@@ -498,7 +506,7 @@ export default function WMSAnalyticsDashboard({
                 </h3>
               </div>
               <div className="divide-y divide-border max-h-64 overflow-y-auto">
-                {velocityData.fastMovers.slice(0, 8).map((item) => (
+                {fastMovers.slice(0, 8).map((item) => (
                   <div key={item.itemId} className="flex items-center justify-between p-3 hover:bg-muted/30">
                     <div>
                       <p className="text-sm font-medium text-foreground">{item.description}</p>
@@ -514,7 +522,7 @@ export default function WMSAnalyticsDashboard({
             </div>
           )}
 
-          {velocityData.slowMovers.length > 0 && (
+          {slowMovers.length > 0 && (
             <div className="rounded-xl border border-border overflow-hidden">
               <div className="p-3 bg-amber-600 border-b border-border">
                 <h3 className="font-medium text-white flex items-center gap-2">
@@ -523,7 +531,7 @@ export default function WMSAnalyticsDashboard({
                 </h3>
               </div>
               <div className="divide-y divide-border max-h-64 overflow-y-auto">
-                {velocityData.slowMovers.slice(0, 8).map((item) => (
+                {slowMovers.slice(0, 8).map((item) => (
                   <div key={item.itemId} className="flex items-center justify-between p-3 hover:bg-muted/30">
                     <div>
                       <p className="text-sm font-medium text-foreground">{item.description}</p>
