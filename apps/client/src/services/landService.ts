@@ -3,7 +3,11 @@
  * Handles all API calls for land transport endpoints
  */
 
+import { api, ApiError } from "../lib/queryClient";
+
 const API_BASE = "/api/land";
+
+export { ApiError };
 
 export interface VehicleType {
   id: number;
@@ -145,130 +149,53 @@ export interface AddVehicleData {
   lane?: number;
 }
 
-class LandServiceError extends Error {
-  constructor(message: string, public statusCode?: number) {
-    super(message);
-    this.name = 'LandServiceError';
-  }
-}
-
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new LandServiceError(
-      errorData.error || `Request failed with status ${response.status}`,
-      response.status
-    );
-  }
-  return response.json();
-}
-
 export async function getStatistics(): Promise<LandStatistics> {
-  const response = await fetch(`${API_BASE}/statistics`, {
-    credentials: 'include',
-  });
-  return handleResponse<LandStatistics>(response);
+  return api.get<LandStatistics>(`${API_BASE}/statistics`);
 }
 
 export async function getVehicleTypes(): Promise<VehicleType[]> {
-  const response = await fetch(`${API_BASE}/vehicle-types`, {
-    credentials: 'include',
-  });
-  return handleResponse<VehicleType[]>(response);
+  return api.get<VehicleType[]>(`${API_BASE}/vehicle-types`);
 }
 
 export async function getRoutes(): Promise<LandRoute[]> {
-  const response = await fetch(`${API_BASE}/routes`, {
-    credentials: 'include',
-  });
-  return handleResponse<LandRoute[]>(response);
+  return api.get<LandRoute[]>(`${API_BASE}/routes`);
 }
 
 export async function createRoute(data: CreateRouteData): Promise<LandRoute> {
-  const response = await fetch(`${API_BASE}/routes`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(data),
-  });
-  return handleResponse<LandRoute>(response);
+  return api.post<LandRoute>(`${API_BASE}/routes`, data);
 }
 
 export async function updateRoute(id: number, data: UpdateRouteData): Promise<LandRoute> {
-  const response = await fetch(`${API_BASE}/routes/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(data),
-  });
-  return handleResponse<LandRoute>(response);
+  return api.put<LandRoute>(`${API_BASE}/routes/${id}`, data);
 }
 
 export async function deleteRoute(id: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/routes/${id}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new LandServiceError(
-      errorData.error || 'Failed to delete route',
-      response.status
-    );
-  }
+  return api.delete(`${API_BASE}/routes/${id}`);
 }
 
 export async function getConvoys(): Promise<Convoy[]> {
-  const response = await fetch(`${API_BASE}/convoys`, {
-    credentials: 'include',
-  });
-  return handleResponse<Convoy[]>(response);
+  return api.get<Convoy[]>(`${API_BASE}/convoys`);
 }
 
 export async function getConvoy(id: number): Promise<Convoy> {
-  const response = await fetch(`${API_BASE}/convoys/${id}`, {
-    credentials: 'include',
-  });
-  return handleResponse<Convoy>(response);
+  return api.get<Convoy>(`${API_BASE}/convoys/${id}`);
 }
 
 export async function createConvoy(data: CreateConvoyData): Promise<Convoy> {
-  const response = await fetch(`${API_BASE}/convoys`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({
-      ...data,
-      status: data.status || 'draft',
-      vehicle_count: data.vehicle_count || 0,
-      total_weight_lbs: data.total_weight_lbs || 0,
-    }),
+  return api.post<Convoy>(`${API_BASE}/convoys`, {
+    ...data,
+    status: data.status || 'draft',
+    vehicle_count: data.vehicle_count || 0,
+    total_weight_lbs: data.total_weight_lbs || 0,
   });
-  return handleResponse<Convoy>(response);
 }
 
 export async function updateConvoy(id: number, data: UpdateConvoyData): Promise<Convoy> {
-  const response = await fetch(`${API_BASE}/convoys/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(data),
-  });
-  return handleResponse<Convoy>(response);
+  return api.put<Convoy>(`${API_BASE}/convoys/${id}`, data);
 }
 
 export async function deleteConvoy(id: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/convoys/${id}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new LandServiceError(
-      errorData.error || 'Failed to delete convoy',
-      response.status
-    );
-  }
+  return api.delete(`${API_BASE}/convoys/${id}`);
 }
 
 export async function updateConvoyStatus(id: number, status: string): Promise<Convoy> {
@@ -312,14 +239,7 @@ export async function calculateRoute(
   origin: LocationCoords,
   destination: LocationCoords
 ): Promise<RouteInfo> {
-  const response = await fetch(`${API_BASE}/routes/calculate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ origin, destination }),
-  });
-  
-  const data = await handleResponse<any>(response);
+  const data = await api.post<any>(`${API_BASE}/routes/calculate`, { origin, destination });
   
   return {
     distance_miles: data.distance_miles || data.distanceMiles || 0,
@@ -329,17 +249,11 @@ export async function calculateRoute(
 }
 
 export async function searchPlaces(query: string): Promise<PlaceResult[]> {
-  const response = await fetch(`${API_BASE}/places/autocomplete?input=${encodeURIComponent(query)}`, {
-    credentials: 'include',
-  });
-  return handleResponse<PlaceResult[]>(response);
+  return api.get<PlaceResult[]>(`${API_BASE}/places/autocomplete?input=${encodeURIComponent(query)}`);
 }
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
-  const response = await fetch(`${API_BASE}/places/details?place_id=${encodeURIComponent(placeId)}`, {
-    credentials: 'include',
-  });
-  return handleResponse<PlaceDetails>(response);
+  return api.get<PlaceDetails>(`${API_BASE}/places/details?place_id=${encodeURIComponent(placeId)}`);
 }
 
 export interface PendingTransferItem {
@@ -362,23 +276,17 @@ export interface PendingTransfer {
 }
 
 export async function getPendingTransfers(): Promise<PendingTransfer[]> {
-  const response = await fetch(`${API_BASE}/pending-transfers`, {
-    credentials: 'include',
-  });
-  return handleResponse<PendingTransfer[]>(response);
+  return api.get<PendingTransfer[]>(`${API_BASE}/pending-transfers`);
 }
 
 export async function assignConvoyToTransfer(
   transferId: number,
   convoyId: number
 ): Promise<{ success: boolean }> {
-  const response = await fetch(`/api/warehouse/transfers/${transferId}/assign-convoy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ convoy_id: convoyId }),
-  });
-  return handleResponse<{ success: boolean }>(response);
+  return api.post<{ success: boolean }>(
+    `/api/warehouse/transfers/${transferId}/assign-convoy`,
+    { convoy_id: convoyId }
+  );
 }
 
 export interface VehicleAllocation {
@@ -413,12 +321,10 @@ export interface ProposeConvoyResponse {
 }
 
 export async function proposeConvoyForTransfer(transferId: number): Promise<ProposeConvoyResponse> {
-  const response = await fetch(`/api/warehouse/transfers/${transferId}/propose-convoy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-  });
-  return handleResponse<ProposeConvoyResponse>(response);
+  return api.post<ProposeConvoyResponse>(
+    `/api/warehouse/transfers/${transferId}/propose-convoy`,
+    {}
+  );
 }
 
 export interface AutoCreateConvoyResponse {
@@ -438,12 +344,10 @@ export interface AutoCreateConvoyResponse {
 }
 
 export async function autoCreateConvoyForTransfer(transferId: number): Promise<AutoCreateConvoyResponse> {
-  const response = await fetch(`/api/warehouse/transfers/${transferId}/auto-create-convoy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-  });
-  return handleResponse<AutoCreateConvoyResponse>(response);
+  return api.post<AutoCreateConvoyResponse>(
+    `/api/warehouse/transfers/${transferId}/auto-create-convoy`,
+    {}
+  );
 }
 
 export async function fetchAllData(): Promise<{
@@ -453,19 +357,19 @@ export async function fetchAllData(): Promise<{
   convoys: Convoy[];
   pendingTransfers: PendingTransfer[];
 }> {
-  const [statsRes, vehiclesRes, routesRes, convoysRes, transfersRes] = await Promise.all([
-    fetch(`${API_BASE}/statistics`, { credentials: 'include' }),
-    fetch(`${API_BASE}/vehicle-types`, { credentials: 'include' }),
-    fetch(`${API_BASE}/routes`, { credentials: 'include' }),
-    fetch(`${API_BASE}/convoys`, { credentials: 'include' }),
-    fetch(`${API_BASE}/pending-transfers`, { credentials: 'include' }),
+  const [statistics, vehicleTypes, routes, convoys, pendingTransfers] = await Promise.all([
+    getStatistics().catch(() => null),
+    getVehicleTypes().catch(() => []),
+    getRoutes().catch(() => []),
+    getConvoys().catch(() => []),
+    getPendingTransfers().catch(() => []),
   ]);
 
   return {
-    statistics: statsRes.ok ? await statsRes.json() : null,
-    vehicleTypes: vehiclesRes.ok ? await vehiclesRes.json() : [],
-    routes: routesRes.ok ? await routesRes.json() : [],
-    convoys: convoysRes.ok ? await convoysRes.json() : [],
-    pendingTransfers: transfersRes.ok ? await transfersRes.json() : [],
+    statistics,
+    vehicleTypes,
+    routes,
+    convoys,
+    pendingTransfers,
   };
 }

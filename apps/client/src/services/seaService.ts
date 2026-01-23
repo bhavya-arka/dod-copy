@@ -3,7 +3,11 @@
  * Handles all API calls for MSC maritime transport endpoints
  */
 
+import { api, ApiError } from "../lib/queryClient";
+
 const API_BASE = "/api/sea";
+
+export { ApiError };
 
 export interface VesselType {
   id: number;
@@ -205,159 +209,81 @@ export interface PortScheduleEntry {
   status: string;
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
-    throw new Error(error.message || `HTTP ${response.status}`);
-  }
-  return response.json();
-}
-
 export async function fetchVesselTypes(): Promise<VesselType[]> {
-  const response = await fetch(`${API_BASE}/vessel-types`, {
-    credentials: 'include',
-  });
-  return handleResponse<VesselType[]>(response);
+  return api.get<VesselType[]>(`${API_BASE}/vessel-types`);
 }
 
 export async function fetchVoyages(): Promise<Voyage[]> {
-  const response = await fetch(`${API_BASE}/voyages`, {
-    credentials: 'include',
-  });
-  return handleResponse<Voyage[]>(response);
+  return api.get<Voyage[]>(`${API_BASE}/voyages`);
 }
 
 export async function fetchVoyage(id: number): Promise<Voyage> {
-  const response = await fetch(`${API_BASE}/voyages/${id}`, {
-    credentials: 'include',
-  });
-  return handleResponse<Voyage>(response);
+  return api.get<Voyage>(`${API_BASE}/voyages/${id}`);
 }
 
 export async function createVoyage(data: CreateVoyageData): Promise<Voyage> {
-  const response = await fetch(`${API_BASE}/voyages`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(data),
-  });
-  return handleResponse<Voyage>(response);
+  return api.post<Voyage>(`${API_BASE}/voyages`, data);
 }
 
 export async function updateVoyage(id: number, data: UpdateVoyageData): Promise<Voyage> {
-  const response = await fetch(`${API_BASE}/voyages/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(data),
-  });
-  return handleResponse<Voyage>(response);
+  return api.put<Voyage>(`${API_BASE}/voyages/${id}`, data);
 }
 
 export async function updateVoyageStatus(id: number, status: string): Promise<Voyage> {
-  const response = await fetch(`${API_BASE}/voyages/${id}/status`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ status }),
-  });
-  return handleResponse<Voyage>(response);
+  return api.put<Voyage>(`${API_BASE}/voyages/${id}/status`, { status });
 }
 
 export async function fetchStatistics(): Promise<SeaStatistics> {
-  const response = await fetch(`${API_BASE}/statistics`, {
-    credentials: 'include',
-  });
-  return handleResponse<SeaStatistics>(response);
+  return api.get<SeaStatistics>(`${API_BASE}/statistics`);
 }
 
 export async function fetchContainers(voyageId?: number): Promise<Container[]> {
   const url = voyageId 
     ? `${API_BASE}/containers?voyage_id=${voyageId}` 
     : `${API_BASE}/containers`;
-  const response = await fetch(url, {
-    credentials: 'include',
-  });
-  return handleResponse<Container[]>(response);
+  return api.get<Container[]>(url);
 }
 
 export async function fetchContainer(id: number): Promise<Container> {
-  const response = await fetch(`${API_BASE}/containers/${id}`, {
-    credentials: 'include',
-  });
-  return handleResponse<Container>(response);
+  return api.get<Container>(`${API_BASE}/containers/${id}`);
 }
 
 export async function createContainer(data: CreateContainerData): Promise<Container> {
-  const response = await fetch(`${API_BASE}/containers`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(data),
-  });
-  return handleResponse<Container>(response);
+  return api.post<Container>(`${API_BASE}/containers`, data);
 }
 
 export async function updateContainer(id: number, data: UpdateContainerData): Promise<Container> {
-  const response = await fetch(`${API_BASE}/containers/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(data),
-  });
-  return handleResponse<Container>(response);
+  return api.put<Container>(`${API_BASE}/containers/${id}`, data);
 }
 
 export async function assignContainerToVoyage(containerId: number, voyageId: number): Promise<Container> {
-  const response = await fetch(`${API_BASE}/containers/${containerId}/assign`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ voyage_id: voyageId }),
-  });
-  return handleResponse<Container>(response);
+  return api.post<Container>(`${API_BASE}/containers/${containerId}/assign`, { voyage_id: voyageId });
 }
 
 export async function fetchPortSchedule(days: number = 30): Promise<PortScheduleEntry[]> {
-  const response = await fetch(`${API_BASE}/port-schedule?days=${days}`, {
-    credentials: 'include',
-  });
-  return handleResponse<PortScheduleEntry[]>(response);
+  return api.get<PortScheduleEntry[]>(`${API_BASE}/port-schedule?days=${days}`);
 }
 
 export async function fetchPendingTransfers(): Promise<PendingTransfer[]> {
-  const response = await fetch(`${API_BASE}/pending-transfers`, {
-    credentials: 'include',
-  });
-  return handleResponse<PendingTransfer[]>(response);
+  return api.get<PendingTransfer[]>(`${API_BASE}/pending-transfers`);
 }
 
 export async function proposeVoyageForTransfer(transferId: number): Promise<ProposeVoyageResponse> {
-  const response = await fetch(`/api/warehouse/transfers/${transferId}/propose-voyage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-  });
-  return handleResponse<ProposeVoyageResponse>(response);
+  return api.post<ProposeVoyageResponse>(
+    `/api/warehouse/transfers/${transferId}/propose-voyage`,
+    {}
+  );
 }
 
 export async function autoCreateVoyage(transferId: number): Promise<{ message: string; voyage: Voyage }> {
-  const response = await fetch(`/api/warehouse/transfers/${transferId}/auto-create-voyage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-  });
-  return handleResponse<{ message: string; voyage: Voyage }>(response);
+  return api.post<{ message: string; voyage: Voyage }>(
+    `/api/warehouse/transfers/${transferId}/auto-create-voyage`,
+    {}
+  );
 }
 
 export async function assignVoyageToTransfer(transferId: number, voyageId: number): Promise<void> {
-  const response = await fetch(`/api/warehouse/transfers/${transferId}/assign-voyage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ voyage_id: voyageId }),
-  });
-  await handleResponse<void>(response);
+  await api.post(`/api/warehouse/transfers/${transferId}/assign-voyage`, { voyage_id: voyageId });
 }
 
 export interface AllSeaData {

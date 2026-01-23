@@ -13,7 +13,7 @@ import {
   aiInsights, type AiInsight, type InsertAiInsight, type AiInsightType
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gt, or, isNull } from "drizzle-orm";
+import { eq, desc, and, gt, lt, or, isNull } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 
@@ -34,6 +34,7 @@ export interface IStorage {
   createSession(userId: number): Promise<Session>;
   getSession(token: string): Promise<Session | undefined>;
   deleteSession(token: string): Promise<void>;
+  cleanupExpiredSessions(): Promise<number>;
   
   // Organization methods
   getOrganization(id: number): Promise<Organization | undefined>;
@@ -221,6 +222,13 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSession(token: string): Promise<void> {
     await db.delete(sessions).where(eq(sessions.token, token));
+  }
+
+  async cleanupExpiredSessions(): Promise<number> {
+    const result = await db.delete(sessions)
+      .where(lt(sessions.expires_at, new Date()))
+      .returning();
+    return result.length;
   }
 
   // ============================================================================
@@ -581,14 +589,15 @@ export class DatabaseStorage implements IStorage {
     const manifest = await this.getManifest(manifestId, userId);
     if (!manifest) return undefined;
 
-    const items = manifest.items as any[];
-    if (itemIndex < 0 || itemIndex >= items.length) return undefined;
+    // manifest_data contains the items array
+    const manifestData = (manifest.manifest_data || []) as any[];
+    if (itemIndex < 0 || itemIndex >= manifestData.length) return undefined;
 
-    items[itemIndex] = { ...items[itemIndex], ...itemData };
+    manifestData[itemIndex] = { ...manifestData[itemIndex], ...itemData };
 
     const [updated] = await db
       .update(manifests)
-      .set({ items, updated_at: new Date() } as any)
+      .set({ manifest_data: manifestData, updated_at: new Date() })
       .where(and(eq(manifests.id, manifestId), eq(manifests.user_id, userId)))
       .returning();
     return updated;

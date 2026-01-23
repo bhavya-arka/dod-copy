@@ -3,6 +3,7 @@
  * Handles all API calls for warehouse endpoints
  */
 
+import { api, ApiError } from "../lib/queryClient";
 import type { 
   WarehouseSite, 
   WarehouseBuilding,
@@ -19,16 +20,14 @@ import type {
 
 const API_BASE = "/api/warehouse";
 
+export { ApiError };
+
 /**
  * Fetch all warehouse sites
  * @returns Array of warehouse sites
  */
 export async function fetchSites(): Promise<WarehouseSite[]> {
-  const response = await fetch(`${API_BASE}/sites`, {
-    credentials: "include",
-  });
-  if (!response.ok) throw new Error("Failed to fetch sites");
-  return response.json();
+  return api.get<WarehouseSite[]>(`${API_BASE}/sites`);
 }
 
 /**
@@ -37,11 +36,7 @@ export async function fetchSites(): Promise<WarehouseSite[]> {
  * @returns Array of buildings with capacity info
  */
 export async function getSiteBuildings(siteId: number): Promise<WarehouseBuilding[]> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/buildings`, {
-    credentials: "include",
-  });
-  if (!response.ok) throw new Error("Failed to fetch buildings");
-  return response.json();
+  return api.get<WarehouseBuilding[]>(`${API_BASE}/sites/${siteId}/buildings`);
 }
 
 export async function createBuilding(siteId: number, data: {
@@ -53,17 +48,7 @@ export async function createBuilding(siteId: number, data: {
   geometry_notes?: string;
   capacity_pallets?: number;
 }): Promise<WarehouseBuilding> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/buildings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(data),
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to create building");
-  }
-  return response.json();
+  return api.post<WarehouseBuilding>(`${API_BASE}/sites/${siteId}/buildings`, data);
 }
 
 export async function updateBuilding(siteId: number, buildingId: number, data: {
@@ -75,28 +60,11 @@ export async function updateBuilding(siteId: number, buildingId: number, data: {
   geometry_notes?: string;
   active?: boolean;
 }): Promise<WarehouseBuilding> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/buildings/${buildingId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(data),
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to update building");
-  }
-  return response.json();
+  return api.put<WarehouseBuilding>(`${API_BASE}/sites/${siteId}/buildings/${buildingId}`, data);
 }
 
 export async function deleteBuilding(siteId: number, buildingId: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/buildings/${buildingId}`, {
-    method: "DELETE",
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to delete building");
-  }
+  return api.delete(`${API_BASE}/sites/${siteId}/buildings/${buildingId}`);
 }
 
 /**
@@ -105,11 +73,7 @@ export async function deleteBuilding(siteId: number, buildingId: number): Promis
  * @returns Array of zones
  */
 export async function fetchSiteZones(siteId: number): Promise<WarehouseZone[]> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/zones`, {
-    credentials: "include",
-  });
-  if (!response.ok) throw new Error("Failed to fetch zones");
-  return response.json();
+  return api.get<WarehouseZone[]>(`${API_BASE}/sites/${siteId}/zones`);
 }
 
 /**
@@ -127,17 +91,7 @@ export async function createZone(data: {
   bulk_available?: number;
   rack_available?: number;
 }): Promise<WarehouseZone> {
-  const response = await fetch(`${API_BASE}/sites/${data.site_id}/zones`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(data),
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to create zone");
-  }
-  return response.json();
+  return api.post<WarehouseZone>(`${API_BASE}/sites/${data.site_id}/zones`, data);
 }
 
 /**
@@ -146,14 +100,7 @@ export async function createZone(data: {
  * @param zoneId - Zone ID to delete
  */
 export async function deleteZone(siteId: number, zoneId: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/zones/${zoneId}`, {
-    method: "DELETE",
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to delete zone");
-  }
+  return api.delete(`${API_BASE}/sites/${siteId}/zones/${zoneId}`);
 }
 
 /**
@@ -162,16 +109,7 @@ export async function deleteZone(siteId: number, zoneId: number): Promise<void> 
  * @returns Count of seeded zones
  */
 export async function seedDefaultZones(siteId: number): Promise<{ count: number }> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/zones/seed`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to seed zones");
-  }
-  return response.json();
+  return api.post<{ count: number }>(`${API_BASE}/sites/${siteId}/zones/seed`, {});
 }
 
 /**
@@ -194,17 +132,7 @@ export async function createSite(data: {
   shipyard_code?: string;
   dodaac?: string;
 }): Promise<WarehouseSite> {
-  const response = await fetch(`${API_BASE}/sites`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(data),
-  });
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to create site");
-  }
-  return response.json();
+  return api.post<WarehouseSite>(`${API_BASE}/sites`, data);
 }
 
 /**
@@ -235,11 +163,7 @@ export async function fetchInventoryPaginated(
   const queryString = searchParams.toString();
   const url = `${API_BASE}/sites/${siteId}/inventory${queryString ? `?${queryString}` : ""}`;
 
-  const response = await fetch(url, {
-    credentials: "include",
-  });
-  if (!response.ok) throw new Error("Failed to fetch inventory");
-  return response.json();
+  return api.get<PaginatedInventoryResponse>(url);
 }
 
 /**
@@ -275,17 +199,7 @@ export async function addInventoryItem(
     niin?: string;
   }
 ): Promise<InventoryItem> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/inventory`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(data),
-  });
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to add item");
-  }
-  return response.json();
+  return api.post<InventoryItem>(`${API_BASE}/sites/${siteId}/inventory`, data);
 }
 
 /**
@@ -294,16 +208,7 @@ export async function addInventoryItem(
  * @param csvContent - CSV content string
  */
 export async function uploadInventoryCsv(siteId: number, csvContent: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/inventory/upload`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ csv_content: csvContent }),
-  });
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to upload CSV");
-  }
+  await api.post(`${API_BASE}/sites/${siteId}/inventory/upload`, { csv_content: csvContent });
 }
 
 /**
@@ -311,11 +216,7 @@ export async function uploadInventoryCsv(siteId: number, csvContent: string): Pr
  * @returns Array of transfers
  */
 export async function fetchTransfers(): Promise<Transfer[]> {
-  const response = await fetch(`${API_BASE}/transfers`, {
-    credentials: "include",
-  });
-  if (!response.ok) throw new Error("Failed to fetch transfers");
-  return response.json();
+  return api.get<Transfer[]>(`${API_BASE}/transfers`);
 }
 
 /**
@@ -325,16 +226,7 @@ export async function fetchTransfers(): Promise<Transfer[]> {
  * @returns Vehicle allocation preview
  */
 export async function previewTransferVehicles(itemIds: number[], siteId: number) {
-  const response = await fetch(`${API_BASE}/transfers/preview-vehicles`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ item_ids: itemIds, site_id: siteId })
-  });
-  if (!response.ok) {
-    throw new Error("Failed to preview vehicles");
-  }
-  return response.json();
+  return api.post(`${API_BASE}/transfers/preview-vehicles`, { item_ids: itemIds, site_id: siteId });
 }
 
 export interface TransportLeg {
@@ -377,16 +269,11 @@ export async function planMultiModalRoute(
   destinationSiteId: number,
   cargoWeightLbs: number
 ): Promise<MultiModalRoute> {
-  const response = await fetch("/api/routing/plan-multi-modal", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ sourceSiteId, destinationSiteId, cargoWeightLbs })
+  return api.post<MultiModalRoute>("/api/routing/plan-multi-modal", {
+    sourceSiteId,
+    destinationSiteId,
+    cargoWeightLbs,
   });
-  if (!response.ok) {
-    throw new Error("Failed to plan route");
-  }
-  return response.json();
 }
 
 /**
@@ -395,17 +282,7 @@ export async function planMultiModalRoute(
  * @returns Created transfer
  */
 export async function createTransfer(data: CreateTransferPayload): Promise<Transfer> {
-  const response = await fetch(`${API_BASE}/transfers`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(data),
-  });
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to create transfer");
-  }
-  return response.json();
+  return api.post<Transfer>(`${API_BASE}/transfers`, data);
 }
 
 /**
@@ -418,14 +295,10 @@ export async function updateTransferStatus(
   transferId: number, 
   status: string
 ): Promise<{ message: string; transfer_id: number; status: string }> {
-  const response = await fetch(`${API_BASE}/transfers/${transferId}/status`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ status }),
-  });
-  if (!response.ok) throw new Error('Failed to update transfer status');
-  return response.json();
+  return api.patch<{ message: string; transfer_id: number; status: string }>(
+    `${API_BASE}/transfers/${transferId}/status`,
+    { status }
+  );
 }
 
 /**
@@ -438,14 +311,7 @@ export async function updateTransfer(
   transferId: number, 
   data: { scheduled_arrival_date?: string; notes?: string }
 ): Promise<Transfer> {
-  const response = await fetch(`${API_BASE}/transfers/${transferId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(data),
-  });
-  if (!response.ok) throw new Error('Failed to update transfer');
-  return response.json();
+  return api.put<Transfer>(`${API_BASE}/transfers/${transferId}`, data);
 }
 
 /**
@@ -472,13 +338,8 @@ export async function deleteTransfer(transferId: number): Promise<{ success: boo
  * @returns Optimization result
  */
 export async function runOptimization(siteId: number): Promise<OptimizationResult> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/optimization`, {
-    credentials: "include",
-  });
-  if (!response.ok) throw new Error("Failed to run optimization");
-  const data = await response.json();
+  const data = await api.get<any>(`${API_BASE}/sites/${siteId}/optimization`);
   
-  // Map backend response (uses 'summary') to frontend type (uses 'metrics')
   return {
     site_name: data.site_name,
     recommendations: data.recommendations || [],
@@ -520,18 +381,10 @@ export async function uploadInventoryFile(siteId: number, file: File): Promise<F
  * @returns Commit result
  */
 export async function commitInventoryUpload(siteId: number, uploadId: string): Promise<FileCommitResult> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/inventory/import/commit`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ uploadId }),
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to commit upload");
-  }
-  return response.json();
+  return api.post<FileCommitResult>(
+    `${API_BASE}/sites/${siteId}/inventory/import/commit`,
+    { uploadId }
+  );
 }
 
 /**
@@ -627,15 +480,7 @@ export async function getWarehouseDeletionPreview(siteId: number): Promise<{
     optimizationActions: number;
   };
 }> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/deletion-preview`, {
-    credentials: "include",
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to get deletion preview");
-  }
-  return response.json();
+  return api.get(`${API_BASE}/sites/${siteId}/deletion-preview`);
 }
 
 /**
@@ -654,18 +499,10 @@ export async function moveInventoryItem(
     notes?: string;
   }
 ): Promise<{ success: boolean; message: string; item: InventoryItem }> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/inventory/${itemId}/move`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(data),
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to move item");
-  }
-  return response.json();
+  return api.put<{ success: boolean; message: string; item: InventoryItem }>(
+    `${API_BASE}/sites/${siteId}/inventory/${itemId}/move`,
+    data
+  );
 }
 
 /**
@@ -681,22 +518,14 @@ export async function bulkMoveItemsToZone(
   targetZoneId: number | null,
   notes?: string
 ): Promise<{ success: boolean; message: string; itemsMoved: number }> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/inventory/bulk-move-zone`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({
+  return api.put<{ success: boolean; message: string; itemsMoved: number }>(
+    `${API_BASE}/sites/${siteId}/inventory/bulk-move-zone`,
+    {
       item_ids: itemIds,
       target_zone_id: targetZoneId,
       notes,
-    }),
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to move items to zone");
-  }
-  return response.json();
+    }
+  );
 }
 
 /** Optimization action from wizard */
@@ -745,64 +574,215 @@ export async function runOptimizationWizard(
   algorithm: string,
   params: Record<string, any>
 ): Promise<OptimizationWizardResult> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/optimize`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ algorithm, params }),
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to run optimization");
+  return api.post<OptimizationWizardResult>(
+    `${API_BASE}/sites/${siteId}/optimize`,
+    { algorithm, params }
+  );
+}
+
+/**
+ * Get pending optimization actions for a site
+ */
+export async function getPendingOptimizationActions(siteId: number): Promise<OptimizationAction[]> {
+  return api.get<OptimizationAction[]>(`${API_BASE}/sites/${siteId}/optimization/actions`);
+}
+
+/**
+ * Mark an optimization action as complete
+ */
+export async function completeOptimizationAction(
+  siteId: number,
+  actionId: string
+): Promise<{ success: boolean; message: string }> {
+  return api.post<{ success: boolean; message: string }>(
+    `${API_BASE}/sites/${siteId}/optimization/actions/${actionId}/complete`,
+    {}
+  );
+}
+
+/**
+ * Skip an optimization action
+ */
+export async function skipOptimizationAction(
+  siteId: number,
+  actionId: string,
+  reason?: string
+): Promise<{ success: boolean; message: string }> {
+  return api.post<{ success: boolean; message: string }>(
+    `${API_BASE}/sites/${siteId}/optimization/actions/${actionId}/skip`,
+    { reason }
+  );
+}
+
+/**
+ * Get zone summary with item counts and capacity utilization
+ */
+export async function fetchZoneSummary(siteId: number): Promise<{
+  zones: Array<{
+    id: number;
+    code: string;
+    name: string;
+    itemCount: number;
+    totalWeight: number;
+    bulkUsed: number;
+    bulkAvailable: number;
+    rackUsed: number;
+    rackAvailable: number;
+    utilizationPercent: number;
+  }>;
+}> {
+  return api.get(`${API_BASE}/sites/${siteId}/zones/summary`);
+}
+
+/**
+ * Update zone capacity settings
+ */
+export async function updateZoneCapacity(
+  siteId: number,
+  zoneId: number,
+  data: {
+    bulk_available?: number;
+    rack_available?: number;
   }
-  return response.json();
+): Promise<WarehouseZone> {
+  return api.put<WarehouseZone>(
+    `${API_BASE}/sites/${siteId}/zones/${zoneId}/capacity`,
+    data
+  );
+}
+
+/**
+ * Get history log for a site
+ */
+export async function fetchSiteHistory(
+  siteId: number,
+  params?: { limit?: number; offset?: number }
+): Promise<{
+  logs: Array<{
+    id: number;
+    action: string;
+    entity_type: string;
+    entity_id: number;
+    details: any;
+    created_at: string;
+    user_id?: number;
+  }>;
+  total: number;
+}> {
+  const searchParams = new URLSearchParams();
+  if (params?.limit) searchParams.set("limit", params.limit.toString());
+  if (params?.offset) searchParams.set("offset", params.offset.toString());
+  
+  const queryString = searchParams.toString();
+  const url = `${API_BASE}/sites/${siteId}/history${queryString ? `?${queryString}` : ""}`;
+  
+  return api.get(url);
+}
+
+/**
+ * Get analytics data for a site
+ */
+export async function fetchSiteAnalytics(siteId: number): Promise<{
+  inventory: {
+    totalItems: number;
+    totalValue: number;
+    totalWeight: number;
+    itemsByCategory: Record<string, number>;
+    valueByCategory: Record<string, number>;
+  };
+  zones: {
+    utilizationByZone: Array<{ zone: string; utilization: number }>;
+    itemsByZone: Array<{ zone: string; count: number }>;
+  };
+  aging: {
+    fresh: number;
+    moderate: number;
+    aging: number;
+    critical: number;
+  };
+  trends: {
+    inbound: number[];
+    outbound: number[];
+    dates: string[];
+  };
+}> {
+  return api.get(`${API_BASE}/sites/${siteId}/analytics`);
+}
+
+/**
+ * Get AI-powered insights for a site
+ */
+export async function fetchAiInsights(siteId: number): Promise<{
+  insights: Array<{
+    id: string;
+    type: 'optimization' | 'warning' | 'trend' | 'recommendation';
+    title: string;
+    description: string;
+    impact: 'high' | 'medium' | 'low';
+    actionable: boolean;
+    suggestedAction?: string;
+  }>;
+  generatedAt: string;
+}> {
+  return api.get(`${API_BASE}/sites/${siteId}/ai-insights`);
+}
+
+/**
+ * Get system settings for warehouse
+ */
+export async function getWarehouseSettings(): Promise<{
+  agingThresholds: {
+    fresh: number;
+    moderate: number;
+    aging: number;
+  };
+  vehiclePriorities: Array<{ code: string; priority: number }>;
+  defaultZoneCapacity: {
+    bulk: number;
+    rack: number;
+  };
+}> {
+  return api.get(`${API_BASE}/settings`);
+}
+
+/**
+ * Update warehouse system settings
+ */
+export async function updateWarehouseSettings(settings: {
+  agingThresholds?: {
+    fresh: number;
+    moderate: number;
+    aging: number;
+  };
+  vehiclePriorities?: Array<{ code: string; priority: number }>;
+  defaultZoneCapacity?: {
+    bulk: number;
+    rack: number;
+  };
+}): Promise<{ success: boolean }> {
+  return api.put(`${API_BASE}/settings`, settings);
 }
 
 export async function runAllOptimizations(
   siteId: number,
   params: Record<string, any>
 ): Promise<OptimizationWizardResult> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/optimize/run-all`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ params }),
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to run all optimizations");
-  }
-  return response.json();
+  return api.post<OptimizationWizardResult>(
+    `${API_BASE}/sites/${siteId}/optimize/run-all`,
+    { params }
+  );
 }
 
-/**
- * Apply optimization plan
- * @param siteId - Site ID
- * @param runId - Optimization run ID
- * @returns Success result
- */
 export async function applyOptimizationPlan(
   siteId: number,
   runId: number
 ): Promise<{ success: boolean; message: string; actionsApplied: number }> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/optimize/${runId}/apply`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to apply optimization plan");
-  }
-  return response.json();
+  return api.post<{ success: boolean; message: string; actionsApplied: number }>(
+    `${API_BASE}/sites/${siteId}/optimize/${runId}/apply`,
+    {}
+  );
 }
 
-/**
- * Dynamic column definition from API
- */
 export interface InventoryColumnDefinition {
   key: string;
   label: string;
@@ -813,33 +793,19 @@ export interface InventoryColumnDefinition {
   category: "identification" | "logistics" | "financial" | "tracking" | "metadata";
 }
 
-/**
- * Fetch inventory column definitions dynamically from the server
- * This ensures columns are always in sync with the database schema
- * @returns Column definitions with version for cache invalidation
- */
 export async function fetchInventoryColumns(): Promise<{
   columns: InventoryColumnDefinition[];
   version: number;
 }> {
-  const response = await fetch(`${API_BASE}/inventory-columns`, {
-    credentials: "include",
-  });
-  
-  if (!response.ok) {
-    throw new Error("Failed to fetch inventory columns");
-  }
-  return response.json();
+  return api.get(`${API_BASE}/inventory-columns`);
 }
 
-/** AI insight type for warehouse analysis */
 export type WarehouseInsightType = 
   | 'warehouse_optimization' 
   | 'inventory_analysis' 
   | 'storage_efficiency'
   | 'mission_readiness';
 
-/** AI-generated warehouse insight response */
 export interface WarehouseAiInsight {
   id: number;
   type: WarehouseInsightType;
@@ -850,14 +816,6 @@ export interface WarehouseAiInsight {
   cached: boolean;
 }
 
-/**
- * Generate AI insights for warehouse inventory
- * @param siteId - Site ID
- * @param type - Type of insight to generate
- * @param inventoryData - Optional inventory data to analyze
- * @param forceRegenerate - Force regeneration instead of using cache
- * @returns AI-generated insight
- */
 export async function generateWarehouseInsights(
   siteId: number,
   type: WarehouseInsightType = 'warehouse_optimization',
@@ -893,18 +851,15 @@ export async function generateWarehouseInsights(
   
   const data = await response.json();
   
-  // The insight content may be an object with summary/recommendations or a string
   const insightContent = data.insight?.content || data.content;
   let contentString: string;
   let recommendations: string[] = [];
   let summary: string | undefined;
   
   if (typeof insightContent === 'object' && insightContent !== null) {
-    // Extract structured data from the insight object
     summary = insightContent.summary || '';
     recommendations = insightContent.optimization_suggestions || insightContent.recommendations || [];
     
-    // Build a formatted content string from the object
     const parts: string[] = [];
     if (insightContent.summary) {
       parts.push(insightContent.summary);
@@ -934,7 +889,6 @@ export async function generateWarehouseInsights(
   };
 }
 
-/** Summary metrics for optimization plan */
 export interface OptimizationPlanSummary {
   slotsFreed: number;
   consolidationWins: string;
@@ -947,7 +901,6 @@ export interface OptimizationPlanSummary {
   items_consolidated?: number;
 }
 
-/** Individual action within an optimization plan */
 export interface OptimizationPlanAction {
   id: number;
   plan_id: number;
@@ -963,7 +916,6 @@ export interface OptimizationPlanAction {
   sequence: number;
 }
 
-/** Full optimization plan with optional actions */
 export interface OptimizationPlan {
   id: number;
   site_id: number;
@@ -988,7 +940,6 @@ export interface OptimizationPlan {
   actions?: OptimizationPlanAction[];
 }
 
-/** Data for creating a new optimization plan */
 export interface CreatePlanData {
   name: string;
   algorithm: string;
@@ -1004,12 +955,6 @@ export interface CreatePlanData {
   }>;
 }
 
-/**
- * Fetch optimization plans for a site
- * @param siteId - Site ID
- * @param statuses - Optional array of status filters
- * @returns Array of optimization plans
- */
 export async function getOptimizationPlans(
   siteId: number,
   statuses?: string[]
@@ -1020,102 +965,28 @@ export async function getOptimizationPlans(
   }
   const queryString = params.toString();
   const url = `${API_BASE}/sites/${siteId}/optimization-plans${queryString ? `?${queryString}` : ""}`;
-  
-  const response = await fetch(url, {
-    credentials: "include",
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to fetch optimization plans");
-  }
-  return response.json();
+  return api.get<OptimizationPlan[]>(url);
 }
 
-/**
- * Create a new optimization plan
- * @param siteId - Site ID
- * @param data - Plan creation data
- * @returns Created optimization plan
- */
 export async function createOptimizationPlan(
   siteId: number,
   data: CreatePlanData
 ): Promise<OptimizationPlan> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/optimization-plans`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(data),
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to create optimization plan");
-  }
-  return response.json();
+  return api.post<OptimizationPlan>(`${API_BASE}/sites/${siteId}/optimization-plans`, data);
 }
 
-/**
- * Fetch a single optimization plan by ID
- * @param planId - Plan ID
- * @returns Optimization plan with actions
- */
 export async function getOptimizationPlan(planId: number): Promise<OptimizationPlan> {
-  const response = await fetch(`${API_BASE}/optimization-plans/${planId}`, {
-    credentials: "include",
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to fetch optimization plan");
-  }
-  return response.json();
+  return api.get<OptimizationPlan>(`${API_BASE}/optimization-plans/${planId}`);
 }
 
-/**
- * Execute an optimization plan
- * @param planId - Plan ID
- * @returns Updated optimization plan
- */
 export async function executeOptimizationPlan(planId: number): Promise<OptimizationPlan> {
-  const response = await fetch(`${API_BASE}/optimization-plans/${planId}/execute`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to execute optimization plan");
-  }
-  return response.json();
+  return api.post<OptimizationPlan>(`${API_BASE}/optimization-plans/${planId}/execute`, {});
 }
 
-/**
- * Cancel an optimization plan
- * @param planId - Plan ID
- * @returns Updated optimization plan
- */
 export async function cancelOptimizationPlan(planId: number): Promise<OptimizationPlan> {
-  const response = await fetch(`${API_BASE}/optimization-plans/${planId}/cancel`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to cancel optimization plan");
-  }
-  return response.json();
+  return api.post<OptimizationPlan>(`${API_BASE}/optimization-plans/${planId}/cancel`, {});
 }
 
-/**
- * Delete an optimization plan
- * @param planId - Plan ID
- * @returns Success response
- */
 export async function deleteOptimizationPlan(planId: number): Promise<{ success: boolean; message: string }> {
   const response = await fetch(`${API_BASE}/optimization-plans/${planId}`, {
     method: "DELETE",
@@ -1129,83 +1000,37 @@ export async function deleteOptimizationPlan(planId: number): Promise<{ success:
   return response.json();
 }
 
-/**
- * Update an optimization action status
- * @param planId - Plan ID
- * @param actionId - Action ID
- * @param data - Update data with status and optional notes
- * @returns Updated action
- */
 export async function updateOptimizationAction(
   planId: number,
   actionId: number,
   data: { status: string; notes?: string }
 ): Promise<OptimizationPlanAction> {
-  const response = await fetch(`${API_BASE}/optimization-plans/${planId}/actions/${actionId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(data),
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to update optimization action");
-  }
-  return response.json();
+  return api.patch<OptimizationPlanAction>(
+    `${API_BASE}/optimization-plans/${planId}/actions/${actionId}`,
+    data
+  );
 }
 
-/**
- * Set target completion date for an optimization plan
- * @param planId - Plan ID
- * @param targetDate - Target completion date (ISO string) or null to clear
- * @returns Updated optimization plan
- */
 export async function setOptimizationPlanTargetDate(
   planId: number,
   targetDate: string | null
 ): Promise<OptimizationPlan> {
-  const response = await fetch(`${API_BASE}/optimization-plans/${planId}/target-date`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ target_completion_date: targetDate }),
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to set target completion date");
-  }
-  return response.json();
+  return api.patch<OptimizationPlan>(
+    `${API_BASE}/optimization-plans/${planId}/target-date`,
+    { target_completion_date: targetDate }
+  );
 }
 
-/** Result of starting all actions */
 export interface StartAllResult {
   plan: OptimizationPlan;
   actions: OptimizationPlanAction[];
   started_count: number;
 }
 
-/**
- * Start all pending optimization actions at once
- * @param planId - Plan ID
- * @returns Updated plan with actions and count of started actions
- */
 export async function startAllOptimizationActions(planId: number): Promise<StartAllResult> {
-  const response = await fetch(`${API_BASE}/optimization-plans/${planId}/start-all`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to start all actions");
-  }
-  return response.json();
+  return api.post<StartAllResult>(`${API_BASE}/optimization-plans/${planId}/start-all`, {});
 }
 
-/** Zone capacity summary response */
 export interface ZoneSummary {
   totalZones: number;
   totalCapacity: number;
@@ -1219,7 +1044,6 @@ export interface ZoneSummary {
   byUsage: Record<string, number>;
 }
 
-/** Zone capacity history entry */
 export interface ZoneHistoryEntry {
   id: number;
   zone_id: number;
@@ -1232,70 +1056,13 @@ export interface ZoneHistoryEntry {
   created_at: string;
 }
 
-/**
- * Fetch zone capacity summary for a site
- * @param siteId - Site ID
- * @returns Zone summary data
- */
-export async function fetchZoneSummary(siteId: number): Promise<ZoneSummary> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/zones/summary`, {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch zone summary");
-  }
-  return response.json();
-}
-
-/**
- * Trigger resync of zone capacities for a site
- * @param siteId - Site ID
- * @returns Resync result
- */
 export async function resyncZones(siteId: number): Promise<{ success: boolean; zonesUpdated: number }> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/zones/resync`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to resync zones");
-  }
-  return response.json();
+  return api.post<{ success: boolean; zonesUpdated: number }>(
+    `${API_BASE}/sites/${siteId}/zones/resync`,
+    {}
+  );
 }
 
-/**
- * Update zone pallet position capacity
- * @param zoneId - Zone ID
- * @param capacity - Object with rack_available and bulk_available values
- * @returns Updated zone
- */
-export async function updateZoneCapacity(
-  zoneId: number,
-  capacity: { rack_available: number; bulk_available: number }
-): Promise<WarehouseZone> {
-  const response = await fetch(`${API_BASE}/zones/${zoneId}/capacity`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(capacity),
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to update zone capacity");
-  }
-  return response.json();
-}
-
-/**
- * Fetch capacity history for a zone
- * @param zoneId - Zone ID
- * @param startDate - Optional start date filter
- * @param endDate - Optional end date filter
- * @returns Array of history entries
- */
 export async function fetchZoneHistory(
   zoneId: number,
   startDate?: string,
@@ -1306,18 +1073,9 @@ export async function fetchZoneHistory(
   if (endDate) params.set("end_date", endDate);
   const queryString = params.toString();
   const url = `${API_BASE}/zones/${zoneId}/history${queryString ? `?${queryString}` : ""}`;
-  
-  const response = await fetch(url, {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch zone history");
-  }
-  return response.json();
+  return api.get<ZoneHistoryEntry[]>(url);
 }
 
-/** Optimization event from API */
 export interface OptimizationEvent {
   id: number;
   plan_id: number;
@@ -1333,7 +1091,6 @@ export interface OptimizationEvent {
   user_email: string | null;
 }
 
-/** Optimization events response */
 export interface OptimizationEventsResponse {
   events: OptimizationEvent[];
   total: number;
@@ -1341,7 +1098,6 @@ export interface OptimizationEventsResponse {
   offset: number;
 }
 
-/** Optimization events query filters */
 export interface OptimizationEventsFilters {
   site_id?: number;
   plan_id?: number;
@@ -1352,11 +1108,6 @@ export interface OptimizationEventsFilters {
   offset?: number;
 }
 
-/**
- * Fetch optimization events with optional filters
- * @param filters - Query filters
- * @returns Paginated optimization events
- */
 export async function getOptimizationEvents(
   filters: OptimizationEventsFilters = {}
 ): Promise<OptimizationEventsResponse> {
@@ -1372,18 +1123,9 @@ export async function getOptimizationEvents(
   
   const queryString = params.toString();
   const url = `${API_BASE}/optimization-events${queryString ? `?${queryString}` : ""}`;
-  
-  const response = await fetch(url, {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch optimization events");
-  }
-  return response.json();
+  return api.get<OptimizationEventsResponse>(url);
 }
 
-/** Warehouse alert from analytics */
 export interface WarehouseAlert {
   id: number;
   site_id: number;
@@ -1400,7 +1142,6 @@ export interface WarehouseAlert {
   created_at: string;
 }
 
-/** Trend metric from analytics */
 export interface TrendMetric {
   date: string;
   metricKey: string;
@@ -1408,69 +1149,20 @@ export interface TrendMetric {
   zoneName?: string;
 }
 
-/**
- * Get alerts for a warehouse site
- * @param siteId - Site ID
- * @returns Array of warehouse alerts
- */
 export async function getWarehouseAlerts(siteId: number): Promise<WarehouseAlert[]> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/alerts`, {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch alerts");
-  }
-  return response.json();
+  return api.get<WarehouseAlert[]>(`${API_BASE}/sites/${siteId}/alerts`);
 }
 
-/**
- * Resolve (dismiss) a warehouse alert
- * @param siteId - Site ID
- * @param alertId - Alert ID to resolve
- */
 export async function resolveWarehouseAlert(siteId: number, alertId: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/alerts/${alertId}/resolve`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to resolve alert");
-  }
+  await api.post(`${API_BASE}/sites/${siteId}/alerts/${alertId}/resolve`, {});
 }
 
-/**
- * Run warehouse analytics to generate alerts
- * @param siteId - Site ID
- */
 export async function runWarehouseAnalytics(siteId: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/analytics/run`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to run analytics");
-  }
+  await api.post(`${API_BASE}/sites/${siteId}/analytics/run`, {});
 }
 
-/**
- * Get trend metrics for a warehouse site
- * @param siteId - Site ID
- * @returns Array of trend metrics
- */
 export async function getWarehouseTrendMetrics(siteId: number): Promise<TrendMetric[]> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/analytics/trends`, {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch trend metrics");
-  }
-  return response.json();
+  return api.get<TrendMetric[]>(`${API_BASE}/sites/${siteId}/analytics/trends`);
 }
 
 export interface WarehouseStateVersion {
@@ -1503,66 +1195,23 @@ export interface WarehouseItemVersion {
   created_at: string;
 }
 
-/**
- * Get version history for a warehouse site
- * @param siteId - Site ID
- * @returns Array of state versions
- */
 export async function getWarehouseVersions(siteId: number): Promise<WarehouseStateVersion[]> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/versions`, {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch version history");
-  }
-  const data = await response.json();
+  const data = await api.get<{ versions: WarehouseStateVersion[] }>(`${API_BASE}/sites/${siteId}/versions`);
   return data.versions;
 }
 
-/**
- * Get version details with item changes
- * @param siteId - Site ID
- * @param versionId - Version ID
- * @returns Version with item changes
- */
 export async function getWarehouseVersionDetails(siteId: number, versionId: number): Promise<{
   version: WarehouseStateVersion;
   itemChanges: WarehouseItemVersion[];
 }> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/versions/${versionId}`, {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to fetch version details");
-  }
-  return response.json();
+  return api.get(`${API_BASE}/sites/${siteId}/versions/${versionId}`);
 }
 
-/**
- * Revert a warehouse version
- * @param siteId - Site ID
- * @param versionId - Version ID to revert
- * @returns Revert result
- */
 export async function revertWarehouseVersion(siteId: number, versionId: number): Promise<{
   success: boolean;
   message: string;
-  itemsReverted: number;
-  totalItems: number;
-  errors?: string[];
 }> {
-  const response = await fetch(`${API_BASE}/sites/${siteId}/versions/${versionId}/revert`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to revert version");
-  }
-  return response.json();
+  return api.post(`${API_BASE}/sites/${siteId}/versions/${versionId}/revert`, {});
 }
 
 export interface VehicleType {
@@ -1582,24 +1231,16 @@ export interface VehiclePrioritySetting {
 }
 
 export async function getVehicleTypes(): Promise<VehicleType[]> {
-  const response = await fetch('/api/land/vehicle-types', { credentials: "include" });
-  if (!response.ok) throw new Error("Failed to fetch vehicle types");
-  return response.json();
+  return api.get<VehicleType[]>('/api/land/vehicle-types');
 }
 
 export async function getVehiclePrioritySettings(): Promise<VehiclePrioritySetting[]> {
-  const response = await fetch('/api/admin/vehicle-priorities', { credentials: "include" });
-  if (!response.ok) throw new Error("Failed to fetch vehicle priorities");
-  return response.json();
+  return api.get<VehiclePrioritySetting[]>('/api/admin/vehicle-priorities');
 }
 
 export async function saveVehiclePrioritySettings(settings: VehiclePrioritySetting[]): Promise<{ success: boolean; message: string }> {
-  const response = await fetch('/api/admin/vehicle-priorities', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: "include",
-    body: JSON.stringify({ priorities: settings })
-  });
-  if (!response.ok) throw new Error("Failed to save vehicle priorities");
-  return response.json();
+  return api.post<{ success: boolean; message: string }>(
+    '/api/admin/vehicle-priorities',
+    { priorities: settings }
+  );
 }
