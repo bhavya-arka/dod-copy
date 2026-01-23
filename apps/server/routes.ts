@@ -9050,6 +9050,135 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/warehouse/:siteId/ai-insights - Generate AI insights for warehouse
+  app.post("/api/warehouse/:siteId/ai-insights", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { insightType, forceRefresh = false } = req.body;
+
+      if (!insightType) {
+        return res.status(400).json({ error: "insightType is required" });
+      }
+
+      const validTypes = [
+        'warehouse_demand_forecast',
+        'warehouse_anomaly_detection', 
+        'warehouse_smart_placement',
+        'warehouse_inventory_velocity',
+        'warehouse_capacity_forecast'
+      ];
+
+      if (!validTypes.includes(insightType)) {
+        return res.status(400).json({ error: `Invalid insight type. Must be one of: ${validTypes.join(', ')}` });
+      }
+
+      const { generateInsight, generateInputHash, checkBedrockHealth } = await import("./services/bedrockService");
+
+      const isHealthy = await checkBedrockHealth();
+      if (!isHealthy) {
+        return res.status(503).json({ error: "AI service is currently unavailable" });
+      }
+
+      const items = await db.select()
+        .from(warehouseInventoryItems)
+        .where(eq(warehouseInventoryItems.site_id, siteId));
+
+      const zones = await db.select()
+        .from(warehouseZones)
+        .where(eq(warehouseZones.site_id, siteId));
+
+      const movements = await warehouseAnalyticsService.getMovements(siteId, { limit: 100 });
+      const growthInsights = await warehouseAnalyticsService.getGrowthInsights(siteId, 30);
+      const velocityAnalytics = await warehouseAnalyticsService.getVelocityAnalytics(siteId);
+
+      const inputData = {
+        site: {
+          id: site.id,
+          name: site.name,
+          total_capacity_lb: site.total_capacity_lb,
+          current_weight_lb: site.current_weight_lb,
+          utilization_percent: site.total_capacity_lb ? Math.round((site.current_weight_lb / site.total_capacity_lb) * 100) : 0
+        },
+        zones: zones.map(z => ({
+          id: z.id,
+          name: z.name,
+          pallet_positions_total: z.pallet_positions_total,
+          pallet_positions_used: z.pallet_positions_used,
+          max_weight_lb: z.max_weight_lb,
+          current_weight_lb: z.current_weight_lb,
+          utilization_percent: z.pallet_positions_total ? Math.round((z.pallet_positions_used / z.pallet_positions_total) * 100) : 0
+        })),
+        items_summary: {
+          total_count: items.length,
+          total_weight_lb: items.reduce((sum, i) => sum + (i.weight_lb || 0) * (i.quantity || 1), 0),
+          categories: [...new Set(items.map(i => i.classification).filter(Boolean))]
+        },
+        recent_movements: movements.movements?.slice(0, 20) || [],
+        growth_trends: growthInsights,
+        velocity_data: velocityAnalytics
+      };
+
+      const inputHash = await generateInputHash(inputData);
+
+      if (!forceRefresh) {
+        const [cached] = await db.select()
+          .from(aiInsights)
+          .where(and(
+            eq(aiInsights.user_id, req.user!.id),
+            eq(aiInsights.insight_type, insightType),
+            eq(aiInsights.input_hash, inputHash),
+            eq(aiInsights.is_valid, true)
+          ))
+          .orderBy(desc(aiInsights.created_at))
+          .limit(1);
+
+        if (cached) {
+          return res.json({
+            insight: cached.insight_data,
+            cached: true,
+            generatedAt: cached.created_at
+          });
+        }
+      }
+
+      const insight = await generateInsight(insightType, inputData, {
+        userId: req.user!.id
+      });
+
+      await db.insert(aiInsights).values({
+        user_id: req.user!.id,
+        insight_type: insightType,
+        input_hash: inputHash,
+        insight_data: insight,
+        is_valid: true
+      });
+
+      res.json({
+        insight,
+        cached: false,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("[Warehouse AI Insights] Failed to generate insight:", error);
+      res.status(500).json({ error: "Failed to generate AI insight" });
+    }
+  });
+
   // ============================================================================
   // LAND LOGISTICS API (PROTECTED)
   // ============================================================================

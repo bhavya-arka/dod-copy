@@ -43,6 +43,7 @@ import PlanActionsModal from "./modals/PlanActionsModal";
 import TextConfirmationDialog from "../ui/TextConfirmationDialog";
 import WMSSolutionDashboard from "./WMSSolutionDashboard";
 import WMSAnalyticsDashboard from "./WMSAnalyticsDashboard";
+import WMSAiRecommendationsPanel from "./WMSAiRecommendationsPanel";
 
 interface WMSAiInsightsProps {
   sites: WarehouseSite[];
@@ -859,6 +860,13 @@ export default function WMSAiInsights({
           </p>
         )}
       </motion.div>
+
+      <div className="mb-6">
+        <WMSAiRecommendationsPanel
+          selectedSite={selectedSite || null}
+          onShowToast={onShowToast}
+        />
+      </div>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
