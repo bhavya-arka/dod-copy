@@ -545,9 +545,17 @@ export default function WMSAiRecommendationsPanel({
 
           return (
             <div key={insight.type} className="bg-gray-50">
-              <button
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => setExpandedType(isExpanded ? null : insight.type)}
-                className="w-full p-4 flex items-center justify-between hover:bg-gray-100 transition-colors"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setExpandedType(isExpanded ? null : insight.type);
+                  }
+                }}
+                className="w-full p-4 flex items-center justify-between hover:bg-gray-100 transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-3">
                   <div className={`p-2 ${insight.bgColor} rounded-lg`}>
@@ -586,7 +594,7 @@ export default function WMSAiRecommendationsPanel({
                     <ChevronDown className="w-4 h-4 text-gray-500" />
                   )}
                 </div>
-              </button>
+              </div>
 
               <AnimatePresence>
                 {isExpanded && (
