@@ -208,7 +208,7 @@ export default function NetworkInventoryMatrix({
         </button>
       </motion.div>
 
-      {networkData && (
+      {networkData && networkData.summary && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -221,7 +221,7 @@ export default function NetworkInventoryMatrix({
               Total Items
             </div>
             <p className="text-2xl font-bold text-gray-900">
-              {networkData.summary.totalItems}
+              {networkData.summary.totalItems || 0}
             </p>
           </div>
           <div className="p-4 rounded-xl bg-white border border-gray-200">
@@ -230,7 +230,7 @@ export default function NetworkInventoryMatrix({
               Items OK
             </div>
             <p className="text-2xl font-bold text-gray-900">
-              {networkData.summary.itemsOk}
+              {networkData.summary.itemsOk || 0}
             </p>
           </div>
           <div className="p-4 rounded-xl bg-white border border-gray-200">
@@ -239,7 +239,7 @@ export default function NetworkInventoryMatrix({
               Shortages
             </div>
             <p className="text-2xl font-bold text-gray-900">
-              {networkData.summary.totalShortages}
+              {networkData.summary.totalShortages || 0}
             </p>
           </div>
           <div className="p-4 rounded-xl bg-white border border-gray-200">
@@ -248,7 +248,7 @@ export default function NetworkInventoryMatrix({
               Surpluses
             </div>
             <p className="text-2xl font-bold text-gray-900">
-              {networkData.summary.totalSurpluses}
+              {networkData.summary.totalSurpluses || 0}
             </p>
           </div>
         </motion.div>
