@@ -207,6 +207,12 @@ export const INSIGHT_TYPE_LABELS: Record<InsightType, string> = {
   mission_briefing: 'Mission Briefing',
   mission_analytics: 'Mission Analytics',
   flight_allocation_analysis: 'Flight Allocation Analysis',
+  land_convoy_analysis: 'Convoy Analysis',
+  land_route_optimization: 'Route Optimization',
+  sea_voyage_analysis: 'Voyage Analysis',
+  sea_container_optimization: 'Container Optimization',
+  cross_modal_manifest_analysis: 'Cross-Modal Analysis',
+  warehouse_capacity_forecast: 'Capacity Forecast',
 };
 
 export const INSIGHT_TYPE_DESCRIPTIONS: Record<InsightType, string> = {
@@ -218,4 +224,10 @@ export const INSIGHT_TYPE_DESCRIPTIONS: Record<InsightType, string> = {
   mission_briefing: 'Executive summary for mission commanders',
   mission_analytics: 'Comprehensive analytics with performance metrics and actionable advice',
   flight_allocation_analysis: 'Comprehensive flight allocation analysis with fleet status, issues, and recommendations',
+  land_convoy_analysis: 'AI-powered analysis of convoy composition and logistics efficiency',
+  land_route_optimization: 'Recommendations for optimal routing and fuel efficiency',
+  sea_voyage_analysis: 'AI-powered analysis of voyage planning and maritime logistics',
+  sea_container_optimization: 'Recommendations for container loading and space utilization',
+  cross_modal_manifest_analysis: 'Analysis of cross-modal transport manifests and routing',
+  warehouse_capacity_forecast: 'Warehouse capacity forecasting and utilization analysis',
 };

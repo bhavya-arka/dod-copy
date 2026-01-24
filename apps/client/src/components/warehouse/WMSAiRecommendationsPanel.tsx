@@ -101,6 +101,7 @@ export default function WMSAiRecommendationsPanel({
       const response = await fetch(`/api/warehouse/${selectedSite.id}/ai-insights`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           insightType: `warehouse_${type}`,
           forceRefresh
@@ -108,7 +109,8 @@ export default function WMSAiRecommendationsPanel({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to generate insight");
+        const errorData = await response.json().catch(() => ({ error: "Failed to generate insight" }));
+        throw new Error(errorData.error || `Failed to generate insight: ${response.status}`);
       }
 
       const data = await response.json();

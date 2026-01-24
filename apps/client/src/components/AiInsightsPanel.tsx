@@ -17,7 +17,13 @@ import {
   BarChart3,
   AlertTriangle,
   RefreshCw,
-  Bot
+  Bot,
+  Truck,
+  Route,
+  Ship,
+  Container,
+  ArrowRightLeft,
+  Warehouse
 } from 'lucide-react';
 
 interface AiInsightsPanelProps {
@@ -44,6 +50,13 @@ const INSIGHT_ICONS: Record<InsightType, React.ReactNode> = {
   compliance: <CheckCircle className="w-5 h-5" />,
   mission_briefing: <ClipboardList className="w-5 h-5" />,
   mission_analytics: <BarChart3 className="w-5 h-5" />,
+  flight_allocation_analysis: <Package className="w-5 h-5" />,
+  land_convoy_analysis: <Truck className="w-5 h-5" />,
+  land_route_optimization: <Route className="w-5 h-5" />,
+  sea_voyage_analysis: <Ship className="w-5 h-5" />,
+  sea_container_optimization: <Container className="w-5 h-5" />,
+  cross_modal_manifest_analysis: <ArrowRightLeft className="w-5 h-5" />,
+  warehouse_capacity_forecast: <Warehouse className="w-5 h-5" />,
 };
 
 export default function AiInsightsPanel({
