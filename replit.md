@@ -67,8 +67,59 @@ The Sea Freight module provides comprehensive maritime logistics, including a da
 ## Government Compliance & Federal Standards
 The system supports National Stock Numbers (NSN), Commercial and Government Entity (CAGE) codes, and integrates with Military Sealift Command (MSC) vessel designations, aligning with Federal Logistics Information System (FLIS) standards.
 
-## UI/UX Design
-The platform features a responsive, mobile-first design with a consistent navigation and a dark theme. Styling guidelines prioritize subtle colors, dark theme components, mode-specific accent colors, and professional, minimal styling, with all weights in pounds (lbs).
+## UI/UX Design & Styling Guidelines
+
+**IMPORTANT: Light Theme Only - No Dark Theme**
+
+The platform features a responsive, mobile-first design with consistent navigation and a clean light theme. All weights are displayed in Imperial US standard (pounds only, no metric conversion).
+
+### Theme Tokens (from index.css)
+Use CSS variables for consistent theming:
+- **Backgrounds**: `bg-background` (page), `bg-card` (cards), `bg-muted` (subtle sections)
+- **Text**: `text-foreground` (primary), `text-muted-foreground` (secondary)
+- **Borders**: `border-border`
+- **Accent**: `bg-accent` / `text-accent` for interactive elements
+
+### Component Styling Rules
+**Cards & Containers:**
+- Use `bg-white` or `bg-gray-50` for backgrounds
+- Use `border-gray-200` for borders
+- Use `shadow-sm` or `shadow-soft` for subtle elevation
+
+**Text Colors:**
+- Primary text: `text-gray-900` or `text-foreground`
+- Secondary text: `text-gray-500` or `text-muted-foreground`
+- Never use `text-white` unless on colored button backgrounds
+
+**Interactive Elements:**
+- Hover states: `hover:bg-gray-100`
+- Focus rings: `focus:ring-accent`
+- Active buttons: mode-specific colors with `text-white` (e.g., `bg-blue-500 text-white`)
+
+**Mode-Specific Accent Colors:**
+- Air: Blue (`bg-blue-500`, `border-blue-500`)
+- Land: Amber (`bg-amber-500`, `border-amber-500`)
+- Sea: Teal (`bg-teal-500`, `border-teal-500`)
+- Warehouse: Navy (`bg-[#004E89]`, WMS theme variables)
+
+**Forbidden Patterns (Never Use):**
+- `bg-slate-800`, `bg-slate-900`, `bg-gray-800`, `bg-gray-900`
+- `bg-[#0f172a]`, `bg-[#1e293b]` (dark hex backgrounds)
+- `text-white` on light backgrounds
+- `border-slate-700`, `border-gray-700`, `border-white/10`
+
+### Responsive Design
+- Mobile-first approach: design for small screens first
+- Use Tailwind breakpoints: `sm:`, `md:`, `lg:`, `xl:`
+- Grid layouts: `grid-cols-1 md:grid-cols-2 lg:grid-cols-3`
+- Flex layouts: use `flex-wrap` and `gap-*` for spacing
+
+### Reusable CSS Classes (in index.css @layer components)
+- `.glass-card` - White card with border and shadow
+- `.btn-primary` - Primary action button (accent color)
+- `.btn-secondary` - Secondary action button (white with border)
+- `.badge-*` - Status badges (primary, success, warning, danger)
+- `.stat-card` - Metric display cards
 
 ## Military Organization & Role-Based Access Control
 The system supports four military organizations (PACAF, DLA, MSC, TRANSCOM) with a role-based access control (RBAC) system. Roles include Superadmin, Admin (branch-specific), and User, managed through Department Access Codes (DACs) and an approval workflow.

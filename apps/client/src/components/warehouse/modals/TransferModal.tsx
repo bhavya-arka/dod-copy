@@ -273,9 +273,9 @@ export default function TransferModal({ sites, onClose, onSuccess }: TransferMod
           </div>
 
           {loadingRoute && sourceSiteId && destSiteId && sourceSiteId !== destSiteId && (
-            <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-100 border border-slate-200">
-              <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
-              <span className="text-sm text-slate-600">Analyzing route...</span>
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-gray-100 border border-gray-200">
+              <Loader2 className="w-4 h-4 animate-spin text-gray-600" />
+              <span className="text-sm text-gray-600">Analyzing route...</span>
             </div>
           )}
 
