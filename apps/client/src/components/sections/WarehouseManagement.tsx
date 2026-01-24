@@ -16,6 +16,7 @@ import {
   Brain,
   History,
   Settings,
+  Network,
 } from "lucide-react";
 import { User } from "../../hooks/useAuth";
 import {
@@ -26,6 +27,7 @@ import {
   WMSAiInsights,
   WMSHistory,
   WMSAdmin,
+  WMSInterSite,
   Toast,
   AddSiteModal,
   AddItemModal,
@@ -130,6 +132,7 @@ export default function WarehouseManagement({
     { id: "inventory", label: "Inventory", icon: <Package className="w-4 h-4" /> },
     { id: "operations", label: "Operations", icon: <ArrowRightLeft className="w-4 h-4" /> },
     { id: "sites", label: "Sites & Storage", icon: <Building2 className="w-4 h-4" /> },
+    { id: "inter-site", label: "Inter-Site", icon: <Network className="w-4 h-4" /> },
     { id: "ai-insights", label: "AI Insights", icon: <Brain className="w-4 h-4" /> },
     { id: "history", label: "History", icon: <History className="w-4 h-4" /> },
     { id: "admin", label: "Admin", icon: <Settings className="w-4 h-4" /> },
@@ -260,6 +263,13 @@ export default function WarehouseManagement({
             loading={loading}
             onAddSite={() => setAddSiteOpen(true)}
             onRefresh={fetchSites}
+            onShowToast={showToast}
+          />
+        )}
+
+        {activeTab === "inter-site" && (
+          <WMSInterSite
+            sites={sites}
             onShowToast={showToast}
           />
         )}

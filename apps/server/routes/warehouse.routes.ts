@@ -27,7 +27,12 @@ import {
   flightPlans,
   seaVoyages,
   militaryInstallations,
-  users
+  users,
+  siteThresholds,
+  capacityForecasts,
+  rebalancingSuggestions,
+  transportReservations,
+  siteMetricsDaily
 } from "@shared/schema";
 import * as multiModalRoutingService from "../services/multiModalRoutingService";
 import { eq, and, or, ilike, sql, gt, lt, gte, lte, isNull, isNotNull, asc, desc, count, inArray } from "drizzle-orm";
@@ -7010,6 +7015,295 @@ router.post("/warehouse/capacity/:siteId/check", authMiddleware, async (req: Aut
   });
 
   // ============================================================================
+  // PRIORITY TRANSFER QUEUE ENDPOINTS
+  // ============================================================================
+
+  // GET /api/warehouse/queue - Get prioritized transfer queue
+  router.get("/warehouse/queue", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { status, site_id, limit: limitParam } = req.query;
+      const limitValue = limitParam ? parseInt(limitParam as string) : 50;
+      const finalLimit = isNaN(limitValue) || limitValue < 1 ? 50 : Math.min(limitValue, 500);
+
+      const sourceSite = db.select({
+        id: warehouseSites.id,
+        name: warehouseSites.name,
+      }).from(warehouseSites).as('sourceSite');
+
+      const destSite = db.select({
+        id: warehouseSites.id,
+        name: warehouseSites.name,
+      }).from(warehouseSites).as('destSite');
+
+      let conditions = [eq(warehouseTransfers.user_id, req.user!.id)];
+
+      if (status && typeof status === 'string') {
+        conditions.push(eq(warehouseTransfers.status, status));
+      }
+
+      if (site_id && typeof site_id === 'string') {
+        const siteIdNum = parseInt(site_id);
+        if (!isNaN(siteIdNum)) {
+          conditions.push(
+            or(
+              eq(warehouseTransfers.source_site_id, siteIdNum),
+              eq(warehouseTransfers.destination_site_id, siteIdNum)
+            )!
+          );
+        }
+      }
+
+      const transfers = await db
+        .select({
+          id: warehouseTransfers.id,
+          user_id: warehouseTransfers.user_id,
+          source_site_id: warehouseTransfers.source_site_id,
+          destination_site_id: warehouseTransfers.destination_site_id,
+          status: warehouseTransfers.status,
+          transport_mode: warehouseTransfers.transport_mode,
+          transfer_items: warehouseTransfers.transfer_items,
+          notes: warehouseTransfers.notes,
+          scheduled_date: warehouseTransfers.scheduled_date,
+          completed_date: warehouseTransfers.completed_date,
+          priority_level: warehouseTransfers.priority_level,
+          priority_score: warehouseTransfers.priority_score,
+          escalated_at: warehouseTransfers.escalated_at,
+          escalated_by: warehouseTransfers.escalated_by,
+          queue_position: warehouseTransfers.queue_position,
+          created_at: warehouseTransfers.created_at,
+          updated_at: warehouseTransfers.updated_at,
+          source_site_name: sourceSite.name,
+          destination_site_name: destSite.name,
+        })
+        .from(warehouseTransfers)
+        .leftJoin(sourceSite, eq(warehouseTransfers.source_site_id, sourceSite.id))
+        .leftJoin(destSite, eq(warehouseTransfers.destination_site_id, destSite.id))
+        .where(and(...conditions))
+        .orderBy(desc(warehouseTransfers.priority_score), asc(warehouseTransfers.created_at))
+        .limit(finalLimit);
+
+      res.json(transfers);
+    } catch (error) {
+      console.error("[Warehouse Queue] Failed to fetch queue:", error);
+      res.status(500).json({ error: "Failed to fetch transfer queue" });
+    }
+  });
+
+  // GET /api/warehouse/queue/stats - Queue statistics
+  router.get("/warehouse/queue/stats", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const pendingTransfers = await db
+        .select({
+          id: warehouseTransfers.id,
+          priority_level: warehouseTransfers.priority_level,
+          created_at: warehouseTransfers.created_at,
+        })
+        .from(warehouseTransfers)
+        .where(and(
+          eq(warehouseTransfers.user_id, req.user!.id),
+          eq(warehouseTransfers.status, 'pending')
+        ));
+
+      const totalPending = pendingTransfers.length;
+
+      const byPriority: Record<string, number> = {
+        routine: 0,
+        priority: 0,
+        immediate: 0,
+        flash: 0,
+      };
+
+      let totalWaitHours = 0;
+      let oldestPending: Date | null = null;
+      const now = new Date();
+
+      for (const transfer of pendingTransfers) {
+        const level = transfer.priority_level || 'routine';
+        if (level in byPriority) {
+          byPriority[level]++;
+        } else {
+          byPriority[level] = 1;
+        }
+
+        if (transfer.created_at) {
+          const waitMs = now.getTime() - new Date(transfer.created_at).getTime();
+          totalWaitHours += waitMs / (1000 * 60 * 60);
+
+          if (!oldestPending || new Date(transfer.created_at) < oldestPending) {
+            oldestPending = new Date(transfer.created_at);
+          }
+        }
+      }
+
+      const avgWaitHours = totalPending > 0 ? Math.round(totalWaitHours / totalPending * 10) / 10 : 0;
+
+      res.json({
+        total_pending: totalPending,
+        by_priority: byPriority,
+        avg_wait_hours: avgWaitHours,
+        oldest_pending: oldestPending?.toISOString() || null,
+      });
+    } catch (error) {
+      console.error("[Warehouse Queue] Failed to fetch stats:", error);
+      res.status(500).json({ error: "Failed to fetch queue statistics" });
+    }
+  });
+
+  // PATCH /api/warehouse/transfers/:id/priority - Update transfer priority
+  router.patch("/warehouse/transfers/:id/priority", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const transferId = parseInt(req.params.id);
+      if (isNaN(transferId)) {
+        return res.status(400).json({ error: "Invalid transfer ID" });
+      }
+
+      const { priority_level } = req.body;
+      const validLevels = ['routine', 'priority', 'immediate', 'flash'];
+
+      if (!priority_level || !validLevels.includes(priority_level)) {
+        return res.status(400).json({ 
+          error: "Invalid priority_level. Must be one of: routine, priority, immediate, flash" 
+        });
+      }
+
+      const [existingTransfer] = await db
+        .select()
+        .from(warehouseTransfers)
+        .where(and(
+          eq(warehouseTransfers.id, transferId),
+          eq(warehouseTransfers.user_id, req.user!.id)
+        ));
+
+      if (!existingTransfer) {
+        return res.status(404).json({ error: "Transfer not found" });
+      }
+
+      const basePriorityScore: Record<string, number> = {
+        routine: 25,
+        priority: 50,
+        immediate: 75,
+        flash: 100,
+      };
+
+      let priorityScore = basePriorityScore[priority_level];
+
+      if (existingTransfer.created_at) {
+        const waitMs = new Date().getTime() - new Date(existingTransfer.created_at).getTime();
+        const waitHours = waitMs / (1000 * 60 * 60);
+        if (waitHours > 24) {
+          priorityScore += 10;
+        }
+      }
+
+      const items = existingTransfer.transfer_items as any[];
+      if (Array.isArray(items)) {
+        const hasHighValue = items.some((item: any) => {
+          const unitPrice = parseFloat(item.unit_price) || 0;
+          return unitPrice > 1000;
+        });
+        if (hasHighValue) {
+          priorityScore += 5;
+        }
+      }
+
+      const [updated] = await db
+        .update(warehouseTransfers)
+        .set({
+          priority_level,
+          priority_score: priorityScore,
+          updated_at: new Date(),
+        })
+        .where(eq(warehouseTransfers.id, transferId))
+        .returning();
+
+      res.json(updated);
+    } catch (error) {
+      console.error("[Warehouse Queue] Failed to update priority:", error);
+      res.status(500).json({ error: "Failed to update transfer priority" });
+    }
+  });
+
+  // POST /api/warehouse/transfers/:id/escalate - Escalate a transfer
+  router.post("/warehouse/transfers/:id/escalate", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const transferId = parseInt(req.params.id);
+      if (isNaN(transferId)) {
+        return res.status(400).json({ error: "Invalid transfer ID" });
+      }
+
+      const [existingTransfer] = await db
+        .select()
+        .from(warehouseTransfers)
+        .where(and(
+          eq(warehouseTransfers.id, transferId),
+          eq(warehouseTransfers.user_id, req.user!.id)
+        ));
+
+      if (!existingTransfer) {
+        return res.status(404).json({ error: "Transfer not found" });
+      }
+
+      const newPriorityScore = (existingTransfer.priority_score || 0) + 20;
+
+      const [updated] = await db
+        .update(warehouseTransfers)
+        .set({
+          escalated_at: new Date(),
+          escalated_by: req.user!.id,
+          priority_score: newPriorityScore,
+          updated_at: new Date(),
+        })
+        .where(eq(warehouseTransfers.id, transferId))
+        .returning();
+
+      res.json(updated);
+    } catch (error) {
+      console.error("[Warehouse Queue] Failed to escalate transfer:", error);
+      res.status(500).json({ error: "Failed to escalate transfer" });
+    }
+  });
+
+  // POST /api/warehouse/queue/recalculate - Recalculate all queue positions
+  router.post("/warehouse/queue/recalculate", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const pendingTransfers = await db
+        .select({
+          id: warehouseTransfers.id,
+          priority_score: warehouseTransfers.priority_score,
+          created_at: warehouseTransfers.created_at,
+        })
+        .from(warehouseTransfers)
+        .where(and(
+          eq(warehouseTransfers.user_id, req.user!.id),
+          eq(warehouseTransfers.status, 'pending')
+        ))
+        .orderBy(desc(warehouseTransfers.priority_score), asc(warehouseTransfers.created_at));
+
+      let updatedCount = 0;
+      for (let i = 0; i < pendingTransfers.length; i++) {
+        const queuePosition = i + 1;
+        await db
+          .update(warehouseTransfers)
+          .set({ 
+            queue_position: queuePosition,
+            updated_at: new Date(),
+          })
+          .where(eq(warehouseTransfers.id, pendingTransfers[i].id));
+        updatedCount++;
+      }
+
+      res.json({
+        success: true,
+        message: `Recalculated queue positions for ${updatedCount} pending transfers`,
+        updated_count: updatedCount,
+      });
+    } catch (error) {
+      console.error("[Warehouse Queue] Failed to recalculate queue:", error);
+      res.status(500).json({ error: "Failed to recalculate queue positions" });
+    }
+  });
+
+  // ============================================================================
   // SITE ASSIGNMENT LOGIC
   // ============================================================================
 
@@ -7140,5 +7434,2130 @@ router.post("/warehouse/assign-site", authMiddleware, async (req: AuthRequest, r
       res.status(500).json({ error: "Failed to assign site" });
     }
   });
+
+  // ============================================================================
+  // CROSS-SITE INVENTORY VISIBILITY API
+  // ============================================================================
+
+  // GET /api/warehouse/thresholds - Get all site thresholds with site names
+  router.get("/warehouse/thresholds", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { site_id, nsn } = req.query;
+      
+      // Build query with joins
+      let query = db.select({
+        id: siteThresholds.id,
+        site_id: siteThresholds.site_id,
+        site_name: warehouseSites.name,
+        site_code: warehouseSites.code,
+        nsn: siteThresholds.nsn,
+        min_quantity: siteThresholds.min_quantity,
+        max_quantity: siteThresholds.max_quantity,
+        reorder_point: siteThresholds.reorder_point,
+        last_reviewed_at: siteThresholds.last_reviewed_at,
+        reviewed_by: siteThresholds.reviewed_by,
+        created_at: siteThresholds.created_at,
+        updated_at: siteThresholds.updated_at,
+      })
+        .from(siteThresholds)
+        .leftJoin(warehouseSites, eq(siteThresholds.site_id, warehouseSites.id));
+      
+      // Apply filters
+      const conditions = [];
+      if (site_id) {
+        conditions.push(eq(siteThresholds.site_id, parseInt(site_id as string)));
+      }
+      if (nsn) {
+        conditions.push(eq(siteThresholds.nsn, nsn as string));
+      }
+      
+      const thresholds = conditions.length > 0
+        ? await query.where(and(...conditions))
+        : await query;
+      
+      res.json(thresholds);
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch thresholds:", error);
+      res.status(500).json({ error: "Failed to fetch site thresholds" });
+    }
+  });
+
+  // POST /api/warehouse/thresholds - Create/update threshold (upsert)
+  router.post("/warehouse/thresholds", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { site_id, nsn, min_quantity, max_quantity, reorder_point } = req.body;
+      
+      if (!site_id || !nsn) {
+        return res.status(400).json({ error: "site_id and nsn are required" });
+      }
+      
+      // Check if threshold already exists for this site_id + nsn combination
+      const [existing] = await db.select()
+        .from(siteThresholds)
+        .where(and(
+          eq(siteThresholds.site_id, site_id),
+          eq(siteThresholds.nsn, nsn)
+        ));
+      
+      if (existing) {
+        // Update existing threshold
+        const [updated] = await db.update(siteThresholds)
+          .set({
+            min_quantity: min_quantity ?? existing.min_quantity,
+            max_quantity: max_quantity ?? existing.max_quantity,
+            reorder_point: reorder_point ?? existing.reorder_point,
+            last_reviewed_at: new Date(),
+            reviewed_by: req.user!.id,
+            updated_at: new Date(),
+          })
+          .where(eq(siteThresholds.id, existing.id))
+          .returning();
+        
+        return res.json(updated);
+      }
+      
+      // Create new threshold
+      const [created] = await db.insert(siteThresholds)
+        .values({
+          site_id,
+          nsn,
+          min_quantity: min_quantity ?? 0,
+          max_quantity: max_quantity ?? 1000,
+          reorder_point: reorder_point ?? 10,
+          last_reviewed_at: new Date(),
+          reviewed_by: req.user!.id,
+        })
+        .returning();
+      
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("[Warehouse] Failed to upsert threshold:", error);
+      res.status(500).json({ error: "Failed to create/update threshold" });
+    }
+  });
+
+  // DELETE /api/warehouse/thresholds/:id - Delete threshold
+  router.delete("/warehouse/thresholds/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const thresholdId = parseInt(req.params.id);
+      if (isNaN(thresholdId)) {
+        return res.status(400).json({ error: "Invalid threshold ID" });
+      }
+      
+      const [deleted] = await db.delete(siteThresholds)
+        .where(eq(siteThresholds.id, thresholdId))
+        .returning();
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Threshold not found" });
+      }
+      
+      res.json({ success: true, deleted });
+    } catch (error) {
+      console.error("[Warehouse] Failed to delete threshold:", error);
+      res.status(500).json({ error: "Failed to delete threshold" });
+    }
+  });
+
+  // GET /api/warehouse/network/inventory - Network-wide inventory matrix
+  router.get("/warehouse/network/inventory", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      // Get all user's sites
+      const userSites = await db.select()
+        .from(warehouseSites)
+        .where(eq(warehouseSites.user_id, req.user!.id));
+      
+      const siteIds = userSites.map(s => s.id);
+      if (siteIds.length === 0) {
+        return res.json([]);
+      }
+      
+      // Aggregate inventory by NSN across all sites
+      const inventoryByNsn = await db.select({
+        nsn: warehouseInventoryItems.nsn,
+        description: warehouseInventoryItems.description,
+        site_id: warehouseInventoryItems.site_id,
+        total_quantity: sql<number>`CAST(COALESCE(SUM(${warehouseInventoryItems.quantity}), 0) AS INTEGER)`,
+      })
+        .from(warehouseInventoryItems)
+        .where(and(
+          inArray(warehouseInventoryItems.site_id, siteIds),
+          isNotNull(warehouseInventoryItems.nsn)
+        ))
+        .groupBy(warehouseInventoryItems.nsn, warehouseInventoryItems.description, warehouseInventoryItems.site_id);
+      
+      // Get thresholds for all sites
+      const thresholds = await db.select()
+        .from(siteThresholds)
+        .where(inArray(siteThresholds.site_id, siteIds));
+      
+      // Create threshold lookup map
+      const thresholdMap = new Map<string, typeof thresholds[number]>();
+      for (const t of thresholds) {
+        thresholdMap.set(`${t.site_id}_${t.nsn}`, t);
+      }
+      
+      // Create site lookup map
+      const siteMap = new Map(userSites.map(s => [s.id, s]));
+      
+      // Group by NSN and build matrix
+      const nsnMap = new Map<string, {
+        nsn: string;
+        description: string | null;
+        sites: Array<{
+          site_id: number;
+          name: string;
+          code: string | null;
+          quantity: number;
+          status: 'ok' | 'low' | 'critical' | 'surplus';
+          threshold: {
+            min_quantity: number;
+            max_quantity: number;
+            reorder_point: number;
+          } | null;
+        }>;
+        total_quantity: number;
+      }>();
+      
+      for (const item of inventoryByNsn) {
+        if (!item.nsn) continue;
+        
+        const site = siteMap.get(item.site_id);
+        if (!site) continue;
+        
+        const threshold = thresholdMap.get(`${item.site_id}_${item.nsn}`);
+        const quantity = item.total_quantity;
+        
+        // Determine status
+        let status: 'ok' | 'low' | 'critical' | 'surplus' = 'ok';
+        if (threshold) {
+          if (quantity > threshold.max_quantity) {
+            status = 'surplus';
+          } else if (quantity < (threshold.min_quantity ?? 0)) {
+            status = 'critical';
+          } else if (quantity < threshold.reorder_point) {
+            status = 'low';
+          }
+        }
+        
+        if (!nsnMap.has(item.nsn)) {
+          nsnMap.set(item.nsn, {
+            nsn: item.nsn,
+            description: item.description,
+            sites: [],
+            total_quantity: 0,
+          });
+        }
+        
+        const entry = nsnMap.get(item.nsn)!;
+        entry.sites.push({
+          site_id: site.id,
+          name: site.name,
+          code: site.code,
+          quantity,
+          status,
+          threshold: threshold ? {
+            min_quantity: threshold.min_quantity,
+            max_quantity: threshold.max_quantity,
+            reorder_point: threshold.reorder_point,
+          } : null,
+        });
+        entry.total_quantity += quantity;
+      }
+      
+      res.json(Array.from(nsnMap.values()));
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch network inventory:", error);
+      res.status(500).json({ error: "Failed to fetch network inventory" });
+    }
+  });
+
+  // GET /api/warehouse/network/shortages - Find items below reorder point
+  router.get("/warehouse/network/shortages", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      // Get all user's sites
+      const userSites = await db.select()
+        .from(warehouseSites)
+        .where(eq(warehouseSites.user_id, req.user!.id));
+      
+      const siteIds = userSites.map(s => s.id);
+      if (siteIds.length === 0) {
+        return res.json([]);
+      }
+      
+      // Get all thresholds for user's sites
+      const thresholds = await db.select({
+        id: siteThresholds.id,
+        site_id: siteThresholds.site_id,
+        site_name: warehouseSites.name,
+        site_code: warehouseSites.code,
+        nsn: siteThresholds.nsn,
+        min_quantity: siteThresholds.min_quantity,
+        max_quantity: siteThresholds.max_quantity,
+        reorder_point: siteThresholds.reorder_point,
+      })
+        .from(siteThresholds)
+        .leftJoin(warehouseSites, eq(siteThresholds.site_id, warehouseSites.id))
+        .where(inArray(siteThresholds.site_id, siteIds));
+      
+      // Get inventory quantities by site and NSN
+      const inventory = await db.select({
+        nsn: warehouseInventoryItems.nsn,
+        description: warehouseInventoryItems.description,
+        site_id: warehouseInventoryItems.site_id,
+        total_quantity: sql<number>`CAST(COALESCE(SUM(${warehouseInventoryItems.quantity}), 0) AS INTEGER)`,
+      })
+        .from(warehouseInventoryItems)
+        .where(and(
+          inArray(warehouseInventoryItems.site_id, siteIds),
+          isNotNull(warehouseInventoryItems.nsn)
+        ))
+        .groupBy(warehouseInventoryItems.nsn, warehouseInventoryItems.description, warehouseInventoryItems.site_id);
+      
+      // Create inventory lookup
+      const inventoryMap = new Map<string, { quantity: number; description: string | null }>();
+      for (const inv of inventory) {
+        if (inv.nsn) {
+          inventoryMap.set(`${inv.site_id}_${inv.nsn}`, { quantity: inv.total_quantity, description: inv.description });
+        }
+      }
+      
+      // Find shortages (quantity < reorder_point)
+      const shortages: Array<{
+        site_id: number;
+        site_name: string | null;
+        site_code: string | null;
+        nsn: string;
+        description: string | null;
+        current_quantity: number;
+        reorder_point: number;
+        shortage_amount: number;
+        recommended_sources: Array<{
+          site_id: number;
+          site_name: string;
+          available_surplus: number;
+        }>;
+      }> = [];
+      
+      for (const t of thresholds) {
+        const invKey = `${t.site_id}_${t.nsn}`;
+        const invData = inventoryMap.get(invKey);
+        const quantity = invData?.quantity ?? 0;
+        
+        if (quantity < t.reorder_point) {
+          // Find potential source sites with surplus for this NSN
+          const recommendedSources: Array<{
+            site_id: number;
+            site_name: string;
+            available_surplus: number;
+          }> = [];
+          
+          for (const other of thresholds) {
+            if (other.site_id !== t.site_id && other.nsn === t.nsn) {
+              const otherInv = inventoryMap.get(`${other.site_id}_${other.nsn}`);
+              const otherQuantity = otherInv?.quantity ?? 0;
+              if (otherQuantity > other.max_quantity) {
+                recommendedSources.push({
+                  site_id: other.site_id,
+                  site_name: other.site_name || 'Unknown',
+                  available_surplus: otherQuantity - other.max_quantity,
+                });
+              }
+            }
+          }
+          
+          shortages.push({
+            site_id: t.site_id,
+            site_name: t.site_name,
+            site_code: t.site_code,
+            nsn: t.nsn,
+            description: invData?.description ?? null,
+            current_quantity: quantity,
+            reorder_point: t.reorder_point,
+            shortage_amount: t.reorder_point - quantity,
+            recommended_sources: recommendedSources.sort((a, b) => b.available_surplus - a.available_surplus),
+          });
+        }
+      }
+      
+      // Sort by shortage amount descending (most critical first)
+      shortages.sort((a, b) => b.shortage_amount - a.shortage_amount);
+      
+      res.json(shortages);
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch shortages:", error);
+      res.status(500).json({ error: "Failed to fetch shortages" });
+    }
+  });
+
+  // GET /api/warehouse/network/surpluses - Find items above max quantity
+  router.get("/warehouse/network/surpluses", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      // Get all user's sites
+      const userSites = await db.select()
+        .from(warehouseSites)
+        .where(eq(warehouseSites.user_id, req.user!.id));
+      
+      const siteIds = userSites.map(s => s.id);
+      if (siteIds.length === 0) {
+        return res.json([]);
+      }
+      
+      // Get all thresholds for user's sites
+      const thresholds = await db.select({
+        id: siteThresholds.id,
+        site_id: siteThresholds.site_id,
+        site_name: warehouseSites.name,
+        site_code: warehouseSites.code,
+        nsn: siteThresholds.nsn,
+        min_quantity: siteThresholds.min_quantity,
+        max_quantity: siteThresholds.max_quantity,
+        reorder_point: siteThresholds.reorder_point,
+      })
+        .from(siteThresholds)
+        .leftJoin(warehouseSites, eq(siteThresholds.site_id, warehouseSites.id))
+        .where(inArray(siteThresholds.site_id, siteIds));
+      
+      // Get inventory quantities by site and NSN
+      const inventory = await db.select({
+        nsn: warehouseInventoryItems.nsn,
+        description: warehouseInventoryItems.description,
+        site_id: warehouseInventoryItems.site_id,
+        total_quantity: sql<number>`CAST(COALESCE(SUM(${warehouseInventoryItems.quantity}), 0) AS INTEGER)`,
+      })
+        .from(warehouseInventoryItems)
+        .where(and(
+          inArray(warehouseInventoryItems.site_id, siteIds),
+          isNotNull(warehouseInventoryItems.nsn)
+        ))
+        .groupBy(warehouseInventoryItems.nsn, warehouseInventoryItems.description, warehouseInventoryItems.site_id);
+      
+      // Create inventory lookup
+      const inventoryMap = new Map<string, { quantity: number; description: string | null }>();
+      for (const inv of inventory) {
+        if (inv.nsn) {
+          inventoryMap.set(`${inv.site_id}_${inv.nsn}`, { quantity: inv.total_quantity, description: inv.description });
+        }
+      }
+      
+      // Find surpluses (quantity > max_quantity)
+      const surpluses: Array<{
+        site_id: number;
+        site_name: string | null;
+        site_code: string | null;
+        nsn: string;
+        description: string | null;
+        current_quantity: number;
+        max_quantity: number;
+        surplus_amount: number;
+        recommended_destinations: Array<{
+          site_id: number;
+          site_name: string;
+          shortage_amount: number;
+        }>;
+      }> = [];
+      
+      for (const t of thresholds) {
+        const invKey = `${t.site_id}_${t.nsn}`;
+        const invData = inventoryMap.get(invKey);
+        const quantity = invData?.quantity ?? 0;
+        
+        if (quantity > t.max_quantity) {
+          // Find potential destination sites with shortages for this NSN
+          const recommendedDestinations: Array<{
+            site_id: number;
+            site_name: string;
+            shortage_amount: number;
+          }> = [];
+          
+          for (const other of thresholds) {
+            if (other.site_id !== t.site_id && other.nsn === t.nsn) {
+              const otherInv = inventoryMap.get(`${other.site_id}_${other.nsn}`);
+              const otherQuantity = otherInv?.quantity ?? 0;
+              if (otherQuantity < other.reorder_point) {
+                recommendedDestinations.push({
+                  site_id: other.site_id,
+                  site_name: other.site_name || 'Unknown',
+                  shortage_amount: other.reorder_point - otherQuantity,
+                });
+              }
+            }
+          }
+          
+          surpluses.push({
+            site_id: t.site_id,
+            site_name: t.site_name,
+            site_code: t.site_code,
+            nsn: t.nsn,
+            description: invData?.description ?? null,
+            current_quantity: quantity,
+            max_quantity: t.max_quantity,
+            surplus_amount: quantity - t.max_quantity,
+            recommended_destinations: recommendedDestinations.sort((a, b) => b.shortage_amount - a.shortage_amount),
+          });
+        }
+      }
+      
+      // Sort by surplus amount descending (most surplus first)
+      surpluses.sort((a, b) => b.surplus_amount - a.surplus_amount);
+      
+      res.json(surpluses);
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch surpluses:", error);
+      res.status(500).json({ error: "Failed to fetch surpluses" });
+    }
+  });
+
+  // ============================================================================
+  // INBOUND CARGO VISIBILITY
+  // ============================================================================
+
+  // GET /api/warehouse/inbound/:siteId - Get all inbound cargo for a site
+  router.get("/warehouse/inbound/:siteId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      // Query manifests destined for this site
+      const inboundManifests = await db.select({
+        id: crossModalManifests.id,
+        manifest_number: crossModalManifests.manifest_number,
+        name: crossModalManifests.name,
+        transport_mode: crossModalManifests.transport_mode,
+        status: crossModalManifests.status,
+        total_weight_lbs: crossModalManifests.total_weight_lbs,
+        total_items: crossModalManifests.total_items,
+        estimated_arrival: crossModalManifests.estimated_arrival,
+        scheduled_departure: crossModalManifests.estimated_departure,
+        source_site_id: crossModalManifests.source_site_id,
+        priority: crossModalManifests.priority,
+      })
+        .from(crossModalManifests)
+        .where(and(
+          eq(crossModalManifests.destination_site_id, siteId),
+          inArray(crossModalManifests.status, ['pending_transport', 'assigned', 'in_transit'])
+        ))
+        .orderBy(asc(crossModalManifests.estimated_arrival));
+
+      // Get source site names
+      const sourceSiteIds = Array.from(new Set(inboundManifests.map(m => m.source_site_id).filter(Boolean))) as number[];
+      const sourceSites = sourceSiteIds.length > 0
+        ? await db.select({ id: warehouseSites.id, name: warehouseSites.name })
+            .from(warehouseSites)
+            .where(inArray(warehouseSites.id, sourceSiteIds))
+        : [];
+      const siteNameMap = new Map(sourceSites.map(s => [s.id, s.name]));
+
+      // Get items for each manifest
+      const manifestIds = inboundManifests.map(m => m.id);
+      const items = manifestIds.length > 0
+        ? await db.select()
+            .from(manifestItems)
+            .where(inArray(manifestItems.manifest_id, manifestIds))
+        : [];
+      const itemsByManifest = new Map<number, typeof items>();
+      for (const item of items) {
+        const list = itemsByManifest.get(item.manifest_id) || [];
+        list.push(item);
+        itemsByManifest.set(item.manifest_id, list);
+      }
+
+      // Also query inbound transfers
+      const inboundTransfers = await db.select({
+        id: warehouseTransfers.id,
+        status: warehouseTransfers.status,
+        transport_mode: warehouseTransfers.transport_mode,
+        scheduled_date: warehouseTransfers.scheduled_date,
+        total_weight_lbs: warehouseTransfers.total_weight_lbs,
+        transfer_items: warehouseTransfers.transfer_items,
+        source_site_id: warehouseTransfers.source_site_id,
+        priority_level: warehouseTransfers.priority_level,
+      })
+        .from(warehouseTransfers)
+        .where(and(
+          eq(warehouseTransfers.destination_site_id, siteId),
+          inArray(warehouseTransfers.status, ['pending', 'manifest_created', 'transport_assigned', 'in_transit'])
+        ))
+        .orderBy(asc(warehouseTransfers.scheduled_date));
+
+      // Get source site names for transfers
+      const transferSourceIds = Array.from(new Set(inboundTransfers.map(t => t.source_site_id).filter(Boolean))) as number[];
+      const transferSourceSites = transferSourceIds.length > 0
+        ? await db.select({ id: warehouseSites.id, name: warehouseSites.name })
+            .from(warehouseSites)
+            .where(inArray(warehouseSites.id, transferSourceIds))
+        : [];
+      for (const s of transferSourceSites) {
+        siteNameMap.set(s.id, s.name);
+      }
+
+      // Combine results
+      const result = {
+        manifests: inboundManifests.map(m => ({
+          id: m.id,
+          manifest_number: m.manifest_number,
+          name: m.name,
+          transport_mode: m.transport_mode || 'unknown',
+          status: m.status,
+          eta: m.estimated_arrival,
+          origin_site_name: siteNameMap.get(m.source_site_id!) || 'Unknown',
+          items: itemsByManifest.get(m.id) || [],
+          weight_lbs: m.total_weight_lbs,
+          item_count: m.total_items,
+          priority: m.priority,
+        })),
+        transfers: inboundTransfers.map(t => ({
+          id: t.id,
+          type: 'transfer' as const,
+          transport_mode: t.transport_mode || 'ground',
+          status: t.status,
+          eta: t.scheduled_date,
+          origin_site_name: siteNameMap.get(t.source_site_id) || 'Unknown',
+          items: t.transfer_items as any[],
+          weight_lbs: t.total_weight_lbs ? parseFloat(t.total_weight_lbs as string) : 0,
+          item_count: Array.isArray(t.transfer_items) ? (t.transfer_items as any[]).length : 0,
+          priority: t.priority_level,
+        })),
+      };
+
+      res.json(result);
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch inbound cargo:", error);
+      res.status(500).json({ error: "Failed to fetch inbound cargo" });
+    }
+  });
+
+  // GET /api/warehouse/inbound/:siteId/timeline - Arrival timeline for next 14 days
+  router.get("/warehouse/inbound/:siteId/timeline", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const now = new Date();
+      const endDate = new Date(now);
+      endDate.setDate(endDate.getDate() + 14);
+
+      // Query manifests for next 14 days
+      const inboundManifests = await db.select({
+        id: crossModalManifests.id,
+        transport_mode: crossModalManifests.transport_mode,
+        total_weight_lbs: crossModalManifests.total_weight_lbs,
+        total_items: crossModalManifests.total_items,
+        estimated_arrival: crossModalManifests.estimated_arrival,
+      })
+        .from(crossModalManifests)
+        .where(and(
+          eq(crossModalManifests.destination_site_id, siteId),
+          inArray(crossModalManifests.status, ['pending_transport', 'assigned', 'in_transit']),
+          gte(crossModalManifests.estimated_arrival, now),
+          lte(crossModalManifests.estimated_arrival, endDate)
+        ));
+
+      // Query transfers for next 14 days
+      const inboundTransfers = await db.select({
+        id: warehouseTransfers.id,
+        transport_mode: warehouseTransfers.transport_mode,
+        total_weight_lbs: warehouseTransfers.total_weight_lbs,
+        transfer_items: warehouseTransfers.transfer_items,
+        scheduled_date: warehouseTransfers.scheduled_date,
+      })
+        .from(warehouseTransfers)
+        .where(and(
+          eq(warehouseTransfers.destination_site_id, siteId),
+          inArray(warehouseTransfers.status, ['pending', 'manifest_created', 'transport_assigned', 'in_transit']),
+          gte(warehouseTransfers.scheduled_date, now),
+          lte(warehouseTransfers.scheduled_date, endDate)
+        ));
+
+      // Group by date
+      const timeline: Map<string, {
+        date: string;
+        arrivals: Array<{
+          manifest_id?: number;
+          transfer_id?: number;
+          transport_mode: string;
+          weight_lbs: number;
+          item_count: number;
+        }>;
+        total_weight_lbs: number;
+      }> = new Map();
+
+      // Initialize all 14 days
+      for (let i = 0; i < 14; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() + i);
+        const dateStr = d.toISOString().split('T')[0];
+        timeline.set(dateStr, {
+          date: dateStr,
+          arrivals: [],
+          total_weight_lbs: 0,
+        });
+      }
+
+      // Add manifests to timeline
+      for (const m of inboundManifests) {
+        if (m.estimated_arrival) {
+          const dateStr = new Date(m.estimated_arrival).toISOString().split('T')[0];
+          const dayData = timeline.get(dateStr);
+          if (dayData) {
+            const weight = m.total_weight_lbs || 0;
+            dayData.arrivals.push({
+              manifest_id: m.id,
+              transport_mode: m.transport_mode || 'unknown',
+              weight_lbs: weight,
+              item_count: m.total_items || 0,
+            });
+            dayData.total_weight_lbs += weight;
+          }
+        }
+      }
+
+      // Add transfers to timeline
+      for (const t of inboundTransfers) {
+        if (t.scheduled_date) {
+          const dateStr = new Date(t.scheduled_date).toISOString().split('T')[0];
+          const dayData = timeline.get(dateStr);
+          if (dayData) {
+            const weight = t.total_weight_lbs ? parseFloat(t.total_weight_lbs as string) : 0;
+            const itemCount = Array.isArray(t.transfer_items) ? (t.transfer_items as any[]).length : 0;
+            dayData.arrivals.push({
+              transfer_id: t.id,
+              transport_mode: t.transport_mode || 'ground',
+              weight_lbs: weight,
+              item_count: itemCount,
+            });
+            dayData.total_weight_lbs += weight;
+          }
+        }
+      }
+
+      res.json(Array.from(timeline.values()));
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch inbound timeline:", error);
+      res.status(500).json({ error: "Failed to fetch inbound timeline" });
+    }
+  });
+
+  // ============================================================================
+  // CAPACITY FORECASTING
+  // ============================================================================
+
+  // GET /api/warehouse/forecasts/:siteId - Get capacity forecasts for a site
+  router.get("/warehouse/forecasts/:siteId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const siteId = parseInt(req.params.siteId);
+      if (isNaN(siteId)) {
+        return res.status(400).json({ error: "Invalid site ID" });
+      }
+
+      const days = parseInt(req.query.days as string) || 30;
+
+      // Verify user owns the site
+      const [site] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, siteId),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!site) {
+        return res.status(404).json({ error: "Warehouse site not found" });
+      }
+
+      const now = new Date();
+      const endDate = new Date(now);
+      endDate.setDate(endDate.getDate() + days);
+
+      // Query forecasts for the site
+      const forecasts = await db.select()
+        .from(capacityForecasts)
+        .where(and(
+          eq(capacityForecasts.site_id, siteId),
+          gte(capacityForecasts.forecast_date, now.toISOString().split('T')[0]),
+          lte(capacityForecasts.forecast_date, endDate.toISOString().split('T')[0])
+        ))
+        .orderBy(asc(capacityForecasts.forecast_date));
+
+      res.json({
+        site_id: siteId,
+        site_name: site.name,
+        forecasts: forecasts.map(f => ({
+          date: f.forecast_date,
+          projected_utilization: parseFloat(f.projected_utilization as string),
+          projected_inbound_lbs: f.projected_inbound_lbs,
+          projected_outbound_lbs: f.projected_outbound_lbs,
+          confidence_score: f.confidence_score ? parseFloat(f.confidence_score as string) : 0.8,
+        })),
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch capacity forecasts:", error);
+      res.status(500).json({ error: "Failed to fetch capacity forecasts" });
+    }
+  });
+
+  // POST /api/warehouse/forecasts/generate - Generate forecasts for all user's sites
+  router.post("/warehouse/forecasts/generate", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      // Get all sites for the user
+      const sites = await db.select()
+        .from(warehouseSites)
+        .where(eq(warehouseSites.user_id, req.user!.id));
+
+      if (sites.length === 0) {
+        return res.status(404).json({ error: "No warehouse sites found" });
+      }
+
+      const now = new Date();
+      const forecastDays = 30;
+      const generatedForecasts: any[] = [];
+
+      for (const site of sites) {
+        // Get current utilization (approximate using zone capacity)
+        const zones = await db.select()
+          .from(warehouseZones)
+          .innerJoin(warehouseBuildings, eq(warehouseZones.building_id, warehouseBuildings.id))
+          .where(eq(warehouseBuildings.site_id, site.id));
+
+        const totalCapacity = zones.reduce((sum, z) => sum + (z.warehouse_zones.capacity_pallets || 0), 0);
+        
+        // Get current inventory count
+        const [inventoryCount] = await db.select({ count: count() })
+          .from(warehouseInventoryItems)
+          .where(eq(warehouseInventoryItems.site_id, site.id));
+        
+        const currentUtilization = totalCapacity > 0 
+          ? (Number(inventoryCount?.count || 0) / totalCapacity) * 100
+          : 50;
+
+        // Get scheduled inbound for next 30 days
+        const endDate = new Date(now);
+        endDate.setDate(endDate.getDate() + forecastDays);
+
+        const inboundManifests = await db.select({
+          estimated_arrival: crossModalManifests.estimated_arrival,
+          total_weight_lbs: crossModalManifests.total_weight_lbs,
+        })
+          .from(crossModalManifests)
+          .where(and(
+            eq(crossModalManifests.destination_site_id, site.id),
+            inArray(crossModalManifests.status, ['pending_transport', 'assigned', 'in_transit']),
+            gte(crossModalManifests.estimated_arrival, now),
+            lte(crossModalManifests.estimated_arrival, endDate)
+          ));
+
+        // Get scheduled outbound
+        const outboundManifests = await db.select({
+          estimated_departure: crossModalManifests.estimated_departure,
+          total_weight_lbs: crossModalManifests.total_weight_lbs,
+        })
+          .from(crossModalManifests)
+          .where(and(
+            eq(crossModalManifests.source_site_id, site.id),
+            inArray(crossModalManifests.status, ['pending_transport', 'assigned', 'in_transit']),
+            gte(crossModalManifests.estimated_departure, now),
+            lte(crossModalManifests.estimated_departure, endDate)
+          ));
+
+        // Group by date
+        const inboundByDate = new Map<string, number>();
+        for (const m of inboundManifests) {
+          if (m.estimated_arrival) {
+            const dateStr = new Date(m.estimated_arrival).toISOString().split('T')[0];
+            inboundByDate.set(dateStr, (inboundByDate.get(dateStr) || 0) + (m.total_weight_lbs || 0));
+          }
+        }
+
+        const outboundByDate = new Map<string, number>();
+        for (const m of outboundManifests) {
+          if (m.estimated_departure) {
+            const dateStr = new Date(m.estimated_departure).toISOString().split('T')[0];
+            outboundByDate.set(dateStr, (outboundByDate.get(dateStr) || 0) + (m.total_weight_lbs || 0));
+          }
+        }
+
+        // Delete existing forecasts for this site
+        await db.delete(capacityForecasts)
+          .where(eq(capacityForecasts.site_id, site.id));
+
+        // Generate forecasts for each day
+        let projectedUtilization = currentUtilization;
+        const dailyDecay = 0.5; // Natural throughput reduces utilization slightly
+
+        for (let i = 0; i < forecastDays; i++) {
+          const forecastDate = new Date(now);
+          forecastDate.setDate(forecastDate.getDate() + i);
+          const dateStr = forecastDate.toISOString().split('T')[0];
+
+          const inboundLbs = inboundByDate.get(dateStr) || 0;
+          const outboundLbs = outboundByDate.get(dateStr) || 0;
+
+          // Simple projection: increase with inbound, decrease with outbound
+          const utilizationChange = totalCapacity > 0
+            ? ((inboundLbs - outboundLbs) / (totalCapacity * 2000)) * 100 // Assume avg pallet = 2000 lbs
+            : 0;
+
+          projectedUtilization = Math.max(0, Math.min(100, projectedUtilization + utilizationChange - dailyDecay));
+
+          const [forecast] = await db.insert(capacityForecasts).values({
+            site_id: site.id,
+            forecast_date: dateStr,
+            projected_utilization: projectedUtilization.toFixed(2),
+            projected_inbound_lbs: inboundLbs,
+            projected_outbound_lbs: outboundLbs,
+            confidence_score: Math.max(0.5, 0.95 - (i * 0.015)).toFixed(2), // Confidence decreases over time
+          }).returning();
+
+          generatedForecasts.push(forecast);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Generated ${generatedForecasts.length} forecasts for ${sites.length} sites`,
+        forecast_count: generatedForecasts.length,
+        sites_processed: sites.length,
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to generate forecasts:", error);
+      res.status(500).json({ error: "Failed to generate forecasts" });
+    }
+  });
+
+  // ============================================================================
+  // REBALANCING SUGGESTIONS
+  // ============================================================================
+
+  // GET /api/warehouse/rebalancing - Get all pending rebalancing suggestions
+  router.get("/warehouse/rebalancing", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      // Get all user's site IDs first
+      const userSites = await db.select({ id: warehouseSites.id })
+        .from(warehouseSites)
+        .where(eq(warehouseSites.user_id, req.user!.id));
+      
+      const userSiteIds = userSites.map(s => s.id);
+
+      if (userSiteIds.length === 0) {
+        return res.json([]);
+      }
+
+      // Get pending suggestions where source or destination is user's site
+      const suggestions = await db.select()
+        .from(rebalancingSuggestions)
+        .where(and(
+          eq(rebalancingSuggestions.status, 'pending'),
+          or(
+            inArray(rebalancingSuggestions.source_site_id, userSiteIds),
+            inArray(rebalancingSuggestions.destination_site_id, userSiteIds)
+          )
+        ))
+        .orderBy(desc(sql`CASE 
+          WHEN ${rebalancingSuggestions.priority} = 'critical' THEN 4
+          WHEN ${rebalancingSuggestions.priority} = 'high' THEN 3
+          WHEN ${rebalancingSuggestions.priority} = 'medium' THEN 2
+          ELSE 1
+        END`));
+
+      // Get site names
+      const siteIds = Array.from(new Set([
+        ...suggestions.map(s => s.source_site_id),
+        ...suggestions.map(s => s.destination_site_id)
+      ]));
+
+      const sites = siteIds.length > 0
+        ? await db.select({ id: warehouseSites.id, name: warehouseSites.name, code: warehouseSites.code })
+            .from(warehouseSites)
+            .where(inArray(warehouseSites.id, siteIds))
+        : [];
+      const siteMap = new Map(sites.map(s => [s.id, s]));
+
+      const result = suggestions.map(s => ({
+        id: s.id,
+        source_site_id: s.source_site_id,
+        source_site_name: siteMap.get(s.source_site_id)?.name || 'Unknown',
+        source_site_code: siteMap.get(s.source_site_id)?.code || '',
+        destination_site_id: s.destination_site_id,
+        destination_site_name: siteMap.get(s.destination_site_id)?.name || 'Unknown',
+        destination_site_code: siteMap.get(s.destination_site_id)?.code || '',
+        suggested_items: s.suggested_items,
+        total_weight_lbs: s.total_weight_lbs,
+        reason: s.reason,
+        priority: s.priority,
+        status: s.status,
+        created_at: s.created_at,
+        expires_at: s.expires_at,
+      }));
+
+      res.json(result);
+    } catch (error) {
+      console.error("[Warehouse] Failed to fetch rebalancing suggestions:", error);
+      res.status(500).json({ error: "Failed to fetch rebalancing suggestions" });
+    }
+  });
+
+  // POST /api/warehouse/rebalancing/generate - Generate new rebalancing suggestions
+  router.post("/warehouse/rebalancing/generate", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      // Get user's sites with their thresholds
+      const sites = await db.select()
+        .from(warehouseSites)
+        .where(eq(warehouseSites.user_id, req.user!.id));
+
+      if (sites.length < 2) {
+        return res.json({
+          success: true,
+          message: "Need at least 2 sites for rebalancing analysis",
+          suggestions_created: 0,
+        });
+      }
+
+      const siteIds = sites.map(s => s.id);
+
+      // Get thresholds for all user's sites
+      const thresholds = await db.select()
+        .from(siteThresholds)
+        .where(inArray(siteThresholds.site_id, siteIds));
+
+      // Group inventory by NSN and site
+      const inventory = await db.select({
+        site_id: warehouseInventoryItems.site_id,
+        nsn: warehouseInventoryItems.nsn,
+        quantity: sql<number>`CAST(SUM(${warehouseInventoryItems.quantity}) AS INTEGER)`,
+        description: sql<string>`MAX(${warehouseInventoryItems.description})`,
+        weight_lbs: sql<number>`CAST(AVG(${warehouseInventoryItems.weight_lbs}) AS INTEGER)`,
+      })
+        .from(warehouseInventoryItems)
+        .where(and(
+          inArray(warehouseInventoryItems.site_id, siteIds),
+          isNotNull(warehouseInventoryItems.nsn)
+        ))
+        .groupBy(warehouseInventoryItems.site_id, warehouseInventoryItems.nsn);
+
+      // Build maps for quick lookup
+      const thresholdMap = new Map<string, typeof thresholds[0]>();
+      for (const t of thresholds) {
+        thresholdMap.set(`${t.site_id}_${t.nsn}`, t);
+      }
+
+      const inventoryMap = new Map<string, typeof inventory[0]>();
+      for (const inv of inventory) {
+        if (inv.nsn) {
+          inventoryMap.set(`${inv.site_id}_${inv.nsn}`, inv);
+        }
+      }
+
+      // Find shortages and surpluses
+      const shortages: Array<{
+        site_id: number;
+        nsn: string;
+        shortage_amount: number;
+        description: string | null;
+      }> = [];
+
+      const surpluses: Array<{
+        site_id: number;
+        nsn: string;
+        surplus_amount: number;
+        description: string | null;
+        weight_per_unit: number;
+      }> = [];
+
+      for (const t of thresholds) {
+        const invKey = `${t.site_id}_${t.nsn}`;
+        const inv = inventoryMap.get(invKey);
+        const quantity = inv?.quantity ?? 0;
+
+        if (quantity < t.reorder_point) {
+          shortages.push({
+            site_id: t.site_id,
+            nsn: t.nsn,
+            shortage_amount: t.reorder_point - quantity,
+            description: inv?.description || null,
+          });
+        } else if (quantity > t.max_quantity) {
+          surpluses.push({
+            site_id: t.site_id,
+            nsn: t.nsn,
+            surplus_amount: quantity - t.max_quantity,
+            description: inv?.description || null,
+            weight_per_unit: inv?.weight_lbs || 10,
+          });
+        }
+      }
+
+      // Delete old pending suggestions
+      await db.delete(rebalancingSuggestions)
+        .where(and(
+          eq(rebalancingSuggestions.status, 'pending'),
+          or(
+            inArray(rebalancingSuggestions.source_site_id, siteIds),
+            inArray(rebalancingSuggestions.destination_site_id, siteIds)
+          )
+        ));
+
+      // Generate suggestions matching surpluses to shortages
+      const newSuggestions: any[] = [];
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Suggestions expire in 7 days
+
+      for (const surplus of surpluses) {
+        // Find matching shortages for same NSN at different sites
+        const matchingShortages = shortages.filter(s => 
+          s.nsn === surplus.nsn && s.site_id !== surplus.site_id
+        );
+
+        for (const shortage of matchingShortages) {
+          const transferQuantity = Math.min(surplus.surplus_amount, shortage.shortage_amount);
+          if (transferQuantity <= 0) continue;
+
+          const totalWeight = transferQuantity * surplus.weight_per_unit;
+          const priority = shortage.shortage_amount > 100 ? 'high' : 
+                          shortage.shortage_amount > 50 ? 'medium' : 'low';
+
+          const [suggestion] = await db.insert(rebalancingSuggestions).values({
+            source_site_id: surplus.site_id,
+            destination_site_id: shortage.site_id,
+            suggested_items: [{
+              nsn: surplus.nsn,
+              quantity: transferQuantity,
+              description: surplus.description,
+              weight_lbs: surplus.weight_per_unit,
+            }],
+            total_weight_lbs: totalWeight,
+            reason: `Transfer ${transferQuantity} units of ${surplus.nsn} to address shortage (${shortage.shortage_amount} units below reorder point)`,
+            priority,
+            status: 'pending',
+            expires_at: expiresAt,
+          }).returning();
+
+          newSuggestions.push(suggestion);
+
+          // Reduce remaining amounts
+          surplus.surplus_amount -= transferQuantity;
+          shortage.shortage_amount -= transferQuantity;
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Generated ${newSuggestions.length} rebalancing suggestions`,
+        suggestions_created: newSuggestions.length,
+        shortages_found: shortages.length,
+        surpluses_found: surpluses.length,
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to generate rebalancing suggestions:", error);
+      res.status(500).json({ error: "Failed to generate rebalancing suggestions" });
+    }
+  });
+
+  // PATCH /api/warehouse/rebalancing/:id - Approve or reject a suggestion
+  router.patch("/warehouse/rebalancing/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const suggestionId = parseInt(req.params.id);
+      if (isNaN(suggestionId)) {
+        return res.status(400).json({ error: "Invalid suggestion ID" });
+      }
+
+      const { status } = req.body;
+      if (!status || !['approved', 'rejected'].includes(status)) {
+        return res.status(400).json({ error: "Status must be 'approved' or 'rejected'" });
+      }
+
+      // Verify suggestion exists and user has access
+      const [suggestion] = await db.select()
+        .from(rebalancingSuggestions)
+        .where(eq(rebalancingSuggestions.id, suggestionId));
+
+      if (!suggestion) {
+        return res.status(404).json({ error: "Rebalancing suggestion not found" });
+      }
+
+      // Verify user owns one of the sites
+      const [sourceSite] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, suggestion.source_site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      const [destSite] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, suggestion.destination_site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!sourceSite && !destSite) {
+        return res.status(403).json({ error: "Access denied to this suggestion" });
+      }
+
+      const updateData: any = { status };
+      if (status === 'approved') {
+        updateData.approved_by = req.user!.id;
+      }
+
+      const [updated] = await db.update(rebalancingSuggestions)
+        .set(updateData)
+        .where(eq(rebalancingSuggestions.id, suggestionId))
+        .returning();
+
+      res.json(updated);
+    } catch (error) {
+      console.error("[Warehouse] Failed to update rebalancing suggestion:", error);
+      res.status(500).json({ error: "Failed to update rebalancing suggestion" });
+    }
+  });
+
+  // POST /api/warehouse/rebalancing/:id/execute - Execute an approved suggestion
+  router.post("/warehouse/rebalancing/:id/execute", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const suggestionId = parseInt(req.params.id);
+      if (isNaN(suggestionId)) {
+        return res.status(400).json({ error: "Invalid suggestion ID" });
+      }
+
+      // Get the suggestion
+      const [suggestion] = await db.select()
+        .from(rebalancingSuggestions)
+        .where(eq(rebalancingSuggestions.id, suggestionId));
+
+      if (!suggestion) {
+        return res.status(404).json({ error: "Rebalancing suggestion not found" });
+      }
+
+      if (suggestion.status !== 'approved') {
+        return res.status(400).json({ error: "Suggestion must be approved before execution" });
+      }
+
+      // Verify user owns one of the sites
+      const [sourceSite] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, suggestion.source_site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      const [destSite] = await db.select()
+        .from(warehouseSites)
+        .where(and(
+          eq(warehouseSites.id, suggestion.destination_site_id),
+          eq(warehouseSites.user_id, req.user!.id)
+        ));
+
+      if (!sourceSite && !destSite) {
+        return res.status(403).json({ error: "Access denied to this suggestion" });
+      }
+
+      // Create the warehouse transfer
+      const [transfer] = await db.insert(warehouseTransfers).values({
+        user_id: req.user!.id,
+        source_site_id: suggestion.source_site_id,
+        destination_site_id: suggestion.destination_site_id,
+        status: 'pending',
+        transport_mode: 'ground',
+        transfer_items: suggestion.suggested_items,
+        total_weight_lbs: suggestion.total_weight_lbs.toString(),
+        priority_level: suggestion.priority === 'critical' ? 'immediate' : 
+                       suggestion.priority === 'high' ? 'priority' : 'routine',
+        notes: `Executed from rebalancing suggestion #${suggestion.id}: ${suggestion.reason}`,
+        scheduled_date: new Date(),
+      }).returning();
+
+      // Update suggestion status and link to transfer
+      const [updatedSuggestion] = await db.update(rebalancingSuggestions)
+        .set({
+          status: 'executed',
+          executed_transfer_id: transfer.id,
+        })
+        .where(eq(rebalancingSuggestions.id, suggestionId))
+        .returning();
+
+      res.json({
+        success: true,
+        message: "Rebalancing suggestion executed successfully",
+        suggestion: updatedSuggestion,
+        transfer: transfer,
+      });
+    } catch (error) {
+      console.error("[Warehouse] Failed to execute rebalancing suggestion:", error);
+      res.status(500).json({ error: "Failed to execute rebalancing suggestion" });
+    }
+  });
+
+// ============================================================================
+// TRANSPORT RESERVATIONS API
+// ============================================================================
+
+// GET /api/warehouse/reservations - Get all reservations with filters
+router.get("/warehouse/reservations", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { site_id, date_from, date_to, status } = req.query;
+
+    const conditions: any[] = [];
+
+    if (site_id) {
+      conditions.push(eq(transportReservations.site_id, parseInt(site_id as string)));
+    }
+    if (date_from) {
+      conditions.push(gte(transportReservations.reservation_date, date_from as string));
+    }
+    if (date_to) {
+      conditions.push(lte(transportReservations.reservation_date, date_to as string));
+    }
+    if (status) {
+      conditions.push(eq(transportReservations.status, status as string));
+    }
+
+    const reservations = await db
+      .select({
+        id: transportReservations.id,
+        site_id: transportReservations.site_id,
+        site_name: warehouseSites.name,
+        site_code: warehouseSites.code,
+        transport_mode: transportReservations.transport_mode,
+        asset_type: transportReservations.asset_type,
+        reserved_capacity_lbs: transportReservations.reserved_capacity_lbs,
+        reservation_date: transportReservations.reservation_date,
+        time_slot: transportReservations.time_slot,
+        purpose: transportReservations.purpose,
+        transfer_id: transportReservations.transfer_id,
+        reserved_by: transportReservations.reserved_by,
+        status: transportReservations.status,
+        created_at: transportReservations.created_at,
+      })
+      .from(transportReservations)
+      .leftJoin(warehouseSites, eq(transportReservations.site_id, warehouseSites.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(transportReservations.reservation_date), desc(transportReservations.created_at));
+
+    res.json(reservations);
+  } catch (error) {
+    console.error("[Warehouse] Failed to fetch reservations:", error);
+    res.status(500).json({ error: "Failed to fetch reservations" });
+  }
+});
+
+// POST /api/warehouse/reservations - Create a new reservation
+router.post("/warehouse/reservations", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const {
+      site_id,
+      transport_mode,
+      asset_type,
+      reserved_capacity_lbs,
+      reservation_date,
+      time_slot,
+      purpose,
+      transfer_id,
+    } = req.body;
+
+    if (!site_id || !transport_mode || !reserved_capacity_lbs || !reservation_date || !purpose) {
+      return res.status(400).json({
+        error: "Missing required fields: site_id, transport_mode, reserved_capacity_lbs, reservation_date, purpose",
+      });
+    }
+
+    // Check for double-booking (same site, mode, date, time_slot with status=confirmed)
+    const existingReservations = await db
+      .select()
+      .from(transportReservations)
+      .where(
+        and(
+          eq(transportReservations.site_id, site_id),
+          eq(transportReservations.transport_mode, transport_mode),
+          eq(transportReservations.reservation_date, reservation_date),
+          time_slot ? eq(transportReservations.time_slot, time_slot) : isNull(transportReservations.time_slot),
+          eq(transportReservations.status, "confirmed")
+        )
+      );
+
+    if (existingReservations.length > 0) {
+      return res.status(409).json({
+        error: "Double-booking detected: A confirmed reservation already exists for this site, mode, date, and time slot",
+        conflicting_reservation: existingReservations[0],
+      });
+    }
+
+    const [reservation] = await db
+      .insert(transportReservations)
+      .values({
+        site_id,
+        transport_mode,
+        asset_type: asset_type || null,
+        reserved_capacity_lbs,
+        reservation_date,
+        time_slot: time_slot || null,
+        purpose,
+        transfer_id: transfer_id || null,
+        reserved_by: req.user!.id,
+        status: "tentative",
+      })
+      .returning();
+
+    res.status(201).json(reservation);
+  } catch (error) {
+    console.error("[Warehouse] Failed to create reservation:", error);
+    res.status(500).json({ error: "Failed to create reservation" });
+  }
+});
+
+// PATCH /api/warehouse/reservations/:id - Update reservation status
+router.patch("/warehouse/reservations/:id", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const reservationId = parseInt(req.params.id);
+    if (isNaN(reservationId)) {
+      return res.status(400).json({ error: "Invalid reservation ID" });
+    }
+
+    const { status } = req.body;
+
+    if (!status || !["tentative", "confirmed", "cancelled"].includes(status)) {
+      return res.status(400).json({
+        error: "Invalid status. Must be one of: tentative, confirmed, cancelled",
+      });
+    }
+
+    // If confirming, check for conflicts
+    if (status === "confirmed") {
+      const [existing] = await db
+        .select()
+        .from(transportReservations)
+        .where(eq(transportReservations.id, reservationId));
+
+      if (existing) {
+        const conflicts = await db
+          .select()
+          .from(transportReservations)
+          .where(
+            and(
+              eq(transportReservations.site_id, existing.site_id),
+              eq(transportReservations.transport_mode, existing.transport_mode),
+              eq(transportReservations.reservation_date, existing.reservation_date),
+              existing.time_slot
+                ? eq(transportReservations.time_slot, existing.time_slot)
+                : isNull(transportReservations.time_slot),
+              eq(transportReservations.status, "confirmed"),
+              sql`${transportReservations.id} != ${reservationId}`
+            )
+          );
+
+        if (conflicts.length > 0) {
+          return res.status(409).json({
+            error: "Cannot confirm: A confirmed reservation already exists for this slot",
+            conflicting_reservation: conflicts[0],
+          });
+        }
+      }
+    }
+
+    const [updated] = await db
+      .update(transportReservations)
+      .set({ status })
+      .where(eq(transportReservations.id, reservationId))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: "Reservation not found" });
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error("[Warehouse] Failed to update reservation:", error);
+    res.status(500).json({ error: "Failed to update reservation" });
+  }
+});
+
+// DELETE /api/warehouse/reservations/:id - Cancel/delete a reservation
+router.delete("/warehouse/reservations/:id", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const reservationId = parseInt(req.params.id);
+    if (isNaN(reservationId)) {
+      return res.status(400).json({ error: "Invalid reservation ID" });
+    }
+
+    const [deleted] = await db
+      .delete(transportReservations)
+      .where(eq(transportReservations.id, reservationId))
+      .returning();
+
+    if (!deleted) {
+      return res.status(404).json({ error: "Reservation not found" });
+    }
+
+    res.json({ success: true, message: "Reservation deleted successfully", reservation: deleted });
+  } catch (error) {
+    console.error("[Warehouse] Failed to delete reservation:", error);
+    res.status(500).json({ error: "Failed to delete reservation" });
+  }
+});
+
+// GET /api/warehouse/reservations/calendar - Calendar view of reservations
+router.get("/warehouse/reservations/calendar", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { site_id, month } = req.query;
+
+    if (!month || !/^\d{4}-\d{2}$/.test(month as string)) {
+      return res.status(400).json({ error: "month parameter required in YYYY-MM format" });
+    }
+
+    const monthStart = `${month}-01`;
+    const [year, monthNum] = (month as string).split("-").map(Number);
+    const lastDay = new Date(year, monthNum, 0).getDate();
+    const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
+
+    const conditions: any[] = [
+      gte(transportReservations.reservation_date, monthStart),
+      lte(transportReservations.reservation_date, monthEnd),
+    ];
+
+    if (site_id) {
+      conditions.push(eq(transportReservations.site_id, parseInt(site_id as string)));
+    }
+
+    const reservations = await db
+      .select({
+        id: transportReservations.id,
+        site_id: transportReservations.site_id,
+        site_name: warehouseSites.name,
+        transport_mode: transportReservations.transport_mode,
+        asset_type: transportReservations.asset_type,
+        reserved_capacity_lbs: transportReservations.reserved_capacity_lbs,
+        reservation_date: transportReservations.reservation_date,
+        time_slot: transportReservations.time_slot,
+        purpose: transportReservations.purpose,
+        status: transportReservations.status,
+      })
+      .from(transportReservations)
+      .leftJoin(warehouseSites, eq(transportReservations.site_id, warehouseSites.id))
+      .where(and(...conditions))
+      .orderBy(asc(transportReservations.reservation_date), asc(transportReservations.time_slot));
+
+    // Group by date and detect conflicts
+    const calendarMap = new Map<string, { reservations: any[]; conflicts: boolean }>();
+
+    for (const reservation of reservations) {
+      const dateStr = reservation.reservation_date;
+      if (!calendarMap.has(dateStr)) {
+        calendarMap.set(dateStr, { reservations: [], conflicts: false });
+      }
+      calendarMap.get(dateStr)!.reservations.push(reservation);
+    }
+
+    // Detect conflicts (multiple confirmed reservations on same site/mode/time_slot)
+    for (const [dateStr, data] of Array.from(calendarMap.entries())) {
+      const confirmedBySlot = new Map<string, number>();
+      for (const r of data.reservations) {
+        if (r.status === "confirmed") {
+          const key = `${r.site_id}-${r.transport_mode}-${r.time_slot || "all_day"}`;
+          confirmedBySlot.set(key, (confirmedBySlot.get(key) || 0) + 1);
+        }
+      }
+      for (const count of Array.from(confirmedBySlot.values())) {
+        if (count > 1) {
+          data.conflicts = true;
+          break;
+        }
+      }
+    }
+
+    const calendar = Array.from(calendarMap.entries()).map(([date, data]) => ({
+      date,
+      reservations: data.reservations,
+      conflicts: data.conflicts,
+    }));
+
+    res.json(calendar);
+  } catch (error) {
+    console.error("[Warehouse] Failed to fetch reservation calendar:", error);
+    res.status(500).json({ error: "Failed to fetch reservation calendar" });
+  }
+});
+
+// GET /api/warehouse/reservations/conflicts - Find conflicting reservations
+router.get("/warehouse/reservations/conflicts", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    // Find all confirmed reservations that overlap (same site, mode, date, time_slot)
+    const reservations = await db
+      .select({
+        id: transportReservations.id,
+        site_id: transportReservations.site_id,
+        site_name: warehouseSites.name,
+        transport_mode: transportReservations.transport_mode,
+        reservation_date: transportReservations.reservation_date,
+        time_slot: transportReservations.time_slot,
+        status: transportReservations.status,
+        purpose: transportReservations.purpose,
+        reserved_capacity_lbs: transportReservations.reserved_capacity_lbs,
+      })
+      .from(transportReservations)
+      .leftJoin(warehouseSites, eq(transportReservations.site_id, warehouseSites.id))
+      .where(eq(transportReservations.status, "confirmed"))
+      .orderBy(
+        asc(transportReservations.site_id),
+        asc(transportReservations.reservation_date),
+        asc(transportReservations.time_slot)
+      );
+
+    // Group and find duplicates
+    const slotMap = new Map<string, any[]>();
+    for (const r of reservations) {
+      const key = `${r.site_id}-${r.transport_mode}-${r.reservation_date}-${r.time_slot || "all_day"}`;
+      if (!slotMap.has(key)) {
+        slotMap.set(key, []);
+      }
+      slotMap.get(key)!.push(r);
+    }
+
+    const conflicts: { slot: string; reservations: any[] }[] = [];
+    for (const [slot, rList] of Array.from(slotMap.entries())) {
+      if (rList.length > 1) {
+        conflicts.push({ slot, reservations: rList });
+      }
+    }
+
+    res.json({
+      total_conflicts: conflicts.length,
+      conflicts,
+    });
+  } catch (error) {
+    console.error("[Warehouse] Failed to find conflicts:", error);
+    res.status(500).json({ error: "Failed to find conflicts" });
+  }
+});
+
+// ============================================================================
+// SITE BENCHMARKING API
+// ============================================================================
+
+// GET /api/warehouse/benchmarks - Get aggregated metrics for all sites
+router.get("/warehouse/benchmarks", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { date_from, date_to } = req.query;
+
+    // Default to last 30 days
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const fromDate = date_from ? (date_from as string) : defaultFrom.toISOString().split("T")[0];
+    const toDate = date_to ? (date_to as string) : now.toISOString().split("T")[0];
+
+    const metrics = await db
+      .select({
+        site_id: siteMetricsDaily.site_id,
+        site_name: warehouseSites.name,
+        site_code: warehouseSites.code,
+        total_throughput_lbs: sql<number>`CAST(SUM(${siteMetricsDaily.throughput_lbs}) AS INTEGER)`,
+        total_inbound: sql<number>`CAST(SUM(${siteMetricsDaily.inbound_shipments}) AS INTEGER)`,
+        total_outbound: sql<number>`CAST(SUM(${siteMetricsDaily.outbound_shipments}) AS INTEGER)`,
+        avg_processing_hours: sql<number>`AVG(${siteMetricsDaily.avg_processing_hours})`,
+        avg_utilization: sql<number>`AVG(${siteMetricsDaily.utilization_percent})`,
+        total_items_processed: sql<number>`CAST(SUM(${siteMetricsDaily.items_processed}) AS INTEGER)`,
+        total_errors: sql<number>`CAST(SUM(${siteMetricsDaily.error_count}) AS INTEGER)`,
+        days_recorded: sql<number>`COUNT(*)`,
+      })
+      .from(siteMetricsDaily)
+      .leftJoin(warehouseSites, eq(siteMetricsDaily.site_id, warehouseSites.id))
+      .where(
+        and(
+          gte(siteMetricsDaily.metric_date, fromDate),
+          lte(siteMetricsDaily.metric_date, toDate)
+        )
+      )
+      .groupBy(siteMetricsDaily.site_id, warehouseSites.name, warehouseSites.code);
+
+    // Calculate rankings
+    const withRankings = metrics.map((m) => ({
+      ...m,
+      error_rate: m.total_items_processed > 0 ? (m.total_errors / m.total_items_processed) * 100 : 0,
+    }));
+
+    // Sort by throughput for ranking
+    withRankings.sort((a, b) => (b.total_throughput_lbs || 0) - (a.total_throughput_lbs || 0));
+    withRankings.forEach((m, i) => ((m as any).throughput_rank = i + 1));
+
+    // Sort by avg processing time (lower is better)
+    const byProcessing = [...withRankings].sort(
+      (a, b) => (a.avg_processing_hours || 999) - (b.avg_processing_hours || 999)
+    );
+    byProcessing.forEach((m, i) => ((m as any).processing_rank = i + 1));
+
+    // Sort by error rate (lower is better)
+    const byErrors = [...withRankings].sort((a, b) => (a.error_rate || 0) - (b.error_rate || 0));
+    byErrors.forEach((m, i) => ((m as any).error_rank = i + 1));
+
+    res.json({
+      date_range: { from: fromDate, to: toDate },
+      sites: withRankings,
+    });
+  } catch (error) {
+    console.error("[Warehouse] Failed to fetch benchmarks:", error);
+    res.status(500).json({ error: "Failed to fetch benchmarks" });
+  }
+});
+
+// GET /api/warehouse/benchmarks/leaderboard - Site rankings by category
+router.get("/warehouse/benchmarks/leaderboard", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const fromDate = thirtyDaysAgo.toISOString().split("T")[0];
+    const toDate = now.toISOString().split("T")[0];
+
+    const metrics = await db
+      .select({
+        site_id: siteMetricsDaily.site_id,
+        site_name: warehouseSites.name,
+        site_code: warehouseSites.code,
+        total_throughput_lbs: sql<number>`CAST(SUM(${siteMetricsDaily.throughput_lbs}) AS INTEGER)`,
+        avg_processing_hours: sql<number>`AVG(${siteMetricsDaily.avg_processing_hours})`,
+        total_items_processed: sql<number>`CAST(SUM(${siteMetricsDaily.items_processed}) AS INTEGER)`,
+        total_errors: sql<number>`CAST(SUM(${siteMetricsDaily.error_count}) AS INTEGER)`,
+      })
+      .from(siteMetricsDaily)
+      .leftJoin(warehouseSites, eq(siteMetricsDaily.site_id, warehouseSites.id))
+      .where(
+        and(
+          gte(siteMetricsDaily.metric_date, fromDate),
+          lte(siteMetricsDaily.metric_date, toDate)
+        )
+      )
+      .groupBy(siteMetricsDaily.site_id, warehouseSites.name, warehouseSites.code);
+
+    const withRates = metrics.map((m) => ({
+      ...m,
+      error_rate: m.total_items_processed > 0 ? (m.total_errors / m.total_items_processed) * 100 : 0,
+    }));
+
+    // Top 5 by throughput
+    const topThroughput = [...withRates]
+      .sort((a, b) => (b.total_throughput_lbs || 0) - (a.total_throughput_lbs || 0))
+      .slice(0, 5)
+      .map((m, i) => ({ rank: i + 1, site_id: m.site_id, site_name: m.site_name, value: m.total_throughput_lbs }));
+
+    // Top 5 by processing time (lowest)
+    const topProcessing = [...withRates]
+      .filter((m) => m.avg_processing_hours !== null)
+      .sort((a, b) => (a.avg_processing_hours || 999) - (b.avg_processing_hours || 999))
+      .slice(0, 5)
+      .map((m, i) => ({
+        rank: i + 1,
+        site_id: m.site_id,
+        site_name: m.site_name,
+        value: Number(m.avg_processing_hours?.toFixed(2)),
+      }));
+
+    // Top 5 by lowest error rate
+    const topErrorRate = [...withRates]
+      .sort((a, b) => (a.error_rate || 0) - (b.error_rate || 0))
+      .slice(0, 5)
+      .map((m, i) => ({
+        rank: i + 1,
+        site_id: m.site_id,
+        site_name: m.site_name,
+        value: Number(m.error_rate.toFixed(2)),
+      }));
+
+    res.json({
+      date_range: { from: fromDate, to: toDate },
+      leaderboards: {
+        throughput: { metric: "total_throughput_lbs", unit: "lbs", top: topThroughput },
+        processing_time: { metric: "avg_processing_hours", unit: "hours", top: topProcessing },
+        error_rate: { metric: "error_rate", unit: "%", top: topErrorRate },
+      },
+    });
+  } catch (error) {
+    console.error("[Warehouse] Failed to fetch leaderboard:", error);
+    res.status(500).json({ error: "Failed to fetch leaderboard" });
+  }
+});
+
+// GET /api/warehouse/benchmarks/:siteId - Site-specific metrics with trends
+router.get("/warehouse/benchmarks/:siteId", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const siteId = parseInt(req.params.siteId);
+    if (isNaN(siteId)) {
+      return res.status(400).json({ error: "Invalid site ID" });
+    }
+
+    const { date_from, date_to } = req.query;
+
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const fromDate = date_from ? (date_from as string) : defaultFrom.toISOString().split("T")[0];
+    const toDate = date_to ? (date_to as string) : now.toISOString().split("T")[0];
+
+    // Get daily metrics
+    const dailyMetrics = await db
+      .select()
+      .from(siteMetricsDaily)
+      .where(
+        and(
+          eq(siteMetricsDaily.site_id, siteId),
+          gte(siteMetricsDaily.metric_date, fromDate),
+          lte(siteMetricsDaily.metric_date, toDate)
+        )
+      )
+      .orderBy(asc(siteMetricsDaily.metric_date));
+
+    // Calculate trends (compare first half to second half)
+    const midpoint = Math.floor(dailyMetrics.length / 2);
+    const firstHalf = dailyMetrics.slice(0, midpoint);
+    const secondHalf = dailyMetrics.slice(midpoint);
+
+    const calcAvg = (arr: typeof dailyMetrics, field: keyof typeof dailyMetrics[0]) => {
+      if (arr.length === 0) return 0;
+      const sum = arr.reduce((acc, m) => acc + (Number(m[field]) || 0), 0);
+      return sum / arr.length;
+    };
+
+    const firstThroughput = calcAvg(firstHalf, "throughput_lbs");
+    const secondThroughput = calcAvg(secondHalf, "throughput_lbs");
+    const throughputTrend = secondThroughput > firstThroughput ? "improving" : secondThroughput < firstThroughput ? "declining" : "stable";
+
+    const firstProcessing = calcAvg(firstHalf, "avg_processing_hours");
+    const secondProcessing = calcAvg(secondHalf, "avg_processing_hours");
+    const processingTrend = secondProcessing < firstProcessing ? "improving" : secondProcessing > firstProcessing ? "declining" : "stable";
+
+    const firstErrors = calcAvg(firstHalf, "error_count");
+    const secondErrors = calcAvg(secondHalf, "error_count");
+    const errorTrend = secondErrors < firstErrors ? "improving" : secondErrors > firstErrors ? "declining" : "stable";
+
+    // Get site info
+    const [site] = await db.select().from(warehouseSites).where(eq(warehouseSites.id, siteId));
+
+    res.json({
+      site: site || { id: siteId },
+      date_range: { from: fromDate, to: toDate },
+      daily_metrics: dailyMetrics,
+      trends: {
+        throughput: { trend: throughputTrend, first_period_avg: firstThroughput, second_period_avg: secondThroughput },
+        processing_time: { trend: processingTrend, first_period_avg: firstProcessing, second_period_avg: secondProcessing },
+        error_count: { trend: errorTrend, first_period_avg: firstErrors, second_period_avg: secondErrors },
+      },
+    });
+  } catch (error) {
+    console.error("[Warehouse] Failed to fetch site benchmarks:", error);
+    res.status(500).json({ error: "Failed to fetch site benchmarks" });
+  }
+});
+
+// POST /api/warehouse/benchmarks/capture - Capture today's metrics for all sites
+router.post("/warehouse/benchmarks/capture", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const today = new Date().toISOString().split("T")[0];
+
+    // Get all sites for current user
+    const sites = await db
+      .select()
+      .from(warehouseSites)
+      .where(eq(warehouseSites.user_id, req.user!.id));
+
+    const capturedMetrics = [];
+
+    for (const site of sites) {
+      // Check if metrics already captured for today
+      const [existing] = await db
+        .select()
+        .from(siteMetricsDaily)
+        .where(and(eq(siteMetricsDaily.site_id, site.id), eq(siteMetricsDaily.metric_date, today)));
+
+      // Count inbound transfers (destination = this site, completed today)
+      const [inboundResult] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(warehouseTransfers)
+        .where(
+          and(
+            eq(warehouseTransfers.destination_site_id, site.id),
+            eq(warehouseTransfers.status, "completed"),
+            sql`DATE(${warehouseTransfers.updated_at}) = ${today}`
+          )
+        );
+
+      // Count outbound transfers (source = this site, completed today)
+      const [outboundResult] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(warehouseTransfers)
+        .where(
+          and(
+            eq(warehouseTransfers.source_site_id, site.id),
+            eq(warehouseTransfers.status, "completed"),
+            sql`DATE(${warehouseTransfers.updated_at}) = ${today}`
+          )
+        );
+
+      // Sum total weight transferred today (both directions)
+      const [weightResult] = await db
+        .select({ total: sql<number>`COALESCE(SUM(CAST(${warehouseTransfers.total_weight_lbs} AS INTEGER)), 0)` })
+        .from(warehouseTransfers)
+        .where(
+          and(
+            or(
+              eq(warehouseTransfers.source_site_id, site.id),
+              eq(warehouseTransfers.destination_site_id, site.id)
+            ),
+            eq(warehouseTransfers.status, "completed"),
+            sql`DATE(${warehouseTransfers.updated_at}) = ${today}`
+          )
+        );
+
+      // Count items in inventory at this site
+      const [itemsResult] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(warehouseInventoryItems)
+        .where(eq(warehouseInventoryItems.site_id, site.id));
+
+      // Calculate utilization (items / capacity estimate)
+      const capacity = await getSiteCapacity(site.id);
+      const utilizationPercent = capacity && capacity.totalPalletPositions > 0 
+        ? ((capacity.totalPalletPositions - capacity.openPalletPositions) / capacity.totalPalletPositions) * 100 
+        : 0;
+
+      const metricsData = {
+        site_id: site.id,
+        metric_date: today,
+        throughput_lbs: Number(weightResult?.total) || 0,
+        inbound_shipments: Number(inboundResult?.count) || 0,
+        outbound_shipments: Number(outboundResult?.count) || 0,
+        avg_processing_hours: null, // Would need more data to calculate
+        utilization_percent: utilizationPercent.toFixed(2),
+        items_processed: (Number(inboundResult?.count) || 0) + (Number(outboundResult?.count) || 0),
+        error_count: 0, // Would need error tracking to calculate
+      };
+
+      if (existing) {
+        // Update existing
+        const [updated] = await db
+          .update(siteMetricsDaily)
+          .set(metricsData)
+          .where(eq(siteMetricsDaily.id, existing.id))
+          .returning();
+        capturedMetrics.push({ ...updated, action: "updated" });
+      } else {
+        // Insert new
+        const [inserted] = await db.insert(siteMetricsDaily).values(metricsData).returning();
+        capturedMetrics.push({ ...inserted, action: "created" });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Captured metrics for ${capturedMetrics.length} sites`,
+      date: today,
+      metrics: capturedMetrics,
+    });
+  } catch (error) {
+    console.error("[Warehouse] Failed to capture benchmarks:", error);
+    res.status(500).json({ error: "Failed to capture benchmarks" });
+  }
+});
+
+// ============================================================================
+// INBOUND CARGO FEED API
+// ============================================================================
+
+// GET /api/warehouse/inbound/:siteId - Get all inbound shipments for a site
+router.get("/warehouse/inbound/:siteId", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const siteId = parseInt(req.params.siteId, 10);
+    if (isNaN(siteId)) {
+      return res.status(400).json({ error: "Invalid site ID" });
+    }
+
+    // Get transfers where this site is the destination and not yet completed
+    const transfers = await db
+      .select({
+        id: warehouseTransfers.id,
+        source_site_id: warehouseTransfers.source_site_id,
+        destination_site_id: warehouseTransfers.destination_site_id,
+        transport_mode: warehouseTransfers.transport_mode,
+        status: warehouseTransfers.status,
+        scheduled_date: warehouseTransfers.scheduled_date,
+        transfer_items: warehouseTransfers.transfer_items,
+        total_weight_lbs: warehouseTransfers.total_weight_lbs,
+        created_at: warehouseTransfers.created_at,
+      })
+      .from(warehouseTransfers)
+      .where(
+        and(
+          eq(warehouseTransfers.destination_site_id, siteId),
+          inArray(warehouseTransfers.status, ["pending", "scheduled", "in_transit", "delayed"])
+        )
+      )
+      .orderBy(asc(warehouseTransfers.scheduled_date));
+
+    // Get source site names
+    const sourceSiteIds = Array.from(new Set(transfers.map(t => t.source_site_id)));
+    const sourceSites = sourceSiteIds.length > 0 
+      ? await db
+          .select({ id: warehouseSites.id, name: warehouseSites.name })
+          .from(warehouseSites)
+          .where(inArray(warehouseSites.id, sourceSiteIds))
+      : [];
+    const siteNameMap = Object.fromEntries(sourceSites.map(s => [s.id, s.name]));
+
+    const shipments = transfers.map(t => {
+      const items = Array.isArray(t.transfer_items) ? t.transfer_items : [];
+      const itemCount = items.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0);
+      const etaValue = t.scheduled_date 
+        ? (t.scheduled_date instanceof Date ? t.scheduled_date.toISOString() : String(t.scheduled_date))
+        : (t.created_at instanceof Date ? t.created_at.toISOString() : String(t.created_at));
+      
+      return {
+        id: t.id,
+        transferId: t.id,
+        originSiteId: t.source_site_id,
+        originSiteName: siteNameMap[t.source_site_id] || `Site #${t.source_site_id}`,
+        transportMode: t.transport_mode || "ground",
+        status: t.status,
+        eta: etaValue,
+        itemCount,
+        totalWeight: parseFloat(t.total_weight_lbs || "0") || 0,
+        items: items.map((item: any) => ({
+          requisitionNo: item.requisition_no || item.requisitionNo || "",
+          description: item.description || "",
+          nsn: item.nsn || "",
+          quantity: item.quantity || 1,
+          weight: parseFloat(item.weight_lb || item.weight || "0") || 0,
+        })),
+      };
+    });
+
+    res.json(shipments);
+  } catch (error) {
+    console.error("[Warehouse] Failed to fetch inbound shipments:", error);
+    res.status(500).json({ error: "Failed to fetch inbound shipments" });
+  }
+});
+
+// GET /api/warehouse/inbound/:siteId/timeline - Get 14-day timeline of inbound shipments
+router.get("/warehouse/inbound/:siteId/timeline", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const siteId = parseInt(req.params.siteId, 10);
+    if (isNaN(siteId)) {
+      return res.status(400).json({ error: "Invalid site ID" });
+    }
+
+    // Generate 14-day window
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 14);
+
+    const todayStr = today.toISOString().split("T")[0];
+    const endDateStr = endDate.toISOString().split("T")[0];
+
+    // Get transfers in this date range
+    const transfers = await db
+      .select({
+        id: warehouseTransfers.id,
+        source_site_id: warehouseTransfers.source_site_id,
+        transport_mode: warehouseTransfers.transport_mode,
+        status: warehouseTransfers.status,
+        scheduled_date: warehouseTransfers.scheduled_date,
+        transfer_items: warehouseTransfers.transfer_items,
+        total_weight_lbs: warehouseTransfers.total_weight_lbs,
+      })
+      .from(warehouseTransfers)
+      .where(
+        and(
+          eq(warehouseTransfers.destination_site_id, siteId),
+          sql`DATE(${warehouseTransfers.scheduled_date}) >= ${todayStr}`,
+          sql`DATE(${warehouseTransfers.scheduled_date}) <= ${endDateStr}`
+        )
+      );
+
+    // Get source site names
+    const sourceSiteIds = Array.from(new Set(transfers.map(t => t.source_site_id)));
+    const sourceSites = sourceSiteIds.length > 0
+      ? await db
+          .select({ id: warehouseSites.id, name: warehouseSites.name })
+          .from(warehouseSites)
+          .where(inArray(warehouseSites.id, sourceSiteIds))
+      : [];
+    const siteNameMap = Object.fromEntries(sourceSites.map(s => [s.id, s.name]));
+
+    // Build timeline by day
+    const timeline: Array<{
+      date: string;
+      arrivalCount: number;
+      totalWeight: number;
+      shipments: Array<{
+        transferId: number;
+        originSiteName: string;
+        transportMode: string;
+        status: string;
+        itemCount: number;
+        totalWeight: number;
+      }>;
+    }> = [];
+
+    for (let i = 0; i < 14; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() + i);
+      const dateStr = date.toISOString().split("T")[0];
+
+      const dayTransfers = transfers.filter(t => {
+        if (!t.scheduled_date) return false;
+        const scheduledDate = t.scheduled_date instanceof Date 
+          ? t.scheduled_date.toISOString().split("T")[0]
+          : String(t.scheduled_date).split("T")[0];
+        return scheduledDate === dateStr;
+      });
+
+      const shipments = dayTransfers.map(t => {
+        const items = Array.isArray(t.transfer_items) ? t.transfer_items : [];
+        const itemCount = items.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0);
+        
+        return {
+          transferId: t.id,
+          originSiteName: siteNameMap[t.source_site_id] || `Site #${t.source_site_id}`,
+          transportMode: t.transport_mode || "ground",
+          status: t.status,
+          itemCount,
+          totalWeight: parseFloat(t.total_weight_lbs || "0") || 0,
+        };
+      });
+
+      timeline.push({
+        date: dateStr,
+        arrivalCount: shipments.length,
+        totalWeight: shipments.reduce((sum, s) => sum + s.totalWeight, 0),
+        shipments,
+      });
+    }
+
+    res.json(timeline);
+  } catch (error) {
+    console.error("[Warehouse] Failed to fetch inbound timeline:", error);
+    res.status(500).json({ error: "Failed to fetch inbound timeline" });
+  }
+});
 
 export default router;

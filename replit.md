@@ -51,6 +51,16 @@ The system provides automatic vehicle calculation for ground transfers between w
 ## Unified Transport Data Pipeline
 The system provides standardized transport data aggregation for warehouse forecasting with a cross-modal manifest system. It includes a transfer workflow with lifecycle tracking, inbound cargo tracking, 80% utilization threshold alerts, and predictive forecasting that incorporates warehouse transfers.
 
+## Inter-Site Management Features (New)
+The WMS includes comprehensive inter-site coordination capabilities:
+- **Priority Transfer Queue**: Transfer prioritization with queue position tracking, escalation controls, and priority levels (routine, priority, immediate, flash)
+- **Cross-Site Inventory Matrix**: Network-wide inventory visibility with shortage/surplus detection, site thresholds, and rebalancing recommendations
+- **Inbound Cargo Feed**: Real-time visibility of incoming shipments with timeline view, arrival forecasting, and transport mode color-coding
+- **Capacity Forecasting**: 30-day utilization projections with 80% threshold alerts, confidence scoring, and inbound/outbound planning
+- **Rebalancing Suggestions**: AI-generated inventory redistribution recommendations with approval workflow and execution tracking
+- **Transport Calendar**: Cross-site transport reservation scheduling with conflict detection and consolidation wizard
+- **Site Benchmarking**: Performance metrics comparison across sites with leaderboards, trend analysis, and daily metric capture
+
 ## Military Sealift Command (MSC) Sea Freight Operations
 The Sea Freight module provides comprehensive maritime logistics, including a database of authentic MSC vessel types, tab-based navigation for managing voyages, containers, transfers, and schedules. It features voyage management with a status lifecycle, container tracking, a dynamic port schedule, and a voyage proposal system for recommending vessels.
 

@@ -617,20 +617,7 @@ export async function skipOptimizationAction(
 /**
  * Get zone summary with item counts and capacity utilization
  */
-export async function fetchZoneSummary(siteId: number): Promise<{
-  zones: Array<{
-    id: number;
-    code: string;
-    name: string;
-    itemCount: number;
-    totalWeight: number;
-    bulkUsed: number;
-    bulkAvailable: number;
-    rackUsed: number;
-    rackAvailable: number;
-    utilizationPercent: number;
-  }>;
-}> {
+export async function fetchZoneSummary(siteId: number): Promise<ZoneSummary> {
   return api.get(`${API_BASE}/sites/${siteId}/zones/summary`);
 }
 
@@ -1032,6 +1019,21 @@ export async function startAllOptimizationActions(planId: number): Promise<Start
 }
 
 export interface ZoneSummary {
+  zones: Array<{
+    id: number;
+    code: string;
+    name: string;
+    itemCount: number;
+    totalWeight: number;
+    bulkUsed: number;
+    bulkAvailable: number;
+    rackUsed: number;
+    rackAvailable: number;
+    utilizationPercent: number;
+  }>;
+}
+
+export interface ZoneSummaryStats {
   totalZones: number;
   totalCapacity: number;
   totalUsed: number;
@@ -1243,4 +1245,505 @@ export async function saveVehiclePrioritySettings(settings: VehiclePrioritySetti
     '/api/admin/vehicle-priorities',
     { priorities: settings }
   );
+}
+
+export type TransferPriorityLevel = 'routine' | 'priority' | 'immediate' | 'flash';
+
+export interface QueueTransfer {
+  id: number;
+  user_id: number;
+  source_site_id: number;
+  destination_site_id: number;
+  status: string;
+  transport_mode: string;
+  transfer_items: any[];
+  notes?: string;
+  scheduled_date?: string;
+  completed_date?: string;
+  priority_level: TransferPriorityLevel;
+  priority_score: number;
+  escalated_at?: string | null;
+  escalated_by?: number | null;
+  queue_position?: number | null;
+  created_at: string;
+  updated_at?: string;
+  source_site_name?: string;
+  destination_site_name?: string;
+}
+
+export interface QueueStats {
+  total_pending: number;
+  by_priority: Record<string, number>;
+  avg_wait_hours: number;
+  oldest_pending: string | null;
+}
+
+export async function fetchTransferQueue(params?: {
+  status?: string;
+  site_id?: number;
+  limit?: number;
+}): Promise<QueueTransfer[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.status) searchParams.set("status", params.status);
+  if (params?.site_id) searchParams.set("site_id", params.site_id.toString());
+  if (params?.limit) searchParams.set("limit", params.limit.toString());
+  
+  const queryString = searchParams.toString();
+  const url = `${API_BASE}/queue${queryString ? `?${queryString}` : ""}`;
+  return api.get<QueueTransfer[]>(url);
+}
+
+export async function fetchQueueStats(): Promise<QueueStats> {
+  return api.get<QueueStats>(`${API_BASE}/queue/stats`);
+}
+
+export async function escalateTransfer(transferId: number): Promise<QueueTransfer> {
+  return api.post<QueueTransfer>(`${API_BASE}/transfers/${transferId}/escalate`, {});
+}
+
+export async function updateTransferPriority(
+  transferId: number,
+  priorityLevel: TransferPriorityLevel
+): Promise<QueueTransfer> {
+  return api.patch<QueueTransfer>(
+    `${API_BASE}/transfers/${transferId}/priority`,
+    { priority_level: priorityLevel }
+  );
+}
+
+export async function recalculateQueue(): Promise<{ message: string; updated: number }> {
+  return api.post<{ message: string; updated: number }>(`${API_BASE}/queue/recalculate`, {});
+}
+
+export interface NetworkInventoryItem {
+  nsn: string;
+  description: string;
+  fsc?: string;
+  niin?: string;
+  sites: {
+    siteId: number;
+    siteCode: string;
+    siteName: string;
+    quantity: number;
+    status: 'ok' | 'low' | 'critical' | 'surplus';
+    minThreshold?: number;
+    maxThreshold?: number;
+    reorderPoint?: number;
+  }[];
+  totalQuantity: number;
+}
+
+export interface NetworkInventoryResponse {
+  items: NetworkInventoryItem[];
+  sites: { id: number; code: string; name: string }[];
+  summary: {
+    totalItems: number;
+    totalShortages: number;
+    totalSurpluses: number;
+    itemsOk: number;
+  };
+}
+
+export interface NetworkShortage {
+  id: number;
+  nsn: string;
+  description: string;
+  siteId: number;
+  siteCode: string;
+  siteName: string;
+  currentQuantity: number;
+  reorderPoint: number;
+  minThreshold: number;
+  shortfall: number;
+  suggestedTransfers: {
+    fromSiteId: number;
+    fromSiteCode: string;
+    fromSiteName: string;
+    availableQuantity: number;
+    suggestedQuantity: number;
+  }[];
+}
+
+export interface NetworkSurplus {
+  id: number;
+  nsn: string;
+  description: string;
+  siteId: number;
+  siteCode: string;
+  siteName: string;
+  currentQuantity: number;
+  maxThreshold: number;
+  excess: number;
+  suggestedTransfers: {
+    toSiteId: number;
+    toSiteCode: string;
+    toSiteName: string;
+    currentQuantity: number;
+    suggestedQuantity: number;
+  }[];
+}
+
+export interface InventoryThreshold {
+  id: number;
+  siteId: number;
+  siteCode: string;
+  siteName: string;
+  nsn: string;
+  description?: string;
+  minThreshold: number;
+  maxThreshold: number;
+  reorderPoint: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateThresholdData {
+  siteId: number;
+  nsn: string;
+  minThreshold: number;
+  maxThreshold: number;
+  reorderPoint: number;
+}
+
+export async function fetchNetworkInventory(): Promise<NetworkInventoryResponse> {
+  return api.get<NetworkInventoryResponse>(`${API_BASE}/network/inventory`);
+}
+
+export async function fetchNetworkShortages(): Promise<NetworkShortage[]> {
+  return api.get<NetworkShortage[]>(`${API_BASE}/network/shortages`);
+}
+
+export async function fetchNetworkSurpluses(): Promise<NetworkSurplus[]> {
+  return api.get<NetworkSurplus[]>(`${API_BASE}/network/surpluses`);
+}
+
+export async function fetchThresholds(): Promise<InventoryThreshold[]> {
+  return api.get<InventoryThreshold[]>(`${API_BASE}/thresholds`);
+}
+
+export async function createThreshold(data: CreateThresholdData): Promise<InventoryThreshold> {
+  return api.post<InventoryThreshold>(`${API_BASE}/thresholds`, data);
+}
+
+export async function updateThreshold(
+  thresholdId: number,
+  data: Partial<CreateThresholdData>
+): Promise<InventoryThreshold> {
+  return api.put<InventoryThreshold>(`${API_BASE}/thresholds/${thresholdId}`, data);
+}
+
+export async function deleteThreshold(thresholdId: number): Promise<{ success: boolean; message: string }> {
+  return api.delete(`${API_BASE}/thresholds/${thresholdId}`).then(() => ({
+    success: true,
+    message: "Threshold deleted successfully"
+  }));
+}
+
+export interface RebalancingSuggestion {
+  id?: number;
+  shortageId: number;
+  surplusId: number;
+  nsn: string;
+  fromSiteId: number;
+  toSiteId: number;
+  suggestedQuantity: number;
+  status: 'pending' | 'approved' | 'rejected' | 'executed';
+}
+
+export async function createRebalancingSuggestion(data: {
+  shortageId: number;
+  surplusId: number;
+  quantity: number;
+}): Promise<RebalancingSuggestion> {
+  return api.post<RebalancingSuggestion>(`${API_BASE}/network/rebalance`, data);
+}
+
+export interface InboundShipmentItem {
+  requisitionNo: string;
+  description?: string;
+  nsn?: string;
+  quantity: number;
+  weight?: number;
+}
+
+export interface InboundShipment {
+  id: number;
+  transferId: number;
+  originSiteId: number;
+  originSiteName: string;
+  transportMode: 'air' | 'ground' | 'sea';
+  status: string;
+  eta: string;
+  itemCount: number;
+  totalWeight: number;
+  items?: InboundShipmentItem[];
+}
+
+export interface InboundTimelineDay {
+  date: string;
+  arrivalCount: number;
+  totalWeight: number;
+  shipments: Array<{
+    transferId: number;
+    originSiteName: string;
+    transportMode: string;
+    status: string;
+    itemCount: number;
+    totalWeight: number;
+  }>;
+}
+
+export async function fetchInboundShipments(siteId: number): Promise<InboundShipment[]> {
+  return api.get<InboundShipment[]>(`${API_BASE}/inbound/${siteId}`);
+}
+
+export async function fetchInboundTimeline(siteId: number): Promise<InboundTimelineDay[]> {
+  return api.get<InboundTimelineDay[]>(`${API_BASE}/inbound/${siteId}/timeline`);
+}
+
+export interface CapacityForecast {
+  id: number;
+  site_id: number;
+  forecast_date: string;
+  projected_utilization_percent: string;
+  inbound_weight_lbs: string;
+  outbound_weight_lbs: string;
+  confidence_score: string;
+  created_at: string;
+}
+
+export async function fetchCapacityForecasts(siteId: number): Promise<CapacityForecast[]> {
+  return api.get<CapacityForecast[]>(`${API_BASE}/sites/${siteId}/forecasts`);
+}
+
+export async function generateCapacityForecasts(siteId: number): Promise<{ success: boolean; count: number }> {
+  return api.post<{ success: boolean; count: number }>(`${API_BASE}/forecasts/generate`, { site_id: siteId });
+}
+
+export interface RebalancingSuggestionItem {
+  nsn: string;
+  description?: string;
+  quantity: number;
+  weight?: number;
+}
+
+export interface RebalancingSuggestionDetail {
+  id: number;
+  source_site_id: number;
+  source_site_name: string;
+  destination_site_id: number;
+  destination_site_name: string;
+  nsn: string;
+  suggested_quantity: number;
+  reason: string;
+  priority: string;
+  status: 'pending' | 'approved' | 'rejected' | 'executed';
+  items?: RebalancingSuggestionItem[];
+  created_at: string;
+  expires_at?: string;
+}
+
+export async function fetchRebalancingSuggestions(
+  status?: string
+): Promise<RebalancingSuggestionDetail[]> {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  const queryString = params.toString();
+  const url = `${API_BASE}/rebalancing${queryString ? `?${queryString}` : ""}`;
+  return api.get<RebalancingSuggestionDetail[]>(url);
+}
+
+export async function generateRebalancingSuggestions(): Promise<{
+  success: boolean;
+  count: number;
+}> {
+  return api.post<{ success: boolean; count: number }>(`${API_BASE}/rebalancing/generate`, {});
+}
+
+export async function updateRebalancingStatus(
+  suggestionId: number,
+  status: 'approved' | 'rejected'
+): Promise<RebalancingSuggestionDetail> {
+  return api.patch<RebalancingSuggestionDetail>(`${API_BASE}/rebalancing/${suggestionId}`, { status });
+}
+
+export async function executeRebalancingSuggestion(
+  suggestionId: number
+): Promise<{ success: boolean; transfer_id: number }> {
+  return api.post<{ success: boolean; transfer_id: number }>(
+    `${API_BASE}/rebalancing/${suggestionId}/execute`,
+    {}
+  );
+}
+
+export interface TransportReservation {
+  id: number;
+  site_id: number;
+  site_name?: string;
+  transport_mode: "ground" | "air" | "sea";
+  asset_type: string;
+  capacity_units: number;
+  reservation_date: string;
+  time_slot: string;
+  purpose?: string;
+  status: string;
+  created_by?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ReservationConflict {
+  id: number;
+  date: string;
+  site_id: number;
+  site_name?: string;
+  reservations: TransportReservation[];
+}
+
+export interface TransportReservationFilters {
+  site_id?: number;
+  start_date?: string;
+  end_date?: string;
+  status?: string;
+}
+
+export async function fetchTransportReservations(
+  filters: TransportReservationFilters = {}
+): Promise<TransportReservation[]> {
+  const params = new URLSearchParams();
+  if (filters.site_id) params.set("site_id", filters.site_id.toString());
+  if (filters.start_date) params.set("start_date", filters.start_date);
+  if (filters.end_date) params.set("end_date", filters.end_date);
+  if (filters.status) params.set("status", filters.status);
+  const queryString = params.toString();
+  const url = `${API_BASE}/reservations${queryString ? `?${queryString}` : ""}`;
+  return api.get<TransportReservation[]>(url);
+}
+
+export async function fetchReservationConflicts(
+  siteId?: number
+): Promise<ReservationConflict[]> {
+  const params = new URLSearchParams();
+  if (siteId) params.set("site_id", siteId.toString());
+  const queryString = params.toString();
+  const url = `${API_BASE}/reservations/conflicts${queryString ? `?${queryString}` : ""}`;
+  return api.get<ReservationConflict[]>(url);
+}
+
+export async function createTransportReservation(data: {
+  site_id: number;
+  transport_mode: "ground" | "air" | "sea";
+  asset_type: string;
+  capacity_units: number;
+  reservation_date: string;
+  time_slot: string;
+  purpose?: string;
+  status?: string;
+}): Promise<TransportReservation> {
+  return api.post<TransportReservation>(`${API_BASE}/reservations`, data);
+}
+
+export async function updateTransportReservation(
+  reservationId: number,
+  data: Partial<TransportReservation>
+): Promise<TransportReservation> {
+  return api.patch<TransportReservation>(`${API_BASE}/reservations/${reservationId}`, data);
+}
+
+export async function cancelTransportReservation(
+  reservationId: number
+): Promise<{ success: boolean; message: string }> {
+  return api.post<{ success: boolean; message: string }>(
+    `${API_BASE}/reservations/${reservationId}/cancel`,
+    {}
+  );
+}
+
+export interface SiteBenchmark {
+  site_id: number;
+  site_name?: string;
+  throughput: number;
+  inbound_shipments: number;
+  outbound_shipments: number;
+  avg_processing_hours: string;
+  utilization_percent: string;
+  error_count: number;
+  snapshot_date?: string;
+}
+
+export interface BenchmarkLeaderboardEntry {
+  site_id: number;
+  site_name: string;
+  value: number;
+}
+
+export interface BenchmarkLeaderboard {
+  top_throughput: BenchmarkLeaderboardEntry[];
+  fastest_processing: BenchmarkLeaderboardEntry[];
+  lowest_error_rate: BenchmarkLeaderboardEntry[];
+}
+
+export interface SiteBenchmarkTrendDay {
+  date: string;
+  throughput: number;
+  inbound: number;
+  outbound: number;
+  processing_hours: number;
+  utilization: number;
+  errors: number;
+}
+
+export interface SiteBenchmarkTrend {
+  site_id: number;
+  site_name: string;
+  trend_direction: "improving" | "declining" | "stable";
+  trend_change_percent?: number;
+  avg_throughput: number;
+  avg_processing_hours: number;
+  total_inbound: number;
+  total_outbound: number;
+  daily_data: SiteBenchmarkTrendDay[];
+}
+
+export interface BenchmarkFilters {
+  start_date?: string;
+  end_date?: string;
+}
+
+export async function fetchBenchmarks(
+  filters: BenchmarkFilters = {}
+): Promise<SiteBenchmark[]> {
+  const params = new URLSearchParams();
+  if (filters.start_date) params.set("start_date", filters.start_date);
+  if (filters.end_date) params.set("end_date", filters.end_date);
+  const queryString = params.toString();
+  const url = `${API_BASE}/benchmarks${queryString ? `?${queryString}` : ""}`;
+  return api.get<SiteBenchmark[]>(url);
+}
+
+export async function fetchBenchmarkLeaderboard(
+  filters: BenchmarkFilters = {}
+): Promise<BenchmarkLeaderboard> {
+  const params = new URLSearchParams();
+  if (filters.start_date) params.set("start_date", filters.start_date);
+  if (filters.end_date) params.set("end_date", filters.end_date);
+  const queryString = params.toString();
+  const url = `${API_BASE}/benchmarks/leaderboard${queryString ? `?${queryString}` : ""}`;
+  return api.get<BenchmarkLeaderboard>(url);
+}
+
+export async function fetchSiteBenchmarkTrend(
+  siteId: number,
+  filters: BenchmarkFilters = {}
+): Promise<SiteBenchmarkTrend> {
+  const params = new URLSearchParams();
+  if (filters.start_date) params.set("start_date", filters.start_date);
+  if (filters.end_date) params.set("end_date", filters.end_date);
+  const queryString = params.toString();
+  const url = `${API_BASE}/benchmarks/${siteId}${queryString ? `?${queryString}` : ""}`;
+  return api.get<SiteBenchmarkTrend>(url);
+}
+
+export async function captureBenchmarkMetrics(): Promise<{ success: boolean; count: number }> {
+  return api.post<{ success: boolean; count: number }>(`${API_BASE}/benchmarks/capture`, {});
 }

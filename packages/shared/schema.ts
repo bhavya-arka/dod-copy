@@ -1112,6 +1112,11 @@ export const warehouseTransfers = pgTable("warehouse_transfers", {
   scheduled_date: timestamp("scheduled_date"),
   completed_date: timestamp("completed_date"),
   total_weight_lbs: numeric("total_weight_lbs", { precision: 12, scale: 2 }),
+  priority_level: text("priority_level").notNull().default("routine"),
+  priority_score: integer("priority_score").notNull().default(0),
+  escalated_at: timestamp("escalated_at"),
+  escalated_by: integer("escalated_by"),
+  queue_position: integer("queue_position"),
   created_at: timestamp("created_at").defaultNow().notNull(),
   updated_at: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1644,3 +1649,116 @@ export const insertWarehouseCapacitySnapshotSchema = createInsertSchema(warehous
 });
 export type InsertWarehouseCapacitySnapshot = z.infer<typeof insertWarehouseCapacitySnapshotSchema>;
 export type WarehouseCapacitySnapshot = typeof warehouseCapacitySnapshots.$inferSelect;
+
+// ============================================================================
+// INTER-SITE MANAGEMENT TABLES
+// ============================================================================
+
+// Site Thresholds - cross-site inventory thresholds by NSN
+export const siteThresholds = pgTable("site_thresholds", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  nsn: text("nsn").notNull(),
+  min_quantity: integer("min_quantity").notNull().default(0),
+  max_quantity: integer("max_quantity").notNull().default(1000),
+  reorder_point: integer("reorder_point").notNull().default(10),
+  last_reviewed_at: timestamp("last_reviewed_at"),
+  reviewed_by: integer("reviewed_by"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSiteThresholdSchema = createInsertSchema(siteThresholds).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertSiteThreshold = z.infer<typeof insertSiteThresholdSchema>;
+export type SiteThreshold = typeof siteThresholds.$inferSelect;
+
+// Capacity Forecasts - projected capacity utilization
+export const capacityForecasts = pgTable("capacity_forecasts", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  forecast_date: date("forecast_date").notNull(),
+  projected_utilization: numeric("projected_utilization", { precision: 5, scale: 2 }).notNull(),
+  projected_inbound_lbs: integer("projected_inbound_lbs").notNull().default(0),
+  projected_outbound_lbs: integer("projected_outbound_lbs").notNull().default(0),
+  confidence_score: numeric("confidence_score", { precision: 3, scale: 2 }).default("0.8"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCapacityForecastSchema = createInsertSchema(capacityForecasts).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertCapacityForecast = z.infer<typeof insertCapacityForecastSchema>;
+export type CapacityForecast = typeof capacityForecasts.$inferSelect;
+
+// Rebalancing Suggestions - AI-driven inventory redistribution recommendations
+export const rebalancingSuggestions = pgTable("rebalancing_suggestions", {
+  id: serial("id").primaryKey(),
+  source_site_id: integer("source_site_id").notNull(),
+  destination_site_id: integer("destination_site_id").notNull(),
+  suggested_items: jsonb("suggested_items").notNull().default([]),
+  total_weight_lbs: integer("total_weight_lbs").notNull(),
+  reason: text("reason").notNull(),
+  priority: text("priority").notNull().default("medium"),
+  status: text("status").notNull().default("pending"),
+  approved_by: integer("approved_by"),
+  executed_transfer_id: integer("executed_transfer_id"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  expires_at: timestamp("expires_at"),
+});
+
+export const insertRebalancingSuggestionSchema = createInsertSchema(rebalancingSuggestions).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertRebalancingSuggestion = z.infer<typeof insertRebalancingSuggestionSchema>;
+export type RebalancingSuggestion = typeof rebalancingSuggestions.$inferSelect;
+
+// Transport Reservations - scheduled transport capacity reservations
+export const transportReservations = pgTable("transport_reservations", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  transport_mode: text("transport_mode").notNull(),
+  asset_type: text("asset_type"),
+  reserved_capacity_lbs: integer("reserved_capacity_lbs").notNull(),
+  reservation_date: date("reservation_date").notNull(),
+  time_slot: text("time_slot"),
+  purpose: text("purpose").notNull(),
+  transfer_id: integer("transfer_id"),
+  reserved_by: integer("reserved_by").notNull(),
+  status: text("status").notNull().default("tentative"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertTransportReservationSchema = createInsertSchema(transportReservations).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertTransportReservation = z.infer<typeof insertTransportReservationSchema>;
+export type TransportReservation = typeof transportReservations.$inferSelect;
+
+// Site Metrics Daily - daily site performance benchmarking
+export const siteMetricsDaily = pgTable("site_metrics_daily", {
+  id: serial("id").primaryKey(),
+  site_id: integer("site_id").notNull(),
+  metric_date: date("metric_date").notNull(),
+  throughput_lbs: integer("throughput_lbs").notNull().default(0),
+  inbound_shipments: integer("inbound_shipments").notNull().default(0),
+  outbound_shipments: integer("outbound_shipments").notNull().default(0),
+  avg_processing_hours: numeric("avg_processing_hours", { precision: 5, scale: 2 }),
+  utilization_percent: numeric("utilization_percent", { precision: 5, scale: 2 }),
+  items_processed: integer("items_processed").notNull().default(0),
+  error_count: integer("error_count").notNull().default(0),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSiteMetricsDailySchema = createInsertSchema(siteMetricsDaily).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertSiteMetricsDaily = z.infer<typeof insertSiteMetricsDailySchema>;
+export type SiteMetricsDaily = typeof siteMetricsDaily.$inferSelect;
