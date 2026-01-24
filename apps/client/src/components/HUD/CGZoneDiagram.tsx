@@ -83,11 +83,11 @@ export default function CGZoneDiagram({
             </div>
 
             {/* CG Zone Diagram */}
-            <div className="relative bg-gray-900/80 border border-gray-600/30 rounded p-3">
+            <div className="relative bg-gray-50 border border-gray-300 rounded p-3">
               <svg
                 width={diagramWidth}
                 height={diagramLength}
-                className="border border-gray-700/50 rounded"
+                className="border border-gray-300 rounded"
                 style={{ maxWidth: '400px', maxHeight: '200px' }}
                 viewBox={`0 0 ${diagramWidth} ${diagramLength}`}
               >
@@ -97,8 +97,8 @@ export default function CGZoneDiagram({
                   y="2"
                   width={diagramWidth - 4}
                   height={diagramLength - 4}
-                  fill="rgba(15, 23, 42, 0.8)"
-                  stroke="rgba(71, 85, 105, 0.8)"
+                  fill="rgba(249, 250, 251, 0.9)"
+                  stroke="rgba(209, 213, 219, 0.8)"
                   strokeWidth="2"
                   rx="4"
                 />
@@ -132,7 +132,7 @@ export default function CGZoneDiagram({
                   y1="0"
                   x2={diagramWidth / 2}
                   y2={diagramLength}
-                  stroke="rgba(71, 85, 105, 0.6)"
+                  stroke="rgba(156, 163, 175, 0.6)"
                   strokeWidth="1"
                   strokeDasharray="2,2"
                 />
@@ -141,7 +141,7 @@ export default function CGZoneDiagram({
                   y1={diagramLength / 2}
                   x2={diagramWidth}
                   y2={diagramLength / 2}
-                  stroke="rgba(71, 85, 105, 0.6)"
+                  stroke="rgba(156, 163, 175, 0.6)"
                   strokeWidth="1"
                   strokeDasharray="2,2"
                 />
@@ -178,36 +178,36 @@ export default function CGZoneDiagram({
               </svg>
 
               {/* Labels */}
-              <div className="absolute top-1 left-1/2 transform -translate-x-1/2 text-xs text-gray-400 military-title">
+              <div className="absolute top-1 left-1/2 transform -translate-x-1/2 text-xs text-gray-600 military-title">
                 FORWARD
               </div>
-              <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 text-xs text-gray-400 military-title">
+              <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 text-xs text-gray-600 military-title">
                 AFT
               </div>
-              <div className="absolute top-1/2 left-1 transform -translate-y-1/2 -rotate-90 text-xs text-gray-400 military-title">
+              <div className="absolute top-1/2 left-1 transform -translate-y-1/2 -rotate-90 text-xs text-gray-600 military-title">
                 PORT
               </div>
-              <div className="absolute top-1/2 right-1 transform -translate-y-1/2 rotate-90 text-xs text-gray-400 military-title">
+              <div className="absolute top-1/2 right-1 transform -translate-y-1/2 rotate-90 text-xs text-gray-600 military-title">
                 STBD
               </div>
             </div>
 
             {/* CG Position Data */}
             <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
-              <div className="angular-small glass-panel p-2 border border-gray-600/20">
-                <div className="text-gray-400 military-title">LATERAL</div>
+              <div className="angular-small glass-panel p-2 border border-gray-300">
+                <div className="text-gray-500 military-title">LATERAL</div>
                 <div className={`military-title ${statusColors[cgStatus].glow}`}>
                   {centerOfGravityX >= 0 ? '+' : ''}{centerOfGravityX.toFixed(2)}m
                 </div>
               </div>
-              <div className="angular-small glass-panel p-2 border border-gray-600/20">
-                <div className="text-gray-400 military-title">LONGITUDINAL</div>
+              <div className="angular-small glass-panel p-2 border border-gray-300">
+                <div className="text-gray-500 military-title">LONGITUDINAL</div>
                 <div className={`military-title ${statusColors[cgStatus].glow}`}>
                   {centerOfGravityZ >= 0 ? '+' : ''}{centerOfGravityZ.toFixed(2)}m
                 </div>
               </div>
-              <div className="angular-small glass-panel p-2 border border-gray-600/20">
-                <div className="text-gray-400 military-title">BALANCE</div>
+              <div className="angular-small glass-panel p-2 border border-gray-300">
+                <div className="text-gray-500 military-title">BALANCE</div>
                 <div className={`military-title ${statusColors[cgStatus].glow}`}>
                   {balanceScore.toFixed(0)}%
                 </div>
@@ -218,15 +218,15 @@ export default function CGZoneDiagram({
             <div className="mt-3 flex justify-center space-x-4 text-xs">
               <div className="flex items-center">
                 <div className="w-3 h-2 bg-green-500/30 border border-green-400 mr-2"></div>
-                <span className="text-gray-400 military-title">SAFE ZONE</span>
+                <span className="text-gray-600 military-title">SAFE ZONE</span>
               </div>
               <div className="flex items-center">
                 <div className="w-3 h-2 bg-yellow-500/20 border border-yellow-400 border-dashed mr-2"></div>
-                <span className="text-gray-400 military-title">WARNING</span>
+                <span className="text-gray-600 military-title">WARNING</span>
               </div>
               <div className="flex items-center">
                 <div className="w-3 h-3 bg-red-400 rounded-full mr-2"></div>
-                <span className="text-gray-400 military-title">CURRENT CG</span>
+                <span className="text-gray-600 military-title">CURRENT CG</span>
               </div>
             </div>
           </div>

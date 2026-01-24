@@ -72,7 +72,7 @@ const modeConfig = {
   land: {
     cards: landInsightCards,
     primaryColor: "amber",
-    headerBg: "bg-slate-800/80",
+    headerBg: "bg-white",
     borderAccent: "border-l-amber-500",
     iconColor: "text-amber-400",
     bgLight: "bg-amber-50",
@@ -84,7 +84,7 @@ const modeConfig = {
   sea: {
     cards: seaInsightCards,
     primaryColor: "teal",
-    headerBg: "bg-slate-800/80",
+    headerBg: "bg-white",
     borderAccent: "border-l-teal-500",
     iconColor: "text-teal-400",
     bgLight: "bg-teal-50",
@@ -231,8 +231,8 @@ export function TransportAiInsights({
             <Brain className={`w-5 h-5 ${config.iconColor}`} />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-white">{config.title}</h2>
-            <p className="text-sm text-slate-400">AI-powered analysis and recommendations</p>
+            <h2 className="text-lg font-semibold text-gray-900">{config.title}</h2>
+            <p className="text-sm text-gray-500">AI-powered analysis and recommendations</p>
           </div>
         </div>
       </div>

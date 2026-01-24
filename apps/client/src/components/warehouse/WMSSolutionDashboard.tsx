@@ -116,10 +116,10 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'high': return 'bg-red-500/20 text-red-400 border-red-500/30';
-      case 'medium': return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-      case 'low': return 'bg-green-500/20 text-green-400 border-green-500/30';
-      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+      case 'high': return 'bg-red-500/20 text-red-600 border-red-500/30';
+      case 'medium': return 'bg-amber-500/20 text-amber-600 border-amber-500/30';
+      case 'low': return 'bg-green-500/20 text-green-600 border-green-500/30';
+      default: return 'bg-gray-500/20 text-gray-600 border-gray-500/30';
     }
   };
 
@@ -130,33 +130,33 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
   };
 
   return (
-    <div className="bg-[#0f172a] rounded-2xl border border-white/10 overflow-hidden">
-      <div className="p-4 border-b border-white/10 bg-slate-800/80">
+    <div className="bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden">
+      <div className="p-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-blue-500/20">
-              <Zap className="w-5 h-5 text-blue-400" />
+              <Zap className="w-5 h-5 text-blue-500" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">WMS Solution Dashboard</h2>
-              <p className="text-sm text-slate-400">Advanced warehouse optimization features</p>
+              <h2 className="text-lg font-semibold text-gray-900">WMS Solution Dashboard</h2>
+              <p className="text-sm text-gray-500">Advanced warehouse optimization features</p>
             </div>
           </div>
           {onClose && (
-            <button onClick={onClose} className="text-slate-400 hover:text-white">×</button>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-900">×</button>
           )}
         </div>
       </div>
 
-      <div className="flex border-b border-white/10">
+      <div className="flex border-b border-gray-200">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all ${
               activeTab === tab.id
-                ? 'text-blue-400 border-b-2 border-blue-400 bg-blue-500/10'
-                : 'text-slate-400 hover:text-white hover:bg-white/5'
+                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-500/10'
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
             }`}
           >
             {tab.icon}
@@ -169,8 +169,8 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
         {activeTab === 'layout' && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-4">
-              <Clock className="w-5 h-5 text-blue-400" />
-              <h3 className="text-sm font-medium text-white">Dynamic Layouts by Time-in-Storage, Turnover & Access</h3>
+              <Clock className="w-5 h-5 text-blue-500" />
+              <h3 className="text-sm font-medium text-gray-900">Dynamic Layouts by Time-in-Storage, Turnover & Access</h3>
             </div>
             <div className="grid grid-cols-1 gap-3">
               {mockLayoutItems.map(item => (
@@ -179,7 +179,7 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
                   className={`p-4 rounded-xl border transition-all duration-300 ${
                     animatedItems.includes(item.id)
                       ? 'border-blue-500 bg-blue-500/10 scale-[1.02]'
-                      : 'border-white/10 bg-slate-800/50'
+                      : 'border-gray-200 bg-gray-50'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -188,27 +188,27 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
                         {item.priority.toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-white">{item.name}</p>
-                        <p className="text-xs text-slate-400">Zone: {item.zone}</p>
+                        <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                        <p className="text-xs text-gray-500">Zone: {item.zone}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-6 text-sm">
                       <div className="text-center">
-                        <p className="text-slate-400 text-xs">Days</p>
-                        <p className={`font-medium ${item.daysInStorage > 90 ? 'text-red-400' : item.daysInStorage > 60 ? 'text-amber-400' : 'text-green-400'}`}>
+                        <p className="text-gray-500 text-xs">Days</p>
+                        <p className={`font-medium ${item.daysInStorage > 90 ? 'text-red-600' : item.daysInStorage > 60 ? 'text-amber-600' : 'text-green-600'}`}>
                           {item.daysInStorage}
                         </p>
                       </div>
                       <div className="text-center">
-                        <p className="text-slate-400 text-xs">Turnover</p>
-                        <p className="text-white font-medium">{item.turnoverRate}x</p>
+                        <p className="text-gray-500 text-xs">Turnover</p>
+                        <p className="text-gray-900 font-medium">{item.turnoverRate}x</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-slate-400 text-xs">Access/mo</p>
-                        <p className="text-white font-medium">{item.accessFrequency}</p>
+                        <p className="text-gray-500 text-xs">Access/mo</p>
+                        <p className="text-gray-900 font-medium">{item.accessFrequency}</p>
                       </div>
                       {animatedItems.includes(item.id) && (
-                        <div className="flex items-center gap-1 text-blue-400 text-xs">
+                        <div className="flex items-center gap-1 text-blue-500 text-xs">
                           <ArrowRight className="w-4 h-4 animate-pulse" />
                           <span>Relocating...</span>
                         </div>
@@ -219,7 +219,7 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
               ))}
             </div>
             <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 mt-4">
-              <p className="text-xs text-blue-300">
+              <p className="text-xs text-blue-700">
                 <strong>AI Recommendation:</strong> High-turnover items automatically moved to accessible zones. 
                 Low-access items relocated to deep storage for optimal space utilization.
               </p>
@@ -230,16 +230,16 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
         {activeTab === 'balance' && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-4">
-              <Scale className="w-5 h-5 text-teal-400" />
-              <h3 className="text-sm font-medium text-white">Intra-Site + Inter-Site Load Balancing</h3>
+              <Scale className="w-5 h-5 text-teal-500" />
+              <h3 className="text-sm font-medium text-gray-900">Intra-Site + Inter-Site Load Balancing</h3>
             </div>
             <div className="grid grid-cols-2 gap-4">
               {mockLoadBalance.map((site, idx) => (
-                <div key={idx} className="p-4 rounded-xl border border-white/10 bg-slate-800/50">
+                <div key={idx} className="p-4 rounded-xl border border-gray-200 bg-gray-50">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-medium text-white">{site.siteName}</h4>
+                    <h4 className="text-sm font-medium text-gray-900">{site.siteName}</h4>
                     <div className={`flex items-center gap-1 text-xs ${
-                      site.trend === 'up' ? 'text-red-400' : site.trend === 'down' ? 'text-green-400' : 'text-slate-400'
+                      site.trend === 'up' ? 'text-red-600' : site.trend === 'down' ? 'text-green-600' : 'text-gray-500'
                     }`}>
                       {site.trend === 'up' ? '↑' : site.trend === 'down' ? '↓' : '→'}
                       {site.trend}
@@ -247,21 +247,21 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
                   </div>
                   <div className="mb-2">
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-slate-400">Utilization</span>
-                      <span className={`font-medium ${site.utilization >= 80 ? 'text-red-400' : 'text-white'}`}>
+                      <span className="text-gray-500">Utilization</span>
+                      <span className={`font-medium ${site.utilization >= 80 ? 'text-red-600' : 'text-gray-900'}`}>
                         {site.utilization}%
                       </span>
                     </div>
-                    <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                       <div 
                         className={`h-full ${getUtilizationColor(site.utilization)} transition-all duration-500`}
                         style={{ width: `${site.utilization}%` }}
                       />
                     </div>
                   </div>
-                  <p className="text-xs text-slate-400">Capacity: {site.capacity.toLocaleString()} lbs</p>
+                  <p className="text-xs text-gray-500">Capacity: {site.capacity.toLocaleString()} lbs</p>
                   {site.utilization >= 80 && (
-                    <div className="flex items-center gap-1 mt-2 text-xs text-amber-400">
+                    <div className="flex items-center gap-1 mt-2 text-xs text-amber-600">
                       <AlertTriangle className="w-3 h-3" />
                       <span>Transfer recommended</span>
                     </div>
@@ -270,7 +270,7 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
               ))}
             </div>
             <div className="p-3 rounded-lg bg-teal-500/10 border border-teal-500/20 mt-4">
-              <p className="text-xs text-teal-300">
+              <p className="text-xs text-teal-700">
                 <strong>Load Balance Alert:</strong> Norfolk at 82% - recommend transferring 5,000 lbs to Yokosuka (55% utilization) for optimal distribution.
               </p>
             </div>
@@ -280,13 +280,13 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
         {activeTab === 'density' && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-4">
-              <Layers className="w-5 h-5 text-purple-400" />
-              <h3 className="text-sm font-medium text-white">Automated Dimensional Mapping for Storage Density</h3>
+              <Layers className="w-5 h-5 text-purple-500" />
+              <h3 className="text-sm font-medium text-gray-900">Automated Dimensional Mapping for Storage Density</h3>
             </div>
             <div className="grid grid-cols-2 gap-4">
               {mockDimensionalData.map((zone, idx) => (
-                <div key={idx} className="p-4 rounded-xl border border-white/10 bg-slate-800/50">
-                  <h4 className="text-sm font-medium text-white mb-3">{zone.zone}</h4>
+                <div key={idx} className="p-4 rounded-xl border border-gray-200 bg-gray-50">
+                  <h4 className="text-sm font-medium text-gray-900 mb-3">{zone.zone}</h4>
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     <div className="h-16 bg-purple-500/30 rounded-lg flex items-end justify-center overflow-hidden">
                       <div 
@@ -296,16 +296,16 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
                     </div>
                     <div className="col-span-2 text-xs">
                       <div className="flex justify-between mb-1">
-                        <span className="text-slate-400">Total:</span>
-                        <span className="text-white">{zone.cubicFt.toLocaleString()} ft³</span>
+                        <span className="text-gray-500">Total:</span>
+                        <span className="text-gray-900">{zone.cubicFt.toLocaleString()} ft³</span>
                       </div>
                       <div className="flex justify-between mb-1">
-                        <span className="text-slate-400">Used:</span>
-                        <span className="text-white">{zone.usedCubicFt.toLocaleString()} ft³</span>
+                        <span className="text-gray-500">Used:</span>
+                        <span className="text-gray-900">{zone.usedCubicFt.toLocaleString()} ft³</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Density:</span>
-                        <span className={`font-medium ${zone.density >= 85 ? 'text-red-400' : zone.density >= 75 ? 'text-amber-400' : 'text-green-400'}`}>
+                        <span className="text-gray-500">Density:</span>
+                        <span className={`font-medium ${zone.density >= 85 ? 'text-red-600' : zone.density >= 75 ? 'text-amber-600' : 'text-green-600'}`}>
                           {zone.density}%
                         </span>
                       </div>
@@ -315,7 +315,7 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
               ))}
             </div>
             <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
-              <p className="text-xs text-purple-300">
+              <p className="text-xs text-purple-700">
                 <strong>Density Analysis:</strong> Zone D (Cold Storage) at 85% density - consider expansion or redistribution to Zone B (70% density).
               </p>
             </div>
@@ -325,30 +325,30 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
         {activeTab === 'forecast' && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-4">
-              <BarChart3 className="w-5 h-5 text-amber-400" />
-              <h3 className="text-sm font-medium text-white">Predictive Demand & Shipyard-Cycle Forecasting</h3>
+              <BarChart3 className="w-5 h-5 text-amber-500" />
+              <h3 className="text-sm font-medium text-gray-900">Predictive Demand & Shipyard-Cycle Forecasting</h3>
             </div>
-            <div className="overflow-hidden rounded-xl border border-white/10">
+            <div className="overflow-hidden rounded-xl border border-gray-200">
               <table className="w-full">
-                <thead className="bg-slate-800/80">
+                <thead className="bg-white">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-400">Month</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-400">Shipyard Cycle</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-400">Predicted (lbs)</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-400">Demand (lbs)</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-400">Gap</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Month</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Shipyard Cycle</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">Predicted (lbs)</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">Demand (lbs)</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">Gap</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-gray-100">
                   {mockForecast.map((row, idx) => {
                     const gap = row.demand - row.predicted;
                     return (
-                      <tr key={idx} className="hover:bg-white/5">
-                        <td className="px-4 py-3 text-sm text-white">{row.month}</td>
-                        <td className="px-4 py-3 text-sm text-slate-300">{row.shipyardCycle}</td>
-                        <td className="px-4 py-3 text-sm text-right text-white">{row.predicted.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-sm text-right text-white">{row.demand.toLocaleString()}</td>
-                        <td className={`px-4 py-3 text-sm text-right font-medium ${gap > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm text-gray-900">{row.month}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{row.shipyardCycle}</td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900">{row.predicted.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900">{row.demand.toLocaleString()}</td>
+                        <td className={`px-4 py-3 text-sm text-right font-medium ${gap > 0 ? 'text-red-600' : 'text-green-600'}`}>
                           {gap > 0 ? '+' : ''}{gap.toLocaleString()}
                         </td>
                       </tr>
@@ -358,7 +358,7 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
               </table>
             </div>
             <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-              <p className="text-xs text-amber-300">
+              <p className="text-xs text-amber-700">
                 <strong>Forecast Alert:</strong> May shipyard cycle (CVN-68 DPIA) shows 1,800 lbs supply gap - recommend pre-positioning inventory.
               </p>
             </div>
@@ -368,21 +368,21 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
         {activeTab === 'integrations' && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-4">
-              <Link2 className="w-5 h-5 text-green-400" />
-              <h3 className="text-sm font-medium text-white">SAP / GCSS-A / Existing WMS Integration</h3>
+              <Link2 className="w-5 h-5 text-green-500" />
+              <h3 className="text-sm font-medium text-gray-900">SAP / GCSS-A / Existing WMS Integration</h3>
             </div>
             <div className="grid grid-cols-2 gap-4">
               {integrations.map((int, idx) => (
-                <div key={idx} className="p-4 rounded-xl border border-white/10 bg-slate-800/50">
+                <div key={idx} className="p-4 rounded-xl border border-gray-200 bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">{int.icon}</span>
                       <div>
-                        <h4 className="text-sm font-medium text-white">{int.name}</h4>
-                        <p className="text-xs text-slate-400">Last sync: {int.lastSync}</p>
+                        <h4 className="text-sm font-medium text-gray-900">{int.name}</h4>
+                        <p className="text-xs text-gray-500">Last sync: {int.lastSync}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 text-green-400 text-xs">
+                    <div className="flex items-center gap-1 text-green-600 text-xs">
                       <CheckCircle className="w-4 h-4" />
                       <span>Connected</span>
                     </div>
@@ -390,40 +390,40 @@ export default function WMSSolutionDashboard({ siteId, siteName, onClose }: Solu
                 </div>
               ))}
             </div>
-            <div className="mt-4 p-4 rounded-xl border border-white/10 bg-slate-800/50">
-              <h4 className="text-sm font-medium text-white mb-3">Data Flow Overview</h4>
+            <div className="mt-4 p-4 rounded-xl border border-gray-200 bg-gray-50">
+              <h4 className="text-sm font-medium text-gray-900 mb-3">Data Flow Overview</h4>
               <div className="flex items-center justify-between text-xs">
                 <div className="text-center">
                   <div className="w-12 h-12 rounded-lg bg-blue-500/20 flex items-center justify-center mb-1">
                     <span className="text-lg">📦</span>
                   </div>
-                  <span className="text-slate-400">SAP ERP</span>
+                  <span className="text-gray-500">SAP ERP</span>
                 </div>
-                <ArrowRight className="w-4 h-4 text-slate-500" />
+                <ArrowRight className="w-4 h-4 text-gray-400" />
                 <div className="text-center">
                   <div className="w-12 h-12 rounded-lg bg-green-500/20 flex items-center justify-center mb-1">
                     <span className="text-lg">🔄</span>
                   </div>
-                  <span className="text-slate-400">ARKA WMS</span>
+                  <span className="text-gray-500">ARKA WMS</span>
                 </div>
-                <ArrowRight className="w-4 h-4 text-slate-500" />
+                <ArrowRight className="w-4 h-4 text-gray-400" />
                 <div className="text-center">
                   <div className="w-12 h-12 rounded-lg bg-purple-500/20 flex items-center justify-center mb-1">
                     <span className="text-lg">🎯</span>
                   </div>
-                  <span className="text-slate-400">GCSS-A</span>
+                  <span className="text-gray-500">GCSS-A</span>
                 </div>
-                <ArrowRight className="w-4 h-4 text-slate-500" />
+                <ArrowRight className="w-4 h-4 text-gray-400" />
                 <div className="text-center">
                   <div className="w-12 h-12 rounded-lg bg-amber-500/20 flex items-center justify-center mb-1">
                     <span className="text-lg">📊</span>
                   </div>
-                  <span className="text-slate-400">Navy ERP</span>
+                  <span className="text-gray-500">Navy ERP</span>
                 </div>
               </div>
             </div>
             <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-              <p className="text-xs text-green-300">
+              <p className="text-xs text-green-700">
                 <strong>Integration Status:</strong> All systems synchronized. Real-time data flow active across SAP, GCSS-A, Navy ERP, and DLA DAAS.
               </p>
             </div>

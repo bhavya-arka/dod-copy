@@ -81,14 +81,14 @@ export function CapacityWidget({
   return (
     <div
       className={cn(
-        'p-4 rounded-2xl bg-[#0f172a] border border-white/10',
+        'p-4 rounded-2xl bg-white border border-gray-200',
         mode && `ring-1 ${modeAccents[mode]}`
       )}
     >
       <div className="flex items-start justify-between mb-3">
         <div>
-          <h4 className="text-sm font-medium text-white">{label}</h4>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h4 className="text-sm font-medium text-gray-900">{label}</h4>
+          <p className="text-xs text-gray-500 mt-0.5">
             {formatValue(current, unit)} / {formatValue(max, unit)}
             {unit && !unit.includes('lbs') && ` ${unit}`}
           </p>
@@ -108,7 +108,7 @@ export function CapacityWidget({
         )}
       </div>
 
-      <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
+      <div className="h-3 rounded-full bg-gray-200 overflow-hidden">
         <motion.div
           className={cn('h-full rounded-full', colors.bar)}
           initial={{ width: 0 }}
@@ -117,7 +117,7 @@ export function CapacityWidget({
         />
       </div>
 
-      <div className="flex justify-between mt-2 text-xs text-slate-500">
+      <div className="flex justify-between mt-2 text-xs text-gray-500">
         <span>0%</span>
         <div className="flex gap-3">
           <span className="text-green-500">60%</span>

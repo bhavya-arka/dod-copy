@@ -33,22 +33,22 @@ const modeConfig: Record<TransportMode, {
   accentColor: string;
 }> = {
   air: {
-    headerBg: 'bg-slate-800/80',
-    hoverBg: 'hover:bg-slate-700/50',
+    headerBg: 'bg-white',
+    hoverBg: 'hover:bg-gray-100',
     accentBorder: 'border-l-blue-500',
     searchFocus: 'focus:ring-blue-500/50 focus:border-blue-500',
     accentColor: 'text-blue-400',
   },
   land: {
-    headerBg: 'bg-slate-800/80',
-    hoverBg: 'hover:bg-slate-700/50',
+    headerBg: 'bg-white',
+    hoverBg: 'hover:bg-gray-100',
     accentBorder: 'border-l-amber-500',
     searchFocus: 'focus:ring-amber-500/50 focus:border-amber-500',
     accentColor: 'text-amber-400',
   },
   sea: {
-    headerBg: 'bg-slate-800/80',
-    hoverBg: 'hover:bg-slate-700/50',
+    headerBg: 'bg-white',
+    hoverBg: 'hover:bg-gray-100',
     accentBorder: 'border-l-teal-500',
     searchFocus: 'focus:ring-teal-500/50 focus:border-teal-500',
     accentColor: 'text-teal-400',
@@ -59,10 +59,10 @@ function TableSkeleton({ columns, rows = 5 }: { columns: number; rows?: number }
   return (
     <>
       {Array.from({ length: rows }).map((_, i) => (
-        <tr key={i} className="border-b border-white/5">
+        <tr key={i} className="border-b border-gray-200">
           {Array.from({ length: columns }).map((_, j) => (
             <td key={j} className="p-4">
-              <div className="h-4 bg-white/10 rounded animate-pulse" style={{ width: `${60 + Math.random() * 30}%` }} />
+              <div className="h-4 bg-gray-200 rounded animate-pulse" style={{ width: `${60 + Math.random() * 30}%` }} />
             </td>
           ))}
         </tr>
@@ -138,19 +138,19 @@ function TransportTableInner<T extends { id?: number | string }>({
   }, []);
 
   return (
-    <div className="rounded-2xl bg-[#0f172a] border border-white/10 overflow-hidden">
+    <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
       {searchable && (
-        <div className="p-4 border-b border-white/10">
+        <div className="p-4 border-b border-gray-200">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={searchPlaceholder}
               className={cn(
-                'w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-xl',
-                'text-white placeholder:text-slate-500 text-sm',
+                'w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl',
+                'text-gray-900 placeholder:text-gray-500 text-sm',
                 'focus:outline-none focus:ring-2 transition-all',
                 config.searchFocus
               )}
@@ -167,8 +167,8 @@ function TransportTableInner<T extends { id?: number | string }>({
                 <th
                   key={col.id}
                   className={cn(
-                    'px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider',
-                    col.sortable && 'cursor-pointer select-none hover:bg-white/5 transition-colors',
+                    'px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider',
+                    col.sortable && 'cursor-pointer select-none hover:bg-gray-100 transition-colors',
                     col.className
                   )}
                   onClick={() => col.sortable && handleSort(col.id)}
@@ -192,8 +192,8 @@ function TransportTableInner<T extends { id?: number | string }>({
               <tr>
                 <td colSpan={columns.length} className="px-4 py-12 text-center">
                   <div className="flex flex-col items-center gap-2">
-                    <Loader2 className="w-8 h-8 text-slate-600" />
-                    <p className="text-slate-500">{emptyMessage}</p>
+                    <Loader2 className="w-8 h-8 text-gray-400" />
+                    <p className="text-gray-500">{emptyMessage}</p>
                   </div>
                 </td>
               </tr>
@@ -206,7 +206,7 @@ function TransportTableInner<T extends { id?: number | string }>({
                   transition={{ delay: index * 0.02 }}
                   onClick={() => onRowClick?.(row)}
                   className={cn(
-                    'border-b border-white/5 transition-colors',
+                    'border-b border-gray-200 transition-colors',
                     config.hoverBg,
                     onRowClick && 'cursor-pointer',
                     `border-l-2 border-l-transparent hover:${config.accentBorder}`
@@ -215,7 +215,7 @@ function TransportTableInner<T extends { id?: number | string }>({
                   {columns.map((col) => (
                     <td
                       key={col.id}
-                      className={cn('px-4 py-3 text-sm text-slate-300', col.className)}
+                      className={cn('px-4 py-3 text-sm text-gray-700', col.className)}
                     >
                       {getCellValue(row, col)}
                     </td>
@@ -228,7 +228,7 @@ function TransportTableInner<T extends { id?: number | string }>({
       </div>
 
       {!loading && sortedData.length > 0 && (
-        <div className="px-4 py-3 border-t border-white/10 text-xs text-slate-500">
+        <div className="px-4 py-3 border-t border-gray-200 text-xs text-gray-500">
           Showing {sortedData.length} of {data.length} entries
         </div>
       )}

@@ -129,11 +129,11 @@ export default function RebalancingSuggestions() {
   ).length;
 
   return (
-    <div className="space-y-6 p-6 bg-slate-900 min-h-screen">
+    <div className="space-y-6 p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Scale className="h-6 w-6 text-cyan-400" />
-          <h2 className="text-2xl font-bold text-white">
+          <h2 className="text-2xl font-bold text-gray-900">
             Rebalancing Suggestions
           </h2>
         </div>
@@ -153,7 +153,7 @@ export default function RebalancingSuggestions() {
       </div>
 
       {error && (
-        <Alert variant="destructive" className="bg-red-900/50 border-red-700">
+        <Alert variant="destructive" className="bg-red-50 border-red-300">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
@@ -161,19 +161,19 @@ export default function RebalancingSuggestions() {
       )}
 
       <div className="grid grid-cols-2 gap-4">
-        <Card className="bg-slate-800 border-slate-700">
+        <Card className="bg-white border-gray-200">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-400">Pending Review</p>
+              <p className="text-sm text-gray-500">Pending Review</p>
               <p className="text-3xl font-bold text-amber-400">{pendingCount}</p>
             </div>
             <AlertCircle className="h-8 w-8 text-amber-400" />
           </CardContent>
         </Card>
-        <Card className="bg-slate-800 border-slate-700">
+        <Card className="bg-white border-gray-200">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-400">Approved (Not Executed)</p>
+              <p className="text-sm text-gray-500">Approved (Not Executed)</p>
               <p className="text-3xl font-bold text-cyan-400">
                 {approvedNotExecuted}
               </p>
@@ -184,30 +184,30 @@ export default function RebalancingSuggestions() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as SuggestionStatus)}>
-        <TabsList className="bg-slate-800 border-slate-700">
+        <TabsList className="bg-white border-gray-200">
           <TabsTrigger
             value="pending"
-            className="data-[state=active]:bg-slate-700 text-slate-300 data-[state=active]:text-white"
+            className="data-[state=active]:bg-gray-100 text-gray-600 data-[state=active]:text-gray-900"
           >
             Pending ({suggestions.filter((s) => s.status === "pending").length})
           </TabsTrigger>
           <TabsTrigger
             value="approved"
-            className="data-[state=active]:bg-slate-700 text-slate-300 data-[state=active]:text-white"
+            className="data-[state=active]:bg-gray-100 text-gray-600 data-[state=active]:text-gray-900"
           >
             Approved (
             {suggestions.filter((s) => s.status === "approved").length})
           </TabsTrigger>
           <TabsTrigger
             value="executed"
-            className="data-[state=active]:bg-slate-700 text-slate-300 data-[state=active]:text-white"
+            className="data-[state=active]:bg-gray-100 text-gray-600 data-[state=active]:text-gray-900"
           >
             Executed (
             {suggestions.filter((s) => s.status === "executed").length})
           </TabsTrigger>
           <TabsTrigger
             value="rejected"
-            className="data-[state=active]:bg-slate-700 text-slate-300 data-[state=active]:text-white"
+            className="data-[state=active]:bg-gray-100 text-gray-600 data-[state=active]:text-gray-900"
           >
             Rejected (
             {suggestions.filter((s) => s.status === "rejected").length})
@@ -218,12 +218,12 @@ export default function RebalancingSuggestions() {
           {loading ? (
             <div className="space-y-4">
               {[...Array(3)].map((_, i) => (
-                <Skeleton key={i} className="h-48 bg-slate-800" />
+                <Skeleton key={i} className="h-48 bg-white" />
               ))}
             </div>
           ) : filteredSuggestions.length === 0 ? (
-            <Card className="bg-slate-800 border-slate-700">
-              <CardContent className="p-8 text-center text-slate-400">
+            <Card className="bg-white border-gray-200">
+              <CardContent className="p-8 text-center text-gray-500">
                 No {activeTab} suggestions found.
                 {activeTab === "pending" &&
                   ' Click "Generate Suggestions" to analyze inventory.'}
@@ -265,24 +265,24 @@ function SuggestionCard({
   loading,
 }: SuggestionCardProps) {
   return (
-    <Card className="bg-slate-800 border-slate-700">
+    <Card className="bg-white border-gray-200">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-lg font-semibold text-white">
+            <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
               <span>{suggestion.source_site_name}</span>
               <ArrowRight className="h-5 w-5 text-cyan-400" />
               <span>{suggestion.destination_site_name}</span>
             </div>
             <Badge
               className={`${
-                priorityColors[suggestion.priority] || "bg-slate-600"
+                priorityColors[suggestion.priority] || "bg-gray-600"
               } text-white`}
             >
               {suggestion.priority?.toUpperCase() || "NORMAL"}
             </Badge>
           </div>
-          <div className="flex items-center gap-2 text-sm text-slate-400">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
             {reasonIcons[suggestion.reason] || <Package className="h-4 w-4" />}
             <span>
               {reasonLabels[suggestion.reason] || suggestion.reason}
@@ -291,8 +291,8 @@ function SuggestionCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="bg-slate-900 rounded-lg p-3">
-          <h4 className="text-sm font-medium text-slate-400 mb-2">Items</h4>
+        <div className="bg-gray-50 rounded-lg p-3">
+          <h4 className="text-sm font-medium text-gray-500 mb-2">Items</h4>
           <div className="space-y-2">
             {suggestion.items?.map((item: RebalancingSuggestionItem, idx: number) => (
               <div
@@ -300,28 +300,28 @@ function SuggestionCard({
                 className="flex items-center justify-between text-sm"
               >
                 <div className="flex items-center gap-2">
-                  <Package className="h-4 w-4 text-slate-500" />
-                  <span className="text-white font-mono">{item.nsn}</span>
+                  <Package className="h-4 w-4 text-gray-400" />
+                  <span className="text-gray-900 font-mono">{item.nsn}</span>
                   {item.description && (
-                    <span className="text-slate-400 truncate max-w-xs">
+                    <span className="text-gray-500 truncate max-w-xs">
                       - {item.description}
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-4 text-slate-300">
+                <div className="flex items-center gap-4 text-gray-600">
                   <span>Qty: {item.quantity}</span>
                   {item.weight && <span>{item.weight.toLocaleString()} lbs</span>}
                 </div>
               </div>
             )) || (
-              <div className="text-sm text-slate-400">
+              <div className="text-sm text-gray-500">
                 {suggestion.suggested_quantity} units of {suggestion.nsn}
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-sm text-slate-400">
+        <div className="flex items-center justify-between text-sm text-gray-500">
           <div className="flex items-center gap-4">
             <span>
               Created:{" "}

@@ -587,20 +587,20 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-slate-700 shadow-xl overflow-hidden"
+                className="rounded-2xl bg-white border border-gray-200 shadow-xl overflow-hidden"
               >
-                <div className="p-6 border-b border-slate-700/50">
+                <div className="p-6 border-b border-gray-200">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/20">
                         <Calendar className="w-5 h-5 text-white" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-white">Transport Forecast</h3>
-                        <p className="text-xs text-slate-400">Predictive operations outlook</p>
+                        <h3 className="text-lg font-bold text-gray-900">Transport Forecast</h3>
+                        <p className="text-xs text-gray-500">Predictive operations outlook</p>
                       </div>
                     </div>
-                    <div className="flex bg-slate-800 rounded-xl p-1 gap-1">
+                    <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
                       {([30, 60, 90] as const).map((days) => (
                         <button
                           key={days}
@@ -608,7 +608,7 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                           className={`px-4 py-2 text-xs font-medium rounded-lg transition-all ${
                             selectedForecastDays === days
                               ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg'
-                              : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                              : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
                           }`}
                         >
                           {days}D
@@ -623,19 +623,19 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                       <motion.div 
                         whileHover={{ scale: 1.01 }}
-                        className="relative p-5 rounded-xl bg-slate-800/80 border-l-4 border-l-blue-500 border border-slate-700 overflow-hidden"
+                        className="relative p-5 rounded-xl bg-white border-l-4 border-l-blue-500 border border-gray-200 overflow-hidden"
                       >
                         <div className="flex items-center justify-between mb-3">
-                          <div className="p-2 rounded-lg bg-slate-700">
+                          <div className="p-2 rounded-lg bg-blue-50">
                             <Plane className="w-5 h-5 text-blue-400" />
                           </div>
-                          <span className="text-xs font-medium text-blue-400 bg-slate-700 px-2 py-1 rounded-full">AIR</span>
+                          <span className="text-xs font-medium text-blue-400 bg-blue-50 px-2 py-1 rounded-full">AIR</span>
                         </div>
-                        <div className="text-3xl font-bold text-white mb-1">
+                        <div className="text-3xl font-bold text-gray-900 mb-1">
                           {summaries.air.expectedFlights}
                         </div>
-                        <div className="text-sm text-slate-400">Expected flights</div>
-                        <div className="mt-2 text-xs text-slate-400 flex items-center gap-1">
+                        <div className="text-sm text-gray-500">Expected flights</div>
+                        <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
                           <Box className="w-3 h-3" />
                           {formatWeight(summaries.air.totalCargoLbs)}
                         </div>
@@ -643,19 +643,19 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
 
                       <motion.div 
                         whileHover={{ scale: 1.01 }}
-                        className="relative p-5 rounded-xl bg-slate-800/80 border-l-4 border-l-amber-500 border border-slate-700 overflow-hidden"
+                        className="relative p-5 rounded-xl bg-white border-l-4 border-l-amber-500 border border-gray-200 overflow-hidden"
                       >
                         <div className="flex items-center justify-between mb-3">
-                          <div className="p-2 rounded-lg bg-slate-700">
+                          <div className="p-2 rounded-lg bg-amber-50">
                             <Truck className="w-5 h-5 text-amber-400" />
                           </div>
-                          <span className="text-xs font-medium text-amber-400 bg-slate-700 px-2 py-1 rounded-full">LAND</span>
+                          <span className="text-xs font-medium text-amber-400 bg-amber-50 px-2 py-1 rounded-full">LAND</span>
                         </div>
-                        <div className="text-3xl font-bold text-white mb-1">
+                        <div className="text-3xl font-bold text-gray-900 mb-1">
                           {summaries.land.expectedConvoys}
                         </div>
-                        <div className="text-sm text-slate-400">Expected convoys</div>
-                        <div className="mt-2 text-xs text-slate-400 flex items-center gap-1">
+                        <div className="text-sm text-gray-500">Expected convoys</div>
+                        <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
                           <Box className="w-3 h-3" />
                           {formatWeight(summaries.land.totalCargoLbs)}
                         </div>
@@ -663,19 +663,19 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
 
                       <motion.div 
                         whileHover={{ scale: 1.01 }}
-                        className="relative p-5 rounded-xl bg-slate-800/80 border-l-4 border-l-teal-500 border border-slate-700 overflow-hidden"
+                        className="relative p-5 rounded-xl bg-white border-l-4 border-l-teal-500 border border-gray-200 overflow-hidden"
                       >
                         <div className="flex items-center justify-between mb-3">
-                          <div className="p-2 rounded-lg bg-slate-700">
+                          <div className="p-2 rounded-lg bg-teal-50">
                             <Ship className="w-5 h-5 text-teal-400" />
                           </div>
-                          <span className="text-xs font-medium text-teal-400 bg-slate-700 px-2 py-1 rounded-full">SEA</span>
+                          <span className="text-xs font-medium text-teal-400 bg-teal-50 px-2 py-1 rounded-full">SEA</span>
                         </div>
-                        <div className="text-3xl font-bold text-white mb-1">
+                        <div className="text-3xl font-bold text-gray-900 mb-1">
                           {summaries.sea.expectedVoyages}
                         </div>
-                        <div className="text-sm text-slate-400">Expected voyages</div>
-                        <div className="mt-2 text-xs text-slate-400 flex items-center gap-1">
+                        <div className="text-sm text-gray-500">Expected voyages</div>
+                        <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
                           <Ship className="w-3 h-3" />
                           Maritime operations
                         </div>
@@ -683,13 +683,13 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="p-5 rounded-xl bg-slate-800/50 border border-slate-700">
+                      <div className="p-5 rounded-xl bg-gray-50 border border-gray-200">
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-2">
                             <div className="p-2 rounded-lg bg-purple-500/20">
                               <Warehouse className="w-4 h-4 text-purple-400" />
                             </div>
-                            <span className="text-sm font-medium text-white">Warehouse Utilization</span>
+                            <span className="text-sm font-medium text-gray-900">Warehouse Utilization</span>
                           </div>
                           <span className={`text-xs font-bold px-2 py-1 rounded-full ${
                             summaries.warehouse.avgUtilization >= 85 ? 'bg-red-500/20 text-red-400' :
@@ -708,9 +708,9 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                           }`}>
                             {summaries.warehouse.avgUtilization}%
                           </span>
-                          <span className="text-slate-400 text-sm">average capacity</span>
+                          <span className="text-gray-500 text-sm">average capacity</span>
                         </div>
-                        <div className="h-3 rounded-full bg-slate-700 overflow-hidden">
+                        <div className="h-3 rounded-full bg-gray-200 overflow-hidden">
                           <motion.div 
                             initial={{ width: 0 }}
                             animate={{ width: `${Math.min(100, summaries.warehouse.avgUtilization)}%` }}
@@ -724,7 +724,7 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                         </div>
                       </div>
 
-                      <div className="p-5 rounded-xl bg-slate-800/50 border border-slate-700">
+                      <div className="p-5 rounded-xl bg-gray-50 border border-gray-200">
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-2">
                             <div className={`p-2 rounded-lg ${
@@ -734,7 +734,7 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                                 summaries.warehouse.sitesWithWarnings > 0 ? 'text-amber-400' : 'text-emerald-400'
                               }`} />
                             </div>
-                            <span className="text-sm font-medium text-white">Capacity Alerts</span>
+                            <span className="text-sm font-medium text-gray-900">Capacity Alerts</span>
                           </div>
                           {summaries.warehouse.sitesWithWarnings === 0 && (
                             <span className="text-xs font-bold px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1">
@@ -751,9 +751,9 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                           }`}>
                             {summaries.warehouse.sitesWithWarnings}
                           </span>
-                          <span className="text-slate-400 text-sm">sites flagged</span>
+                          <span className="text-gray-500 text-sm">sites flagged</span>
                         </div>
-                        <p className="text-xs text-slate-500 leading-relaxed">
+                        <p className="text-xs text-gray-500 leading-relaxed">
                           {summaries.warehouse.sitesWithWarnings === 0 
                             ? 'No capacity issues projected for the forecast period. All warehouse sites operating within normal parameters.'
                             : `${summaries.warehouse.sitesWithWarnings} warehouse site${summaries.warehouse.sitesWithWarnings > 1 ? 's' : ''} may require capacity attention during this period.`
@@ -762,8 +762,8 @@ export default function OperationsHub({ user, onSelectModule, onLogout }: Operat
                       </div>
                     </div>
 
-                    <div className="mt-6 pt-4 border-t border-slate-700/50">
-                      <div className="flex items-center justify-between text-xs text-slate-500">
+                    <div className="mt-6 pt-4 border-t border-gray-200">
+                      <div className="flex items-center justify-between text-xs text-gray-500">
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                           <span>Live {selectedForecastDays}-day projection</span>

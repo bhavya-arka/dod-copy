@@ -176,7 +176,7 @@ export default function ThresholdManagement({
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        <span className="ml-3 text-slate-400">Loading thresholds...</span>
+        <span className="ml-3 text-gray-500">Loading thresholds...</span>
       </div>
     );
   }
@@ -189,18 +189,18 @@ export default function ThresholdManagement({
         className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Settings className="w-7 h-7 text-blue-500" />
             Threshold Management
           </h1>
-          <p className="text-slate-400 mt-1">
+          <p className="text-gray-500 mt-1">
             Configure inventory min/max thresholds and reorder points
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={loadData}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
@@ -221,14 +221,14 @@ export default function ThresholdManagement({
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl bg-slate-800 border border-slate-700 p-6"
+          className="rounded-xl bg-white border border-gray-200 p-6"
         >
-          <h2 className="text-lg font-semibold text-white mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
             {editingId ? "Edit Threshold" : "Add New Threshold"}
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Site</label>
+              <label className="block text-sm text-gray-500 mb-1">Site</label>
               <select
                 value={formData.siteId}
                 onChange={(e) =>
@@ -237,7 +237,7 @@ export default function ThresholdManagement({
                     e.target.value ? Number(e.target.value) : ""
                   )
                 }
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 disabled={!!editingId}
               >
                 <option value="">Select site...</option>
@@ -249,18 +249,18 @@ export default function ThresholdManagement({
               </select>
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">NSN</label>
+              <label className="block text-sm text-gray-500 mb-1">NSN</label>
               <input
                 type="text"
                 value={formData.nsn}
                 onChange={(e) => handleInputChange("nsn", e.target.value)}
                 placeholder="1234-56-789-0123"
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 disabled={!!editingId}
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">
+              <label className="block text-sm text-gray-500 mb-1">
                 Min Threshold
               </label>
               <input
@@ -274,11 +274,11 @@ export default function ThresholdManagement({
                   )
                 }
                 placeholder="0"
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">
+              <label className="block text-sm text-gray-500 mb-1">
                 Reorder Point
               </label>
               <input
@@ -292,11 +292,11 @@ export default function ThresholdManagement({
                   )
                 }
                 placeholder="10"
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">
+              <label className="block text-sm text-gray-500 mb-1">
                 Max Threshold
               </label>
               <input
@@ -310,14 +310,14 @@ export default function ThresholdManagement({
                   )
                 }
                 placeholder="100"
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
           <div className="flex items-center justify-end gap-3 mt-4">
             <button
               onClick={handleCancel}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors"
             >
               <X className="w-4 h-4" />
               Cancel
@@ -342,13 +342,13 @@ export default function ThresholdManagement({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="rounded-xl bg-slate-800 border border-slate-700 overflow-hidden"
+        className="rounded-xl bg-white border border-gray-200 overflow-hidden"
       >
-        <div className="p-4 border-b border-slate-700">
-          <h2 className="text-lg font-semibold text-white">
+        <div className="p-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">
             Configured Thresholds
           </h2>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-gray-500">
             {thresholds.length} threshold{thresholds.length !== 1 ? "s" : ""}{" "}
             configured
           </p>
@@ -356,26 +356,26 @@ export default function ThresholdManagement({
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="bg-slate-900/50">
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-300 border-b border-slate-700">
+              <tr className="bg-gray-50">
+                <th className="text-left px-4 py-3 text-sm font-medium text-gray-600 border-b border-gray-200">
                   Site
                 </th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-300 border-b border-slate-700">
+                <th className="text-left px-4 py-3 text-sm font-medium text-gray-600 border-b border-gray-200">
                   NSN
                 </th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-300 border-b border-slate-700">
+                <th className="text-left px-4 py-3 text-sm font-medium text-gray-600 border-b border-gray-200">
                   Description
                 </th>
-                <th className="text-center px-4 py-3 text-sm font-medium text-slate-300 border-b border-slate-700">
+                <th className="text-center px-4 py-3 text-sm font-medium text-gray-600 border-b border-gray-200">
                   Min
                 </th>
-                <th className="text-center px-4 py-3 text-sm font-medium text-slate-300 border-b border-slate-700">
+                <th className="text-center px-4 py-3 text-sm font-medium text-gray-600 border-b border-gray-200">
                   Reorder
                 </th>
-                <th className="text-center px-4 py-3 text-sm font-medium text-slate-300 border-b border-slate-700">
+                <th className="text-center px-4 py-3 text-sm font-medium text-gray-600 border-b border-gray-200">
                   Max
                 </th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-slate-300 border-b border-slate-700">
+                <th className="text-right px-4 py-3 text-sm font-medium text-gray-600 border-b border-gray-200">
                   Actions
                 </th>
               </tr>
@@ -385,7 +385,7 @@ export default function ThresholdManagement({
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-4 py-12 text-center text-slate-400"
+                    className="px-4 py-12 text-center text-gray-500"
                   >
                     <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
                     <p>No thresholds configured</p>
@@ -398,46 +398,46 @@ export default function ThresholdManagement({
                 thresholds.map((threshold, idx) => (
                   <tr
                     key={threshold.id}
-                    className={`${idx % 2 === 0 ? "bg-slate-800/50" : "bg-slate-800"} hover:bg-slate-700/50 transition-colors`}
+                    className={`${idx % 2 === 0 ? "bg-gray-50" : "bg-white"} hover:bg-gray-100 transition-colors`}
                   >
-                    <td className="px-4 py-3 border-b border-slate-700">
-                      <div className="text-sm font-medium text-white">
+                    <td className="px-4 py-3 border-b border-gray-200">
+                      <div className="text-sm font-medium text-gray-900">
                         {threshold.siteCode}
                       </div>
-                      <div className="text-xs text-slate-400">
+                      <div className="text-xs text-gray-500">
                         {threshold.siteName}
                       </div>
                     </td>
-                    <td className="px-4 py-3 border-b border-slate-700">
-                      <span className="text-sm font-mono text-white">
+                    <td className="px-4 py-3 border-b border-gray-200">
+                      <span className="text-sm font-mono text-gray-900">
                         {threshold.nsn}
                       </span>
                     </td>
-                    <td className="px-4 py-3 border-b border-slate-700">
-                      <span className="text-sm text-slate-300 truncate max-w-[150px] block">
+                    <td className="px-4 py-3 border-b border-gray-200">
+                      <span className="text-sm text-gray-600 truncate max-w-[150px] block">
                         {threshold.description || "—"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center border-b border-slate-700">
-                      <span className="inline-flex items-center px-2 py-1 rounded bg-red-500/20 text-red-400 text-sm">
+                    <td className="px-4 py-3 text-center border-b border-gray-200">
+                      <span className="inline-flex items-center px-2 py-1 rounded bg-red-500/20 text-red-600 text-sm">
                         {threshold.minThreshold}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center border-b border-slate-700">
-                      <span className="inline-flex items-center px-2 py-1 rounded bg-yellow-500/20 text-yellow-400 text-sm">
+                    <td className="px-4 py-3 text-center border-b border-gray-200">
+                      <span className="inline-flex items-center px-2 py-1 rounded bg-yellow-500/20 text-yellow-600 text-sm">
                         {threshold.reorderPoint}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center border-b border-slate-700">
-                      <span className="inline-flex items-center px-2 py-1 rounded bg-blue-500/20 text-blue-400 text-sm">
+                    <td className="px-4 py-3 text-center border-b border-gray-200">
+                      <span className="inline-flex items-center px-2 py-1 rounded bg-blue-500/20 text-blue-600 text-sm">
                         {threshold.maxThreshold}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right border-b border-slate-700">
+                    <td className="px-4 py-3 text-right border-b border-gray-200">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleEdit(threshold)}
-                          className="p-2 text-slate-400 hover:text-blue-400 hover:bg-slate-700 rounded-lg transition-colors"
+                          className="p-2 text-gray-500 hover:text-blue-400 hover:bg-gray-100 rounded-lg transition-colors"
                           title="Edit"
                         >
                           <Edit2 className="w-4 h-4" />
@@ -445,7 +445,7 @@ export default function ThresholdManagement({
                         <button
                           onClick={() => handleDelete(threshold.id)}
                           disabled={deletingId === threshold.id}
-                          className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+                          className="p-2 text-gray-500 hover:text-red-400 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
                           title="Delete"
                         >
                           {deletingId === threshold.id ? (
@@ -468,15 +468,15 @@ export default function ThresholdManagement({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="rounded-xl bg-slate-800/50 border border-slate-700 p-4"
+        className="rounded-xl bg-gray-50 border border-gray-200 p-4"
       >
         <div className="flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
           <div>
-            <h3 className="text-sm font-medium text-white">
+            <h3 className="text-sm font-medium text-gray-900">
               Threshold Guidelines
             </h3>
-            <ul className="mt-2 text-sm text-slate-400 space-y-1 list-disc list-inside">
+            <ul className="mt-2 text-sm text-gray-500 space-y-1 list-disc list-inside">
               <li>
                 <strong className="text-red-400">Min Threshold</strong>: Critical
                 level - triggers urgent alerts

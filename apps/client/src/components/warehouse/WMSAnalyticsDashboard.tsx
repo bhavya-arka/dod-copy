@@ -247,8 +247,8 @@ export default function WMSAnalyticsDashboard({
 
         {(movementData.mostMovingItems || []).length > 0 && (
           <div className="rounded-xl border border-border overflow-hidden">
-            <div className="p-3 bg-slate-800/80 border-b border-border">
-              <h3 className="font-medium text-white">Most Moving Items</h3>
+            <div className="p-3 bg-white border-b border-border">
+              <h3 className="font-medium text-gray-900">Most Moving Items</h3>
             </div>
             <div className="divide-y divide-border max-h-64 overflow-y-auto">
               {(movementData.mostMovingItems || []).slice(0, 10).map((item, idx) => (
@@ -274,8 +274,8 @@ export default function WMSAnalyticsDashboard({
 
         {(movementData.recentlyMoved || []).length > 0 && (
           <div className="rounded-xl border border-border overflow-hidden">
-            <div className="p-3 bg-slate-800/80 border-b border-border">
-              <h3 className="font-medium text-white">Recent Movements</h3>
+            <div className="p-3 bg-white border-b border-border">
+              <h3 className="font-medium text-gray-900">Recent Movements</h3>
             </div>
             <div className="divide-y divide-border max-h-64 overflow-y-auto">
               {(movementData.recentlyMoved || []).slice(0, 10).map((movement) => (
@@ -387,8 +387,8 @@ export default function WMSAnalyticsDashboard({
 
         {capacityTrends.length > 0 && (
           <div className="rounded-xl border border-border overflow-hidden">
-            <div className="p-3 bg-slate-800/80 border-b border-border">
-              <h3 className="font-medium text-white">Capacity Trends</h3>
+            <div className="p-3 bg-white border-b border-border">
+              <h3 className="font-medium text-gray-900">Capacity Trends</h3>
             </div>
             <div className="p-4">
               <div className="h-48 flex items-end gap-1">
@@ -560,7 +560,7 @@ export default function WMSAnalyticsDashboard({
       return (
         <div className="text-center py-12">
           <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">No zone heatmap data available</p>
+          <p className="text-muted-foreground">No heatmap data available</p>
           <button
             onClick={handleGenerateDemoData}
             className="mt-4 px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto"
@@ -572,65 +572,64 @@ export default function WMSAnalyticsDashboard({
       );
     }
 
+    const getHeatColor = (intensity: number) => {
+      const normalized = intensity / (heatmapData.maxIntensity || 1);
+      if (normalized > 0.8) return "bg-red-500";
+      if (normalized > 0.6) return "bg-orange-500";
+      if (normalized > 0.4) return "bg-yellow-500";
+      if (normalized > 0.2) return "bg-green-400";
+      return "bg-green-200";
+    };
+
     return (
       <div className="space-y-6">
-        <div className="p-4 rounded-xl bg-muted/30 border border-border">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-medium text-foreground">Zone Activity Heatmap</h3>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground">Activity Level:</span>
-              <div className="flex items-center gap-1">
-                <div className="w-4 h-4 rounded bg-emerald-200" />
-                <span>Low</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-4 h-4 rounded bg-amber-400" />
-                <span>Medium</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-4 h-4 rounded bg-red-500" />
-                <span>High</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {heatmapData.zones.map((zone) => {
-              const intensity = heatmapData.maxIntensity > 0 
-                ? zone.movementIntensity / heatmapData.maxIntensity 
-                : 0;
-              
-              let bgColor = "bg-emerald-100 border-emerald-200";
-              let textColor = "text-emerald-700";
-              
-              if (intensity > 0.7) {
-                bgColor = "bg-red-100 border-red-200";
-                textColor = "text-red-700";
-              } else if (intensity > 0.4) {
-                bgColor = "bg-amber-100 border-amber-200";
-                textColor = "text-amber-700";
-              }
-
-              return (
-                <div
-                  key={zone.zoneId}
-                  className={`p-4 rounded-xl border ${bgColor} transition-all hover:shadow-md cursor-default`}
-                  title={`${zone.totalMovements} total movements`}
-                >
-                  <p className={`font-bold ${textColor}`}>{zone.zoneName}</p>
-                  <div className="mt-2 space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Movements</span>
-                      <span className={`font-medium ${textColor}`}>{zone.totalMovements}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Utilization</span>
-                      <span className={`font-medium ${textColor}`}>{zone.utilizationPercent.toFixed(0)}%</span>
-                    </div>
-                  </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {heatmapData.zones.map((zone) => (
+            <motion.div
+              key={zone.zoneId}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={`p-4 rounded-xl border border-gray-200 ${getHeatColor(zone.movementIntensity)} bg-opacity-20`}
+            >
+              <h4 className="text-sm font-medium text-gray-900 mb-2">{zone.zoneName}</h4>
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Movements:</span>
+                  <span className="font-medium text-gray-900">{zone.totalMovements}</span>
                 </div>
-              );
-            })}
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Utilization:</span>
+                  <span className="font-medium text-gray-900">{zone.utilizationPercent.toFixed(1)}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Intensity:</span>
+                  <span className="font-medium text-gray-900">{zone.movementIntensity.toFixed(1)}</span>
+                </div>
+              </div>
+              <div className={`mt-3 h-2 rounded-full ${getHeatColor(zone.movementIntensity)}`} />
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="p-4 rounded-xl bg-gray-50 border border-gray-200">
+          <h4 className="text-sm font-medium text-gray-900 mb-3">Heat Legend</h4>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-green-200" />
+              <span className="text-xs text-gray-600">Low</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-yellow-500" />
+              <span className="text-xs text-gray-600">Medium</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-orange-500" />
+              <span className="text-xs text-gray-600">High</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-red-500" />
+              <span className="text-xs text-gray-600">Critical</span>
+            </div>
           </div>
         </div>
       </div>
@@ -638,62 +637,64 @@ export default function WMSAnalyticsDashboard({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-card rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col border border-border"
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col"
       >
-        <div className="flex items-center justify-between p-6 border-b border-border">
+        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-foreground">Analytics Dashboard</h2>
-            <p className="text-sm text-muted-foreground">{siteName}</p>
+            <h2 className="text-xl font-bold text-gray-900">Analytics Dashboard</h2>
+            <p className="text-sm text-gray-500">{siteName}</p>
           </div>
           <div className="flex items-center gap-3">
             <select
               value={daysFilter}
-              onChange={(e) => setDaysFilter(parseInt(e.target.value))}
-              className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm"
+              onChange={(e) => setDaysFilter(Number(e.target.value))}
+              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-900"
             >
               <option value={7}>Last 7 days</option>
               <option value={30}>Last 30 days</option>
-              <option value={60}>Last 60 days</option>
               <option value={90}>Last 90 days</option>
             </select>
             <button
               onClick={() => fetchAnalytics(activeTab)}
               disabled={loading}
-              className="p-2 rounded-lg hover:bg-muted transition-colors"
+              className="p-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
             >
-              <RefreshCw className={`w-5 h-5 text-muted-foreground ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-4 h-4 text-gray-600 ${loading ? "animate-spin" : ""}`} />
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
+              className="p-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 text-gray-600" />
             </button>
           </div>
         </div>
 
-        <div className="border-b border-border">
-          <div className="flex gap-1 p-2 overflow-x-auto">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? "bg-blue-600 text-white"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                {tab.icon}
-                {tab.label}
-              </button>
-            ))}
-          </div>
+        <div className="flex border-b border-gray-200">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50"
+                  : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
@@ -708,7 +709,6 @@ export default function WMSAnalyticsDashboard({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
               >
                 {activeTab === "movements" && renderMovementsTab()}
                 {activeTab === "growth" && renderGrowthTab()}
@@ -719,6 +719,6 @@ export default function WMSAnalyticsDashboard({
           )}
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   );
 }

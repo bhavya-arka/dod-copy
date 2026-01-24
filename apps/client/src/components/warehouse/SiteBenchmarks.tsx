@@ -187,7 +187,7 @@ export default function SiteBenchmarks({ sites, onShowToast }: SiteBenchmarksPro
 
   const SortableHeader = ({ field, label }: { field: SortField; label: string }) => (
     <TableHead
-      className="text-gray-400 cursor-pointer hover:text-white transition-colors"
+      className="text-gray-500 cursor-pointer hover:text-gray-900 transition-colors"
       onClick={() => handleSort(field)}
     >
       <div className="flex items-center gap-1">
@@ -207,30 +207,30 @@ export default function SiteBenchmarks({ sites, onShowToast }: SiteBenchmarksPro
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-blue-400" />
             Site Benchmarks
           </h2>
-          <p className="text-gray-400 mt-1">Compare performance across warehouse sites</p>
+          <p className="text-gray-500 mt-1">Compare performance across warehouse sites</p>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Label className="text-gray-400 text-sm">From</Label>
+            <Label className="text-gray-500 text-sm">From</Label>
             <Input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="bg-gray-800 border-gray-700 text-white w-36"
+              className="bg-white border-gray-200 text-gray-900 w-36"
             />
           </div>
           <div className="flex items-center gap-2">
-            <Label className="text-gray-400 text-sm">To</Label>
+            <Label className="text-gray-500 text-sm">To</Label>
             <Input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="bg-gray-800 border-gray-700 text-white w-36"
+              className="bg-white border-gray-200 text-gray-900 w-36"
             />
           </div>
           <Button
@@ -257,22 +257,22 @@ export default function SiteBenchmarks({ sites, onShowToast }: SiteBenchmarksPro
               transition={{ delay: 0.1 }}
               className="grid grid-cols-1 md:grid-cols-3 gap-4"
             >
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-4">
                   <Trophy className="w-5 h-5 text-yellow-400" />
-                  <h3 className="text-lg font-semibold text-white">Top Throughput</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Top Throughput</h3>
                 </div>
                 <div className="space-y-2">
                   {leaderboard.top_throughput.map((item: BenchmarkLeaderboardEntry, idx: number) => (
                     <div
                       key={item.site_id}
-                      className="flex items-center justify-between p-2 rounded-lg bg-gray-800"
+                      className="flex items-center justify-between p-2 rounded-lg bg-white"
                     >
                       <div className="flex items-center gap-2">
-                        <span className={`text-sm font-bold ${idx === 0 ? "text-yellow-400" : idx === 1 ? "text-gray-300" : idx === 2 ? "text-orange-400" : "text-gray-500"}`}>
+                        <span className={`text-sm font-bold ${idx === 0 ? "text-yellow-400" : idx === 1 ? "text-gray-400" : idx === 2 ? "text-orange-400" : "text-gray-500"}`}>
                           #{idx + 1}
                         </span>
-                        <span className="text-white text-sm">{item.site_name}</span>
+                        <span className="text-gray-900 text-sm">{item.site_name}</span>
                       </div>
                       <span className="text-blue-400 font-medium">{item.value.toLocaleString()}</span>
                     </div>
@@ -280,22 +280,22 @@ export default function SiteBenchmarks({ sites, onShowToast }: SiteBenchmarksPro
                 </div>
               </div>
 
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-4">
                   <Clock className="w-5 h-5 text-green-400" />
-                  <h3 className="text-lg font-semibold text-white">Fastest Processing</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Fastest Processing</h3>
                 </div>
                 <div className="space-y-2">
                   {leaderboard.fastest_processing.map((item: BenchmarkLeaderboardEntry, idx: number) => (
                     <div
                       key={item.site_id}
-                      className="flex items-center justify-between p-2 rounded-lg bg-gray-800"
+                      className="flex items-center justify-between p-2 rounded-lg bg-white"
                     >
                       <div className="flex items-center gap-2">
-                        <span className={`text-sm font-bold ${idx === 0 ? "text-yellow-400" : idx === 1 ? "text-gray-300" : idx === 2 ? "text-orange-400" : "text-gray-500"}`}>
+                        <span className={`text-sm font-bold ${idx === 0 ? "text-yellow-400" : idx === 1 ? "text-gray-400" : idx === 2 ? "text-orange-400" : "text-gray-500"}`}>
                           #{idx + 1}
                         </span>
-                        <span className="text-white text-sm">{item.site_name}</span>
+                        <span className="text-gray-900 text-sm">{item.site_name}</span>
                       </div>
                       <span className="text-green-400 font-medium">{item.value.toFixed(1)}h</span>
                     </div>
@@ -303,22 +303,22 @@ export default function SiteBenchmarks({ sites, onShowToast }: SiteBenchmarksPro
                 </div>
               </div>
 
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-4">
                   <AlertCircle className="w-5 h-5 text-red-400" />
-                  <h3 className="text-lg font-semibold text-white">Lowest Error Rate</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Lowest Error Rate</h3>
                 </div>
                 <div className="space-y-2">
                   {leaderboard.lowest_error_rate.map((item: BenchmarkLeaderboardEntry, idx: number) => (
                     <div
                       key={item.site_id}
-                      className="flex items-center justify-between p-2 rounded-lg bg-gray-800"
+                      className="flex items-center justify-between p-2 rounded-lg bg-white"
                     >
                       <div className="flex items-center gap-2">
-                        <span className={`text-sm font-bold ${idx === 0 ? "text-yellow-400" : idx === 1 ? "text-gray-300" : idx === 2 ? "text-orange-400" : "text-gray-500"}`}>
+                        <span className={`text-sm font-bold ${idx === 0 ? "text-yellow-400" : idx === 1 ? "text-gray-400" : idx === 2 ? "text-orange-400" : "text-gray-500"}`}>
                           #{idx + 1}
                         </span>
-                        <span className="text-white text-sm">{item.site_name}</span>
+                        <span className="text-gray-900 text-sm">{item.site_name}</span>
                       </div>
                       <span className="text-red-400 font-medium">{item.value}%</span>
                     </div>
@@ -333,11 +333,11 @@ export default function SiteBenchmarks({ sites, onShowToast }: SiteBenchmarksPro
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="flex-1 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden"
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl overflow-hidden"
             >
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-gray-800/50">
+                  <TableRow className="border-gray-200 hover:bg-gray-100">
                     <SortableHeader field="site_name" label="Site" />
                     <SortableHeader field="throughput" label="Throughput" />
                     <SortableHeader field="inbound_shipments" label="Inbound" />
@@ -345,13 +345,13 @@ export default function SiteBenchmarks({ sites, onShowToast }: SiteBenchmarksPro
                     <SortableHeader field="avg_processing_hours" label="Avg Process (h)" />
                     <SortableHeader field="utilization_percent" label="Utilization" />
                     <SortableHeader field="error_count" label="Errors" />
-                    <TableHead className="text-gray-400 w-10"></TableHead>
+                    <TableHead className="text-gray-500 w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedBenchmarks.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-gray-400 py-8">
+                      <TableCell colSpan={8} className="text-center text-gray-500 py-8">
                         No benchmark data available
                       </TableCell>
                     </TableRow>
@@ -359,36 +359,36 @@ export default function SiteBenchmarks({ sites, onShowToast }: SiteBenchmarksPro
                     sortedBenchmarks.map((bm) => (
                       <TableRow
                         key={bm.site_id}
-                        className={`border-gray-800 cursor-pointer transition-colors ${
-                          selectedSiteId === bm.site_id ? "bg-blue-900/20" : "hover:bg-gray-800/50"
+                        className={`border-gray-200 cursor-pointer transition-colors ${
+                          selectedSiteId === bm.site_id ? "bg-blue-50" : "hover:bg-gray-100"
                         }`}
                         onClick={() => handleSiteClick(bm.site_id)}
                       >
-                        <TableCell className="text-white font-medium">{bm.site_name}</TableCell>
+                        <TableCell className="text-gray-900 font-medium">{bm.site_name}</TableCell>
                         <TableCell className="text-blue-400">{bm.throughput?.toLocaleString() || 0}</TableCell>
-                        <TableCell className="text-gray-300">{bm.inbound_shipments || 0}</TableCell>
-                        <TableCell className="text-gray-300">{bm.outbound_shipments || 0}</TableCell>
-                        <TableCell className="text-gray-300">
+                        <TableCell className="text-gray-600">{bm.inbound_shipments || 0}</TableCell>
+                        <TableCell className="text-gray-600">{bm.outbound_shipments || 0}</TableCell>
+                        <TableCell className="text-gray-600">
                           {parseFloat(bm.avg_processing_hours || "0").toFixed(1)}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="w-16 h-2 bg-gray-700 rounded-full overflow-hidden">
+                            <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div
                                 className="h-full bg-blue-500 rounded-full"
                                 style={{ width: `${Math.min(parseFloat(bm.utilization_percent || "0"), 100)}%` }}
                               />
                             </div>
-                            <span className="text-gray-300 text-sm">
+                            <span className="text-gray-600 text-sm">
                               {parseFloat(bm.utilization_percent || "0").toFixed(0)}%
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className={bm.error_count && bm.error_count > 0 ? "text-red-400" : "text-gray-300"}>
+                        <TableCell className={bm.error_count && bm.error_count > 0 ? "text-red-400" : "text-gray-600"}>
                           {bm.error_count || 0}
                         </TableCell>
                         <TableCell>
-                          <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${selectedSiteId === bm.site_id ? "rotate-90" : ""}`} />
+                          <ChevronRight className={`w-4 h-4 text-gray-500 transition-transform ${selectedSiteId === bm.site_id ? "rotate-90" : ""}`} />
                         </TableCell>
                       </TableRow>
                     ))
@@ -403,10 +403,10 @@ export default function SiteBenchmarks({ sites, onShowToast }: SiteBenchmarksPro
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
-                  className="w-full lg:w-96 bg-gray-900 border border-gray-800 rounded-xl p-4"
+                  className="w-full lg:w-96 bg-gray-50 border border-gray-200 rounded-xl p-4"
                 >
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-white">
+                    <h3 className="text-lg font-semibold text-gray-900">
                       {sites.find((s) => s.id === selectedSiteId)?.name || "Site"} Trend
                     </h3>
                     <Button
@@ -416,7 +416,7 @@ export default function SiteBenchmarks({ sites, onShowToast }: SiteBenchmarksPro
                         setSelectedSiteId(null);
                         setSiteTrend(null);
                       }}
-                      className="text-gray-400 hover:text-white"
+                      className="text-gray-500 hover:text-gray-900"
                     >
                       <X className="w-4 h-4" />
                     </Button>
@@ -428,18 +428,18 @@ export default function SiteBenchmarks({ sites, onShowToast }: SiteBenchmarksPro
                     </div>
                   ) : siteTrend ? (
                     <>
-                      <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-gray-800">
+                      <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-white">
                         <TrendIcon trend={siteTrend.trend_direction} />
-                        <span className="text-white capitalize">{siteTrend.trend_direction}</span>
+                        <span className="text-gray-900 capitalize">{siteTrend.trend_direction}</span>
                         {siteTrend.trend_change_percent && (
-                          <span className={`text-sm ${siteTrend.trend_direction === "improving" ? "text-green-400" : siteTrend.trend_direction === "declining" ? "text-red-400" : "text-gray-400"}`}>
+                          <span className={`text-sm ${siteTrend.trend_direction === "improving" ? "text-green-400" : siteTrend.trend_direction === "declining" ? "text-red-400" : "text-gray-500"}`}>
                             ({siteTrend.trend_change_percent > 0 ? "+" : ""}{siteTrend.trend_change_percent.toFixed(1)}%)
                           </span>
                         )}
                       </div>
 
                       <div className="mb-4">
-                        <h4 className="text-sm text-gray-400 mb-2">Daily Throughput</h4>
+                        <h4 className="text-sm text-gray-500 mb-2">Daily Throughput</h4>
                         <div className="h-32 flex items-end gap-1">
                           {siteTrend.daily_data.map((day: SiteBenchmarkTrendDay, idx: number) => (
                             <div
@@ -464,34 +464,34 @@ export default function SiteBenchmarks({ sites, onShowToast }: SiteBenchmarksPro
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="p-3 rounded-lg bg-gray-800">
-                          <div className="text-xs text-gray-400">Avg Throughput</div>
-                          <div className="text-lg font-semibold text-white">
+                        <div className="p-3 rounded-lg bg-white">
+                          <div className="text-xs text-gray-500">Avg Throughput</div>
+                          <div className="text-lg font-semibold text-gray-900">
                             {siteTrend.avg_throughput?.toLocaleString() || 0}
                           </div>
                         </div>
-                        <div className="p-3 rounded-lg bg-gray-800">
-                          <div className="text-xs text-gray-400">Avg Processing</div>
-                          <div className="text-lg font-semibold text-white">
+                        <div className="p-3 rounded-lg bg-white">
+                          <div className="text-xs text-gray-500">Avg Processing</div>
+                          <div className="text-lg font-semibold text-gray-900">
                             {siteTrend.avg_processing_hours?.toFixed(1) || 0}h
                           </div>
                         </div>
-                        <div className="p-3 rounded-lg bg-gray-800">
-                          <div className="text-xs text-gray-400">Total Inbound</div>
-                          <div className="text-lg font-semibold text-white">
+                        <div className="p-3 rounded-lg bg-white">
+                          <div className="text-xs text-gray-500">Total Inbound</div>
+                          <div className="text-lg font-semibold text-gray-900">
                             {siteTrend.total_inbound?.toLocaleString() || 0}
                           </div>
                         </div>
-                        <div className="p-3 rounded-lg bg-gray-800">
-                          <div className="text-xs text-gray-400">Total Outbound</div>
-                          <div className="text-lg font-semibold text-white">
+                        <div className="p-3 rounded-lg bg-white">
+                          <div className="text-xs text-gray-500">Total Outbound</div>
+                          <div className="text-lg font-semibold text-gray-900">
                             {siteTrend.total_outbound?.toLocaleString() || 0}
                           </div>
                         </div>
                       </div>
                     </>
                   ) : (
-                    <p className="text-gray-400 text-center py-8">No trend data available</p>
+                    <p className="text-gray-500 text-center py-8">No trend data available</p>
                   )}
                 </motion.div>
               )}

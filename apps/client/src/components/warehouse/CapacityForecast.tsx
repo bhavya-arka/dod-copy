@@ -120,11 +120,11 @@ export default function CapacityForecast() {
   );
 
   return (
-    <div className="space-y-6 p-6 bg-slate-900 min-h-screen">
+    <div className="space-y-6 p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <TrendingUp className="h-6 w-6 text-cyan-400" />
-          <h2 className="text-2xl font-bold text-white">Capacity Forecast</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Capacity Forecast</h2>
         </div>
 
         <div className="flex items-center gap-4">
@@ -132,15 +132,15 @@ export default function CapacityForecast() {
             value={selectedSiteId?.toString() || ""}
             onValueChange={(v) => setSelectedSiteId(parseInt(v))}
           >
-            <SelectTrigger className="w-64 bg-slate-800 border-slate-700 text-white">
+            <SelectTrigger className="w-64 bg-white border-gray-200 text-gray-900">
               <SelectValue placeholder="Select a site" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-700">
+            <SelectContent className="bg-white border-gray-200">
               {sites.map((site) => (
                 <SelectItem
                   key={site.id}
                   value={site.id.toString()}
-                  className="text-white hover:bg-slate-700"
+                  className="text-gray-900 hover:bg-gray-100"
                 >
                   {site.name} ({site.code})
                 </SelectItem>
@@ -164,7 +164,7 @@ export default function CapacityForecast() {
       </div>
 
       {error && (
-        <Alert variant="destructive" className="bg-red-900/50 border-red-700">
+        <Alert variant="destructive" className="bg-red-50 border-red-200">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
@@ -172,12 +172,12 @@ export default function CapacityForecast() {
       )}
 
       {overThresholdDays.length > 0 && (
-        <Alert className="bg-amber-900/50 border-amber-700">
-          <AlertTriangle className="h-4 w-4 text-amber-400" />
-          <AlertTitle className="text-amber-300">
+        <Alert className="bg-amber-50 border-amber-200">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <AlertTitle className="text-amber-700">
             Capacity Warning
           </AlertTitle>
-          <AlertDescription className="text-amber-200">
+          <AlertDescription className="text-amber-600">
             {overThresholdDays.length} day(s) projected to exceed{" "}
             {UTILIZATION_THRESHOLD}% utilization threshold. Consider rebalancing
             inventory or arranging additional storage.
@@ -185,43 +185,43 @@ export default function CapacityForecast() {
         </Alert>
       )}
 
-      <Card className="bg-slate-800 border-slate-700">
+      <Card className="bg-white border-gray-200">
         <CardHeader>
-          <CardTitle className="text-white">
+          <CardTitle className="text-gray-900">
             30-Day Utilization Forecast
           </CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <Skeleton className="h-80 bg-slate-700" />
+            <Skeleton className="h-80 bg-gray-100" />
           ) : chartData.length === 0 ? (
-            <div className="h-80 flex items-center justify-center text-slate-400">
+            <div className="h-80 flex items-center justify-center text-gray-500">
               No forecast data available. Click "Generate Forecasts" to create
               projections.
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={320}>
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis
                   dataKey="date"
-                  stroke="#94a3b8"
-                  tick={{ fill: "#94a3b8" }}
+                  stroke="#6b7280"
+                  tick={{ fill: "#6b7280" }}
                 />
                 <YAxis
                   domain={[0, 100]}
-                  stroke="#94a3b8"
-                  tick={{ fill: "#94a3b8" }}
+                  stroke="#6b7280"
+                  tick={{ fill: "#6b7280" }}
                   tickFormatter={(v) => `${v}%`}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#1e293b",
-                    border: "1px solid #334155",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #e5e7eb",
                     borderRadius: "8px",
                   }}
-                  labelStyle={{ color: "#e2e8f0" }}
-                  itemStyle={{ color: "#e2e8f0" }}
+                  labelStyle={{ color: "#111827" }}
+                  itemStyle={{ color: "#111827" }}
                   formatter={(value: number, name: string) => {
                     if (name === "utilization") return [`${value.toFixed(1)}%`, "Utilization"];
                     if (name === "confidence") return [`${value.toFixed(0)}%`, "Confidence"];
@@ -261,37 +261,37 @@ export default function CapacityForecast() {
         </CardContent>
       </Card>
 
-      <Card className="bg-slate-800 border-slate-700">
+      <Card className="bg-white border-gray-200">
         <CardHeader>
-          <CardTitle className="text-white">Forecast Details</CardTitle>
+          <CardTitle className="text-gray-900">Forecast Details</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="space-y-2">
               {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-12 bg-slate-700" />
+                <Skeleton key={i} className="h-12 bg-gray-100" />
               ))}
             </div>
           ) : chartData.length === 0 ? (
-            <div className="text-center py-8 text-slate-400">
+            <div className="text-center py-8 text-gray-500">
               No forecast data available
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-slate-700 hover:bg-slate-700/50">
-                    <TableHead className="text-slate-300">Date</TableHead>
-                    <TableHead className="text-slate-300 text-right">
+                  <TableRow className="border-gray-200 hover:bg-gray-50">
+                    <TableHead className="text-gray-600">Date</TableHead>
+                    <TableHead className="text-gray-600 text-right">
                       Projected Utilization
                     </TableHead>
-                    <TableHead className="text-slate-300 text-right">
+                    <TableHead className="text-gray-600 text-right">
                       Inbound (lbs)
                     </TableHead>
-                    <TableHead className="text-slate-300 text-right">
+                    <TableHead className="text-gray-600 text-right">
                       Outbound (lbs)
                     </TableHead>
-                    <TableHead className="text-slate-300 text-right">
+                    <TableHead className="text-gray-600 text-right">
                       Confidence
                     </TableHead>
                   </TableRow>
@@ -300,13 +300,13 @@ export default function CapacityForecast() {
                   {chartData.map((row, idx) => (
                     <TableRow
                       key={idx}
-                      className={`border-slate-700 hover:bg-slate-700/50 ${
+                      className={`border-gray-200 hover:bg-gray-50 ${
                         row.utilization > UTILIZATION_THRESHOLD
-                          ? "bg-red-900/20"
+                          ? "bg-red-50"
                           : ""
                       }`}
                     >
-                      <TableCell className="text-white font-medium">
+                      <TableCell className="text-gray-900 font-medium">
                         {format(new Date(row.fullDate), "MMM dd, yyyy")}
                       </TableCell>
                       <TableCell className="text-right">
@@ -329,13 +329,13 @@ export default function CapacityForecast() {
                           {row.utilization.toFixed(1)}%
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right text-green-400">
+                      <TableCell className="text-right text-green-600">
                         +{row.inbound.toLocaleString()}
                       </TableCell>
-                      <TableCell className="text-right text-red-400">
+                      <TableCell className="text-right text-red-600">
                         -{row.outbound.toLocaleString()}
                       </TableCell>
-                      <TableCell className="text-right text-slate-300">
+                      <TableCell className="text-right text-gray-600">
                         {row.confidence.toFixed(0)}%
                       </TableCell>
                     </TableRow>

@@ -217,37 +217,37 @@ export default function InboundCargoFeed({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="p-4 rounded-2xl bg-slate-800 border border-slate-700 shadow-sm"
+          className="p-4 rounded-2xl bg-white border border-gray-200 shadow-sm"
         >
-          <div className="w-10 h-10 rounded-xl bg-blue-900/50 flex items-center justify-center mb-3">
-            <Package className="w-5 h-5 text-blue-400" />
+          <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center mb-3">
+            <Package className="w-5 h-5 text-blue-600" />
           </div>
-          <p className="text-2xl font-bold text-white">{totalExpectedArrivals}</p>
-          <p className="text-xs text-slate-400 mt-1">Expected Arrivals (7 days)</p>
+          <p className="text-2xl font-bold text-gray-900">{totalExpectedArrivals}</p>
+          <p className="text-xs text-gray-500 mt-1">Expected Arrivals (7 days)</p>
         </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="p-4 rounded-2xl bg-slate-800 border border-slate-700 shadow-sm"
+          className="p-4 rounded-2xl bg-white border border-gray-200 shadow-sm"
         >
-          <div className="w-10 h-10 rounded-xl bg-amber-900/50 flex items-center justify-center mb-3">
-            <Weight className="w-5 h-5 text-amber-400" />
+          <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center mb-3">
+            <Weight className="w-5 h-5 text-amber-600" />
           </div>
-          <p className="text-2xl font-bold text-white">{formatWeight(totalExpectedWeight)}</p>
-          <p className="text-xs text-slate-400 mt-1">Total Expected Weight</p>
+          <p className="text-2xl font-bold text-gray-900">{formatWeight(totalExpectedWeight)}</p>
+          <p className="text-xs text-gray-500 mt-1">Total Expected Weight</p>
         </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="p-4 rounded-2xl bg-slate-800 border border-slate-700 shadow-sm"
+          className="p-4 rounded-2xl bg-white border border-gray-200 shadow-sm"
         >
-          <div className="w-10 h-10 rounded-xl bg-purple-900/50 flex items-center justify-center mb-3">
-            <Clock className="w-5 h-5 text-purple-400" />
+          <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center mb-3">
+            <Clock className="w-5 h-5 text-purple-600" />
           </div>
-          <p className="text-2xl font-bold text-white">{busiestDay ? busiestDay[0] : "—"}</p>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-2xl font-bold text-gray-900">{busiestDay ? busiestDay[0] : "—"}</p>
+          <p className="text-xs text-gray-500 mt-1">
             Busiest Day {busiestDay ? `(${busiestDay[1]} arrivals)` : ""}
           </p>
         </motion.div>
@@ -265,9 +265,9 @@ export default function InboundCargoFeed({
           className="space-y-3"
         >
           {shipments.length === 0 ? (
-            <div className="rounded-2xl bg-slate-800 border border-slate-700 p-8 text-center">
-              <Package className="w-12 h-12 mx-auto mb-3 text-slate-500" />
-              <p className="text-slate-400">No inbound shipments scheduled</p>
+            <div className="rounded-2xl bg-white border border-gray-200 p-8 text-center">
+              <Package className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+              <p className="text-gray-500">No inbound shipments scheduled</p>
             </div>
           ) : (
             shipments.map((shipment, idx) => {
@@ -281,31 +281,31 @@ export default function InboundCargoFeed({
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.03 }}
-                  className="rounded-xl bg-slate-800 border border-slate-700 overflow-hidden"
+                  className="rounded-xl bg-white border border-gray-200 overflow-hidden"
                 >
                   <div
                     onClick={() => toggleShipmentExpand(shipment.id)}
-                    className="p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-700/50 transition-colors"
+                    className="p-4 flex items-center gap-4 cursor-pointer hover:bg-gray-50 transition-colors"
                   >
                     <div className={`w-10 h-10 rounded-lg ${colors.iconBg} flex items-center justify-center text-white`}>
                       {getTransportIcon(shipment.transportMode)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-white truncate">
+                        <span className="font-medium text-gray-900 truncate">
                           From: {shipment.originSiteName}
                         </span>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors.bg} ${statusColors.text}`}>
                           {shipment.status.replace(/_/g, " ")}
                         </span>
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-slate-400">
+                      <div className="flex items-center gap-4 text-sm text-gray-500">
                         <span>ETA: {formatDate(shipment.eta)}</span>
                         <span>{shipment.itemCount} items</span>
                         <span>{formatWeight(shipment.totalWeight)}</span>
                       </div>
                     </div>
-                    <div className="flex items-center text-slate-400">
+                    <div className="flex items-center text-gray-500">
                       {isExpanded ? (
                         <ChevronDown className="w-5 h-5" />
                       ) : (
@@ -319,23 +319,23 @@ export default function InboundCargoFeed({
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        className="border-t border-slate-700 bg-slate-900/50"
+                        className="border-t border-gray-200 bg-gray-50"
                       >
                         <div className="p-4">
-                          <h4 className="text-sm font-medium text-slate-300 mb-3">Shipment Items</h4>
+                          <h4 className="text-sm font-medium text-gray-600 mb-3">Shipment Items</h4>
                           <div className="space-y-2">
                             {shipment.items.map((item, itemIdx) => (
                               <div
                                 key={itemIdx}
-                                className="flex items-center justify-between text-sm p-2 rounded-lg bg-slate-800"
+                                className="flex items-center justify-between text-sm p-2 rounded-lg bg-white"
                               >
                                 <div className="flex-1">
-                                  <span className="text-slate-300">{item.description || item.requisitionNo}</span>
+                                  <span className="text-gray-700">{item.description || item.requisitionNo}</span>
                                   {item.nsn && (
-                                    <span className="text-slate-500 ml-2 text-xs">NSN: {item.nsn}</span>
+                                    <span className="text-gray-400 ml-2 text-xs">NSN: {item.nsn}</span>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-4 text-slate-400">
+                                <div className="flex items-center gap-4 text-gray-500">
                                   <span>Qty: {item.quantity}</span>
                                   {item.weight && <span>{formatWeight(item.weight)}</span>}
                                 </div>
@@ -371,8 +371,8 @@ export default function InboundCargoFeed({
                     isSelected
                       ? "bg-[#2563EB] text-white ring-2 ring-[#2563EB]/50"
                       : isHeavy
-                      ? "bg-amber-900/50 border border-amber-600 text-amber-300"
-                      : "bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700"
+                      ? "bg-amber-50 border border-amber-300 text-amber-700"
+                      : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
                   }`}
                 >
                   <div className="text-xs mb-1 opacity-70">{formatDayOfWeek(day.date)}</div>
@@ -392,7 +392,7 @@ export default function InboundCargoFeed({
                   </div>
                   {isHeavy && (
                     <div className="mt-1">
-                      <AlertTriangle className="w-3 h-3 mx-auto text-amber-400" />
+                      <AlertTriangle className="w-3 h-3 mx-auto text-amber-500" />
                     </div>
                   )}
                 </button>
@@ -407,10 +407,10 @@ export default function InboundCargoFeed({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="rounded-xl bg-slate-800 border border-slate-700 overflow-hidden"
+                className="rounded-xl bg-white border border-gray-200 overflow-hidden"
               >
-                <div className="p-4 border-b border-slate-700">
-                  <h3 className="text-lg font-medium text-white">
+                <div className="p-4 border-b border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-900">
                     Arrivals for {formatDate(expandedDay)}
                   </h3>
                 </div>
@@ -424,21 +424,21 @@ export default function InboundCargoFeed({
                       return (
                         <div
                           key={idx}
-                          className="flex items-center gap-4 p-3 rounded-lg bg-slate-900/50"
+                          className="flex items-center gap-4 p-3 rounded-lg bg-gray-50"
                         >
                           <div className={`w-8 h-8 rounded-lg ${colors.iconBg} flex items-center justify-center text-white`}>
                             {getTransportIcon(shipment.transportMode)}
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium text-slate-200">
+                              <span className="font-medium text-gray-700">
                                 {shipment.originSiteName}
                               </span>
                               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors.bg} ${statusColors.text}`}>
                                 {shipment.status.replace(/_/g, " ")}
                               </span>
                             </div>
-                            <div className="text-sm text-slate-400 mt-0.5">
+                            <div className="text-sm text-gray-500 mt-0.5">
                               {shipment.itemCount} items • {formatWeight(shipment.totalWeight)}
                             </div>
                           </div>
@@ -446,7 +446,7 @@ export default function InboundCargoFeed({
                       );
                     })}
                   {timeline.find(d => d.date === expandedDay)?.shipments.length === 0 && (
-                    <p className="text-slate-400 text-center py-4">No arrivals scheduled</p>
+                    <p className="text-gray-500 text-center py-4">No arrivals scheduled</p>
                   )}
                 </div>
               </motion.div>

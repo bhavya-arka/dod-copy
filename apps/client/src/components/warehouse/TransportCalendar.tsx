@@ -276,11 +276,11 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Calendar className="w-6 h-6 text-blue-400" />
             Transport Calendar
           </h2>
-          <p className="text-gray-400 mt-1">Schedule and manage transport reservations</p>
+          <p className="text-gray-500 mt-1">Schedule and manage transport reservations</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -288,7 +288,7 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
             variant="outline"
             size="sm"
             onClick={() => setShowConflictsPanel(!showConflictsPanel)}
-            className={`border-gray-700 ${conflicts.length > 0 ? "text-red-400 border-red-700" : "text-gray-300"}`}
+            className={`border-gray-200 ${conflicts.length > 0 ? "text-red-400 border-red-300" : "text-gray-600"}`}
           >
             <AlertTriangle className="w-4 h-4 mr-2" />
             {conflicts.length} Conflicts
@@ -308,7 +308,7 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="flex-1 bg-gray-900 border border-gray-800 rounded-xl p-4"
+          className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-4"
         >
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -316,11 +316,11 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
                 variant="ghost"
                 size="icon"
                 onClick={() => handleMonthChange(-1)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-500 hover:text-gray-900"
               >
                 <ChevronLeft className="w-5 h-5" />
               </Button>
-              <span className="text-lg font-semibold text-white min-w-[140px] text-center">
+              <span className="text-lg font-semibold text-gray-900 min-w-[140px] text-center">
                 {new Date(currentMonth + "-01").toLocaleDateString("en-US", {
                   month: "long",
                   year: "numeric",
@@ -330,7 +330,7 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
                 variant="ghost"
                 size="icon"
                 onClick={() => handleMonthChange(1)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-500 hover:text-gray-900"
               >
                 <ChevronRight className="w-5 h-5" />
               </Button>
@@ -340,14 +340,14 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
               value={selectedSiteId === "all" ? "all" : String(selectedSiteId)}
               onValueChange={(v) => setSelectedSiteId(v === "all" ? "all" : parseInt(v))}
             >
-              <SelectTrigger className="w-[180px] bg-gray-800 border-gray-700 text-white">
+              <SelectTrigger className="w-[180px] bg-white border-gray-200 text-gray-900">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Filter by site" />
               </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
-                <SelectItem value="all" className="text-white">All Sites</SelectItem>
+              <SelectContent className="bg-white border-gray-200">
+                <SelectItem value="all" className="text-gray-900">All Sites</SelectItem>
                 {sites.map((site) => (
-                  <SelectItem key={site.id} value={String(site.id)} className="text-white">
+                  <SelectItem key={site.id} value={String(site.id)} className="text-gray-900">
                     {site.name}
                   </SelectItem>
                 ))}
@@ -381,13 +381,13 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
                       onClick={() => handleDayClick(day.date)}
                       className={`
                         relative p-2 min-h-[80px] rounded-lg border transition-all
-                        ${day.isCurrentMonth ? "bg-gray-800" : "bg-gray-900 opacity-50"}
-                        ${isSelected ? "border-blue-500 ring-2 ring-blue-500/20" : "border-gray-700"}
+                        ${day.isCurrentMonth ? "bg-white" : "bg-gray-50 opacity-50"}
+                        ${isSelected ? "border-blue-500 ring-2 ring-blue-500/20" : "border-gray-200"}
                         ${hasConflict ? "border-red-500 ring-1 ring-red-500/30" : ""}
-                        hover:border-gray-600
+                        hover:border-gray-300
                       `}
                     >
-                      <span className={`text-sm font-medium ${day.isCurrentMonth ? "text-white" : "text-gray-500"}`}>
+                      <span className={`text-sm font-medium ${day.isCurrentMonth ? "text-gray-900" : "text-gray-500"}`}>
                         {day.dayNum}
                       </span>
 
@@ -405,7 +405,7 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
                           </div>
                         ))}
                         {dayReservations.length > 3 && (
-                          <div className="text-xs text-gray-400">+{dayReservations.length - 3} more</div>
+                          <div className="text-xs text-gray-500">+{dayReservations.length - 3} more</div>
                         )}
                       </div>
                     </button>
@@ -413,7 +413,7 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
                 })}
               </div>
 
-              <div className="flex items-center gap-4 mt-4 text-xs text-gray-400">
+              <div className="flex items-center gap-4 mt-4 text-xs text-gray-500">
                 <span className="flex items-center gap-1">
                   <span className="w-3 h-3 rounded bg-gray-500" /> Tentative
                 </span>
@@ -434,10 +434,10 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="w-full lg:w-80 bg-gray-900 border border-gray-800 rounded-xl p-4"
+              className="w-full lg:w-80 bg-gray-50 border border-gray-200 rounded-xl p-4"
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">
+                <h3 className="text-lg font-semibold text-gray-900">
                   {new Date(selectedDay).toLocaleDateString("en-US", {
                     weekday: "short",
                     month: "short",
@@ -448,14 +448,14 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
                   variant="ghost"
                   size="icon"
                   onClick={() => setSelectedDay(null)}
-                  className="text-gray-400 hover:text-white"
+                  className="text-gray-500 hover:text-gray-900"
                 >
                   <X className="w-4 h-4" />
                 </Button>
               </div>
 
               {selectedDayReservations.length === 0 ? (
-                <p className="text-gray-400 text-sm">No reservations for this day</p>
+                <p className="text-gray-500 text-sm">No reservations for this day</p>
               ) : (
                 <div className="space-y-3">
                   {selectedDayReservations.map((r) => {
@@ -463,12 +463,12 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
                     return (
                       <div
                         key={r.id}
-                        className={`p-3 rounded-lg border ${r.status === "cancelled" ? "border-red-800 bg-red-900/20" : "border-gray-700 bg-gray-800"}`}
+                        className={`p-3 rounded-lg border ${r.status === "cancelled" ? "border-red-300 bg-red-50" : "border-gray-200 bg-white"}`}
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <ModeIcon className="w-4 h-4 text-blue-400" />
-                            <span className="text-sm font-medium text-white capitalize">
+                            <span className="text-sm font-medium text-gray-900 capitalize">
                               {r.transport_mode}
                             </span>
                           </div>
@@ -479,7 +479,7 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
                           </span>
                         </div>
 
-                        <div className="text-xs text-gray-400 space-y-1">
+                        <div className="text-xs text-gray-500 space-y-1">
                           <div className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
                             {r.time_slot?.replace("-", " - ")}
@@ -494,7 +494,7 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
                               variant="ghost"
                               size="sm"
                               onClick={() => setEditingReservation(r)}
-                              className="text-gray-400 hover:text-white text-xs h-7"
+                              className="text-gray-500 hover:text-gray-900 text-xs h-7"
                             >
                               <Edit2 className="w-3 h-3 mr-1" />
                               Edit
@@ -536,7 +536,7 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="w-full lg:w-80 bg-gray-900 border border-red-800 rounded-xl p-4"
+              className="w-full lg:w-80 bg-gray-50 border border-red-300 rounded-xl p-4"
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-red-400 flex items-center gap-2">
@@ -547,7 +547,7 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
                   variant="ghost"
                   size="icon"
                   onClick={() => setShowConflictsPanel(false)}
-                  className="text-gray-400 hover:text-white"
+                  className="text-gray-500 hover:text-gray-900"
                 >
                   <X className="w-4 h-4" />
                 </Button>
@@ -555,18 +555,18 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
 
               <div className="space-y-3 max-h-[400px] overflow-y-auto">
                 {conflicts.map((conflict) => (
-                  <div key={conflict.id} className="p-3 rounded-lg border border-red-800 bg-red-900/20">
-                    <div className="text-sm text-white mb-1">
+                  <div key={conflict.id} className="p-3 rounded-lg border border-red-300 bg-red-50">
+                    <div className="text-sm text-gray-900 mb-1">
                       {new Date(conflict.date).toLocaleDateString()}
                     </div>
-                    <div className="text-xs text-gray-400 mb-2">
+                    <div className="text-xs text-gray-500 mb-2">
                       {conflict.reservations?.length || 0} overlapping reservations
                     </div>
 
                     <div className="space-y-2">
                       {conflict.reservations?.map((r: TransportReservation) => (
                         <div key={r.id} className="flex items-center justify-between text-xs">
-                          <span className="text-gray-300">{r.time_slot}</span>
+                          <span className="text-gray-600">{r.time_slot}</span>
                           <div className="flex gap-1">
                             <Button
                               variant="ghost"
@@ -589,24 +589,24 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
       </div>
 
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-md">
+        <DialogContent className="bg-white border-gray-200 text-gray-900 max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white">Add Reservation</DialogTitle>
+            <DialogTitle className="text-gray-900">Add Reservation</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
-              <Label className="text-gray-300">Site *</Label>
+              <Label className="text-gray-600">Site *</Label>
               <Select
                 value={formData.site_id}
                 onValueChange={(v) => setFormData((prev) => ({ ...prev, site_id: v }))}
               >
-                <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                <SelectTrigger className="bg-white border-gray-200 text-gray-900">
                   <SelectValue placeholder="Select site" />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="bg-white border-gray-200">
                   {sites.map((site) => (
-                    <SelectItem key={site.id} value={String(site.id)} className="text-white">
+                    <SelectItem key={site.id} value={String(site.id)} className="text-gray-900">
                       {site.name}
                     </SelectItem>
                   ))}
@@ -616,36 +616,35 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label className="text-gray-300">Transport Mode</Label>
+                <Label className="text-gray-600">Transport Mode</Label>
                 <Select
                   value={formData.transport_mode}
                   onValueChange={(v) => setFormData((prev) => ({ ...prev, transport_mode: v }))}
                 >
-                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                  <SelectTrigger className="bg-white border-gray-200 text-gray-900">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectContent className="bg-white border-gray-200">
                     {TRANSPORT_MODES.map((mode) => (
-                      <SelectItem key={mode.value} value={mode.value} className="text-white">
+                      <SelectItem key={mode.value} value={mode.value} className="text-gray-900">
                         {mode.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
               <div>
-                <Label className="text-gray-300">Asset Type</Label>
+                <Label className="text-gray-600">Asset Type</Label>
                 <Select
                   value={formData.asset_type}
                   onValueChange={(v) => setFormData((prev) => ({ ...prev, asset_type: v }))}
                 >
-                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                  <SelectTrigger className="bg-white border-gray-200 text-gray-900">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectContent className="bg-white border-gray-200">
                     {ASSET_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value} className="text-white">
+                      <SelectItem key={type.value} value={type.value} className="text-gray-900">
                         {type.label}
                       </SelectItem>
                     ))}
@@ -656,117 +655,108 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label className="text-gray-300">Capacity Units</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={formData.capacity_units}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, capacity_units: e.target.value }))}
-                  className="bg-gray-800 border-gray-700 text-white"
-                />
-              </div>
-
-              <div>
-                <Label className="text-gray-300">Date *</Label>
+                <Label className="text-gray-600">Date *</Label>
                 <Input
                   type="date"
                   value={formData.reservation_date}
                   onChange={(e) => setFormData((prev) => ({ ...prev, reservation_date: e.target.value }))}
-                  className="bg-gray-800 border-gray-700 text-white"
+                  className="bg-white border-gray-200 text-gray-900"
                 />
+              </div>
+              <div>
+                <Label className="text-gray-600">Time Slot</Label>
+                <Select
+                  value={formData.time_slot}
+                  onValueChange={(v) => setFormData((prev) => ({ ...prev, time_slot: v }))}
+                >
+                  <SelectTrigger className="bg-white border-gray-200 text-gray-900">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-gray-200">
+                    {TIME_SLOTS.map((slot) => (
+                      <SelectItem key={slot.value} value={slot.value} className="text-gray-900">
+                        {slot.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             <div>
-              <Label className="text-gray-300">Time Slot</Label>
-              <Select
-                value={formData.time_slot}
-                onValueChange={(v) => setFormData((prev) => ({ ...prev, time_slot: v }))}
-              >
-                <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
-                  {TIME_SLOTS.map((slot) => (
-                    <SelectItem key={slot.value} value={slot.value} className="text-white">
-                      {slot.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-gray-600">Capacity Units</Label>
+              <Input
+                type="number"
+                min="1"
+                value={formData.capacity_units}
+                onChange={(e) => setFormData((prev) => ({ ...prev, capacity_units: e.target.value }))}
+                className="bg-white border-gray-200 text-gray-900"
+              />
             </div>
 
             <div>
-              <Label className="text-gray-300">Purpose</Label>
+              <Label className="text-gray-600">Purpose</Label>
               <Input
                 value={formData.purpose}
                 onChange={(e) => setFormData((prev) => ({ ...prev, purpose: e.target.value }))}
-                placeholder="e.g., Container unloading"
-                className="bg-gray-800 border-gray-700 text-white"
+                placeholder="Optional description"
+                className="bg-white border-gray-200 text-gray-900"
               />
             </div>
           </div>
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowAddModal(false)}
-              className="border-gray-700 text-gray-300"
-            >
+            <Button variant="outline" onClick={() => setShowAddModal(false)} className="border-gray-200">
               Cancel
             </Button>
-            <Button
-              onClick={handleAddReservation}
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
+            <Button onClick={handleAddReservation} className="bg-blue-600 hover:bg-blue-700">
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Create Reservation
+              Create
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={!!editingReservation} onOpenChange={() => setEditingReservation(null)}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-md">
+        <DialogContent className="bg-white border-gray-200 text-gray-900 max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white">Edit Reservation</DialogTitle>
+            <DialogTitle className="text-gray-900">Edit Reservation</DialogTitle>
           </DialogHeader>
 
           {editingReservation && (
             <div className="space-y-4">
               <div>
-                <Label className="text-gray-300">Status</Label>
+                <Label className="text-gray-600">Status</Label>
                 <Select
                   value={editingReservation.status}
                   onValueChange={(v) =>
-                    setEditingReservation((prev: TransportReservation | null) => prev ? { ...prev, status: v } : null)
+                    setEditingReservation({ ...editingReservation, status: v as TransportReservation["status"] })
                   }
                 >
-                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                  <SelectTrigger className="bg-white border-gray-200 text-gray-900">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
-                    <SelectItem value="tentative" className="text-white">Tentative</SelectItem>
-                    <SelectItem value="confirmed" className="text-white">Confirmed</SelectItem>
+                  <SelectContent className="bg-white border-gray-200">
+                    <SelectItem value="tentative" className="text-gray-900">Tentative</SelectItem>
+                    <SelectItem value="confirmed" className="text-gray-900">Confirmed</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <Label className="text-gray-300">Time Slot</Label>
+                <Label className="text-gray-600">Time Slot</Label>
                 <Select
                   value={editingReservation.time_slot || "0600-1000"}
                   onValueChange={(v) =>
-                    setEditingReservation((prev: TransportReservation | null) => prev ? { ...prev, time_slot: v } : null)
+                    setEditingReservation({ ...editingReservation, time_slot: v })
                   }
                 >
-                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                  <SelectTrigger className="bg-white border-gray-200 text-gray-900">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectContent className="bg-white border-gray-200">
                     {TIME_SLOTS.map((slot) => (
-                      <SelectItem key={slot.value} value={slot.value} className="text-white">
+                      <SelectItem key={slot.value} value={slot.value} className="text-gray-900">
                         {slot.label}
                       </SelectItem>
                     ))}
@@ -777,11 +767,7 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
           )}
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setEditingReservation(null)}
-              className="border-gray-700 text-gray-300"
-            >
+            <Button variant="outline" onClick={() => setEditingReservation(null)} className="border-gray-200">
               Cancel
             </Button>
             <Button
@@ -793,11 +779,10 @@ export default function TransportCalendar({ sites, onShowToast }: TransportCalen
                   });
                 }
               }}
-              disabled={loading}
               className="bg-blue-600 hover:bg-blue-700"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Save Changes
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>
