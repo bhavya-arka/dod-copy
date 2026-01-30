@@ -249,7 +249,7 @@ function ConvoyScene({
         receiveShadow
       >
         <planeGeometry args={[100, Math.max(100, convoyBounds.maxZ - convoyBounds.minZ + 50)]} />
-        <meshStandardMaterial color="#1a1a1a" roughness={0.9} metalness={0.1} />
+        <meshStandardMaterial color="#4b5563" roughness={0.9} metalness={0.1} />
       </mesh>
 
       {showGrid && (
@@ -258,10 +258,10 @@ function ConvoyScene({
           args={[100, Math.max(100, convoyBounds.maxZ - convoyBounds.minZ + 50)]}
           cellSize={2}
           cellThickness={0.5}
-          cellColor="#333333"
+          cellColor="#6b7280"
           sectionSize={10}
           sectionThickness={1}
-          sectionColor="#444444"
+          sectionColor="#9ca3af"
           fadeDistance={150}
           fadeStrength={1}
           followCamera={false}
@@ -285,17 +285,17 @@ function ConvoyScene({
 
       <Environment preset="city" />
       
-      <fog attach="fog" args={['#1a1a1a', 50, 200]} />
+      <fog attach="fog" args={['#f3f4f6', 80, 250]} />
     </>
   );
 }
 
 function StatusBadge({ status }: { status: ConvoyVisualizationProps['convoyStatus'] }) {
-  const statusColors = {
-    draft: 'bg-gray-600',
-    planned: 'bg-blue-600',
-    underway: 'bg-green-600',
-    completed: 'bg-purple-600',
+  const statusStyles = {
+    draft: 'bg-gray-100 text-gray-700 border-gray-200',
+    planned: 'bg-blue-50 text-blue-700 border-blue-200',
+    underway: 'bg-green-50 text-green-700 border-green-200',
+    completed: 'bg-purple-50 text-purple-700 border-purple-200',
   };
 
   const statusLabels = {
@@ -306,9 +306,9 @@ function StatusBadge({ status }: { status: ConvoyVisualizationProps['convoyStatu
   };
 
   return (
-    <div className={`px-3 py-1.5 rounded-md text-white text-sm font-medium ${statusColors[status]}`}>
+    <div className={`px-3 py-1.5 rounded-md text-sm font-medium border shadow-sm ${statusStyles[status]}`}>
       {status === 'underway' && (
-        <span className="inline-block w-2 h-2 bg-white rounded-full mr-2 animate-pulse" />
+        <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse" />
       )}
       {statusLabels[status]}
     </div>
@@ -344,8 +344,8 @@ const ConvoyVisualization: React.FC<ConvoyVisualizationProps> = memo(({
 
   if (vehicles.length === 0) {
     return (
-      <div className="relative w-full flex items-center justify-center bg-[#0a0a0a] rounded-lg" style={{ height }}>
-        <div className="text-center text-gray-400">
+      <div className="relative w-full flex items-center justify-center bg-gray-100 rounded-lg border border-gray-200" style={{ height }}>
+        <div className="text-center text-gray-500">
           <p className="text-sm">No vehicles in convoy</p>
         </div>
       </div>
@@ -359,16 +359,16 @@ const ConvoyVisualization: React.FC<ConvoyVisualizationProps> = memo(({
       </div>
       
       <div className="absolute top-3 right-3 z-10">
-        <div className="bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-md text-white text-sm">
-          <span className="text-gray-400">Vehicles:</span>{' '}
+        <div className="bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-md text-gray-900 text-sm border border-gray-200 shadow-sm">
+          <span className="text-gray-500">Vehicles:</span>{' '}
           <span className="font-medium">{vehicles.length}</span>
         </div>
       </div>
 
       {contextLost ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a0a] rounded-lg">
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg border border-gray-200">
           <div className="text-center">
-            <p className="text-gray-400 mb-3">3D view temporarily unavailable</p>
+            <p className="text-gray-500 mb-3">3D view temporarily unavailable</p>
             <button
               onClick={handleReloadCanvas}
               className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors text-sm font-medium"
@@ -389,7 +389,7 @@ const ConvoyVisualization: React.FC<ConvoyVisualizationProps> = memo(({
             preserveDrawingBuffer: true,
             failIfMajorPerformanceCaveat: false,
           }}
-          style={{ background: '#0a0a0a' }}
+          style={{ background: '#f3f4f6' }}
           onCreated={({ gl }) => {
             gl.domElement.addEventListener('webglcontextlost', handleContextLost);
             gl.domElement.addEventListener('webglcontextrestored', handleContextRestored);

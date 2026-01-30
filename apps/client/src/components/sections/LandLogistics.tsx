@@ -19,7 +19,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { User } from "../../hooks/useAuth";
-import { StatusBadge, TransportTable, CapacityWidget, LocationAutocomplete, RouteMap, PlaceDetails, TransportAiInsights } from '../transport';
+import { StatusBadge, TransportTable, CapacityWidget, LocationAutocomplete, RouteMap, PlaceDetails, TransportAiInsights, TransportFlowmap } from '../transport';
+import type { FlowmapRoute, ActiveTransport } from '../transport/TransportFlowmap';
 import * as warehouseService from '../../services/warehouseService';
 import { ConvoyVisualization } from '../3d/ConvoyVisualization';
 import {
@@ -443,6 +444,71 @@ function LandLogistics({
     }));
   }, [selectedConvoy]);
 
+  const flowmapRoutes = useMemo((): FlowmapRoute[] => {
+    const routeList: FlowmapRoute[] = [];
+    const defaultCoords: Record<string, { lat: number; lng: number }> = {
+      'San Diego': { lat: 32.7157, lng: -117.1611 },
+      'Los Angeles': { lat: 34.0522, lng: -118.2437 },
+      'Camp Pendleton': { lat: 33.3875, lng: -117.5653 },
+      'Fort Irwin': { lat: 35.2627, lng: -116.6848 },
+      'Twentynine Palms': { lat: 34.1355, lng: -116.0542 },
+      'Edwards AFB': { lat: 34.9054, lng: -117.8838 },
+      'Naval Base San Diego': { lat: 32.6831, lng: -117.1287 },
+      'March ARB': { lat: 33.8803, lng: -117.2594 },
+    };
+
+    const getCoords = (name: string): { lat: number; lng: number } | null => {
+      for (const [key, coords] of Object.entries(defaultCoords)) {
+        if (name.toLowerCase().includes(key.toLowerCase())) {
+          return coords;
+        }
+      }
+      return null;
+    };
+
+    convoys.forEach((convoy) => {
+      const originCoords = getCoords(convoy.origin);
+      const destCoords = getCoords(convoy.destination);
+      
+      if (originCoords && destCoords) {
+        routeList.push({
+          id: `convoy-${convoy.id}`,
+          origin: { ...originCoords, name: convoy.origin },
+          destination: { ...destCoords, name: convoy.destination },
+          mode: 'land',
+          status: convoy.status,
+        });
+      }
+    });
+
+    return routeList;
+  }, [convoys]);
+
+  const activeTransports = useMemo((): ActiveTransport[] => {
+    const transports: ActiveTransport[] = [];
+    
+    convoys
+      .filter(c => c.status === 'underway')
+      .forEach(convoy => {
+        const route = flowmapRoutes.find(r => r.id === `convoy-${convoy.id}`);
+        if (!route) return;
+        
+        const progress = 0.3 + Math.random() * 0.4;
+        const currentLat = route.origin.lat + (route.destination.lat - route.origin.lat) * progress;
+        const currentLng = route.origin.lng + (route.destination.lng - route.origin.lng) * progress;
+        
+        transports.push({
+          id: convoy.id,
+          routeId: `convoy-${convoy.id}`,
+          currentPosition: { lat: currentLat, lng: currentLng },
+          mode: 'land',
+          name: convoy.name,
+        });
+      });
+    
+    return transports;
+  }, [convoys, flowmapRoutes]);
+
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
       <header className="sticky top-0 z-50 bg-white border-b border-[#E5E7EB] shadow-sm">
@@ -576,50 +642,75 @@ function LandLogistics({
                   </button>
                 </div>
 
-                <div className="rounded-2xl bg-white border border-[#E5E7EB] shadow-sm p-6">
-                  <h2 className="text-lg font-semibold text-[#111827] mb-4">Recent Convoys</h2>
-                  {convoys.length === 0 ? (
-                    <p className="text-[#6B7280] text-center py-8">No convoys yet. Create your first convoy to get started.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {convoys.slice(0, 5).map((convoy) => (
-                        <div 
-                          key={convoy.id} 
-                          className="flex items-center justify-between p-3 rounded-xl bg-[#FAFAFA] hover:bg-white hover:shadow-sm border border-transparent hover:border-[#E5E7EB] transition-all cursor-pointer"
-                        >
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="rounded-2xl bg-white border border-[#E5E7EB] shadow-sm p-6">
+                    <h2 className="text-lg font-semibold text-[#111827] mb-4">Recent Convoys</h2>
+                    {convoys.length === 0 ? (
+                      <p className="text-[#6B7280] text-center py-8">No convoys yet. Create your first convoy to get started.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {convoys.slice(0, 5).map((convoy) => (
                           <div 
-                            className="flex items-center gap-3 flex-1"
-                            onClick={() => setSelectedConvoy(convoy)}
+                            key={convoy.id} 
+                            className="flex items-center justify-between p-3 rounded-xl bg-[#FAFAFA] hover:bg-white hover:shadow-sm border border-transparent hover:border-[#E5E7EB] transition-all cursor-pointer"
                           >
-                            <div className="p-2 rounded-lg bg-amber-50">
-                              <Truck className="w-4 h-4 text-amber-500" />
+                            <div 
+                              className="flex items-center gap-3 flex-1"
+                              onClick={() => setSelectedConvoy(convoy)}
+                            >
+                              <div className="p-2 rounded-lg bg-amber-50">
+                                <Truck className="w-4 h-4 text-amber-500" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-[#111827]">{convoy.name}</div>
+                                <div className="text-sm text-[#6B7280]">{convoy.origin} → {convoy.destination}</div>
+                              </div>
                             </div>
-                            <div>
-                              <div className="font-medium text-[#111827]">{convoy.name}</div>
-                              <div className="text-sm text-[#6B7280]">{convoy.origin} → {convoy.destination}</div>
+                            <div className="flex items-center gap-2">
+                              <StatusBadge status={convoy.status as any} size="sm" showIcon />
+                              {convoy.status !== 'completed' && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (window.confirm(`Are you sure you want to delete convoy "${convoy.name}"? This action cannot be undone.`)) {
+                                      landService.deleteConvoy(convoy.id).then(() => fetchData());
+                                    }
+                                  }}
+                                  className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+                                  title="Delete convoy"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <StatusBadge status={convoy.status as any} size="sm" showIcon />
-                            {convoy.status !== 'completed' && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (window.confirm(`Are you sure you want to delete convoy "${convoy.name}"? This action cannot be undone.`)) {
-                                    landService.deleteConvoy(convoy.id).then(() => fetchData());
-                                  }
-                                }}
-                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors"
-                                title="Delete convoy"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl bg-white border border-[#E5E7EB] shadow-sm p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Map className="w-5 h-5 text-amber-500" />
+                      <h2 className="text-lg font-semibold text-[#111827]">Transport Network</h2>
                     </div>
-                  )}
+                    {flowmapRoutes.length > 0 ? (
+                      <TransportFlowmap
+                        routes={flowmapRoutes}
+                        activeTransports={activeTransports}
+                        height={300}
+                        className="rounded-xl"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-[300px] rounded-xl bg-[#FAFAFA] border border-[#E5E7EB]">
+                        <div className="text-center">
+                          <Map className="w-12 h-12 text-[#E5E7EB] mx-auto mb-3" />
+                          <p className="text-[#6B7280] text-sm">No convoy routes to display</p>
+                          <p className="text-[#9CA3AF] text-xs mt-1">Create convoys to see the transport network</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <motion.div

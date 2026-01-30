@@ -46,6 +46,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "../ui/dialog";
+import SeaVisualization from "../3d/SeaVisualization";
+import { TransportFlowmap, FlowmapRoute, ActiveTransport } from "../transport/TransportFlowmap";
 
 interface SeaFreightProps {
   user: User;
@@ -107,6 +109,48 @@ const containerStatusLabels: Record<string, { label: string; color: string }> = 
   loaded: { label: 'Loaded', color: 'bg-blue-100 text-blue-700' },
   unloading: { label: 'Unloading', color: 'bg-amber-100 text-amber-700' },
   discharged: { label: 'Discharged', color: 'bg-green-100 text-green-700' },
+};
+
+const PORT_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  'San Diego': { lat: 32.7157, lng: -117.1611 },
+  'Los Angeles': { lat: 33.7406, lng: -118.2729 },
+  'Long Beach': { lat: 33.7701, lng: -118.1937 },
+  'Oakland': { lat: 37.7952, lng: -122.2794 },
+  'Seattle': { lat: 47.6062, lng: -122.3321 },
+  'Tacoma': { lat: 47.2529, lng: -122.4443 },
+  'Honolulu': { lat: 21.3099, lng: -157.8581 },
+  'Pearl Harbor': { lat: 21.3544, lng: -157.9596 },
+  'Guam': { lat: 13.4443, lng: 144.7937 },
+  'Yokosuka': { lat: 35.2833, lng: 139.6667 },
+  'Yokohama': { lat: 35.4437, lng: 139.6380 },
+  'Sasebo': { lat: 33.1593, lng: 129.7228 },
+  'Busan': { lat: 35.1028, lng: 129.0403 },
+  'Singapore': { lat: 1.2655, lng: 103.8200 },
+  'Diego Garcia': { lat: -7.3195, lng: 72.4229 },
+  'Bahrain': { lat: 26.2285, lng: 50.5860 },
+  'Jebel Ali': { lat: 25.0190, lng: 55.0640 },
+  'Rota': { lat: 36.6233, lng: -6.3533 },
+  'Naples': { lat: 40.8518, lng: 14.2681 },
+  'Norfolk': { lat: 36.8466, lng: -76.2890 },
+  'Charleston': { lat: 32.7765, lng: -79.9311 },
+  'Savannah': { lat: 32.0809, lng: -81.0912 },
+  'Jacksonville': { lat: 30.3322, lng: -81.6557 },
+  'Houston': { lat: 29.7604, lng: -95.3698 },
+  'New Orleans': { lat: 29.9511, lng: -90.0715 },
+  'Miami': { lat: 25.7617, lng: -80.1918 },
+};
+
+const getPortCoordinates = (portName: string): { lat: number; lng: number } => {
+  const normalized = portName.trim();
+  if (PORT_COORDINATES[normalized]) {
+    return PORT_COORDINATES[normalized];
+  }
+  for (const [key, coords] of Object.entries(PORT_COORDINATES)) {
+    if (normalized.toLowerCase().includes(key.toLowerCase()) || key.toLowerCase().includes(normalized.toLowerCase())) {
+      return coords;
+    }
+  }
+  return { lat: 32.7157 + Math.random() * 20 - 10, lng: -117.1611 + Math.random() * 40 - 20 };
 };
 
 const VesselTypeCard = memo(({ vesselType }: { vesselType: VesselType }) => (
@@ -418,6 +462,58 @@ export default function SeaFreight({
     return voyageContainers.reduce((total, c) => total + c.weight_lbs, 0);
   }, [containersByVoyage]);
 
+  const vesselsForVisualization = useMemo(() => {
+    return voyages.map(voyage => {
+      const vesselType = vesselTypes.find(vt => vt.id === voyage.vessel_type_id);
+      return {
+        id: voyage.id,
+        vesselCode: vesselType?.code || voyage.vessel_class || 'LMSR',
+        status: voyage.status,
+      };
+    });
+  }, [voyages, vesselTypes]);
+
+  const flowmapRoutes = useMemo((): FlowmapRoute[] => {
+    return voyages.map(voyage => {
+      const originCoords = getPortCoordinates(voyage.origin_port);
+      const destCoords = getPortCoordinates(voyage.destination_port);
+      return {
+        id: voyage.id,
+        origin: { ...originCoords, name: voyage.origin_port },
+        destination: { ...destCoords, name: voyage.destination_port },
+        mode: 'sea' as const,
+        status: voyage.status,
+      };
+    });
+  }, [voyages]);
+
+  const activeTransports = useMemo((): ActiveTransport[] => {
+    return voyages
+      .filter(v => v.status === 'underway')
+      .map(voyage => {
+        const originCoords = getPortCoordinates(voyage.origin_port);
+        const destCoords = getPortCoordinates(voyage.destination_port);
+        return {
+          id: voyage.id,
+          routeId: voyage.id,
+          currentPosition: {
+            lat: (originCoords.lat + destCoords.lat) / 2,
+            lng: (originCoords.lng + destCoords.lng) / 2,
+          },
+          mode: 'sea' as const,
+          name: voyage.vessel_name || voyage.name,
+        };
+      });
+  }, [voyages]);
+
+  const overallVoyageStatus = useMemo(() => {
+    if (voyages.some(v => v.status === 'underway')) return 'underway';
+    if (voyages.some(v => v.status === 'loading')) return 'loading';
+    if (voyages.some(v => v.status === 'planned')) return 'planned';
+    if (voyages.some(v => v.status === 'completed')) return 'completed';
+    return 'draft';
+  }, [voyages]);
+
   const statsConfig = [
     { label: "Active Voyages", value: statistics?.activeVoyages ?? 0, icon: Ship, color: "text-teal-600" },
     { label: "In Transit", value: statistics?.inTransit ?? 0, icon: Waves, color: "text-blue-500" },
@@ -461,14 +557,72 @@ export default function SeaFreight({
         ))}
       </div>
 
+      {/* 3D Sea Visualization - Fleet Overview */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-8 rounded-2xl bg-white border border-gray-200 shadow-sm overflow-hidden"
+      >
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Ship className="w-5 h-5 text-teal-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Fleet Visualization</h2>
+            </div>
+            <span className="text-sm text-gray-500">
+              {vesselsForVisualization.length} vessel{vesselsForVisualization.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </div>
+        <SeaVisualization
+          vessels={vesselsForVisualization.length > 0 ? vesselsForVisualization : [{ id: 0, vesselCode: 'LMSR', status: 'draft' }]}
+          voyageStatus={overallVoyageStatus}
+          onVesselClick={(vesselId) => {
+            const voyage = voyages.find(v => v.id === vesselId);
+            if (voyage) setSelectedVoyage(voyage);
+          }}
+          showGrid={true}
+          autoRotate={false}
+          height={350}
+        />
+      </motion.div>
+
+      {/* Transport Flowmap - Route Network */}
+      {flowmapRoutes.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-8 rounded-2xl bg-white border border-gray-200 shadow-sm overflow-hidden"
+        >
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Route className="w-5 h-5 text-teal-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Voyage Routes</h2>
+              </div>
+              <span className="text-sm text-gray-500">
+                {flowmapRoutes.length} route{flowmapRoutes.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+          <TransportFlowmap
+            routes={flowmapRoutes}
+            activeTransports={activeTransports}
+            height={350}
+            className="border-0"
+          />
+        </motion.div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="lg:col-span-2 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm p-6"
+          className="lg:col-span-2 rounded-2xl bg-white border border-gray-200 shadow-sm p-6"
         >
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-[#111827]">Recent Voyages</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Recent Voyages</h2>
             <button 
               onClick={() => setActiveTab('voyages')}
               className="text-sm text-teal-600 hover:text-teal-800 transition-colors"
@@ -501,24 +655,24 @@ export default function SeaFreight({
                   <div
                     key={voyage.id}
                     onClick={() => setSelectedVoyage(voyage)}
-                    className="p-4 rounded-xl border border-[#E5E7EB] hover:border-teal-200 hover:bg-teal-50/30 transition-all cursor-pointer"
+                    className="p-4 rounded-xl border border-gray-200 hover:border-teal-200 hover:bg-teal-50/30 transition-all cursor-pointer"
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div>
-                        <h3 className="font-medium text-[#111827]">{voyage.name}</h3>
+                        <h3 className="font-medium text-gray-900">{voyage.name}</h3>
                         {voyage.vessel_name && (
-                          <p className="text-sm text-[#6B7280]">
+                          <p className="text-sm text-gray-500">
                             {voyage.vessel_name} {voyage.vessel_hull_number && `(${voyage.vessel_hull_number})`}
                           </p>
                         )}
-                        <p className="text-sm text-[#6B7280] flex items-center gap-2 mt-1">
+                        <p className="text-sm text-gray-500 flex items-center gap-2 mt-1">
                           <MapPin className="w-3 h-3" />
                           {voyage.origin_port} → {voyage.destination_port}
                         </p>
                       </div>
                       <StatusBadge status={voyage.status} size="sm" />
                     </div>
-                    <div className="flex items-center gap-4 mt-3 text-xs text-[#6B7280]">
+                    <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
                       <span className="flex items-center gap-1">
                         <Container className="w-3 h-3" />
                         {voyage.container_count} containers
@@ -544,56 +698,56 @@ export default function SeaFreight({
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="rounded-2xl bg-white border border-[#E5E7EB] shadow-sm p-6"
+          className="rounded-2xl bg-white border border-gray-200 shadow-sm p-6"
         >
-          <h2 className="text-lg font-semibold text-[#111827] mb-4">Quick Actions</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
           <div className="space-y-2">
             <button
               onClick={() => setShowCreateModal(true)}
-              className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#FAFAFA] transition-colors text-left group"
+              className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors text-left group"
             >
-              <div className="p-2 rounded-lg bg-[#FAFAFA] group-hover:bg-teal-50">
-                <Ship className="w-4 h-4 text-[#6B7280] group-hover:text-teal-600" />
+              <div className="p-2 rounded-lg bg-gray-50 group-hover:bg-teal-50">
+                <Ship className="w-4 h-4 text-gray-500 group-hover:text-teal-600" />
               </div>
               <div>
-                <p className="text-sm font-medium text-[#111827]">Plan Voyage</p>
-                <p className="text-xs text-[#6B7280]">Create shipping route</p>
+                <p className="text-sm font-medium text-gray-900">Plan Voyage</p>
+                <p className="text-xs text-gray-500">Create shipping route</p>
               </div>
             </button>
             <button
               onClick={() => setShowContainerModal(true)}
-              className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#FAFAFA] transition-colors text-left group"
+              className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors text-left group"
             >
-              <div className="p-2 rounded-lg bg-[#FAFAFA] group-hover:bg-teal-50">
-                <Container className="w-4 h-4 text-[#6B7280] group-hover:text-teal-600" />
+              <div className="p-2 rounded-lg bg-gray-50 group-hover:bg-teal-50">
+                <Container className="w-4 h-4 text-gray-500 group-hover:text-teal-600" />
               </div>
               <div>
-                <p className="text-sm font-medium text-[#111827]">Add Container</p>
-                <p className="text-xs text-[#6B7280]">Register new container</p>
+                <p className="text-sm font-medium text-gray-900">Add Container</p>
+                <p className="text-xs text-gray-500">Register new container</p>
               </div>
             </button>
             <button
               onClick={() => setActiveTab('transfers')}
-              className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#FAFAFA] transition-colors text-left group"
+              className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors text-left group"
             >
-              <div className="p-2 rounded-lg bg-[#FAFAFA] group-hover:bg-teal-50">
-                <Package className="w-4 h-4 text-[#6B7280] group-hover:text-teal-600" />
+              <div className="p-2 rounded-lg bg-gray-50 group-hover:bg-teal-50">
+                <Package className="w-4 h-4 text-gray-500 group-hover:text-teal-600" />
               </div>
               <div>
-                <p className="text-sm font-medium text-[#111827]">Pending Transfers</p>
-                <p className="text-xs text-[#6B7280]">{pendingTransfers.length} awaiting assignment</p>
+                <p className="text-sm font-medium text-gray-900">Pending Transfers</p>
+                <p className="text-xs text-gray-500">{pendingTransfers.length} awaiting assignment</p>
               </div>
             </button>
             <button
               onClick={() => setActiveTab('schedule')}
-              className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#FAFAFA] transition-colors text-left group"
+              className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors text-left group"
             >
-              <div className="p-2 rounded-lg bg-[#FAFAFA] group-hover:bg-teal-50">
-                <Calendar className="w-4 h-4 text-[#6B7280] group-hover:text-teal-600" />
+              <div className="p-2 rounded-lg bg-gray-50 group-hover:bg-teal-50">
+                <Calendar className="w-4 h-4 text-gray-500 group-hover:text-teal-600" />
               </div>
               <div>
-                <p className="text-sm font-medium text-[#111827]">Port Schedule</p>
-                <p className="text-xs text-[#6B7280]">View arrivals & departures</p>
+                <p className="text-sm font-medium text-gray-900">Port Schedule</p>
+                <p className="text-xs text-gray-500">View arrivals & departures</p>
               </div>
             </button>
           </div>
