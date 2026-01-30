@@ -7,6 +7,7 @@ import {
   canAccessOrganization
 } from "../middleware";
 import { storage } from "../storage";
+import { seedAllDemoData } from "../seeds/demoData";
 
 const router = Router();
 
@@ -313,6 +314,24 @@ router.post("/admin/seed-organizations", authMiddleware, requireSuperAdmin, asyn
   } catch (error) {
     console.error('Failed to seed organizations:', error);
     res.status(500).json({ error: "Failed to seed organizations" });
+  }
+});
+
+// ============================================================================
+// DEMO DATA SEED (ADMIN ONLY)
+// ============================================================================
+
+router.post("/admin/seed-demo-data", authMiddleware, requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    console.log(`[Admin] User ${req.user!.email} triggering demo data seed`);
+    await seedAllDemoData();
+    res.json({ 
+      message: "Demo data seeded successfully",
+      seeded: ["land_routes", "land_convoys", "convoy_vehicles", "sea_voyages", "sea_containers"]
+    });
+  } catch (error) {
+    console.error('Failed to seed demo data:', error);
+    res.status(500).json({ error: "Failed to seed demo data" });
   }
 });
 

@@ -21,3 +21,6 @@ export type { RouteMapProps } from './RouteMap';
 
 export { TransportAiInsights } from './TransportAiInsights';
 export type { TransportAiInsightsProps, TransportMode } from './TransportAiInsights';
+
+export { TransportFlowmap } from './TransportFlowmap';
+export type { TransportFlowmapProps, FlowmapRoute, ActiveTransport } from './TransportFlowmap';
